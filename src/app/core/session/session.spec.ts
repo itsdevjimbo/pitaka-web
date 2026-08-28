@@ -7,9 +7,9 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { LocalStorage } from '@/app/core/local-storage';
+import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { Session } from './session';
 
-const BASE_URL = 'http://localhost:5044';
 const TOKEN_KEY = 'pitaka.token';
 
 function fakeStorage(seed: Record<string, string> = {}) {

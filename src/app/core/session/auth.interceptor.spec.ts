@@ -6,10 +6,9 @@ import {
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL, errorInterceptor } from '@/app/core/api';
+import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { authInterceptor } from './auth.interceptor';
 import { Session } from './session';
-
-const BASE_URL = 'http://localhost:5044';
 
 describe('authInterceptor', () => {
   let http: HttpTestingController;

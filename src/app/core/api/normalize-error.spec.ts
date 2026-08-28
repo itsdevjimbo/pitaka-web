@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { ApiError } from './api-error';
 import { normalizeHttpError } from './normalize-error';
 
@@ -18,7 +19,7 @@ describe('normalizeHttpError', () => {
     error?: unknown;
   }): HttpErrorResponse =>
     new HttpErrorResponse({
-      url: 'http://localhost:5044/api/auth/login',
+      url: `${BASE_URL}/api/auth/login`,
       status: 400,
       statusText: 'Bad Request',
       ...init,
@@ -80,14 +81,14 @@ describe('normalizeHttpError', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const error = normalizeHttpError(
-      response({ status: 400, error: null, url: 'http://localhost:5044/api/accounts' })
+      response({ status: 400, error: null, url: `${BASE_URL}/api/accounts` })
     );
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.fieldErrors).toEqual({});
     expect(error.message).not.toMatch(/\{|\}|undefined/);
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('http://localhost:5044/api/accounts')
+      expect.stringContaining(`${BASE_URL}/api/accounts`)
     );
 
     warn.mockRestore();

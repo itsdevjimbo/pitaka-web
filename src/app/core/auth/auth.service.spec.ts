@@ -6,9 +6,8 @@ import {
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
+import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { AuthService } from './auth.service';
-
-const BASE_URL = 'http://localhost:5044';
 
 /**
  * The HTTP adapter boundary — the primary seam (see the spec's Testing

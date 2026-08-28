@@ -14,6 +14,7 @@ import { errorInterceptor, provideApiBaseUrl } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons/provider';
 import { authInterceptor, provideSession } from '@/app/core/session';
 import { provideTheming } from '@/app/core/theming';
+import { environment } from '@/environments/environment';
 import { routes } from './app.routes';
 
 export const appConfig: ApplicationConfig = {
@@ -23,7 +24,7 @@ export const appConfig: ApplicationConfig = {
     // normalises every failure to an `ApiError` first, so `authInterceptor` can
     // recognise a 401 as a lapsed session. Swapping them disables that.
     provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
-    provideApiBaseUrl('http://localhost:5044'),
+    provideApiBaseUrl(environment.apiBaseUrl),
     provideSession(),
     provideRouter(
       routes,
