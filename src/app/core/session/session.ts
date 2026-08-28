@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, Credentials, Profile } from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
-import { signInRedirect } from './sign-in-route';
+import { SIGN_IN_ROUTE, signInRedirect } from './sign-in-route';
 
 const TOKEN_KEY = 'pitaka.token';
 
@@ -82,18 +82,38 @@ export class Session {
   }
 
   /**
+   * The person chose to leave. Clear the session client-side — the API has no
+   * logout to call (ADR 0004) — and return to sign-in. Unlike `expire`, no
+   * return URL is kept: a deliberate exit has nowhere to resume.
+   */
+  signOut(): void {
+    if (this.teardown()) {
+      this.router.navigate([SIGN_IN_ROUTE]);
+    }
+  }
+
+  /**
    * The session lapsed mid-use (a 401 behind some request). Clear it and return
    * to sign-in, remembering where the person was so they resume, not restart.
    */
   expire(): void {
-    // Concurrent in-flight requests can each come back 401; only the first
-    // lapse captures the return URL and redirects.
-    if (this._token() === null) {
-      return;
+    if (this.teardown()) {
+      this.router.navigate(...signInRedirect(this.router.url));
     }
-    const returnUrl = this.router.url;
+  }
+
+  /**
+   * Clear the session if one is still live, reporting whether this call is the
+   * one that did it. Concurrent in-flight requests can each come back 401 (or a
+   * stray second sign-out can land); only the first still has a token, so only
+   * it goes on to redirect.
+   */
+  private teardown(): boolean {
+    if (this._token() === null) {
+      return false;
+    }
     this.clear();
-    this.router.navigate(...signInRedirect(returnUrl));
+    return true;
   }
 
   private clear(): void {

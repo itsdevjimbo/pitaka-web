@@ -1,10 +1,11 @@
 import { Route } from '@angular/router';
-import { authGuard } from '@/app/core/session';
+import { authGuard, guestGuard } from '@/app/core/session';
 
 export const routes: Route[] = [
   // Auth
   {
     path: 'auth',
+    canActivate: [guestGuard],
     loadChildren: () => import('./domains/auth/routes'),
   },
 
