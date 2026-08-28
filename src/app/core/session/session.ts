@@ -4,14 +4,14 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, Credentials, Profile } from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
-import { SIGN_IN_ROUTE, signInRedirect } from './routes';
+import { signInRedirect } from './routes';
 
 const TOKEN_KEY = 'pitaka.token';
 
 /**
  * Owns the signed-in session: the bearer token, the live Profile, and the
- * transitions between them (sign in, boot verification, deliberate sign-out,
- * and the lapse when the hour runs out).
+ * transitions between them (sign in, boot verification, and the lapse when the
+ * hour runs out).
  *
  * The token lives in `localStorage` so a page refresh keeps the person signed
  * in; there is no refresh token, so this whole mechanism has a planned death
@@ -72,12 +72,6 @@ export class Session {
         this.clear();
       }
     }
-  }
-
-  /** Deliberate sign-out — client-side only; the API has no logout endpoint. */
-  signOut(): void {
-    this.clear();
-    this.router.navigateByUrl(SIGN_IN_ROUTE);
   }
 
   /**

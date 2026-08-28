@@ -24,12 +24,12 @@ function fakeStorage(seed: Record<string, string> = {}) {
 
 describe('Session', () => {
   let http: HttpTestingController;
-  let router: { url: string; navigate: ReturnType<typeof vi.fn>; navigateByUrl: ReturnType<typeof vi.fn> };
+  let router: { url: string; navigate: ReturnType<typeof vi.fn> };
   let storage: ReturnType<typeof fakeStorage>;
 
   function configure(seed: Record<string, string> = {}) {
     storage = fakeStorage(seed);
-    router = { url: '/accounts', navigate: vi.fn(), navigateByUrl: vi.fn() };
+    router = { url: '/accounts', navigate: vi.fn() };
 
     TestBed.configureTestingModule({
       providers: [
@@ -135,15 +135,5 @@ describe('Session', () => {
       ['/auth/sign-in'],
       { queryParams: { returnUrl: '/accounts' } }
     );
-  });
-
-  it('signs out deliberately without a return URL', () => {
-    const session = configure({ [TOKEN_KEY]: 'live-token' });
-
-    session.signOut();
-
-    expect(session.isAuthenticated()).toBe(false);
-    expect(storage.getItem(TOKEN_KEY)).toBeNull();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/auth/sign-in');
   });
 });

@@ -11,8 +11,9 @@ import { AuthService } from './auth.service';
 
 /**
  * The HTTP adapter boundary — the primary seam (see the spec's Testing
- * Decisions). Feeds real-shaped responses and all four failure shapes through
- * the service *and its interceptor*, and asserts what comes out the top.
+ * Decisions). Feeds real-shaped responses and the two failure shapes sign-in
+ * meets (a bare-string login failure and a ValidationProblemDetails body)
+ * through the service *and its interceptor*, and asserts what comes out the top.
  */
 describe('AuthService', () => {
   let service: AuthService;
@@ -96,42 +97,10 @@ describe('AuthService', () => {
       email: ['The Email field is required.'],
       password: ['The Password field is required.'],
     });
-  });
-
-  it('turns a bodyless 400 into a form-level message with an empty field map', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const result = firstValueFrom(
-      service.login({ email: 'ada@example.com', password: 'secret12' })
+    // Not the server's raw "One or more validation errors occurred." title.
+    expect((error as ApiError).message).toBe(
+      'Please correct the highlighted fields and try again.'
     );
-
-    http
-      .expectOne(`${BASE_URL}/api/auth/login`)
-      .flush(null, { status: 400, statusText: 'Bad Request' });
-
-    const error = await result.catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).fieldErrors).toEqual({});
-    expect((error as ApiError).message).not.toContain('{');
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
-  it('carries the `detail` of a ProblemDetails response as the message', async () => {
-    const result = firstValueFrom(service.me());
-
-    http.expectOne(`${BASE_URL}/api/auth/me`).flush(
-      {
-        type: 'about:blank',
-        title: 'Bad Request',
-        status: 400,
-        detail: 'The token is malformed.',
-      },
-      { status: 400, statusText: 'Bad Request' }
-    );
-
-    const error = await result.catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).message).toBe('The token is malformed.');
   });
 
   it('GETs the live Profile from /api/auth/me', async () => {

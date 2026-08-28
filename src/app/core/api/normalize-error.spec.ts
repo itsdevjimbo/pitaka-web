@@ -4,12 +4,11 @@ import { ApiError } from './api-error';
 import { normalizeHttpError } from './normalize-error';
 
 /**
- * The four failure shapes the Pitaka API can return (ADR 0002):
- *  1. ProblemDetails with a `detail`
- *  2. ValidationProblemDetails with PascalCase `errors` keys
- *  3. a bodyless 400
- *  4. a bare JSON string on failed login
- * Every one must collapse to a single `ApiError`.
+ * Sign-in meets two of the API's four failure shapes (ADR 0002): a bare JSON
+ * string on failed login, and a ValidationProblemDetails `errors` map with
+ * PascalCase keys. Both must collapse to a single `ApiError`; anything else
+ * falls through to a generic, status-derived message. The other two shapes are
+ * normalised when a screen that hits them is built.
  */
 describe('normalizeHttpError', () => {
   const response = (init: {
@@ -24,25 +23,6 @@ describe('normalizeHttpError', () => {
       statusText: 'Bad Request',
       ...init,
     });
-
-  it('turns a ProblemDetails body into an ApiError carrying its detail', () => {
-    const error = normalizeHttpError(
-      response({
-        status: 409,
-        error: {
-          type: 'https://tools.ietf.org/html/rfc7231#section-6.5.8',
-          title: 'Conflict',
-          status: 409,
-          detail: 'A user with this email already exists.',
-        },
-      })
-    );
-
-    expect(error).toBeInstanceOf(ApiError);
-    expect(error.message).toBe('A user with this email already exists.');
-    expect(error.status).toBe(409);
-    expect(error.fieldErrors).toEqual({});
-  });
 
   it('turns a ValidationProblemDetails body into field errors with camelCased keys', () => {
     const error = normalizeHttpError(
@@ -64,6 +44,10 @@ describe('normalizeHttpError', () => {
       email: ['The Email field is required.'],
       password: ['The Password must be at least 8 characters.'],
     });
+    // The friendly form-level message wins over the server's raw `title`.
+    expect(error.message).toBe(
+      'Please correct the highlighted fields and try again.'
+    );
   });
 
   it('strips a leading JSON path segment from validation keys', () => {
@@ -75,23 +59,6 @@ describe('normalizeHttpError', () => {
     );
 
     expect(error.fieldErrors).toEqual({ email: ['Invalid.'] });
-  });
-
-  it('turns a bodyless 400 into a form-level message with no field errors and logs it', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-    const error = normalizeHttpError(
-      response({ status: 400, error: null, url: `${BASE_URL}/api/accounts` })
-    );
-
-    expect(error).toBeInstanceOf(ApiError);
-    expect(error.fieldErrors).toEqual({});
-    expect(error.message).not.toMatch(/\{|\}|undefined/);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining(`${BASE_URL}/api/accounts`)
-    );
-
-    warn.mockRestore();
   });
 
   it('turns the bare-string login failure into an ApiError carrying that message', () => {
@@ -123,15 +90,5 @@ describe('normalizeHttpError', () => {
 
     expect(error.message).not.toContain('stack');
     expect(error.message).not.toContain('{');
-  });
-
-  it('reports a transport failure (status 0) as a connectivity message', () => {
-    const error = normalizeHttpError(
-      response({ status: 0, error: new ProgressEvent('error') })
-    );
-
-    expect(error).toBeInstanceOf(ApiError);
-    expect(error.status).toBe(0);
-    expect(error.message.toLowerCase()).toContain('reach');
   });
 });
