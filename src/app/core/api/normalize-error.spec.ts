@@ -63,7 +63,6 @@ describe('normalizeHttpError', () => {
       email: ['The Email field is required.'],
       password: ['The Password must be at least 8 characters.'],
     });
-    expect(error.hasFieldErrors).toBe(true);
   });
 
   it('strips a leading JSON path segment from validation keys', () => {
@@ -86,7 +85,6 @@ describe('normalizeHttpError', () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.fieldErrors).toEqual({});
-    expect(error.hasFieldErrors).toBe(false);
     expect(error.message).not.toMatch(/\{|\}|undefined/);
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('http://localhost:5044/api/accounts')

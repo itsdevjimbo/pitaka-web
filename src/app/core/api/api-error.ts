@@ -23,9 +23,4 @@ export class ApiError extends Error {
     this.status = status;
     this.fieldErrors = fieldErrors;
   }
-
-  /** Whether the server attributed the failure to one or more named fields. */
-  get hasFieldErrors(): boolean {
-    return Object.keys(this.fieldErrors).length > 0;
-  }
 }

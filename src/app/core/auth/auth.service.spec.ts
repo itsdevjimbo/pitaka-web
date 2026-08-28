@@ -111,7 +111,7 @@ describe('AuthService', () => {
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).hasFieldErrors).toBe(false);
+    expect((error as ApiError).fieldErrors).toEqual({});
     expect((error as ApiError).message).not.toContain('{');
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
