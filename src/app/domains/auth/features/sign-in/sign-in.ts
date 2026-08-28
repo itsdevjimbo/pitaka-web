@@ -12,7 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiError } from '@/app/core/api';
-import { Session } from '@/app/core/session';
+import { safeReturnUrl, Session } from '@/app/core/session';
 
 const DEFAULT_LANDING = '/app';
 
@@ -70,11 +70,7 @@ export default class AuthSignIn {
   /** Where to go once signed in: the remembered return URL, or the app home. */
   private landingUrl(): string {
     const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-    const safe =
-      returnUrl !== null &&
-      returnUrl.startsWith('/') &&
-      !returnUrl.startsWith('//');
-    return safe ? returnUrl : DEFAULT_LANDING;
+    return safeReturnUrl(returnUrl) ?? DEFAULT_LANDING;
   }
 
   /** One clear sentence — never a raw server string or a stack trace. */

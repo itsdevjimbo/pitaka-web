@@ -18,3 +18,17 @@ export function signInRedirect(
 ): [commands: string[], extras: UrlCreationOptions] {
   return [[SIGN_IN_ROUTE], { queryParams: { returnUrl } }];
 }
+
+/**
+ * Sanitize a `returnUrl` before navigating to it after sign-in. `signInRedirect`
+ * only ever mints an in-app path, but the value survives a round trip through the
+ * query string where anyone can rewrite it, so the open-redirect check lives here
+ * next to the route it guards. A protocol-relative `//host` or any value not
+ * rooted at `/` is rejected as `null`; the caller falls back to its own home.
+ */
+export function safeReturnUrl(returnUrl: string | null): string | null {
+  if (returnUrl === null || !returnUrl.startsWith('/')) {
+    return null;
+  }
+  return returnUrl.startsWith('//') ? null : returnUrl;
+}
