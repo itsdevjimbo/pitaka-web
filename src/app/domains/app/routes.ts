@@ -9,7 +9,11 @@ const routes: Routes = [
       {
         path: '',
         pathMatch: 'full',
-        loadComponent: () => import('./features/home/home'),
+        redirectTo: 'accounts',
+      },
+      {
+        path: 'accounts',
+        loadComponent: () => import('./accounts/accounts'),
       },
     ],
   },
