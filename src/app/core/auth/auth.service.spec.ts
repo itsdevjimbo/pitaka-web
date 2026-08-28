@@ -5,7 +5,12 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
+import {
+  ApiError,
+  API_BASE_URL,
+  errorInterceptor,
+  HANDLES_OWN_401,
+} from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { AuthService } from './auth.service';
 
@@ -55,7 +60,9 @@ describe('AuthService', () => {
     });
   });
 
-  it('normalises the bare-string login failure into an ApiError', async () => {
+  it('turns the bare-string login failure into one clear message of our own', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
     const result = firstValueFrom(
       service.login({ email: 'ada@example.com', password: 'wrong' })
     );
@@ -70,8 +77,28 @@ describe('AuthService', () => {
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(401);
-    expect((error as ApiError).message).toBe('Invalid email or password.');
     expect((error as ApiError).fieldErrors).toEqual({});
+    // Ours, not the server's text, and not the generic "session has ended"
+    // wording a 401 gets anywhere else.
+    expect((error as ApiError).message).toBe(
+      'That email and password do not match. Please try again.'
+    );
+
+    warn.mockRestore();
+  });
+
+  it('marks its two requests as handling their own 401', () => {
+    firstValueFrom(service.login({ email: 'a@b.co', password: 'x' })).catch(
+      () => undefined
+    );
+    const login = http.expectOne(`${BASE_URL}/api/auth/login`);
+    expect(login.request.context.get(HANDLES_OWN_401)).toBe(true);
+    login.flush({ token: 't', user: { id: 1, name: 'A', email: 'a@b.co' } });
+
+    firstValueFrom(service.me()).catch(() => undefined);
+    const me = http.expectOne(`${BASE_URL}/api/auth/me`);
+    expect(me.request.context.get(HANDLES_OWN_401)).toBe(true);
+    me.flush({ id: 1, name: 'A', email: 'a@b.co' });
   });
 
   it('normalises a ValidationProblemDetails response into the same error type, camelCasing keys', async () => {

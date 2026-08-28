@@ -25,9 +25,15 @@ export function signInRedirect(
  * query string where anyone can rewrite it, so the open-redirect check lives here
  * next to the route it guards. A protocol-relative `//host` or any value not
  * rooted at `/` is rejected as `null`; the caller falls back to its own home.
+ *
+ * Absent is absent: an empty string or `undefined` is treated like `null`,
+ * because the value comes off a query string and the caller should not have to
+ * know which flavour of nothing its router API hands back.
  */
-export function safeReturnUrl(returnUrl: string | null): string | null {
-  if (returnUrl === null || !returnUrl.startsWith('/')) {
+export function safeReturnUrl(
+  returnUrl: string | null | undefined
+): string | null {
+  if (!returnUrl || !returnUrl.startsWith('/')) {
     return null;
   }
   return returnUrl.startsWith('//') ? null : returnUrl;

@@ -98,34 +98,69 @@ describe('normalizeHttpError', () => {
     warn.mockRestore();
   });
 
-  it('turns the bare-string login failure into an ApiError carrying that message', () => {
+  it('turns the bare-string login failure into an ApiError without surfacing the server text', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
     const error = normalizeHttpError(
       response({ status: 401, error: 'Invalid email or password.' })
     );
 
     expect(error).toBeInstanceOf(ApiError);
-    expect(error.message).toBe('Invalid email or password.');
     expect(error.status).toBe(401);
     expect(error.fieldErrors).toEqual({});
+    // The wording for this one is `AuthService`'s, since only it knows a 401
+    // here means "wrong pair" rather than "session ended".
+    expect(error.message).not.toBe('Invalid email or password.');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Invalid email or password.')
+    );
+
+    warn.mockRestore();
   });
 
   it('unwraps a bare string that arrived through Angular parse-failure wrapping', () => {
-    const error = normalizeHttpError(
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    normalizeHttpError(
       response({
         status: 401,
         error: { error: new SyntaxError('Unexpected token'), text: 'Invalid email or password.' },
       })
     );
 
-    expect(error.message).toBe('Invalid email or password.');
-  });
-
-  it('does not surface a raw JSON blob as the message', () => {
-    const error = normalizeHttpError(
-      response({ status: 500, error: '{"stack":"boom"}' })
+    // Recognised as the bare-string shape rather than an opaque object.
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Invalid email or password.')
     );
 
-    expect(error.message).not.toContain('stack');
-    expect(error.message).not.toContain('{');
+    warn.mockRestore();
+  });
+
+  it('never puts a server stack trace or JSON blob on screen', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    for (const body of [
+      '{"stack":"boom"}',
+      'System.NullReferenceException: Object reference not set to an instance of an object.',
+    ]) {
+      const error = normalizeHttpError(response({ status: 500, error: body }));
+
+      expect(error.message).not.toContain('stack');
+      expect(error.message).not.toContain('{');
+      expect(error.message).not.toContain('Exception');
+    }
+
+    warn.mockRestore();
+  });
+
+  it('turns a transport failure into a connectivity message, not a status-0 one', () => {
+    const error = normalizeHttpError(
+      response({ status: 0, statusText: 'Unknown Error', error: new ProgressEvent('error') })
+    );
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(0);
+    expect(error.message).not.toContain('0');
+    expect(error.message).toMatch(/reach the server/i);
   });
 });

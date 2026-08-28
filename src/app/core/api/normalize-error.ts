@@ -3,6 +3,9 @@ import { ApiError } from './api-error';
 
 const VALIDATION_MESSAGE = 'Please correct the highlighted fields and try again.';
 
+const CONNECTIVITY_MESSAGE =
+  'Could not reach the server. Check your connection and try again.';
+
 const BODYLESS_MESSAGE =
   'The request was rejected. A value may be missing, out of range, or in the ' +
   'wrong format, or it may point to a record that no longer exists. Review ' +
@@ -15,17 +18,32 @@ const BODYLESS_MESSAGE =
  * defining job (ADR 0002), so all four get a branch here: a bare JSON string on
  * failed login, a ValidationProblemDetails `errors` map with PascalCase keys, a
  * ProblemDetails carrying a human-readable `detail`, and a bodyless 400.
- * Anything else falls through to a generic, status-derived message.
+ * A transport failure — no response at all, `status` 0 — is not one of the four
+ * but reaches here the same way, and gets its own message rather than a
+ * status-derived one built from a status that never came back.
+ *
+ * No branch ever surfaces the server's own text: a body we did not write can be
+ * a stack trace or a raw internal string, which the spec rules out of the UI.
+ * Where such a body arrives it is logged with its endpoint, the same treatment
+ * the bodyless 400 gets, so it stays diagnosable without being displayed.
  */
 export function normalizeHttpError(response: HttpErrorResponse): ApiError {
   const { status } = response;
+
+  // Transport failure: the request never reached the server, so there is no
+  // status to derive a message from.
+  if (status === 0) {
+    return new ApiError(CONNECTIVITY_MESSAGE, 0);
+  }
+
   const body = unwrapBody(response.error);
 
-  // A bare JSON string: the failed-login body.
+  // A bare JSON string: the failed-login body. The text is the server's own and
+  // never reaches the person — `AuthService` supplies the wording for the one
+  // case that has any, and everything else is status-derived.
   if (typeof body === 'string') {
-    const text = body.trim();
-    const usable = text.length > 0 && !text.startsWith('{') && !text.startsWith('[');
-    return new ApiError(usable ? text : fallbackMessage(status), status);
+    logServerText(response.url, body);
+    return new ApiError(fallbackMessage(status), status);
   }
 
   // ValidationProblemDetails: a PascalCase `errors` map. The server's own
@@ -58,6 +76,13 @@ export function normalizeHttpError(response: HttpErrorResponse): ApiError {
   }
 
   return new ApiError(fallbackMessage(status), status);
+}
+
+/** Keep an undisplayable server body diagnosable without putting it on screen. */
+function logServerText(url: string | null, text: string): void {
+  console.warn(
+    `[api] bare-string body from ${url ?? 'unknown endpoint'}: ${text}`
+  );
 }
 
 /**

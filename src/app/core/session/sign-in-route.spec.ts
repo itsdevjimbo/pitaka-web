@@ -1,12 +1,14 @@
-import { safeReturnUrl } from './routes';
+import { safeReturnUrl } from './sign-in-route';
 
 describe('safeReturnUrl', () => {
   it('keeps an in-app path', () => {
     expect(safeReturnUrl('/app/accounts/42')).toBe('/app/accounts/42');
   });
 
-  it('rejects a missing value', () => {
+  it('rejects every flavour of absent', () => {
     expect(safeReturnUrl(null)).toBeNull();
+    expect(safeReturnUrl(undefined)).toBeNull();
+    expect(safeReturnUrl('')).toBeNull();
   });
 
   it('rejects a protocol-relative URL', () => {

@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { signInRedirect } from './routes';
 import { Session } from './session';
+import { signInRedirect } from './sign-in-route';
 
 /**
  * Gate for the authenticated area. An unauthenticated visit is redirected to

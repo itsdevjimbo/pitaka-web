@@ -5,7 +5,11 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { API_BASE_URL, errorInterceptor } from '@/app/core/api';
+import {
+  API_BASE_URL,
+  errorInterceptor,
+  handlesOwn401,
+} from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { authInterceptor } from './auth.interceptor';
 import { Session } from './session';
@@ -76,7 +80,9 @@ describe('authInterceptor', () => {
   it('does not treat a 401 on boot verification as a lapse', async () => {
     configure('a.b.c');
 
-    const result = firstValueFrom(client.get(`${BASE_URL}/api/auth/me`));
+    const result = firstValueFrom(
+      client.get(`${BASE_URL}/api/auth/me`, { context: handlesOwn401() })
+    );
     http
       .expectOne(`${BASE_URL}/api/auth/me`)
       .flush(null, { status: 401, statusText: 'Unauthorized' });
@@ -89,7 +95,7 @@ describe('authInterceptor', () => {
     configure(null);
 
     const result = firstValueFrom(
-      client.post(`${BASE_URL}/api/auth/login`, {})
+      client.post(`${BASE_URL}/api/auth/login`, {}, { context: handlesOwn401() })
     );
     http
       .expectOne(`${BASE_URL}/api/auth/login`)
@@ -100,5 +106,19 @@ describe('authInterceptor', () => {
 
     await result.catch(() => undefined);
     expect(session.expire).not.toHaveBeenCalled();
+  });
+
+  it('exempts by the request flag, not by the URL it was sent to', async () => {
+    configure('a.b.c');
+
+    // Same endpoint as boot verification, but built without the flag: an
+    // ordinary caller's 401 there is still a lapse.
+    const result = firstValueFrom(client.get(`${BASE_URL}/api/auth/me`));
+    http
+      .expectOne(`${BASE_URL}/api/auth/me`)
+      .flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    await result.catch(() => undefined);
+    expect(session.expire).toHaveBeenCalledTimes(1);
   });
 });

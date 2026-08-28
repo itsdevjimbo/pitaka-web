@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, Credentials, Profile } from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
-import { signInRedirect } from './routes';
+import { signInRedirect } from './sign-in-route';
 
 const TOKEN_KEY = 'pitaka.token';
 

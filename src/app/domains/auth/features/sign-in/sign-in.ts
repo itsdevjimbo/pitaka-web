@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, linkedSignal, signal } from '@angular/core';
 import {
   email,
   FieldTree,
@@ -48,7 +48,18 @@ export default class AuthSignIn {
   });
 
   protected submitting = signal(false);
-  protected errorMessage = signal<string | null>(null);
+
+  /**
+   * The form-level banner. Linked to the model so any edit clears it: a message
+   * about the values the person has since changed is worse than none.
+   */
+  protected errorMessage = linkedSignal<
+    { email: string; password: string },
+    string | null
+  >({
+    source: this.signInFormModel,
+    computation: () => null,
+  });
 
   signIn(event: Event) {
     event.preventDefault();
@@ -63,14 +74,25 @@ export default class AuthSignIn {
           await this.router.navigateByUrl(this.landingUrl());
           return undefined;
         } catch (error) {
-          const fieldErrors =
+          const boundErrors =
             error instanceof ApiError ? this.serverFieldErrors(error) : [];
-          if (fieldErrors.length > 0) {
+          const unattributed =
+            error instanceof ApiError ? this.unattributedMessages(error) : [];
+
+          if (boundErrors.length > 0) {
             this.signInForm().markAsTouched();
-            return fieldErrors;
           }
-          this.errorMessage.set(this.messageFor(error));
-          return undefined;
+
+          // A field the server blamed that has no control here would otherwise
+          // vanish, leaving "correct the highlighted fields" with nothing
+          // highlighted. Say what the server said instead of nothing.
+          if (unattributed.length > 0) {
+            this.errorMessage.set(unattributed.join(' '));
+          } else if (boundErrors.length === 0) {
+            this.errorMessage.set(this.messageFor(error));
+          }
+
+          return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
         }
@@ -85,10 +107,7 @@ export default class AuthSignIn {
    * up with the control names here.
    */
   private serverFieldErrors(error: ApiError) {
-    const controls: Partial<Record<string, FieldTree<string>>> = {
-      email: this.signInForm.email,
-      password: this.signInForm.password,
-    };
+    const controls = this.controlsByFieldName();
     return Object.entries(error.fieldErrors).flatMap(([field, messages]) => {
       const control = controls[field];
       return control
@@ -99,6 +118,25 @@ export default class AuthSignIn {
           }))
         : [];
     });
+  }
+
+  /**
+   * Messages the server attached to a field this form has no control for. They
+   * cannot be shown under a field, and dropping them silently would leave the
+   * person with a banner pointing at highlights that are not there.
+   */
+  private unattributedMessages(error: ApiError): string[] {
+    const controls = this.controlsByFieldName();
+    return Object.entries(error.fieldErrors)
+      .filter(([field]) => !controls[field])
+      .flatMap(([, messages]) => [...messages]);
+  }
+
+  private controlsByFieldName(): Partial<Record<string, FieldTree<string>>> {
+    return {
+      email: this.signInForm.email,
+      password: this.signInForm.password,
+    };
   }
 
   /** Where to go once signed in: the remembered return URL, or the app home. */

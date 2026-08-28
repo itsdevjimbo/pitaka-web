@@ -1,7 +1,7 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
-import { API_BASE_URL, ApiError } from '@/app/core/api';
+import { API_BASE_URL, ApiError, HANDLES_OWN_401 } from '@/app/core/api';
 import { Session } from './session';
 
 /**
@@ -10,8 +10,11 @@ import { Session } from './session';
  * lapsed: the token is cleared and the person is returned to sign-in with their
  * place remembered.
  *
- * The token is scoped to `API_BASE_URL` so it never leaks to another host. Two
- * requests are exempt from the lapse handling:
+ * The token is scoped to `API_BASE_URL` so it never leaks to another host. A
+ * request is exempt from the lapse handling when the adapter that built it
+ * flagged it `HANDLES_OWN_401` — the flag rides on the request rather than being
+ * re-derived from its URL here, so a renamed endpoint cannot silently drop the
+ * exemption. Two requests carry it:
  *
  * - the sign-in request — a 401 there means "wrong password", not "your session
  *   ended";
@@ -34,9 +37,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
       ? request.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
       : request;
 
-  const selfHandles401 =
-    request.url.endsWith('/api/auth/login') ||
-    request.url.endsWith('/api/auth/me');
+  const selfHandles401 = request.context.get(HANDLES_OWN_401);
 
   return next(outgoing).pipe(
     catchError((error: unknown) => {
