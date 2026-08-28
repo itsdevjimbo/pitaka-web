@@ -65,13 +65,25 @@ describe('authInterceptor', () => {
   it('treats a 401 on an ordinary request as the session lapsing', async () => {
     configure('a.b.c');
 
+    const result = firstValueFrom(client.get(`${BASE_URL}/api/accounts`));
+    http
+      .expectOne(`${BASE_URL}/api/accounts`)
+      .flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    await result.catch(() => undefined);
+    expect(session.expire).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not treat a 401 on boot verification as a lapse', async () => {
+    configure('a.b.c');
+
     const result = firstValueFrom(client.get(`${BASE_URL}/api/auth/me`));
     http
       .expectOne(`${BASE_URL}/api/auth/me`)
       .flush(null, { status: 401, statusText: 'Unauthorized' });
 
     await result.catch(() => undefined);
-    expect(session.expire).toHaveBeenCalledTimes(1);
+    expect(session.expire).not.toHaveBeenCalled();
   });
 
   it('does not treat a 401 on the sign-in request as a lapse', async () => {

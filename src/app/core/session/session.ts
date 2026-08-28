@@ -54,6 +54,12 @@ export class Session {
    * Only a 401 clears the session (ADR 0004). A transport failure — the API
    * down, no network — leaves the stored token in place so a refresh once
    * connectivity returns signs the person straight back in.
+   *
+   * This method is the sole handler of the 401 on `GET /api/auth/me`: it clears
+   * the token but does not redirect, since it runs before the shell renders and
+   * the app initializer / route guards route from the cleared state. The auth
+   * interceptor deliberately exempts this request so `expire()` does not also
+   * fire on the same response.
    */
   async verifyBoot(): Promise<void> {
     if (this._token() === null) {
@@ -79,6 +85,8 @@ export class Session {
    * to sign-in, remembering where the person was so they resume, not restart.
    */
   expire(): void {
+    // Concurrent in-flight requests can each come back 401; only the first
+    // lapse captures the return URL and redirects.
     if (this._token() === null) {
       return;
     }

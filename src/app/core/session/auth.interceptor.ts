@@ -10,9 +10,16 @@ import { Session } from './session';
  * lapsed: the token is cleared and the person is returned to sign-in with their
  * place remembered.
  *
- * The token is scoped to `API_BASE_URL` so it never leaks to another host. The
- * sign-in request itself is exempt from the lapse handling: a 401 there means
- * "wrong password", not "your session ended".
+ * The token is scoped to `API_BASE_URL` so it never leaks to another host. Two
+ * requests are exempt from the lapse handling:
+ *
+ * - the sign-in request — a 401 there means "wrong password", not "your session
+ *   ended";
+ * - boot verification (`GET /api/auth/me`) — its only caller is
+ *   `Session.verifyBoot`, which owns the 401 for that request (ADR 0004: clear
+ *   the stored token, no redirect, because the shell has not rendered and there
+ *   is no place to return the person to). Letting `expire()` also fire here
+ *   would have two handlers racing on one response.
  */
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   // Dependencies
@@ -27,11 +34,18 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
       ? request.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
       : request;
 
-  const isSignIn = request.url.endsWith('/api/auth/login');
+  const selfHandles401 =
+    request.url.endsWith('/api/auth/login') ||
+    request.url.endsWith('/api/auth/me');
 
   return next(outgoing).pipe(
     catchError((error: unknown) => {
-      if (forApi && !isSignIn && error instanceof ApiError && error.status === 401) {
+      if (
+        forApi &&
+        !selfHandles401 &&
+        error instanceof ApiError &&
+        error.status === 401
+      ) {
         session.expire();
       }
       return throwError(() => error);
