@@ -3,7 +3,7 @@ import { MatPseudoCheckbox } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatDivider } from '@angular/material/list';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { RouterLink } from '@angular/router';
+import { Session } from '@/app/core/session';
 import { Scheme, Theming } from '@/app/core/theming';
 
 @Component({
@@ -15,7 +15,6 @@ import { Scheme, Theming } from '@/app/core/theming';
     MatMenuItem,
     MatPseudoCheckbox,
     MatMenuTrigger,
-    RouterLink,
   ],
   template: `
     <button
@@ -31,7 +30,10 @@ import { Scheme, Theming } from '@/app/core/theming';
         />
       </span>
       <div class="flex min-w-0 flex-auto flex-col select-none">
-        <div class="truncate font-medium">Profile</div>
+        <div class="truncate font-medium">{{ profile()?.name }}</div>
+        <div class="truncate text-sm text-neutral-500 dark:text-neutral-400">
+          {{ profile()?.email }}
+        </div>
       </div>
       <mat-icon
         class="size-4"
@@ -55,7 +57,7 @@ import { Scheme, Theming } from '@/app/core/theming';
       <mat-divider />
       <button
         mat-menu-item
-        routerLink="/auth/sign-in"
+        (click)="signOut()"
       >
         <mat-icon svgIcon="log-out" />
         Sign out
@@ -82,8 +84,10 @@ import { Scheme, Theming } from '@/app/core/theming';
 export class User {
   // Dependencies
   private theming = inject(Theming);
+  private session = inject(Session);
 
   // State
+  protected profile = this.session.profile;
   protected scheme = computed(() => this.theming.scheme());
   protected schemes: { label: string; value: Scheme }[] = [
     { label: 'Light', value: 'light' },
@@ -93,5 +97,10 @@ export class User {
 
   updateScheme(scheme: Scheme) {
     this.theming.scheme.set(scheme);
+  }
+
+  /** Leave deliberately: the session clears client-side and returns to sign-in. */
+  signOut() {
+    this.session.signOut();
   }
 }

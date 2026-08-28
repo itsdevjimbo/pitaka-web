@@ -13,9 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiError } from '@/app/core/api';
-import { safeReturnUrl, Session } from '@/app/core/session';
-
-const DEFAULT_LANDING = '/app';
+import { APP_HOME_ROUTE, safeReturnUrl, Session } from '@/app/core/session';
 
 @Component({
   selector: 'auth-sign-in',
@@ -142,7 +140,7 @@ export default class AuthSignIn {
   /** Where to go once signed in: the remembered return URL, or the app home. */
   private landingUrl(): string {
     const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-    return safeReturnUrl(returnUrl) ?? DEFAULT_LANDING;
+    return safeReturnUrl(returnUrl) ?? APP_HOME_ROUTE;
   }
 
   /**

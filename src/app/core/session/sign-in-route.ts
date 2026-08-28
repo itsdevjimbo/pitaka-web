@@ -8,6 +8,13 @@ import { UrlCreationOptions } from '@angular/router';
 export const SIGN_IN_ROUTE = '/auth/sign-in';
 
 /**
+ * The authenticated area's landing route: where sign-in drops a person with no
+ * remembered destination, and where `guestGuard` sends someone who is already
+ * signed in. The counterpart to `SIGN_IN_ROUTE`, shared for the same reason.
+ */
+export const APP_HOME_ROUTE = '/app';
+
+/**
  * Router arguments for sending someone to sign-in while remembering where they
  * were headed. Spread into `Router.createUrlTree` (the guard, which must return
  * a `UrlTree`) or `Router.navigate` (Session, reacting to a mid-use lapse) so

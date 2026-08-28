@@ -154,4 +154,26 @@ describe('Session', () => {
       { queryParams: { returnUrl: '/accounts' } }
     );
   });
+
+  it('on sign-out clears the session and returns to sign-in without a return URL', async () => {
+    const session = await verifiedSession();
+    expect(session.isAuthenticated()).toBe(true);
+
+    session.signOut();
+
+    expect(session.isAuthenticated()).toBe(false);
+    expect(session.profile()).toBeNull();
+    expect(storage.getItem(TOKEN_KEY)).toBeNull();
+    // A deliberate leave, not a lapse: nowhere to send the person back to.
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/sign-in']);
+  });
+
+  it('ignores a second sign-out once the session is already clear', async () => {
+    const session = await verifiedSession();
+
+    session.signOut();
+    session.signOut();
+
+    expect(router.navigate).toHaveBeenCalledTimes(1);
+  });
 });
