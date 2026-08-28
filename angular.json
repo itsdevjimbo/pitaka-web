@@ -6,7 +6,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "fuse": {
+    "pitaka": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -24,12 +24,7 @@
                 "input": "public"
               }
             ],
-            "styles": ["src/styles/styles.css"],
-            "server": "src/main.server.ts",
-            "outputMode": "server",
-            "ssr": {
-              "entry": "src/server.ts"
-            }
+            "styles": ["src/styles/styles.css"]
           },
           "configurations": {
             "production": {
@@ -55,12 +50,15 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "port": 4200
+          },
           "configurations": {
             "production": {
-              "buildTarget": "fuse:build:production"
+              "buildTarget": "pitaka:build:production"
             },
             "development": {
-              "buildTarget": "fuse:build:development"
+              "buildTarget": "pitaka:build:development"
             }
           },
           "defaultConfiguration": "development"

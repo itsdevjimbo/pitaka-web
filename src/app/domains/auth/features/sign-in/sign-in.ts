@@ -8,7 +8,6 @@ import {
 } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDivider } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -25,7 +24,6 @@ import { Router, RouterLink } from '@angular/router';
     MatIconModule,
     MatCheckboxModule,
     FormField,
-    MatDivider,
   ],
 })
 export default class AuthSignIn {
@@ -34,8 +32,8 @@ export default class AuthSignIn {
 
   // State
   protected signInFormModel = signal({
-    email: 'hughes.brian@company.com',
-    password: 'Secure-Password-123$%^',
+    email: '',
+    password: '',
   });
   protected signInForm = form(this.signInFormModel, (form) => {
     required(form.email, { message: 'You must enter an email address' });
@@ -48,8 +46,7 @@ export default class AuthSignIn {
     event.preventDefault();
 
     submit(this.signInForm, async () => {
-      // Navigate to a route, demo purposes only
-      this.router.navigateByUrl('/admin/dashboards');
+      this.router.navigateByUrl('/app');
     });
   }
 }
