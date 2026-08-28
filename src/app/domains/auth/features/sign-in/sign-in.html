@@ -29,6 +29,16 @@
         class="mt-8"
         (submit)="signIn($event)"
       >
+        <!-- Error message -->
+        @if (errorMessage(); as message) {
+          <div
+            class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+            role="alert"
+          >
+            {{ message }}
+          </div>
+        }
+
         <div class="flex flex-col gap-y-4">
           <!-- Email field -->
           <mat-form-field class="w-full">
@@ -98,19 +108,14 @@
           </mat-form-field>
         </div>
 
-        <!-- Actions -->
-        <div class="mt-2 flex w-full items-center justify-between">
-          <mat-checkbox class="-ml-2">Remember me</mat-checkbox>
-        </div>
-
         <!-- Submit button -->
         <button
           type="submit"
           matButton="filled"
           class="mt-6 w-full"
-          [disabled]="signInForm().invalid()"
+          [disabled]="signInForm().invalid() || submitting()"
         >
-          Sign in
+          {{ submitting() ? 'Signing in…' : 'Sign in' }}
         </button>
       </form>
     </div>
