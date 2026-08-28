@@ -45,6 +45,19 @@ describe('Session', () => {
     return TestBed.inject(Session);
   }
 
+  /** A session the server has confirmed, so `isAuthenticated()` is genuinely true. */
+  async function verifiedSession(token = 'live-token') {
+    const session = configure({ [TOKEN_KEY]: token });
+
+    const pending = session.verifyBoot();
+    http
+      .expectOne(`${BASE_URL}/api/auth/me`)
+      .flush({ id: 7, name: 'Ada', email: 'ada@example.com' });
+    await pending;
+
+    return session;
+  }
+
   afterEach(() => http.verify());
 
   it('starts unauthenticated and makes no request when no token is stored', async () => {
@@ -84,7 +97,7 @@ describe('Session', () => {
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
   });
 
-  it('keeps a stored token when boot verification hits a transport failure', async () => {
+  it('keeps a stored token but stays unauthenticated when boot verification hits a transport failure', async () => {
     const session = configure({ [TOKEN_KEY]: 'stored-token' });
 
     const pending = session.verifyBoot();
@@ -93,7 +106,10 @@ describe('Session', () => {
       .error(new ProgressEvent('error'));
     await pending;
 
-    expect(session.isAuthenticated()).toBe(true);
+    // Unverified, so the shell stays shut; the token survives so a refresh once
+    // the API is reachable signs the person straight back in.
+    expect(session.isAuthenticated()).toBe(false);
+    expect(session.profile()).toBeNull();
     expect(storage.getItem(TOKEN_KEY)).toBe('stored-token');
   });
 
@@ -125,11 +141,13 @@ describe('Session', () => {
   });
 
   it('on expiry clears the token and returns to sign-in preserving the return URL', async () => {
-    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const session = await verifiedSession();
+    expect(session.isAuthenticated()).toBe(true);
 
     session.expire();
 
     expect(session.isAuthenticated()).toBe(false);
+    expect(session.profile()).toBeNull();
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
     expect(router.navigate).toHaveBeenCalledWith(
       ['/auth/sign-in'],

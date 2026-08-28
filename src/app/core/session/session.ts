@@ -36,7 +36,13 @@ export class Session {
   /** The signed-in person's identity, populated once the server confirms it. */
   readonly profile = this._profile.asReadonly();
 
-  readonly isAuthenticated = computed(() => this._token() !== null);
+  /**
+   * Whether the server has confirmed this session during this page's life, not
+   * merely whether a token is stored (ADR 0004: verified, "not merely
+   * decoded"). Only `signIn` and a successful `verifyBoot` set the Profile, so
+   * a token the server has not yet vouched for never reaches the shell.
+   */
+  readonly isAuthenticated = computed(() => this._profile() !== null);
 
   /** Exchange credentials for a session. Rejects with an `ApiError` on failure. */
   async signIn(credentials: Credentials): Promise<void> {
@@ -65,6 +71,7 @@ export class Session {
     if (this._token() === null) {
       return;
     }
+
     try {
       this._profile.set(await firstValueFrom(this.auth.me()));
     } catch (error) {
