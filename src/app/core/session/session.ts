@@ -1,6 +1,7 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { ApiError } from '@/app/core/api';
 import { AuthService, Credentials, Profile } from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
 import { SIGN_IN_ROUTE, signInRedirect } from './routes';
@@ -49,6 +50,10 @@ export class Session {
    * On boot, verify a stored token against the server before the authenticated
    * shell renders. A token the server rejects is cleared; a genuine one yields
    * the current name and email, which a cached copy would serve stale.
+   *
+   * Only a 401 clears the session (ADR 0004). A transport failure — the API
+   * down, no network — leaves the stored token in place so a refresh once
+   * connectivity returns signs the person straight back in.
    */
   async verifyBoot(): Promise<void> {
     if (this._token() === null) {
@@ -56,8 +61,10 @@ export class Session {
     }
     try {
       this._profile.set(await firstValueFrom(this.auth.me()));
-    } catch {
-      this.clear();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        this.clear();
+      }
     }
   }
 

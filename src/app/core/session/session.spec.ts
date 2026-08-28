@@ -84,6 +84,19 @@ describe('Session', () => {
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
   });
 
+  it('keeps a stored token when boot verification hits a transport failure', async () => {
+    const session = configure({ [TOKEN_KEY]: 'stored-token' });
+
+    const pending = session.verifyBoot();
+    http
+      .expectOne(`${BASE_URL}/api/auth/me`)
+      .error(new ProgressEvent('error'));
+    await pending;
+
+    expect(session.isAuthenticated()).toBe(true);
+    expect(storage.getItem(TOKEN_KEY)).toBe('stored-token');
+  });
+
   it('stores the token and Profile on a successful sign-in', async () => {
     const session = configure();
 
