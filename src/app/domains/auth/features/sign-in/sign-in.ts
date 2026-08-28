@@ -67,7 +67,7 @@ export default class AuthSignIn {
     });
   }
 
-  /** Where to go once signed in: the remembered return URL, or Accounts. */
+  /** Where to go once signed in: the remembered return URL, or the app home. */
   private landingUrl(): string {
     const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
     const safe =
