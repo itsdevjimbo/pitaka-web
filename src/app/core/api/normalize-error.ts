@@ -5,7 +5,9 @@ const CONNECTIVITY_MESSAGE =
   'Could not reach the server. Check your connection and try again.';
 
 const BODYLESS_MESSAGE =
-  'The request could not be completed. Please check the values you entered and try again.';
+  'The request was rejected. A value may be missing, out of range, or in the ' +
+  'wrong format, or it may point to a record that no longer exists. Review ' +
+  'what you entered and try again.';
 
 const VALIDATION_MESSAGE = 'Please correct the highlighted fields and try again.';
 
