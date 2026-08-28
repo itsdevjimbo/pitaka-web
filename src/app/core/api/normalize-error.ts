@@ -3,15 +3,19 @@ import { ApiError } from './api-error';
 
 const VALIDATION_MESSAGE = 'Please correct the highlighted fields and try again.';
 
+const BODYLESS_MESSAGE =
+  'The request was rejected. A value may be missing, out of range, or in the ' +
+  'wrong format, or it may point to a record that no longer exists. Review ' +
+  'what you entered and try again.';
+
 /**
  * Collapses any {@link HttpErrorResponse} into a single {@link ApiError}.
  *
- * Sign-in is the only screen wired to the API so far, and it meets exactly two
- * of the API's four failure shapes (ADR 0002): a failed login returns a bare
- * JSON string, and validation failures return a PascalCase `errors` map. Those
- * two are handled here; everything else collapses to a generic, status-derived
- * message. The remaining shapes get their branches when a screen actually hits
- * them.
+ * Knowing the four failure shapes the Pitaka API can return is this client's
+ * defining job (ADR 0002), so all four get a branch here: a bare JSON string on
+ * failed login, a ValidationProblemDetails `errors` map with PascalCase keys, a
+ * ProblemDetails carrying a human-readable `detail`, and a bodyless 400.
+ * Anything else falls through to a generic, status-derived message.
  */
 export function normalizeHttpError(response: HttpErrorResponse): ApiError {
   const { status } = response;
@@ -36,6 +40,21 @@ export function normalizeHttpError(response: HttpErrorResponse): ApiError {
       );
       return new ApiError(VALIDATION_MESSAGE, status, fieldErrors);
     }
+
+    // ProblemDetails: a human-readable `detail` specific to this occurrence.
+    if (typeof record['detail'] === 'string' && record['detail'].length > 0) {
+      return new ApiError(record['detail'], status);
+    }
+  }
+
+  // A bodyless 400 (ten call sites in the API, ADR 0002). Never attributed to a
+  // field — a wrong red outline is worse than none; logged with its endpoint so
+  // it can be justified as a server-side fix later.
+  if (status === 400) {
+    console.warn(
+      `[api] bodyless 400 from ${response.url ?? 'unknown endpoint'}`
+    );
+    return new ApiError(BODYLESS_MESSAGE, status);
   }
 
   return new ApiError(fallbackMessage(status), status);

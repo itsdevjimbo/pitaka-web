@@ -71,8 +71,8 @@ describe('AuthSignIn', () => {
     await fixture.whenStable();
 
     expect(cmp.signInForm.email().errors()).toEqual([]);
-    expect(cmp.errorMessage()).toBe(
-      'That email and password do not match. Please try again.'
-    );
+    // The adapter already produced the display message; the component surfaces
+    // it as-is rather than re-branching on the 401 (ADR 0002).
+    expect(cmp.errorMessage()).toBe('Invalid email or password.');
   });
 });

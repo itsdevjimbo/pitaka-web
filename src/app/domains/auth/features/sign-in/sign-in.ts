@@ -107,12 +107,14 @@ export default class AuthSignIn {
     return safeReturnUrl(returnUrl) ?? DEFAULT_LANDING;
   }
 
-  /** One clear sentence — never a raw server string or a stack trace. */
+  /**
+   * One clear sentence for the form-level banner. The adapter has already
+   * normalised every failure shape into a display-ready message (ADR 0002 —
+   * nothing above the adapter branches on transport detail), so an `ApiError`
+   * is surfaced as-is; only a non-API throw needs a fallback here.
+   */
   private messageFor(error: unknown): string {
     if (error instanceof ApiError) {
-      if (error.status === 401) {
-        return 'That email and password do not match. Please try again.';
-      }
       return error.message;
     }
     return 'Something went wrong signing you in. Please try again.';
