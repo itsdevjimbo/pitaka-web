@@ -12,9 +12,8 @@ export type Account = {
 
   /**
    * The server's freshly recomputed balance, guarded by an optimistic-
-   * concurrency version. Read on every entry and never served from a cache — a
-   * stale figure in a money app is trust-ending (issue #6). May be negative: a
-   * credit card can owe money.
+   * concurrency version. Read on every entry and never served from a cache
+   * (ADR 0006). May be negative: a credit card owes money (ADR 0005).
    */
   currentBalance: number;
 
@@ -30,20 +29,18 @@ export type AccountType =
   | 'Wallet'
   | 'Investment';
 
-/** How each Account type reads in the UI. */
-export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  Cash: 'Cash',
-  Bank: 'Bank',
-  CreditCard: 'Credit card',
-  Wallet: 'Wallet',
-  Investment: 'Investment',
-};
-
-/** The lucide icon that stands in for each Account type in the list. */
-export const ACCOUNT_TYPE_ICONS: Record<AccountType, string> = {
-  Cash: 'banknote',
-  Bank: 'landmark',
-  CreditCard: 'credit-card',
-  Wallet: 'wallet',
-  Investment: 'trending-up',
+/**
+ * How each Account type presents in the list: the word the person reads (the
+ * API's `CreditCard` is never shown as one token) and the lucide icon beside it.
+ * One entry per type so the two cannot drift apart.
+ */
+export const ACCOUNT_TYPES: Record<
+  AccountType,
+  { label: string; icon: string }
+> = {
+  Cash: { label: 'Cash', icon: 'banknote' },
+  Bank: { label: 'Bank', icon: 'landmark' },
+  CreditCard: { label: 'Credit card', icon: 'credit-card' },
+  Wallet: { label: 'Wallet', icon: 'wallet' },
+  Investment: { label: 'Investment', icon: 'trending-up' },
 };

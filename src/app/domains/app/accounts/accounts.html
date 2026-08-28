@@ -17,7 +17,7 @@
       />
       <span>Loading your accounts…</span>
     </div>
-  } @else if (loadError(); as message) {
+  } @else if (errorMessage(); as message) {
     <!-- Failed load: explain, and offer a retry -->
     <div
       class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
@@ -58,11 +58,16 @@
     >
       <div class="flex flex-col">
         <span class="text-sm text-neutral-500 dark:text-neutral-400">
-          {{ showRetired() ? 'Total across all accounts' : 'Total across active accounts' }}
+          {{ totalLabel() }}
         </span>
         <span class="text-2xl font-bold tracking-tight tabular-nums">
           {{ total() | peso }}
         </span>
+        @if (hasRetired() && !showRetired()) {
+          <span class="text-sm text-neutral-500 dark:text-neutral-400">
+            Including retired: {{ allAccountsTotal() | peso }}
+          </span>
+        }
       </div>
 
       @if (hasRetired()) {
@@ -96,7 +101,7 @@
           >
             <mat-icon
               class="size-5"
-              [svgIcon]="typeIcons[account.type]"
+              [svgIcon]="types[account.type].icon"
             />
           </span>
 
@@ -105,7 +110,7 @@
             <span
               class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
             >
-              {{ typeLabels[account.type] }}
+              {{ types[account.type].label }}
               @if (!account.isActive) {
                 <span
                   class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"

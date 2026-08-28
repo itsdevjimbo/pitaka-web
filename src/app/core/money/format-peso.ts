@@ -4,8 +4,9 @@
  * one into a display string. When Pitaka stops being single-currency, this is
  * the only place that changes.
  *
- * Amounts are rendered with the narrow `₱` symbol and two decimal places. A
- * negative figure — a credit card can owe money — keeps its sign.
+ * Amounts render with the narrow `₱` symbol and two decimal places. A derived
+ * figure can be negative — an Account's balance owes money when a card is in
+ * debt (ADR 0005) — so the minus sign is kept, not rejected.
  */
 const PESO = new Intl.NumberFormat('en-PH', {
   style: 'currency',

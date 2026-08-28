@@ -15,4 +15,5 @@ Adding a currency field to the API was deferred rather than rejected. It is the 
 ## Consequences
 
 - Revisit before anyone outside the author signs up. Adding currency after real balances exist means backfilling every row and deciding what historical amounts meant.
-- Amounts are always positive; direction is carried by the transaction type, never by a negative number.
+- A recorded amount is always positive; direction is carried by the transaction type, never by a negative number. This governs what a person *enters* — a Transaction, a Contribution, a starting balance.
+- A derived figure is not a recorded amount and may be negative: an Account's running balance owes money when a credit card is in debt. The peso formatter therefore keeps a minus sign rather than rejecting one.

@@ -3,12 +3,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { ApiError } from '@/app/core/api';
-import { PesoPipe } from '@/app/core/money';
-import {
-  Account,
-  ACCOUNT_TYPE_ICONS,
-  ACCOUNT_TYPE_LABELS,
-} from './account';
+import { PesoPipe, sumPesos } from '@/app/core/money';
+import { Account, ACCOUNT_TYPES } from './account';
 import { AccountsService } from './accounts.service';
 
 const LOAD_FAILED =
@@ -20,7 +16,7 @@ const LOAD_FAILED =
  * arithmetic. Retired Accounts read as retired and can be hidden; a Profile with
  * no Accounts gets told what to do next rather than a blank screen.
  *
- * Balances are re-read from the server on every entry (issue #6): the component
+ * Balances are re-read from the server on every entry (ADR 0006): the component
  * calls the service in its constructor and holds nothing across navigations.
  */
 @Component({
@@ -39,11 +35,10 @@ export default class Accounts {
   // State
   protected readonly accounts = signal<readonly Account[] | null>(null);
   protected readonly loading = signal(true);
-  protected readonly loadError = signal<string | null>(null);
+  protected readonly errorMessage = signal<string | null>(null);
   protected readonly showRetired = signal(false);
 
-  protected readonly typeLabels = ACCOUNT_TYPE_LABELS;
-  protected readonly typeIcons = ACCOUNT_TYPE_ICONS;
+  protected readonly types = ACCOUNT_TYPES;
 
   /** Whether the person owns any retired Account — gates the hide/show control. */
   protected readonly hasRetired = computed(() =>
@@ -58,13 +53,25 @@ export default class Accounts {
       : all.filter((account) => account.isActive);
   });
 
-  /** The sum of exactly what is on screen, so the label can say what it covers. */
+  /** The sum of exactly what is on screen — the headline figure. */
   protected readonly total = computed(() =>
-    this.visibleAccounts().reduce(
-      (sum, account) => sum + account.currentBalance,
-      0
-    )
+    sumPesos(this.visibleAccounts().map((account) => account.currentBalance))
   );
+
+  /** The sum across every Account, retired included — shown while retired are hidden. */
+  protected readonly allAccountsTotal = computed(() =>
+    sumPesos((this.accounts() ?? []).map((account) => account.currentBalance))
+  );
+
+  /** What the headline total covers, said plainly. */
+  protected readonly totalLabel = computed(() => {
+    if (!this.hasRetired()) {
+      return 'Total';
+    }
+    return this.showRetired()
+      ? 'Total across all accounts'
+      : 'Total across active accounts';
+  });
 
   constructor() {
     this.load();
@@ -73,7 +80,7 @@ export default class Accounts {
   /** Read the list from the server afresh. Bound to the error state's retry. */
   protected load(): void {
     this.loading.set(true);
-    this.loadError.set(null);
+    this.errorMessage.set(null);
 
     this.service
       .list()
@@ -84,7 +91,7 @@ export default class Accounts {
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          this.loadError.set(
+          this.errorMessage.set(
             error instanceof ApiError ? error.message : LOAD_FAILED
           );
           this.loading.set(false);

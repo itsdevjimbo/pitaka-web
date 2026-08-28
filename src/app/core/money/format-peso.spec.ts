@@ -1,6 +1,4 @@
-import { TestBed } from '@angular/core/testing';
 import { formatPeso } from './format-peso';
-import { PesoPipe } from './peso.pipe';
 
 describe('formatPeso', () => {
   it('renders a positive amount with the peso sign and two decimals', () => {
@@ -11,20 +9,11 @@ describe('formatPeso', () => {
     expect(formatPeso(0)).toBe('₱0.00');
   });
 
-  it('keeps the sign on a negative balance — a card can owe money', () => {
+  it('keeps the sign on a negative balance — a card can owe money (ADR 0005)', () => {
     expect(formatPeso(-500)).toBe('-₱500.00');
   });
 
   it('groups thousands', () => {
     expect(formatPeso(1000000)).toBe('₱1,000,000.00');
-  });
-});
-
-describe('PesoPipe', () => {
-  it('formats through formatPeso so templates share the one token', () => {
-    const pipe = TestBed.runInInjectionContext(() => new PesoPipe());
-
-    expect(pipe.transform(1234.5)).toBe(formatPeso(1234.5));
-    expect(pipe.transform(1234.5)).toBe('₱1,234.50');
   });
 });

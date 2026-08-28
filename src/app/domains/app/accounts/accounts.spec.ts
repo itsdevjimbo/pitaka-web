@@ -90,19 +90,34 @@ describe('Accounts', () => {
     expect(text()).toContain(formatPeso(8500));
   });
 
-  it('shows the total across the Accounts on screen', () => {
+  it('shows a plainly-labelled total when nothing is retired', () => {
     const { text } = setup(() => of([CASH, BANK]));
 
-    expect(text()).toContain('Total across active accounts');
+    expect(text()).toContain('Total');
+    expect(text()).not.toContain('Total across');
     expect(text()).toContain(formatPeso(10000));
   });
 
-  it('hides retired Accounts and leaves their balance out of the total by default', () => {
+  it('adds money without floating-point drift', () => {
+    const { text } = setup(() =>
+      of([
+        { ...CASH, currentBalance: 0.1 },
+        { ...BANK, currentBalance: 0.2 },
+      ])
+    );
+
+    expect(text()).toContain(formatPeso(0.3));
+  });
+
+  it('hides retired Accounts and their balance from the headline total, but still shows a grand total', () => {
     const { text } = setup(() => of([CASH, BANK, OLD_WALLET]));
 
     expect(text()).not.toContain('Old GCash');
-    // 1500 + 8500, not + 300
+    expect(text()).toContain('Total across active accounts');
+    // Headline is 1500 + 8500; the grand total is still on screen without a click.
     expect(text()).toContain(formatPeso(10000));
+    expect(text()).toContain('Including retired:');
+    expect(text()).toContain(formatPeso(10300));
   });
 
   it('reveals retired Accounts on request and says the total now covers them all', () => {
@@ -114,6 +129,7 @@ describe('Accounts', () => {
     expect(text()).toContain('Old GCash');
     expect(text()).toContain('Retired');
     expect(text()).toContain('Total across all accounts');
+    expect(text()).not.toContain('Including retired:');
     expect(text()).toContain(formatPeso(10300));
   });
 
