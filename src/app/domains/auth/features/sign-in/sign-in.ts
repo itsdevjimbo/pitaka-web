@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import {
   email,
+  FieldTree,
   form,
   FormField,
   required,
@@ -52,18 +53,51 @@ export default class AuthSignIn {
   signIn(event: Event) {
     event.preventDefault();
 
-    submit(this.signInForm, async () => {
-      this.submitting.set(true);
-      this.errorMessage.set(null);
+    submit(this.signInForm, {
+      action: async () => {
+        this.submitting.set(true);
+        this.errorMessage.set(null);
 
-      try {
-        await this.session.signIn(this.signInFormModel());
-        await this.router.navigateByUrl(this.landingUrl());
-      } catch (error) {
-        this.errorMessage.set(this.messageFor(error));
-      } finally {
-        this.submitting.set(false);
-      }
+        try {
+          await this.session.signIn(this.signInFormModel());
+          await this.router.navigateByUrl(this.landingUrl());
+          return undefined;
+        } catch (error) {
+          const fieldErrors =
+            error instanceof ApiError ? this.serverFieldErrors(error) : [];
+          if (fieldErrors.length > 0) {
+            this.signInForm().markAsTouched();
+            return fieldErrors;
+          }
+          this.errorMessage.set(this.messageFor(error));
+          return undefined;
+        } finally {
+          this.submitting.set(false);
+        }
+      },
+    });
+  }
+
+  /**
+   * The messages the server attached to specific fields, bound onto the matching
+   * form controls so they surface under the field. The normalizer has already
+   * camelCased the PascalCase `nameof(...)` keys, so `email` / `password` line
+   * up with the control names here.
+   */
+  private serverFieldErrors(error: ApiError) {
+    const controls: Partial<Record<string, FieldTree<string>>> = {
+      email: this.signInForm.email,
+      password: this.signInForm.password,
+    };
+    return Object.entries(error.fieldErrors).flatMap(([field, messages]) => {
+      const control = controls[field];
+      return control
+        ? messages.map((message) => ({
+            fieldTree: control,
+            kind: 'server',
+            message,
+          }))
+        : [];
     });
   }
 
