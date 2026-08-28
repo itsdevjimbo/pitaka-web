@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { SIGN_IN_ROUTE } from './routes';
+import { signInRedirect } from './routes';
 import { Session } from './session';
 
 /**
@@ -16,7 +16,5 @@ export const authGuard: CanActivateFn = (_route, state) => {
     return true;
   }
 
-  return router.createUrlTree([SIGN_IN_ROUTE], {
-    queryParams: { returnUrl: state.url },
-  });
+  return router.createUrlTree(...signInRedirect(state.url));
 };

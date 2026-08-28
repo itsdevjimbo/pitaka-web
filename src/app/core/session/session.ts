@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService, Credentials, Profile } from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
-import { SIGN_IN_ROUTE } from './routes';
+import { SIGN_IN_ROUTE, signInRedirect } from './routes';
 
 const TOKEN_KEY = 'pitaka.token';
 
@@ -77,7 +77,7 @@ export class Session {
     }
     const returnUrl = this.router.url;
     this.clear();
-    this.router.navigate([SIGN_IN_ROUTE], { queryParams: { returnUrl } });
+    this.router.navigate(...signInRedirect(returnUrl));
   }
 
   private clear(): void {
