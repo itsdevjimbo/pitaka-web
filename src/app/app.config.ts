@@ -13,7 +13,7 @@ import {
 import { errorInterceptor, provideApiBaseUrl } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons/provider';
 import { authInterceptor, provideSession } from '@/app/core/session';
-import { provideTheming } from '@/app/core/theming';
+import { BRAND_ACCENT, provideTheming } from '@/app/core/theming';
 import { environment } from '@/environments/environment';
 import { routes } from './app.routes';
 
@@ -45,7 +45,9 @@ export const appConfig: ApplicationConfig = {
     provideIcons(),
     provideTheming({
       scheme: 'system',
-      primary: '#1565C0',
+      // The one brand choice (ADR 0008). `error` is not a brand colour — it is
+      // just red — so it stays a literal here rather than a named token.
+      primary: BRAND_ACCENT,
       error: '#dc2626',
     }),
   ],

@@ -1,0 +1,22 @@
+/* -------------------------------------------------------------------------- */
+/* Semantic money colours                                                     */
+/*                                                                            */
+/* Income, expense, and transfer — defined here once and referenced wherever  */
+/* an amount is shown with a direction (ADR 0008). These hues are fixed and   */
+/* never derived from the brand accent: green and red carry meaning where     */
+/* money is shown, and a positive number must never be mistaken for chrome.   */
+/*                                                                            */
+/* Each hue is lifted on a dark surface via `light-dark()` — the same         */
+/* scheme-aware idiom the rest of `src/styles` uses — so contrast holds in    */
+/* both schemes without a per-call-site `dark:` variant.                      */
+/*                                                                            */
+/* Utilities: `text-income`, `bg-expense/10`, `text-transfer`, …              */
+/* -------------------------------------------------------------------------- */
+@theme {
+  --color-income: light-dark(var(--color-emerald-700), var(--color-emerald-400));
+  --color-expense: light-dark(var(--color-red-700), var(--color-red-400));
+  --color-transfer: light-dark(
+    var(--color-neutral-600),
+    var(--color-neutral-300)
+  );
+}
