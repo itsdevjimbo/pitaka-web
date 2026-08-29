@@ -1,9 +1,30 @@
 <div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
   <!-- Heading -->
-  <header class="flex flex-col gap-y-1">
-    <h1 class="text-2xl font-bold tracking-tight">Accounts</h1>
-    <p class="text-neutral-500 dark:text-neutral-400">Where you stand right now.</p>
+  <header class="flex items-start justify-between gap-x-4">
+    <div class="flex flex-col gap-y-1">
+      <h1 class="text-2xl font-bold tracking-tight">Accounts</h1>
+      <p class="text-neutral-500 dark:text-neutral-400">
+        Where you stand right now.
+      </p>
+    </div>
+
+    @if (!loading() && !errorMessage() && !adding()) {
+      <button
+        matButton="filled"
+        (click)="adding.set(true)"
+      >
+        <mat-icon svgIcon="plus" />
+        Add account
+      </button>
+    }
   </header>
+
+  @if (adding()) {
+    <accounts-new-account-form
+      (created)="onCreated($event)"
+      (cancelled)="adding.set(false)"
+    />
+  }
 
   @if (loading()) {
     <!-- Slow load: show that it is working -->
@@ -50,6 +71,16 @@
         Add your first account — cash, a bank account, a card, a wallet, or an
         investment — to start tracking where your money sits.
       </p>
+      @if (!adding()) {
+        <button
+          matButton="filled"
+          class="mt-2"
+          (click)="adding.set(true)"
+        >
+          <mat-icon svgIcon="plus" />
+          Add account
+        </button>
+      }
     </div>
   } @else {
     <!-- Total, and what it covers -->
