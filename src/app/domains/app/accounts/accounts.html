@@ -135,34 +135,39 @@
             />
           } @else {
             <div class="flex items-center gap-x-3">
-              <span
-                class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
+              <a
+                class="-m-2 flex min-w-0 flex-auto items-center gap-x-3 rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                [routerLink]="['/app/accounts', account.id]"
               >
-                <mat-icon
-                  class="size-5"
-                  [svgIcon]="types[account.type].icon"
-                />
-              </span>
-
-              <div class="flex min-w-0 flex-auto flex-col">
-                <span class="truncate font-medium">{{ account.name }}</span>
                 <span
-                  class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
+                  class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
                 >
-                  {{ types[account.type].label }}
-                  @if (!account.isActive) {
-                    <span
-                      class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
-                    >
-                      Retired
-                    </span>
-                  }
+                  <mat-icon
+                    class="size-5"
+                    [svgIcon]="types[account.type].icon"
+                  />
                 </span>
-              </div>
 
-              <span class="shrink-0 font-semibold tabular-nums">
-                {{ account.currentBalance | peso }}
-              </span>
+                <div class="flex min-w-0 flex-auto flex-col">
+                  <span class="truncate font-medium">{{ account.name }}</span>
+                  <span
+                    class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
+                  >
+                    {{ types[account.type].label }}
+                    @if (!account.isActive) {
+                      <span
+                        class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+                      >
+                        Retired
+                      </span>
+                    }
+                  </span>
+                </div>
+
+                <span class="shrink-0 font-semibold tabular-nums">
+                  {{ account.currentBalance | peso }}
+                </span>
+              </a>
 
               @if (busyId() === account.id) {
                 <mat-icon

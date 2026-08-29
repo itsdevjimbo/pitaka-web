@@ -71,6 +71,17 @@ export class AccountsService {
   }
 
   /**
+   * One Account by id, its balance the server's own freshly recomputed figure
+   * and never a cached one (ADR 0006). A 404 — not the person's, or gone —
+   * arrives as a normalised `ApiError`.
+   */
+  get(id: number): Observable<Account> {
+    return this.http
+      .get<AccountResource>(`${this.baseUrl}/api/accounts/${id}`)
+      .pipe(map(toAccount));
+  }
+
+  /**
    * Open a new Account. On success the created row comes back with the server's
    * freshly computed balance.
    *

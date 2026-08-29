@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
+import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe, sumPesos } from '@/app/core/money';
@@ -60,6 +61,7 @@ type RowNotice = {
     MatButtonModule,
     MatIconModule,
     MatMenuModule,
+    RouterLink,
     PesoPipe,
     NewAccountForm,
     RenameAccountForm,

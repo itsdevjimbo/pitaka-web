@@ -15,6 +15,10 @@ const routes: Routes = [
         path: 'accounts',
         loadComponent: () => import('./accounts/accounts'),
       },
+      {
+        path: 'accounts/:id',
+        loadComponent: () => import('./accounts/account-detail'),
+      },
     ],
   },
 ];
