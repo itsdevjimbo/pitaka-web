@@ -1,0 +1,131 @@
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
+  <!-- Heading -->
+  <header class="flex flex-col gap-y-1">
+    <h1 class="text-2xl font-bold tracking-tight">Accounts</h1>
+    <p class="text-neutral-500 dark:text-neutral-400">Where you stand right now.</p>
+  </header>
+
+  @if (loading()) {
+    <!-- Slow load: show that it is working -->
+    <div
+      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+      role="status"
+    >
+      <mat-icon
+        class="size-6 animate-spin"
+        svgIcon="loader-circle"
+      />
+      <span>Loading your accounts…</span>
+    </div>
+  } @else if (errorMessage(); as message) {
+    <!-- Failed load: explain, and offer a retry -->
+    <div
+      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
+      role="alert"
+    >
+      <mat-icon
+        class="size-8 text-neutral-400"
+        svgIcon="circle-alert"
+      />
+      <p class="max-w-sm text-neutral-600 dark:text-neutral-300">{{ message }}</p>
+      <button
+        matButton="filled"
+        (click)="load()"
+      >
+        <mat-icon svgIcon="refresh-cw" />
+        Try again
+      </button>
+    </div>
+  } @else if (accounts()!.length === 0) {
+    <!-- Nothing yet: say what to do next -->
+    <div
+      class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+    >
+      <mat-icon
+        class="size-10 text-neutral-400"
+        svgIcon="wallet"
+      />
+      <p class="text-lg font-semibold">No accounts yet</p>
+      <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
+        Add your first account — cash, a bank account, a card, a wallet, or an
+        investment — to start tracking where your money sits.
+      </p>
+    </div>
+  } @else {
+    <!-- Total, and what it covers -->
+    <div
+      class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-neutral-100 px-4 py-3 dark:bg-neutral-900"
+    >
+      <div class="flex flex-col">
+        <span class="text-sm text-neutral-500 dark:text-neutral-400">
+          {{ totalLabel() }}
+        </span>
+        <span class="text-2xl font-bold tracking-tight tabular-nums">
+          {{ total() | peso }}
+        </span>
+        @if (hasRetired() && showRetired()) {
+          <span class="text-sm text-neutral-500 dark:text-neutral-400">
+            Including retired: {{ allAccountsTotal() | peso }}
+          </span>
+        }
+      </div>
+
+      @if (hasRetired()) {
+        <div class="flex items-center gap-x-2">
+          <input
+            id="show-retired"
+            type="checkbox"
+            class="size-4"
+            [checked]="showRetired()"
+            (change)="toggleRetired()"
+          />
+          <label
+            for="show-retired"
+            class="text-sm font-medium text-neutral-600 select-none dark:text-neutral-300"
+          >
+            Show retired
+          </label>
+        </div>
+      }
+    </div>
+
+    <!-- The list -->
+    <ul class="flex flex-col gap-y-2">
+      @for (account of visibleAccounts(); track account.id) {
+        <li
+          class="flex items-center gap-x-3 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
+          [class.opacity-55]="!account.isActive"
+        >
+          <span
+            class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
+          >
+            <mat-icon
+              class="size-5"
+              [svgIcon]="types[account.type].icon"
+            />
+          </span>
+
+          <div class="flex min-w-0 flex-auto flex-col">
+            <span class="truncate font-medium">{{ account.name }}</span>
+            <span
+              class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
+            >
+              {{ types[account.type].label }}
+              @if (!account.isActive) {
+                <span
+                  class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+                >
+                  Retired
+                </span>
+              }
+            </span>
+          </div>
+
+          <span class="shrink-0 font-semibold tabular-nums">
+            {{ account.currentBalance | peso }}
+          </span>
+        </li>
+      }
+    </ul>
+  }
+</div>
