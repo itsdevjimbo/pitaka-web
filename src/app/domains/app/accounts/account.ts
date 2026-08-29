@@ -35,6 +35,13 @@ export type NewAccount = {
   initialBalance: number;
 };
 
+/**
+ * The longest an Account name may be. Mirrors the API's `[MaxLength(255)]` on
+ * both `CreateAccountRequest.Name` and `UpdateAccountRequest.Name`, so the
+ * create and rename forms share one figure.
+ */
+export const ACCOUNT_NAME_MAX = 255;
+
 /** The five kinds of Account, spelt as the API's `AccountType` enum serialises. */
 export type AccountType =
   | 'Cash'

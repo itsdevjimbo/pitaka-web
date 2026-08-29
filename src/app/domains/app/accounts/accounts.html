@@ -124,37 +124,152 @@
     <ul class="flex flex-col gap-y-2">
       @for (account of visibleAccounts(); track account.id) {
         <li
-          class="flex items-center gap-x-3 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
-          [class.opacity-55]="!account.isActive"
+          class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
+          [class.opacity-55]="!account.isActive && renamingId() !== account.id"
         >
-          <span
-            class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
-          >
-            <mat-icon
-              class="size-5"
-              [svgIcon]="types[account.type].icon"
+          @if (renamingId() === account.id) {
+            <accounts-rename-account-form
+              [account]="account"
+              (renamed)="onRenamed()"
+              (cancelled)="renamingId.set(null)"
             />
-          </span>
+          } @else {
+            <div class="flex items-center gap-x-3">
+              <span
+                class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
+              >
+                <mat-icon
+                  class="size-5"
+                  [svgIcon]="types[account.type].icon"
+                />
+              </span>
 
-          <div class="flex min-w-0 flex-auto flex-col">
-            <span class="truncate font-medium">{{ account.name }}</span>
-            <span
-              class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
-            >
-              {{ types[account.type].label }}
-              @if (!account.isActive) {
+              <div class="flex min-w-0 flex-auto flex-col">
+                <span class="truncate font-medium">{{ account.name }}</span>
                 <span
-                  class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+                  class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
                 >
-                  Retired
+                  {{ types[account.type].label }}
+                  @if (!account.isActive) {
+                    <span
+                      class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+                    >
+                      Retired
+                    </span>
+                  }
                 </span>
-              }
-            </span>
-          </div>
+              </div>
 
-          <span class="shrink-0 font-semibold tabular-nums">
-            {{ account.currentBalance | peso }}
-          </span>
+              <span class="shrink-0 font-semibold tabular-nums">
+                {{ account.currentBalance | peso }}
+              </span>
+
+              @if (busyId() === account.id) {
+                <mat-icon
+                  class="size-5 shrink-0 animate-spin text-neutral-400"
+                  svgIcon="loader-circle"
+                  role="status"
+                  aria-label="Working…"
+                />
+              } @else {
+                <button
+                  matIconButton
+                  class="shrink-0"
+                  aria-label="Account actions"
+                  [matMenuTriggerFor]="rowMenu"
+                >
+                  <mat-icon svgIcon="ellipsis-vertical" />
+                </button>
+                <mat-menu #rowMenu>
+                  <button
+                    mat-menu-item
+                    (click)="startRename(account)"
+                  >
+                    <mat-icon svgIcon="pencil" />
+                    <span>Rename</span>
+                  </button>
+                  <button
+                    mat-menu-item
+                    (click)="toggleActive(account)"
+                  >
+                    <mat-icon
+                      [svgIcon]="account.isActive ? 'archive' : 'archive-restore'"
+                    />
+                    <span>{{ account.isActive ? 'Retire' : 'Reactivate' }}</span>
+                  </button>
+                  <button
+                    mat-menu-item
+                    (click)="askDelete(account)"
+                  >
+                    <mat-icon svgIcon="trash-2" />
+                    <span>Delete</span>
+                  </button>
+                </mat-menu>
+              }
+            </div>
+          }
+
+          @if (confirmingDeleteId() === account.id) {
+            <div
+              class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
+              role="alertdialog"
+              aria-label="Confirm delete"
+            >
+              <p class="text-sm text-neutral-700 dark:text-neutral-200">
+                Delete <span class="font-semibold">{{ account.name }}</span
+                >? This can’t be undone.
+              </p>
+              <div class="flex gap-x-2">
+                <button
+                  matButton
+                  type="button"
+                  (click)="cancelDelete()"
+                >
+                  Cancel
+                </button>
+                <button
+                  matButton="filled"
+                  type="button"
+                  (click)="confirmDelete(account)"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (notice(); as n) {
+            @if (n.id === account.id) {
+              <div
+                class="flex flex-col gap-y-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200"
+                role="alert"
+              >
+                <span class="font-medium">{{ n.message }}</span>
+                @if (n.retire || n.retry) {
+                  <div class="flex gap-x-2">
+                    @if (n.retire; as retire) {
+                      <button
+                        matButton
+                        type="button"
+                        (click)="retire()"
+                      >
+                        Retire instead
+                      </button>
+                    }
+                    @if (n.retry; as retry) {
+                      <button
+                        matButton
+                        type="button"
+                        (click)="retry()"
+                      >
+                        Try again
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
         </li>
       }
     </ul>

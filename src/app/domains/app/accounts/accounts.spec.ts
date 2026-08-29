@@ -1,16 +1,38 @@
+import { Signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { Account } from './account';
+import {
+  AccountDeleteBlockedError,
+  AccountModifiedError,
+} from './account-errors';
 import Accounts from './accounts';
 import { AccountsService } from './accounts.service';
+
+type RowNotice = {
+  id: number;
+  message: string;
+  retry?: () => void;
+  retire?: () => void;
+};
 
 /** The slice of the component the tests reach into. */
 type AccountsInternals = {
   toggleRetired(): void;
   load(): void;
+  startRename(account: Account): void;
+  onRenamed(): void;
+  toggleActive(account: Account): void;
+  askDelete(account: Account): void;
+  confirmDelete(account: Account): void;
+  cancelDelete(): void;
+  readonly renamingId: Signal<number | null>;
+  readonly confirmingDeleteId: Signal<number | null>;
+  readonly busyId: Signal<number | null>;
+  readonly notice: Signal<RowNotice | null>;
 };
 
 const CASH: Account = {
@@ -36,10 +58,16 @@ const OLD_WALLET: Account = {
 };
 
 describe('Accounts', () => {
-  function setup(list: AccountsService['list']) {
+  function setup(
+    list: AccountsService['list'],
+    overrides: Partial<AccountsService> = {}
+  ) {
     TestBed.configureTestingModule({
       imports: [Accounts],
-      providers: [provideIcons(), { provide: AccountsService, useValue: { list } }],
+      providers: [
+        provideIcons(),
+        { provide: AccountsService, useValue: { list, ...overrides } },
+      ],
     });
 
     const fixture = TestBed.createComponent(Accounts);
@@ -176,5 +204,181 @@ describe('Accounts', () => {
     expect(text()).toContain(
       'Something went wrong loading your accounts. Please try again.'
     );
+  });
+
+  describe('rename', () => {
+    it('opens an inline editor for the row and closes it on cancel', () => {
+      const { fixture, cmp, text } = setup(() => of([CASH, BANK]));
+
+      cmp.startRename(CASH);
+      fixture.detectChanges();
+
+      expect(cmp.renamingId()).toBe(1);
+      expect(text()).toContain('Save');
+
+      clickButton(fixture, 'Cancel');
+      expect(cmp.renamingId()).toBeNull();
+    });
+
+    it('re-reads the list once a rename saved, so the new name shows everywhere', () => {
+      let attempt = 0;
+      const list = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1
+          ? of([CASH, BANK])
+          : of([{ ...CASH, name: 'Everyday cash' }, BANK]);
+      });
+      const { fixture, cmp, text } = setup(
+        list as unknown as AccountsService['list']
+      );
+
+      cmp.startRename(CASH);
+      cmp.onRenamed();
+      fixture.detectChanges();
+
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(cmp.renamingId()).toBeNull();
+      expect(text()).toContain('Everyday cash');
+      expect(text()).not.toContain('Cash on hand');
+    });
+  });
+
+  describe('retire and reactivate', () => {
+    it('retires an active Account through the service and re-reads the list', () => {
+      const setActive = vi.fn(() => of({ ...CASH, isActive: false }));
+      const list = vi.fn(() => of([CASH]));
+      const { cmp } = setup(list as unknown as AccountsService['list'], {
+        setActive,
+      });
+
+      cmp.toggleActive(CASH);
+
+      expect(setActive).toHaveBeenCalledWith(1, false);
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+
+    it('reactivates a retired Account by asking for isActive true', () => {
+      const setActive = vi.fn(() => of({ ...OLD_WALLET, isActive: true }));
+      const { cmp } = setup(() => of([OLD_WALLET]), { setActive });
+
+      cmp.toggleActive(OLD_WALLET);
+
+      expect(setActive).toHaveBeenCalledWith(3, true);
+    });
+
+    it('reports a retire that lost a concurrency race and offers a retry', () => {
+      const setActive = vi.fn(() =>
+        throwError(
+          () =>
+            new AccountModifiedError(
+              'This account was updated by another request. Please try again.'
+            )
+        )
+      );
+      const { fixture, cmp, text } = setup(() => of([CASH]), { setActive });
+
+      cmp.toggleActive(CASH);
+      fixture.detectChanges();
+
+      expect(cmp.notice()?.id).toBe(1);
+      expect(text()).toContain('updated by another request');
+      expect(text()).toContain('Try again');
+    });
+  });
+
+  describe('delete', () => {
+    it('asks for confirmation and does not call the service until confirmed', () => {
+      const remove = vi.fn(() => of(undefined));
+      const { fixture, cmp, text } = setup(() => of([CASH]), { remove });
+
+      cmp.askDelete(CASH);
+      fixture.detectChanges();
+
+      expect(cmp.confirmingDeleteId()).toBe(1);
+      expect(text()).toContain('This can’t be undone');
+      expect(remove).not.toHaveBeenCalled();
+
+      cmp.confirmDelete(CASH);
+      expect(remove).toHaveBeenCalledWith(1);
+    });
+
+    it('deletes an empty Account and re-reads the list and total', () => {
+      const remove = vi.fn(() => of(undefined));
+      let attempt = 0;
+      const list = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1 ? of([CASH, BANK]) : of([BANK]);
+      });
+      const { fixture, cmp, text } = setup(
+        list as unknown as AccountsService['list'],
+        { remove }
+      );
+
+      cmp.confirmDelete(CASH);
+      fixture.detectChanges();
+
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).not.toContain('Cash on hand');
+      expect(text()).toContain(formatPeso(8500));
+    });
+
+    it('explains a delete refused for Transaction history and points at retiring', () => {
+      const remove = vi.fn(() =>
+        throwError(
+          () =>
+            new AccountDeleteBlockedError(
+              'transaction-history',
+              'This account has transaction history and cannot be deleted.'
+            )
+        )
+      );
+      const { fixture, cmp, text } = setup(() => of([CASH]), { remove });
+
+      cmp.confirmDelete(CASH);
+      fixture.detectChanges();
+
+      expect(text()).toContain('transaction history');
+      expect(text()).toContain('Retire instead');
+      expect(cmp.notice()?.retire).toBeTypeOf('function');
+    });
+
+    it('explains a delete refused for Goal-allocated money, distinctly from history', () => {
+      const remove = vi.fn(() =>
+        throwError(
+          () =>
+            new AccountDeleteBlockedError(
+              'goal-allocation',
+              'This account contains funds allocated toward a specific goal.'
+            )
+        )
+      );
+      const { fixture, cmp, text } = setup(() => of([CASH]), { remove });
+
+      cmp.confirmDelete(CASH);
+      fixture.detectChanges();
+
+      expect(text()).toContain('allocated toward a specific goal');
+      expect(text()).not.toContain('transaction history');
+      expect(text()).not.toContain('Retire instead');
+    });
+
+    it('reports a delete that lost a concurrency race and offers a retry', () => {
+      const remove = vi.fn(() =>
+        throwError(
+          () =>
+            new AccountModifiedError(
+              'This account was updated by another request. Please try again.'
+            )
+        )
+      );
+      const { fixture, cmp, text } = setup(() => of([CASH]), { remove });
+
+      cmp.confirmDelete(CASH);
+      fixture.detectChanges();
+
+      expect(text()).toContain('updated by another request');
+      expect(text()).toContain('Try again');
+      expect(text()).not.toContain('Retire instead');
+    });
   });
 });

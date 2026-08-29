@@ -1,0 +1,51 @@
+<form
+  class="flex flex-auto flex-col gap-y-2"
+  (submit)="save($event)"
+>
+  <div class="flex flex-wrap items-start gap-x-3 gap-y-2">
+    <mat-form-field
+      class="min-w-0 flex-auto"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Name</mat-label>
+      <input
+        id="rename-account-name"
+        matInput
+        [formField]="renameForm.name"
+      />
+      <mat-error>
+        @if (renameForm.name().touched() && renameForm.name().invalid()) {
+          @for (error of renameForm.name().errors(); track error) {
+            {{ error.message }}
+          }
+        }
+      </mat-error>
+    </mat-form-field>
+
+    <div class="flex items-center gap-x-2 pt-2">
+      <button
+        matButton
+        type="button"
+        (click)="cancel()"
+      >
+        Cancel
+      </button>
+      <button
+        matButton="filled"
+        type="submit"
+        [disabled]="renameForm().invalid() || submitting()"
+      >
+        {{ submitting() ? 'Saving…' : 'Save' }}
+      </button>
+    </div>
+  </div>
+
+  @if (errorMessage(); as message) {
+    <div
+      class="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+      role="alert"
+    >
+      {{ message }}
+    </div>
+  }
+</form>

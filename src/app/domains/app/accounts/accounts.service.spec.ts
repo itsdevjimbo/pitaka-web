@@ -7,7 +7,21 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
+import {
+  AccountDeleteBlockedError,
+  AccountModifiedError,
+} from './account-errors';
 import { AccountsService } from './accounts.service';
+
+/** A ProblemDetails body shaped the way the API sends its bare 409s. */
+function problem(detail: string) {
+  return {
+    type: 'https://tools.ietf.org/html/rfc9110#section-15.5.10',
+    title: 'Conflict',
+    status: 409,
+    detail,
+  };
+}
 
 /**
  * The HTTP adapter boundary. Feeds a real-shaped `GET /api/accounts` response
@@ -181,6 +195,184 @@ describe('AccountsService', () => {
       expect((error as ApiError).fieldErrors).toEqual({
         name: ['The Name field is required.'],
       });
+    });
+  });
+
+  describe('rename', () => {
+    it('PUTs the new name and returns the updated Account without the owner id', async () => {
+      const result = firstValueFrom(service.rename(9, 'Everyday cash'));
+
+      const request = http.expectOne(`${BASE_URL}/api/accounts/9`);
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual({ name: 'Everyday cash' });
+      request.flush({
+        id: 9,
+        userId: 7,
+        name: 'Everyday cash',
+        type: 'Cash',
+        initialBalance: 0,
+        currentBalance: 250,
+        isActive: true,
+      });
+
+      await expect(result).resolves.toEqual({
+        id: 9,
+        name: 'Everyday cash',
+        type: 'Cash',
+        currentBalance: 250,
+        isActive: true,
+      });
+    });
+
+    it('re-files a duplicate-name 409 as a name field error against the conflict reason', async () => {
+      const result = firstValueFrom(service.rename(9, 'Savings'));
+
+      http
+        .expectOne(`${BASE_URL}/api/accounts/9`)
+        .flush(problem('An account with this name already exists.'), {
+          status: 409,
+          statusText: 'Conflict',
+        });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).fieldErrors).toEqual({
+        name: ['An account with this name already exists.'],
+      });
+    });
+
+    it('surfaces a concurrency 409 as an AccountModifiedError, not a name clash', async () => {
+      const result = firstValueFrom(service.rename(9, 'Everyday cash'));
+
+      http
+        .expectOne(`${BASE_URL}/api/accounts/9`)
+        .flush(
+          problem('This account was updated by another request. Please try again.'),
+          { status: 409, statusText: 'Conflict' }
+        );
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(AccountModifiedError);
+      expect((error as AccountModifiedError).message).toContain(
+        'updated by another request'
+      );
+    });
+  });
+
+  describe('setActive', () => {
+    it('PATCHes the status endpoint to retire an Account and returns it', async () => {
+      const result = firstValueFrom(service.setActive(9, false));
+
+      const request = http.expectOne(`${BASE_URL}/api/accounts/9/status`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({ isActive: false });
+      request.flush({
+        id: 9,
+        userId: 7,
+        name: 'Old GCash',
+        type: 'Wallet',
+        initialBalance: 0,
+        currentBalance: 300,
+        isActive: false,
+      });
+
+      await expect(result).resolves.toEqual({
+        id: 9,
+        name: 'Old GCash',
+        type: 'Wallet',
+        currentBalance: 300,
+        isActive: false,
+      });
+    });
+
+    it('PATCHes isActive true to reactivate an Account', async () => {
+      const result = firstValueFrom(service.setActive(9, true));
+
+      const request = http.expectOne(`${BASE_URL}/api/accounts/9/status`);
+      expect(request.request.body).toEqual({ isActive: true });
+      request.flush({
+        id: 9,
+        userId: 7,
+        name: 'Old GCash',
+        type: 'Wallet',
+        initialBalance: 0,
+        currentBalance: 300,
+        isActive: true,
+      });
+
+      await expect(result).resolves.toMatchObject({ isActive: true });
+    });
+
+    it('surfaces a concurrency 409 as an AccountModifiedError', async () => {
+      const result = firstValueFrom(service.setActive(9, false));
+
+      http
+        .expectOne(`${BASE_URL}/api/accounts/9/status`)
+        .flush(
+          problem('This account was updated by another request. Please try again.'),
+          { status: 409, statusText: 'Conflict' }
+        );
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(AccountModifiedError);
+    });
+  });
+
+  describe('remove', () => {
+    it('DELETEs the Account and completes on 204', async () => {
+      const result = firstValueFrom(service.remove(9));
+
+      const request = http.expectOne(`${BASE_URL}/api/accounts/9`);
+      expect(request.request.method).toBe('DELETE');
+      request.flush(null, { status: 204, statusText: 'No Content' });
+
+      await expect(result).resolves.toBeUndefined();
+    });
+
+    it('maps the transaction-history 409 to a delete-blocked error naming that reason', async () => {
+      const result = firstValueFrom(service.remove(9));
+
+      http
+        .expectOne(`${BASE_URL}/api/accounts/9`)
+        .flush(
+          problem('This account has transaction history and cannot be deleted.'),
+          { status: 409, statusText: 'Conflict' }
+        );
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(AccountDeleteBlockedError);
+      expect((error as AccountDeleteBlockedError).reason).toBe(
+        'transaction-history'
+      );
+    });
+
+    it('maps the goal-allocation 409 to a distinct delete-blocked reason', async () => {
+      const result = firstValueFrom(service.remove(9));
+
+      http
+        .expectOne(`${BASE_URL}/api/accounts/9`)
+        .flush(
+          problem('This account contains funds allocated toward a specific goal.'),
+          { status: 409, statusText: 'Conflict' }
+        );
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(AccountDeleteBlockedError);
+      expect((error as AccountDeleteBlockedError).reason).toBe('goal-allocation');
+    });
+
+    it('surfaces a concurrency 409 as an AccountModifiedError, not a delete block', async () => {
+      const result = firstValueFrom(service.remove(9));
+
+      http
+        .expectOne(`${BASE_URL}/api/accounts/9`)
+        .flush(
+          problem('This account was updated by another request. Please try again.'),
+          { status: 409, statusText: 'Conflict' }
+        );
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(AccountModifiedError);
     });
   });
 });

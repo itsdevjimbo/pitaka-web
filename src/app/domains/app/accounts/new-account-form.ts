@@ -14,11 +14,14 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import { Account, ACCOUNT_TYPES, AccountType, NewAccount } from './account';
+import {
+  Account,
+  ACCOUNT_NAME_MAX,
+  ACCOUNT_TYPES,
+  AccountType,
+  NewAccount,
+} from './account';
 import { AccountsService } from './accounts.service';
-
-/** The API's `Name` bound (`pitaka` CreateAccountRequest: `[MaxLength(255)]`). */
-const NAME_MAX = 255;
 
 /** The banner line for a create that failed before it could be attributed. */
 const COULD_NOT_CREATE =
@@ -79,8 +82,8 @@ export class NewAccountForm {
 
   protected readonly accountForm = form(this.model, (form) => {
     required(form.name, { message: 'You must enter a name' });
-    maxLength(form.name, NAME_MAX, {
-      message: `The name must be ${NAME_MAX} characters or fewer`,
+    maxLength(form.name, ACCOUNT_NAME_MAX, {
+      message: `The name must be ${ACCOUNT_NAME_MAX} characters or fewer`,
     });
     required(form.type, { message: 'You must choose a type' });
     min(form.initialBalance, 0, {
