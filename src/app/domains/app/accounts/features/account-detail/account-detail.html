@@ -36,13 +36,24 @@
       <p class="max-w-sm text-neutral-600 dark:text-neutral-300">
         {{ message }}
       </p>
-      <button
-        matButton="filled"
-        (click)="load()"
-      >
-        <mat-icon svgIcon="refresh-cw" />
-        Try again
-      </button>
+      @if (notFound()) {
+        <!-- A retry cannot bring back what is gone or was never ours -->
+        <a
+          matButton="filled"
+          routerLink="/app/accounts"
+        >
+          <mat-icon svgIcon="arrow-left" />
+          Back to accounts
+        </a>
+      } @else {
+        <button
+          matButton="filled"
+          (click)="load()"
+        >
+          <mat-icon svgIcon="refresh-cw" />
+          Try again
+        </button>
+      }
     </div>
   } @else {
     <!-- Which Account this is, and where it stands -->

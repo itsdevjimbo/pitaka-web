@@ -13,4 +13,18 @@ export type NavigationItem = {
   activeOptions?: { exact: boolean } | IsActiveMatchOptions;
 };
 
-export const NAVIGATION: NavigationItem[] = [];
+export const NAVIGATION: NavigationItem[] = [
+  {
+    id: 'main',
+    label: 'Main',
+    children: [
+      {
+        id: 'accounts',
+        label: 'Accounts',
+        route: '/app/accounts',
+        icon: 'wallet-cards',
+        activeOptions: { exact: false },
+      },
+    ],
+  },
+];

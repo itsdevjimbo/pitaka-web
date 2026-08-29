@@ -5,8 +5,15 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { SESSION_ENDED_MESSAGE } from '@/app/core/api';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import { APP_HOME_ROUTE, safeReturnUrl, Session } from '@/app/core/session';
+import {
+  APP_HOME_ROUTE,
+  isSessionLapse,
+  safeReturnUrl,
+  Session,
+  SESSION_LAPSE_PARAM,
+} from '@/app/core/session';
 
 /** The banner line for a sign-in that failed before it could be attributed. */
 const COULD_NOT_SIGN_IN =
@@ -45,6 +52,19 @@ export default class AuthSignIn {
   protected submitting = signal(false);
 
   /**
+   * The information notice shown when the person was bounced here by a lapsed
+   * session (story 11). Distinct from `errorMessage`: it is not about anything
+   * they typed, so it is not the red banner. Read once off the query string —
+   * matched exactly, since anyone can rewrite it — and cleared on the first
+   * sign-in attempt so a failed attempt never stacks two banners.
+   */
+  protected sessionNotice = signal<string | null>(
+    isSessionLapse(this.route.snapshot.queryParamMap.get(SESSION_LAPSE_PARAM))
+      ? SESSION_ENDED_MESSAGE
+      : null
+  );
+
+  /**
    * The form-level banner. Linked to the model so any edit clears it: a message
    * about the values the person has since changed is worse than none.
    */
@@ -63,6 +83,7 @@ export default class AuthSignIn {
       action: async () => {
         this.submitting.set(true);
         this.errorMessage.set(null);
+        this.sessionNotice.set(null);
 
         try {
           await this.session.signIn(this.signInFormModel());

@@ -260,7 +260,7 @@ describe('AccountDetail', () => {
       attempt += 1;
       return attempt === 1
         ? throwError(
-            () => new ApiError('That account could not be found.', 404)
+            () => new ApiError('Something went wrong on the server.', 500)
           )
         : of<Transaction[]>([tx({ description: 'Coffee' })]);
     });
@@ -268,7 +268,7 @@ describe('AccountDetail', () => {
       list: list as unknown as TransactionsService['list'],
     });
 
-    expect(text()).toContain('That account could not be found.');
+    expect(text()).toContain('Something went wrong on the server.');
 
     const retry = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button')
@@ -277,8 +277,34 @@ describe('AccountDetail', () => {
     fixture.detectChanges();
 
     expect(list).toHaveBeenCalledTimes(2);
-    expect(text()).not.toContain('That account could not be found.');
+    expect(text()).not.toContain('Something went wrong on the server.');
     expect(text()).toContain('Coffee');
+  });
+
+  it('drops "Try again" for a 404 and points back to the list instead', () => {
+    const { fixture, text } = setup({
+      list: () =>
+        throwError(
+          () =>
+            new ApiError(
+              "We couldn't find that. It may have been deleted, or it may not be yours.",
+              404
+            )
+        ),
+    });
+
+    expect(text()).toContain("We couldn't find that");
+
+    const host = fixture.nativeElement as HTMLElement;
+    const retry = Array.from(host.querySelectorAll('button')).find((b) =>
+      (b.textContent ?? '').includes('Try again')
+    );
+    expect(retry).toBeUndefined();
+
+    const back = Array.from(host.querySelectorAll('a')).find((a) =>
+      (a.textContent ?? '').includes('Back to accounts')
+    );
+    expect(back?.getAttribute('href')).toBe('/app/accounts');
   });
 
   it('falls back to a plain message when the failure is not an ApiError', () => {

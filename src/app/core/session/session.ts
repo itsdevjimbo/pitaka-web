@@ -117,7 +117,7 @@ export class Session {
    */
   expire(): void {
     if (this.teardown()) {
-      this.router.navigate(...signInRedirect(this.router.url));
+      this.router.navigate(...signInRedirect(this.router.url, { lapsed: true }));
     }
   }
 

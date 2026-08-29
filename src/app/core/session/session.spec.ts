@@ -183,7 +183,7 @@ describe('Session', () => {
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
   });
 
-  it('on expiry clears the token and returns to sign-in preserving the return URL', async () => {
+  it('on expiry clears the token and returns to sign-in preserving the return URL and the lapse marker', async () => {
     const session = await verifiedSession();
     expect(session.isAuthenticated()).toBe(true);
 
@@ -194,11 +194,11 @@ describe('Session', () => {
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
     expect(router.navigate).toHaveBeenCalledWith(
       ['/auth/sign-in'],
-      { queryParams: { returnUrl: '/accounts' } }
+      { queryParams: { returnUrl: '/accounts', reason: 'session-expired' } }
     );
   });
 
-  it('on sign-out clears the session and returns to sign-in without a return URL', async () => {
+  it('on sign-out clears the session and returns to sign-in without a return URL or a lapse marker', async () => {
     const session = await verifiedSession();
     expect(session.isAuthenticated()).toBe(true);
 
@@ -207,7 +207,8 @@ describe('Session', () => {
     expect(session.isAuthenticated()).toBe(false);
     expect(session.profile()).toBeNull();
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
-    // A deliberate leave, not a lapse: nowhere to send the person back to.
+    // A deliberate leave, not a lapse: nowhere to send the person back to, and
+    // nothing to explain.
     expect(router.navigate).toHaveBeenCalledWith(['/auth/sign-in']);
   });
 

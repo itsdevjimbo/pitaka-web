@@ -11,6 +11,7 @@ type SignInInternals = {
   signInFormModel: WritableSignal<{ email: string; password: string }>;
   signInForm: { email: FieldTree<string>; password: FieldTree<string> };
   errorMessage: () => string | null;
+  sessionNotice: () => string | null;
   signIn(event: Event): void;
 };
 
@@ -165,6 +166,50 @@ describe('AuthSignIn', () => {
     expect(cmp.errorMessage()).toBe(
       'That workspace is not accepting sign-ins.'
     );
+  });
+
+  it('shows a session-ended notice when the lapse marker is on the query string', () => {
+    const { cmp } = setup(() => Promise.resolve(), {
+      returnUrl: '/app/accounts',
+      reason: 'session-expired',
+    });
+
+    expect(cmp.sessionNotice()).toBe(
+      'Your session has ended. Please sign in again.'
+    );
+  });
+
+  it('shows no notice for a bare returnUrl with no lapse marker', () => {
+    const { cmp } = setup(() => Promise.resolve(), {
+      returnUrl: '/app/accounts',
+    });
+
+    expect(cmp.sessionNotice()).toBeNull();
+  });
+
+  it('shows no notice for an unrecognised reason value', () => {
+    const { cmp } = setup(() => Promise.resolve(), { reason: 'expired' });
+
+    expect(cmp.sessionNotice()).toBeNull();
+  });
+
+  it('dismisses the session notice on a sign-in attempt so banners never stack', async () => {
+    const { fixture, cmp } = setup(
+      () =>
+        Promise.reject(
+          new ApiError(
+            'That email and password do not match. Please try again.',
+            401
+          )
+        ),
+      { returnUrl: '/app/accounts', reason: 'session-expired' }
+    );
+    expect(cmp.sessionNotice()).not.toBeNull();
+
+    await submitAndSettle(fixture, cmp);
+
+    expect(cmp.sessionNotice()).toBeNull();
+    expect(cmp.errorMessage()).not.toBeNull();
   });
 
   it('clears the banner as soon as the person edits the form', async () => {
