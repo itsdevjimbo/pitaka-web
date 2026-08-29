@@ -79,6 +79,13 @@ export default class AccountDetail implements OnInit {
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
 
+  /**
+   * True when the load failed with a 404: the Account is gone or was never the
+   * person's, so the error state drops "Try again" — a retry cannot succeed —
+   * and points back to the list instead (story 51).
+   */
+  protected readonly notFound = signal(false);
+
   protected readonly types = ACCOUNT_TYPES;
   protected readonly directions = TRANSACTION_DIRECTIONS;
 
@@ -96,6 +103,7 @@ export default class AccountDetail implements OnInit {
   protected load(): void {
     this.loading.set(true);
     this.errorMessage.set(null);
+    this.notFound.set(false);
 
     const accountId = Number(this.id());
 
@@ -112,9 +120,9 @@ export default class AccountDetail implements OnInit {
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          this.errorMessage.set(
-            error instanceof ApiError ? error.message : LOAD_FAILED
-          );
+          const apiError = error instanceof ApiError ? error : null;
+          this.errorMessage.set(apiError ? apiError.message : LOAD_FAILED);
+          this.notFound.set(apiError?.status === 404);
           this.loading.set(false);
         },
       });

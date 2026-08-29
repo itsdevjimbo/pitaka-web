@@ -8,9 +8,7 @@ import {
 } from '@angular/material/sidenav';
 import { RouterOutlet } from '@angular/router';
 import { Media } from '@/app/core/media';
-import { Notifications } from '@/app/domains/app/layout/ui/notifications';
 import { SchemeSwitcher } from '@/app/domains/app/layout/ui/scheme-switcher';
-import { Shortcuts } from '@/app/domains/app/layout/ui/shortcuts';
 import { AppSidebar } from '@/app/domains/app/layout/ui/sidebar';
 
 @Component({
@@ -24,8 +22,6 @@ import { AppSidebar } from '@/app/domains/app/layout/ui/sidebar';
     MatSidenavContent,
     AppSidebar,
     SchemeSwitcher,
-    Notifications,
-    Shortcuts,
   ],
   template: `
     <mat-sidenav-container>
@@ -52,18 +48,10 @@ import { AppSidebar } from '@/app/domains/app/layout/ui/sidebar';
             <mat-icon svgIcon="panel-left" />
           </button>
 
-          <!-- Separator -->
-          <div class="mx-3 h-5 border-l"></div>
-
-          <shortcuts />
-
           <!-- Spacer -->
           <div class="flex-auto"></div>
 
-          <div class="flex items-center gap-x-2">
-            <scheme-switcher />
-            <notifications />
-          </div>
+          <scheme-switcher />
         </div>
 
         <!-- Content -->

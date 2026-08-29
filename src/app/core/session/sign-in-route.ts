@@ -15,15 +15,43 @@ export const SIGN_IN_ROUTE = '/auth/sign-in';
 export const APP_HOME_ROUTE = '/app';
 
 /**
+ * Query parameter that marks a redirect to sign-in as a session that lapsed
+ * mid-use, as opposed to a visitor who was never signed in. Only `Session.expire`
+ * sets it; `authGuard` and `Session.signOut` do not — a first visit needs no
+ * account of itself, and a deliberate exit even less. The value is matched
+ * exactly on the way back in ({@link isSessionLapse}), the way `safeReturnUrl`
+ * treats `returnUrl`, because it rides the same rewritable query string.
+ */
+export const SESSION_LAPSE_PARAM = 'reason';
+const SESSION_LAPSE_VALUE = 'session-expired';
+
+/**
  * Router arguments for sending someone to sign-in while remembering where they
  * were headed. Spread into `Router.createUrlTree` (the guard, which must return
  * a `UrlTree`) or `Router.navigate` (Session, reacting to a mid-use lapse) so
- * both build the identical `returnUrl` redirect.
+ * both build the identical `returnUrl` redirect. Pass `lapsed` to add the
+ * {@link SESSION_LAPSE_PARAM} marker so sign-in can explain why the person is
+ * back.
  */
 export function signInRedirect(
-  returnUrl: string
+  returnUrl: string,
+  { lapsed = false }: { lapsed?: boolean } = {}
 ): [commands: string[], extras: UrlCreationOptions] {
-  return [[SIGN_IN_ROUTE], { queryParams: { returnUrl } }];
+  const queryParams: Record<string, string> = { returnUrl };
+  if (lapsed) {
+    queryParams[SESSION_LAPSE_PARAM] = SESSION_LAPSE_VALUE;
+  }
+  return [[SIGN_IN_ROUTE], { queryParams }];
+}
+
+/**
+ * Whether a `reason` query value is the session-lapse marker `signInRedirect`
+ * mints. Exact match or nothing: the value comes off a query string where
+ * anyone can write it, and a wrong "your session ended" is a lie, not a
+ * cosmetic slip.
+ */
+export function isSessionLapse(reason: string | null | undefined): boolean {
+  return reason === SESSION_LAPSE_VALUE;
 }
 
 /**

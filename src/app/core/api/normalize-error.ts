@@ -3,6 +3,24 @@ import { ApiError } from './api-error';
 
 const VALIDATION_MESSAGE = 'Please correct the highlighted fields and try again.';
 
+/**
+ * The line shown when a session has lapsed: the message for a 401 here, and the
+ * same words `AuthSignIn` shows as an information notice after `Session.expire`
+ * bounces someone to sign-in. Exported so the sentence lives in one place
+ * rather than being written twice.
+ */
+export const SESSION_ENDED_MESSAGE =
+  'Your session has ended. Please sign in again.';
+
+/**
+ * One honest "not found" for both 404 and 403, so the app never leaks whether
+ * another person's record exists (story 51). A 403's own `detail` would confirm
+ * the row is real — precisely what must not reach the screen — so this wording
+ * stands in for both.
+ */
+const NOT_FOUND_MESSAGE =
+  "We couldn't find that. It may have been deleted, or it may not be yours.";
+
 const CONNECTIVITY_MESSAGE =
   'Could not reach the server. Check your connection and try again.';
 
@@ -22,6 +40,10 @@ const BODYLESS_MESSAGE =
  * but reaches here the same way, and gets its own message rather than a
  * status-derived one built from a status that never came back.
  *
+ * 404 and 403 are pulled out ahead of those branches and collapsed to one
+ * not-found message, so the app never leaks whether another person's record
+ * exists and a 403's `detail` never reaches the screen.
+ *
  * No branch ever surfaces the server's own text: a body we did not write can be
  * a stack trace or a raw internal string, which the spec rules out of the UI.
  * Where such a body arrives it is logged with its endpoint, the same treatment
@@ -37,6 +59,21 @@ export function normalizeHttpError(response: HttpErrorResponse): ApiError {
   }
 
   const body = unwrapBody(response.error);
+
+  // 404 / 403: collapsed to one not-found message, ahead of every branch that
+  // would surface the server's own text. A 403 ProblemDetails `detail` is the
+  // sentence the spec rules out — it confirms the row exists — so the server's
+  // wording must not win here. The body is still logged, the same treatment the
+  // bodyless 400 and the bare-string login body get, so it stays diagnosable.
+  if (status === 404 || status === 403) {
+    if (body !== null && body !== undefined && body !== '') {
+      logServerText(
+        response.url,
+        typeof body === 'string' ? body : JSON.stringify(body)
+      );
+    }
+    return new ApiError(NOT_FOUND_MESSAGE, status);
+  }
 
   // A bare JSON string: the failed-login body. The text is the server's own and
   // never reaches the person — `AuthService` supplies the wording for the one
@@ -81,7 +118,7 @@ export function normalizeHttpError(response: HttpErrorResponse): ApiError {
 /** Keep an undisplayable server body diagnosable without putting it on screen. */
 function logServerText(url: string | null, text: string): void {
   console.warn(
-    `[api] bare-string body from ${url ?? 'unknown endpoint'}: ${text}`
+    `[api] undisplayable body from ${url ?? 'unknown endpoint'}: ${text}`
   );
 }
 
@@ -131,7 +168,7 @@ function camelCaseKey(key: string): string {
 
 function fallbackMessage(status: number): string {
   if (status === 401) {
-    return 'Your session has ended. Please sign in again.';
+    return SESSION_ENDED_MESSAGE;
   }
   if (status >= 500) {
     return 'Something went wrong on the server. Please try again.';

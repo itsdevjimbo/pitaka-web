@@ -33,5 +33,7 @@ describe('authGuard', () => {
     const tree = result as UrlTree;
     expect(tree.toString()).toContain('/auth/sign-in');
     expect(tree.queryParams['returnUrl']).toBe('/app/accounts/42');
+    // A first visit is not a lapse: no "your session ended" marker.
+    expect(tree.queryParams['reason']).toBeUndefined();
   });
 });

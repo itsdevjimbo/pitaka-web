@@ -153,6 +153,52 @@ describe('normalizeHttpError', () => {
     warn.mockRestore();
   });
 
+  it('turns a bodyless 404 into one honest not-found message', () => {
+    const error = normalizeHttpError(
+      response({
+        status: 404,
+        error: null,
+        url: `${BASE_URL}/api/accounts/42`,
+      })
+    );
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(404);
+    expect(error.message).toBe(
+      "We couldn't find that. It may have been deleted, or it may not be yours."
+    );
+    expect(error.fieldErrors).toEqual({});
+  });
+
+  it('gives a 403 the same not-found message and never lets its detail reach the screen', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const error = normalizeHttpError(
+      response({
+        status: 403,
+        url: `${BASE_URL}/api/transactions/7`,
+        error: {
+          title: 'Forbidden',
+          status: 403,
+          detail: 'Transaction 7 belongs to another user.',
+        },
+      })
+    );
+
+    expect(error.status).toBe(403);
+    expect(error.message).toBe(
+      "We couldn't find that. It may have been deleted, or it may not be yours."
+    );
+    // The server's own text confirms the row exists — it must not be displayed,
+    // only logged so it stays diagnosable.
+    expect(error.message).not.toContain('another user');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('another user')
+    );
+
+    warn.mockRestore();
+  });
+
   it('turns a transport failure into a connectivity message, not a status-0 one', () => {
     const error = normalizeHttpError(
       response({ status: 0, statusText: 'Unknown Error', error: new ProgressEvent('error') })
