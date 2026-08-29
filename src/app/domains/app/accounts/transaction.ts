@@ -65,8 +65,10 @@ export type TransactionDirection = 'income' | 'expense' | 'transfer';
  * How each direction presents on a row: the word the person reads, the lucide
  * icon beside it, and the Tailwind `accent` classes that colour the icon chip
  * (`chip`) and the amount (`amount`) — so income and expense differ by more
- * than a label. One entry per direction so these cannot drift apart. The sign
- * on the amount is the template's, since it depends on rendering `-amount`.
+ * than a label. The colours come from the semantic money tokens defined once
+ * in `styles/base/semantic.css` and are scheme-aware there (ADR 0008). One
+ * entry per direction so these cannot drift apart. The sign on the amount is
+ * the template's, since it depends on rendering `-amount`.
  */
 export const TRANSACTION_DIRECTIONS: Record<
   TransactionDirection,
@@ -76,24 +78,24 @@ export const TRANSACTION_DIRECTIONS: Record<
     label: 'Income',
     icon: 'arrow-down-left',
     accent: {
-      chip: 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400',
-      amount: 'text-emerald-700 dark:text-emerald-400',
+      chip: 'bg-income/10 text-income',
+      amount: 'text-income',
     },
   },
   expense: {
     label: 'Expense',
     icon: 'arrow-up-right',
     accent: {
-      chip: 'bg-red-600/10 text-red-700 dark:text-red-400',
-      amount: 'text-red-700 dark:text-red-400',
+      chip: 'bg-expense/10 text-expense',
+      amount: 'text-expense',
     },
   },
   transfer: {
     label: 'Transfer',
     icon: 'arrow-left-right',
     accent: {
-      chip: 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300',
-      amount: 'text-neutral-600 dark:text-neutral-300',
+      chip: 'bg-transfer/10 text-transfer',
+      amount: 'text-transfer',
     },
   },
 };
