@@ -1,0 +1,100 @@
+<form
+  class="flex flex-col gap-y-4 rounded-xl border border-neutral-200 p-4 sm:p-6 dark:border-neutral-800"
+  (submit)="save($event)"
+>
+  <div class="flex items-center justify-between">
+    <h2 class="text-lg font-semibold tracking-tight">New account</h2>
+    <button
+      matIconButton
+      type="button"
+      aria-label="Cancel"
+      (click)="cancel()"
+    >
+      <mat-icon svgIcon="x" />
+    </button>
+  </div>
+
+  <!-- Failed create with nothing to pin to a field -->
+  @if (errorMessage(); as message) {
+    <div
+      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+      role="alert"
+    >
+      {{ message }}
+    </div>
+  }
+
+  <!-- Name -->
+  <mat-form-field class="w-full">
+    <mat-label>Name</mat-label>
+    <input
+      id="account-name"
+      matInput
+      [formField]="accountForm.name"
+    />
+    <mat-error>
+      @if (accountForm.name().touched() && accountForm.name().invalid()) {
+        @for (error of accountForm.name().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <!-- Type -->
+  <mat-form-field class="w-full">
+    <mat-label>Type</mat-label>
+    <mat-select [formField]="accountForm.type">
+      @for (option of typeOptions; track option.value) {
+        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+    <mat-error>
+      @if (accountForm.type().touched() && accountForm.type().invalid()) {
+        @for (error of accountForm.type().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <!-- Starting balance -->
+  <mat-form-field class="w-full">
+    <mat-label>Starting balance</mat-label>
+    <input
+      id="account-initial-balance"
+      matInput
+      type="number"
+      step="0.01"
+      [formField]="accountForm.initialBalance"
+    />
+    <mat-hint>In pesos. Zero is fine — you can fund it later.</mat-hint>
+    <mat-error>
+      @if (
+        accountForm.initialBalance().touched() &&
+        accountForm.initialBalance().invalid()
+      ) {
+        @for (error of accountForm.initialBalance().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <div class="mt-2 flex items-center justify-end gap-x-3">
+    <button
+      matButton
+      type="button"
+      (click)="cancel()"
+    >
+      Cancel
+    </button>
+    <button
+      matButton="filled"
+      type="submit"
+      [disabled]="accountForm().invalid() || submitting()"
+    >
+      {{ submitting() ? 'Adding…' : 'Add account' }}
+    </button>
+  </div>
+</form>

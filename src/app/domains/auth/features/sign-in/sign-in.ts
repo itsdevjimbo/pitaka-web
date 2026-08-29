@@ -5,8 +5,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { APP_HOME_ROUTE, safeReturnUrl, Session } from '@/app/core/session';
-import { AuthControls, partitionAuthError } from '@/app/domains/auth/server-errors';
 
 /** The banner line for a sign-in that failed before it could be attributed. */
 const COULD_NOT_SIGN_IN =
@@ -67,7 +67,7 @@ export default class AuthSignIn {
         try {
           await this.session.signIn(this.signInFormModel());
         } catch (error) {
-          const { boundErrors, bannerMessage } = partitionAuthError(
+          const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
             COULD_NOT_SIGN_IN
@@ -101,7 +101,7 @@ export default class AuthSignIn {
    * already camelCased the PascalCase `nameof(...)` keys, so `email` /
    * `password` line up with the control names here.
    */
-  private serverErrorControls(): AuthControls {
+  private serverErrorControls(): ServerErrorControls {
     return {
       email: this.signInForm.email,
       password: this.signInForm.password,

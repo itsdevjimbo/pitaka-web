@@ -14,8 +14,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { Router, RouterLink } from '@angular/router';
 import { Registration } from '@/app/core/auth';
+import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { APP_HOME_ROUTE, Session } from '@/app/core/session';
-import { AuthControls, partitionAuthError } from '@/app/domains/auth/server-errors';
 
 /** The banner line for a registration that failed before it could be attributed. */
 const COULD_NOT_REGISTER =
@@ -90,7 +90,7 @@ export default class AuthSignUp {
           // type — the person is signed in the moment this resolves (ticket #5).
           await this.session.register(this.signUpFormModel());
         } catch (error) {
-          const { boundErrors, bannerMessage } = partitionAuthError(
+          const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
             COULD_NOT_REGISTER
@@ -124,7 +124,7 @@ export default class AuthSignUp {
    * already camelCased the PascalCase `nameof(...)` keys, so `name` / `email` /
    * `password` line up with the control names here.
    */
-  private serverErrorControls(): AuthControls {
+  private serverErrorControls(): ServerErrorControls {
     return {
       name: this.signUpForm.name,
       email: this.signUpForm.email,

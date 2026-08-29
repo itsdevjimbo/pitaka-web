@@ -1,19 +1,19 @@
 import { ApiError } from '@/app/core/api';
-import { partitionAuthError } from './server-errors';
+import { partitionServerError } from './server-errors';
 
 /**
- * A stand-in for a signals `FieldTree` — `partitionAuthError` only ever passes
+ * A stand-in for a signals `FieldTree` — `partitionServerError` only ever passes
  * these straight back through in `fieldTree`, so identity is all that matters.
  */
 function fakeControl(name: string) {
   return { _control: name } as never;
 }
 
-describe('partitionAuthError', () => {
+describe('partitionServerError', () => {
   const FALLBACK = 'Something went wrong. Please try again.';
 
   it('sends a non-ApiError throw to the banner via the fallback', () => {
-    const result = partitionAuthError(new Error('offline'), {}, FALLBACK);
+    const result = partitionServerError(new Error('offline'), {}, FALLBACK);
 
     expect(result.boundErrors).toEqual([]);
     expect(result.bannerMessage).toBe(FALLBACK);
@@ -22,7 +22,7 @@ describe('partitionAuthError', () => {
   it('binds a blamed field onto its control and leaves the banner clear', () => {
     const email = fakeControl('email');
 
-    const result = partitionAuthError(
+    const result = partitionServerError(
       new ApiError('Please correct the highlighted fields and try again.', 400, {
         email: ['That email is not registered.'],
       }),
@@ -31,13 +31,17 @@ describe('partitionAuthError', () => {
     );
 
     expect(result.boundErrors).toEqual([
-      { fieldTree: email, kind: 'server', message: 'That email is not registered.' },
+      {
+        fieldTree: email,
+        kind: 'server',
+        message: 'That email is not registered.',
+      },
     ]);
     expect(result.bannerMessage).toBeNull();
   });
 
   it('surfaces a blamed field with no control on the banner instead', () => {
-    const result = partitionAuthError(
+    const result = partitionServerError(
       new ApiError('Please correct the highlighted fields and try again.', 400, {
         tenantCode: ['That workspace is not accepting sign-ins.'],
       }),
@@ -54,7 +58,7 @@ describe('partitionAuthError', () => {
   it('keeps bound field errors even when an unattributed message also present', () => {
     const password = fakeControl('password');
 
-    const result = partitionAuthError(
+    const result = partitionServerError(
       new ApiError('Please correct the highlighted fields and try again.', 400, {
         password: ['Too short.'],
         tenantCode: ['Unknown workspace.'],
@@ -70,8 +74,11 @@ describe('partitionAuthError', () => {
   });
 
   it('puts a field-less ApiError message straight on the banner', () => {
-    const result = partitionAuthError(
-      new ApiError('That email and password do not match. Please try again.', 401),
+    const result = partitionServerError(
+      new ApiError(
+        'That email and password do not match. Please try again.',
+        401
+      ),
       { email: fakeControl('email'), password: fakeControl('password') },
       FALLBACK
     );

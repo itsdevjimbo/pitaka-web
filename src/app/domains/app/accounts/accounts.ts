@@ -6,6 +6,7 @@ import { ApiError } from '@/app/core/api';
 import { PesoPipe, sumPesos } from '@/app/core/money';
 import { Account, ACCOUNT_TYPES } from './account';
 import { AccountsService } from './accounts.service';
+import { NewAccountForm } from './new-account-form';
 
 const LOAD_FAILED =
   'Something went wrong loading your accounts. Please try again.';
@@ -22,7 +23,7 @@ const LOAD_FAILED =
 @Component({
   selector: 'accounts',
   templateUrl: './accounts.html',
-  imports: [MatButtonModule, MatIconModule, PesoPipe],
+  imports: [MatButtonModule, MatIconModule, PesoPipe, NewAccountForm],
   host: {
     class: 'flex flex-auto flex-col',
   },
@@ -37,6 +38,9 @@ export default class Accounts {
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly showRetired = signal(false);
+
+  /** Whether the "new account" form is open. */
+  protected readonly adding = signal(false);
 
   protected readonly types = ACCOUNT_TYPES;
 
@@ -101,5 +105,27 @@ export default class Accounts {
 
   protected toggleRetired(): void {
     this.showRetired.update((shown) => !shown);
+  }
+
+  /**
+   * A new Account was created. Show it at once — its balance is the server's own
+   * figure from the create response, not a remembered one — then re-read the
+   * list so it lands in the server's order and picks up anything changed
+   * elsewhere (ADR 0006: reconcile a write with a fresh read, don't trust a
+   * local splice). A failed reconcile keeps the optimistic row rather than
+   * replacing the screen with an error.
+   */
+  protected onCreated(account: Account): void {
+    this.accounts.update((list) => [...(list ?? []), account]);
+    this.adding.set(false);
+
+    this.service
+      .list()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (accounts) => this.accounts.set(accounts),
+        error: (error: unknown) =>
+          console.error('[accounts] reconcile after create failed', error),
+      });
   }
 }

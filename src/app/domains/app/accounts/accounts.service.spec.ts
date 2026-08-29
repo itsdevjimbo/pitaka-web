@@ -96,4 +96,91 @@ describe('AccountsService', () => {
       'Something went wrong on the server. Please try again.'
     );
   });
+
+  describe('create', () => {
+    it('POSTs name, type, and starting balance and returns the created Account without the owner id', async () => {
+      const result = firstValueFrom(
+        service.create({ name: 'Cash on hand', type: 'Cash', initialBalance: 0 })
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/accounts`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({
+        name: 'Cash on hand',
+        type: 'Cash',
+        initialBalance: 0,
+      });
+      request.flush(
+        {
+          id: 9,
+          userId: 7,
+          name: 'Cash on hand',
+          type: 'Cash',
+          initialBalance: 0,
+          currentBalance: 0,
+          isActive: true,
+        },
+        { status: 201, statusText: 'Created' }
+      );
+
+      await expect(result).resolves.toEqual({
+        id: 9,
+        name: 'Cash on hand',
+        type: 'Cash',
+        currentBalance: 0,
+        isActive: true,
+      });
+    });
+
+    it('re-files a duplicate-name 409 as a name field error against the conflict reason', async () => {
+      const result = firstValueFrom(
+        service.create({
+          name: 'Savings',
+          type: 'Bank',
+          initialBalance: 1000,
+        })
+      );
+
+      http.expectOne(`${BASE_URL}/api/accounts`).flush(
+        {
+          type: 'https://tools.ietf.org/html/rfc9110#section-15.5.10',
+          title: 'Conflict',
+          status: 409,
+          detail: 'An account with this name already exists.',
+        },
+        { status: 409, statusText: 'Conflict' }
+      );
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(409);
+      expect((error as ApiError).message).toBe(
+        'An account with this name already exists.'
+      );
+      expect((error as ApiError).fieldErrors).toEqual({
+        name: ['An account with this name already exists.'],
+      });
+    });
+
+    it('camelCases a PascalCase field error so it binds to the name control', async () => {
+      const result = firstValueFrom(
+        service.create({ name: '', type: 'Cash', initialBalance: 0 })
+      );
+
+      http.expectOne(`${BASE_URL}/api/accounts`).flush(
+        {
+          title: 'One or more validation errors occurred.',
+          status: 400,
+          errors: { Name: ['The Name field is required.'] },
+        },
+        { status: 400, statusText: 'Bad Request' }
+      );
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).fieldErrors).toEqual({
+        name: ['The Name field is required.'],
+      });
+    });
+  });
 });

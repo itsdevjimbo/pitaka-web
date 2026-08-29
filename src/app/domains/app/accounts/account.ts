@@ -21,6 +21,20 @@ export type Account = {
   isActive: boolean;
 };
 
+/**
+ * What the person supplies to open a new Account: a name, a type, and a starting
+ * balance. `initialBalance` is always sent — the API defaults it to `0` when
+ * omitted, but sending it keeps the field's meaning explicit at the seam. It is
+ * an amount the person enters, so it is zero or more (ADR 0005): zero is valid
+ * for an Account about to be funded, and a card's debt is recorded later as a
+ * Transaction, not as a negative opening figure.
+ */
+export type NewAccount = {
+  name: string;
+  type: AccountType;
+  initialBalance: number;
+};
+
 /** The five kinds of Account, spelt as the API's `AccountType` enum serialises. */
 export type AccountType =
   | 'Cash'
