@@ -1,0 +1,168 @@
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
+  <!-- Back to the list -->
+  <a
+    class="flex w-fit items-center gap-x-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-100"
+    routerLink="/app/accounts"
+  >
+    <mat-icon
+      class="size-4"
+      svgIcon="arrow-left"
+    />
+    Accounts
+  </a>
+
+  @if (loading()) {
+    <!-- Slow load: show that it is working -->
+    <div
+      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+      role="status"
+    >
+      <mat-icon
+        class="size-6 animate-spin"
+        svgIcon="loader-circle"
+      />
+      <span>Loading transactions…</span>
+    </div>
+  } @else if (errorMessage(); as message) {
+    <!-- Failed load: explain, and offer a retry -->
+    <div
+      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
+      role="alert"
+    >
+      <mat-icon
+        class="size-8 text-neutral-400"
+        svgIcon="circle-alert"
+      />
+      <p class="max-w-sm text-neutral-600 dark:text-neutral-300">
+        {{ message }}
+      </p>
+      <button
+        matButton="filled"
+        (click)="load()"
+      >
+        <mat-icon svgIcon="refresh-cw" />
+        Try again
+      </button>
+    </div>
+  } @else {
+    <!-- Which Account this is, and where it stands -->
+    @if (account(); as acc) {
+      <header class="flex flex-col gap-y-1">
+        <span
+          class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
+        >
+          <mat-icon
+            class="size-4"
+            [svgIcon]="types[acc.type].icon"
+          />
+          {{ types[acc.type].label }}
+          @if (!acc.isActive) {
+            <span
+              class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+            >
+              Retired
+            </span>
+          }
+        </span>
+        <h1 class="text-2xl font-bold tracking-tight">{{ acc.name }}</h1>
+        <span class="text-2xl font-bold tracking-tight tabular-nums">
+          {{ acc.currentBalance | peso }}
+        </span>
+      </header>
+    }
+
+    @if (isEmpty()) {
+      <!-- Nothing recorded: distinct from a failed load -->
+      <div
+        class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+      >
+        <mat-icon
+          class="size-10 text-neutral-400"
+          svgIcon="receipt"
+        />
+        <p class="text-lg font-semibold">No transactions yet</p>
+        <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
+          Nothing has been recorded against this account.
+        </p>
+      </div>
+    } @else {
+      <ul class="flex flex-col gap-y-2">
+        @for (row of rows(); track row.id) {
+          <li
+            class="flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
+          >
+            <div class="flex items-center gap-x-3">
+              <!-- Direction: the icon and colour carry it without leaning on the label -->
+              <span
+                class="flex size-9 shrink-0 items-center justify-center rounded-lg"
+                [class]="directions[row.direction].accent.chip"
+              >
+                <mat-icon
+                  class="size-5"
+                  [svgIcon]="directions[row.direction].icon"
+                />
+              </span>
+
+              <div class="flex min-w-0 flex-auto flex-col">
+                <span class="truncate font-medium">{{ row.headline }}</span>
+                <span
+                  class="flex flex-wrap items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
+                >
+                  <!-- Local time (ADR 0007). A generated transaction carries only
+                       a wall-clock day, so it shows the date alone. -->
+                  <span>{{
+                    row.date
+                      | date: (row.generated ? 'd MMM y' : 'd MMM y, h:mm a')
+                  }}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{{ directions[row.direction].label }}</span>
+                  @if (row.direction !== 'transfer') {
+                    <span aria-hidden="true">·</span>
+                    <span class="truncate">{{ row.categoryName }}</span>
+                  }
+                  @if (row.generated) {
+                    <span
+                      class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+                    >
+                      Generated
+                    </span>
+                  }
+                </span>
+              </div>
+
+              <!-- Amount: sign and colour, so income and expense differ by more than a word -->
+              <span
+                class="shrink-0 font-semibold tabular-nums"
+                [class]="directions[row.direction].accent.amount"
+              >
+                @switch (row.direction) {
+                  @case ('income') {
+                    +{{ row.amount | peso }}
+                  }
+                  @case ('expense') {
+                    {{ -row.amount | peso }}
+                  }
+                  @default {
+                    {{ row.amount | peso }}
+                  }
+                }
+              </span>
+            </div>
+
+            @if (row.tags.length) {
+              <div class="flex flex-wrap gap-1.5 pl-12">
+                @for (tag of row.tags; track tag.id) {
+                  <span
+                    class="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+                  >
+                    #{{ tag.name }}
+                  </span>
+                }
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+</div>

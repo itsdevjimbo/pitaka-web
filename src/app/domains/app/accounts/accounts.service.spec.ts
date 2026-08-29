@@ -111,10 +111,52 @@ describe('AccountsService', () => {
     );
   });
 
+  describe('get', () => {
+    it('GETs one Account by id and drops the owner id', async () => {
+      const result = firstValueFrom(service.get(9));
+
+      const request = http.expectOne(`${BASE_URL}/api/accounts/9`);
+      expect(request.request.method).toBe('GET');
+      request.flush({
+        id: 9,
+        userId: 7,
+        name: 'Cash on hand',
+        type: 'Cash',
+        initialBalance: 0,
+        currentBalance: 1500.5,
+        isActive: true,
+      });
+
+      await expect(result).resolves.toEqual({
+        id: 9,
+        name: 'Cash on hand',
+        type: 'Cash',
+        currentBalance: 1500.5,
+        isActive: true,
+      });
+    });
+
+    it('surfaces a 404 as a normalised ApiError', async () => {
+      const result = firstValueFrom(service.get(404));
+
+      http
+        .expectOne(`${BASE_URL}/api/accounts/404`)
+        .flush(null, { status: 404, statusText: 'Not Found' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(404);
+    });
+  });
+
   describe('create', () => {
     it('POSTs name, type, and starting balance and returns the created Account without the owner id', async () => {
       const result = firstValueFrom(
-        service.create({ name: 'Cash on hand', type: 'Cash', initialBalance: 0 })
+        service.create({
+          name: 'Cash on hand',
+          type: 'Cash',
+          initialBalance: 0,
+        })
       );
 
       const request = http.expectOne(`${BASE_URL}/api/accounts`);
@@ -247,7 +289,9 @@ describe('AccountsService', () => {
       http
         .expectOne(`${BASE_URL}/api/accounts/9`)
         .flush(
-          problem('This account was updated by another request. Please try again.'),
+          problem(
+            'This account was updated by another request. Please try again.'
+          ),
           { status: 409, statusText: 'Conflict' }
         );
 
@@ -309,7 +353,9 @@ describe('AccountsService', () => {
       http
         .expectOne(`${BASE_URL}/api/accounts/9/status`)
         .flush(
-          problem('This account was updated by another request. Please try again.'),
+          problem(
+            'This account was updated by another request. Please try again.'
+          ),
           { status: 409, statusText: 'Conflict' }
         );
 
@@ -335,7 +381,9 @@ describe('AccountsService', () => {
       http
         .expectOne(`${BASE_URL}/api/accounts/9`)
         .flush(
-          problem('This account has transaction history and cannot be deleted.'),
+          problem(
+            'This account has transaction history and cannot be deleted.'
+          ),
           { status: 409, statusText: 'Conflict' }
         );
 
@@ -352,13 +400,17 @@ describe('AccountsService', () => {
       http
         .expectOne(`${BASE_URL}/api/accounts/9`)
         .flush(
-          problem('This account contains funds allocated toward a specific goal.'),
+          problem(
+            'This account contains funds allocated toward a specific goal.'
+          ),
           { status: 409, statusText: 'Conflict' }
         );
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(AccountDeleteBlockedError);
-      expect((error as AccountDeleteBlockedError).reason).toBe('goal-allocation');
+      expect((error as AccountDeleteBlockedError).reason).toBe(
+        'goal-allocation'
+      );
     });
 
     it('surfaces a concurrency 409 as an AccountModifiedError, not a delete block', async () => {
@@ -367,7 +419,9 @@ describe('AccountsService', () => {
       http
         .expectOne(`${BASE_URL}/api/accounts/9`)
         .flush(
-          problem('This account was updated by another request. Please try again.'),
+          problem(
+            'This account was updated by another request. Please try again.'
+          ),
           { status: 409, statusText: 'Conflict' }
         );
 

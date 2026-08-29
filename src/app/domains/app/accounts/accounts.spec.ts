@@ -1,5 +1,6 @@
 import { Signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
@@ -66,6 +67,7 @@ describe('Accounts', () => {
       imports: [Accounts],
       providers: [
         provideIcons(),
+        provideRouter([]),
         { provide: AccountsService, useValue: { list, ...overrides } },
       ],
     });
