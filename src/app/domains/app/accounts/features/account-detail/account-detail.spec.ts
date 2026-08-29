@@ -7,9 +7,9 @@ import { formatPeso } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import { Transaction } from '@/app/domains/app/transactions/transaction';
 import { TransactionsService } from '@/app/domains/app/transactions/transactions.service';
-import { Account } from './account';
+import { Account } from '../../data/account';
+import { AccountsService } from '../../data/accounts.service';
 import AccountDetail from './account-detail';
-import { AccountsService } from './accounts.service';
 
 const ACCOUNT: Account = {
   id: 3,

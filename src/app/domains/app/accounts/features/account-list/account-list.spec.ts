@@ -5,13 +5,13 @@ import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
-import { Account } from './account';
+import { Account } from '../../data/account';
 import {
   AccountDeleteBlockedError,
   AccountModifiedError,
-} from './account-errors';
-import Accounts from './accounts';
-import { AccountsService } from './accounts.service';
+} from '../../data/account-errors';
+import { AccountsService } from '../../data/accounts.service';
+import AccountList from './account-list';
 
 type RowNotice = {
   id: number;
@@ -58,13 +58,13 @@ const OLD_WALLET: Account = {
   isActive: false,
 };
 
-describe('Accounts', () => {
+describe('AccountList', () => {
   function setup(
     list: AccountsService['list'],
     overrides: Partial<AccountsService> = {}
   ) {
     TestBed.configureTestingModule({
-      imports: [Accounts],
+      imports: [AccountList],
       providers: [
         provideIcons(),
         provideRouter([]),
@@ -72,7 +72,7 @@ describe('Accounts', () => {
       ],
     });
 
-    const fixture = TestBed.createComponent(Accounts);
+    const fixture = TestBed.createComponent(AccountList);
     const cmp = fixture.componentInstance as unknown as AccountsInternals;
     fixture.detectChanges();
 
@@ -83,7 +83,7 @@ describe('Accounts', () => {
     };
   }
 
-  function clickButton(fixture: ComponentFixture<Accounts>, label: string) {
+  function clickButton(fixture: ComponentFixture<AccountList>, label: string) {
     const button = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button')
     ).find((element) => (element.textContent ?? '').includes(label));

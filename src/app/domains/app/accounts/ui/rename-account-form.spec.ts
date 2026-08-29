@@ -4,9 +4,9 @@ import { FieldTree } from '@angular/forms/signals';
 import { of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
-import { Account } from './account';
-import { AccountModifiedError } from './account-errors';
-import { AccountsService } from './accounts.service';
+import { Account } from '../data/account';
+import { AccountModifiedError } from '../data/account-errors';
+import { AccountsService } from '../data/accounts.service';
 import { RenameAccountForm } from './rename-account-form';
 
 /** The slice of the component the tests reach into. */

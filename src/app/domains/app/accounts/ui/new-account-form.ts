@@ -20,8 +20,8 @@ import {
   ACCOUNT_TYPES,
   AccountType,
   NewAccount,
-} from './account';
-import { AccountsService } from './accounts.service';
+} from '../data/account';
+import { AccountsService } from '../data/accounts.service';
 
 /** The banner line for a create that failed before it could be attributed. */
 const COULD_NOT_CREATE =

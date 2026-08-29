@@ -7,7 +7,7 @@ import { of } from 'rxjs';
 import { routes } from '@/app/app.routes';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
-import { AccountsService } from './accounts/accounts.service';
+import { AccountsService } from './accounts';
 import { AppLayout } from './layout/layout';
 
 /**

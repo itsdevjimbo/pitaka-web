@@ -12,9 +12,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import { Account, ACCOUNT_NAME_MAX } from './account';
-import { AccountModifiedError } from './account-errors';
-import { AccountsService } from './accounts.service';
+import { Account, ACCOUNT_NAME_MAX } from '../data/account';
+import { AccountModifiedError } from '../data/account-errors';
+import { AccountsService } from '../data/accounts.service';
 
 /** The banner line for a rename that failed before it could be attributed. */
 const COULD_NOT_RENAME =
