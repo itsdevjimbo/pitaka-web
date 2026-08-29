@@ -1,0 +1,64 @@
+<div class="flex items-center gap-x-3">
+  <!-- Direction: the icon and colour carry it without leaning on the label -->
+  <span
+    class="flex size-9 shrink-0 items-center justify-center rounded-lg"
+    [class]="directions[row().direction].accent.chip"
+  >
+    <mat-icon
+      class="size-5"
+      [svgIcon]="directions[row().direction].icon"
+    />
+  </span>
+
+  <div class="flex min-w-0 flex-auto flex-col">
+    <span class="truncate font-medium">{{ row().headline }}</span>
+    <span
+      class="flex flex-wrap items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
+    >
+      <!-- Local time (ADR 0007). A generated transaction carries only a
+           wall-clock day, so it shows the date alone. -->
+      <span>{{
+        row().date | date: (row().generated ? 'd MMM y' : 'd MMM y, h:mm a')
+      }}</span>
+      <span aria-hidden="true">·</span>
+      <span>{{ directions[row().direction].label }}</span>
+      @if (row().direction !== 'transfer') {
+        <span aria-hidden="true">·</span>
+        <span class="truncate">{{ row().categoryName }}</span>
+      }
+      @if (row().generated) {
+        <span
+          class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+        >
+          Generated
+        </span>
+      }
+    </span>
+  </div>
+
+  <!-- Amount: sign and colour, so a row's direction carries in more than a
+       word. A Transfer is signed against this Account — it adds where the money
+       lands, subtracts where it leaves. -->
+  <span
+    class="shrink-0 font-semibold tabular-nums"
+    [class]="directions[row().direction].accent.amount"
+  >
+    @if (row().incoming) {
+      +{{ row().amount | peso }}
+    } @else {
+      {{ -row().amount | peso }}
+    }
+  </span>
+</div>
+
+@if (row().tags.length) {
+  <div class="flex flex-wrap gap-1.5 pl-12">
+    @for (tag of row().tags; track tag.id) {
+      <span
+        class="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+      >
+        #{{ tag.name }}
+      </span>
+    }
+  </div>
+}
