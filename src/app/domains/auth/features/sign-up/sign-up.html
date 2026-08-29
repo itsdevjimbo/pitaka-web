@@ -29,6 +29,16 @@
         class="mt-8"
         (submit)="signUp($event)"
       >
+        <!-- Error message -->
+        @if (errorMessage(); as message) {
+          <div
+            class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+            role="alert"
+          >
+            {{ message }}
+          </div>
+        }
+
         <div class="flex flex-col gap-y-4">
           <!-- Name field -->
           <mat-form-field class="w-full">
@@ -41,25 +51,6 @@
             <mat-error>
               @if (signUpForm.name().touched() && signUpForm.name().invalid()) {
                 @for (error of signUpForm.name().errors(); track error) {
-                  {{ error.message }}
-                }
-              }
-            </mat-error>
-          </mat-form-field>
-
-          <!-- Company field -->
-          <mat-form-field class="w-full">
-            <mat-label>Company</mat-label>
-            <input
-              id="company"
-              matInput
-              [formField]="signUpForm.company"
-            />
-            <mat-error>
-              @if (
-                signUpForm.company().touched() && signUpForm.company().invalid()
-              ) {
-                @for (error of signUpForm.company().errors(); track error) {
                   {{ error.message }}
                 }
               }
@@ -134,21 +125,14 @@
           </mat-form-field>
         </div>
 
-        <!-- ToS and PP -->
-        <div class="mt-2 inline-flex w-full items-end">
-          <mat-checkbox class="-ml-2">
-            I agree with the Terms and Privacy Policy
-          </mat-checkbox>
-        </div>
-
         <!-- Submit button -->
         <button
           type="submit"
           matButton="filled"
           class="mt-6 w-full"
-          [disabled]="signUpForm().invalid()"
+          [disabled]="signUpForm().invalid() || submitting()"
         >
-          Create my account
+          {{ submitting() ? 'Creating your profile…' : 'Create my profile' }}
         </button>
       </form>
     </div>

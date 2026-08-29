@@ -15,6 +15,13 @@ export type Credentials = {
   password: string;
 };
 
+/** What registration needs: the person's name and the pair they just chose. */
+export type Registration = {
+  name: string;
+  email: string;
+  password: string;
+};
+
 /** What a successful sign-in yields: a bearer token and the signed-in Profile. */
 export type SignInResult = {
   token: string;
@@ -29,6 +36,15 @@ export type SignInResult = {
  * (ADR 0002: nothing above the adapter sees the difference).
  */
 const WRONG_CREDENTIALS = 'That email and password do not match. Please try again.';
+
+/**
+ * A 409 from `POST /api/auth/register` means the email is already taken. The
+ * server's `detail` ("A user with this email already exists.") states the fact
+ * but not the way out; the wording that points the person at signing in is
+ * settled here, the one place that knows which endpoint was called (ADR 0002).
+ */
+const EMAIL_ALREADY_REGISTERED =
+  'That email is already registered. Try signing in instead.';
 
 /** Wire shape of `POST /api/auth/login` — the API names the identity `user`. */
 type LoginResponse = {
@@ -59,6 +75,30 @@ export class AuthService {
           throwError(() =>
             error instanceof ApiError && error.status === 401
               ? new ApiError(WRONG_CREDENTIALS, error.status)
+              : error
+          )
+        )
+      );
+  }
+
+  /**
+   * Register a new Profile and get back a session in the same step: the endpoint
+   * returns the same `{ token, user }` body a login does, so there is no chained
+   * sign-in call (ADR 0004). A taken email fails with a 409 `ApiError` carrying
+   * our sign-in-pointing wording.
+   */
+  register(registration: Registration): Observable<SignInResult> {
+    return this.http
+      .post<LoginResponse>(
+        `${this.baseUrl}/api/auth/register`,
+        registration
+      )
+      .pipe(
+        map((response) => ({ token: response.token, profile: response.user })),
+        catchError((error: unknown) =>
+          throwError(() =>
+            error instanceof ApiError && error.status === 409
+              ? new ApiError(EMAIL_ALREADY_REGISTERED, error.status)
               : error
           )
         )

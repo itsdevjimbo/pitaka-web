@@ -130,6 +130,98 @@ describe('AuthService', () => {
     );
   });
 
+  it('POSTs registration to /api/auth/register and renames the identity to `profile`', async () => {
+    const result = firstValueFrom(
+      service.register({
+        name: 'Ada',
+        email: 'ada@example.com',
+        password: 'secret12',
+      })
+    );
+
+    const request = http.expectOne(`${BASE_URL}/api/auth/register`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      name: 'Ada',
+      email: 'ada@example.com',
+      password: 'secret12',
+    });
+    request.flush(
+      {
+        token: 'a.b.c',
+        user: { id: 7, name: 'Ada', email: 'ada@example.com' },
+      },
+      { status: 201, statusText: 'Created' }
+    );
+
+    await expect(result).resolves.toEqual({
+      token: 'a.b.c',
+      profile: { id: 7, name: 'Ada', email: 'ada@example.com' },
+    });
+  });
+
+  it('turns a 409 taken-email conflict into wording that points at signing in', async () => {
+    const result = firstValueFrom(
+      service.register({
+        name: 'Ada',
+        email: 'taken@example.com',
+        password: 'secret12',
+      })
+    );
+
+    http.expectOne(`${BASE_URL}/api/auth/register`).flush(
+      {
+        title: 'Conflict',
+        status: 409,
+        detail: 'A user with this email already exists.',
+      },
+      { status: 409, statusText: 'Conflict' }
+    );
+
+    const error = await result.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(409);
+    expect((error as ApiError).fieldErrors).toEqual({});
+    // Ours, not the server's bare statement of fact.
+    expect((error as ApiError).message).toBe(
+      'That email is already registered. Try signing in instead.'
+    );
+  });
+
+  it('normalises a ValidationProblemDetails register response into field errors, camelCasing keys', async () => {
+    const result = firstValueFrom(
+      service.register({ name: '', email: 'not-an-email', password: 'short12' })
+    );
+
+    http.expectOne(`${BASE_URL}/api/auth/register`).flush(
+      {
+        title: 'One or more validation errors occurred.',
+        status: 400,
+        errors: {
+          Name: ['The Name field is required.'],
+          Email: ['The Email field is not a valid e-mail address.'],
+          Password: [
+            'The field Password must be a string with a minimum length of 8.',
+          ],
+        },
+      },
+      { status: 400, statusText: 'Bad Request' }
+    );
+
+    const error = await result.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).fieldErrors).toEqual({
+      name: ['The Name field is required.'],
+      email: ['The Email field is not a valid e-mail address.'],
+      password: [
+        'The field Password must be a string with a minimum length of 8.',
+      ],
+    });
+    expect((error as ApiError).message).toBe(
+      'Please correct the highlighted fields and try again.'
+    );
+  });
+
   it('GETs the live Profile from /api/auth/me', async () => {
     const result = firstValueFrom(service.me());
 
