@@ -58,7 +58,7 @@ export default class Accounts {
     sumPesos(this.visibleAccounts().map((account) => account.currentBalance))
   );
 
-  /** The sum across every Account, retired included — shown while retired are hidden. */
+  /** The sum across every Account, retired included — shown once retired are revealed. */
   protected readonly allAccountsTotal = computed(() =>
     sumPesos((this.accounts() ?? []).map((account) => account.currentBalance))
   );

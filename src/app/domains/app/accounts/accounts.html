@@ -63,7 +63,7 @@
         <span class="text-2xl font-bold tracking-tight tabular-nums">
           {{ total() | peso }}
         </span>
-        @if (hasRetired() && !showRetired()) {
+        @if (hasRetired() && showRetired()) {
           <span class="text-sm text-neutral-500 dark:text-neutral-400">
             Including retired: {{ allAccountsTotal() | peso }}
           </span>

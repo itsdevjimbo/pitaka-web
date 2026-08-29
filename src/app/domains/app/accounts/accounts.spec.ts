@@ -109,18 +109,17 @@ describe('Accounts', () => {
     expect(text()).toContain(formatPeso(0.3));
   });
 
-  it('hides retired Accounts and their balance from the headline total, but still shows a grand total', () => {
+  it('hides retired Accounts and their balance from the headline total, without a confusing extra total', () => {
     const { text } = setup(() => of([CASH, BANK, OLD_WALLET]));
 
     expect(text()).not.toContain('Old GCash');
     expect(text()).toContain('Total across active accounts');
-    // Headline is 1500 + 8500; the grand total is still on screen without a click.
+    // Headline is 1500 + 8500; the retired-inclusive total stays hidden until asked for.
     expect(text()).toContain(formatPeso(10000));
-    expect(text()).toContain('Including retired:');
-    expect(text()).toContain(formatPeso(10300));
+    expect(text()).not.toContain('Including retired:');
   });
 
-  it('reveals retired Accounts on request and says the total now covers them all', () => {
+  it('reveals retired Accounts on request and confirms the total now covers them all', () => {
     const { fixture, cmp, text } = setup(() => of([CASH, BANK, OLD_WALLET]));
 
     cmp.toggleRetired();
@@ -129,7 +128,7 @@ describe('Accounts', () => {
     expect(text()).toContain('Old GCash');
     expect(text()).toContain('Retired');
     expect(text()).toContain('Total across all accounts');
-    expect(text()).not.toContain('Including retired:');
+    expect(text()).toContain('Including retired:');
     expect(text()).toContain(formatPeso(10300));
   });
 
