@@ -21,8 +21,8 @@ import {
   TRANSACTION_DIRECTIONS,
 } from '@/app/domains/app/transactions/transaction';
 import { TransactionsService } from '@/app/domains/app/transactions/transactions.service';
-import { Account, ACCOUNT_TYPES } from './account';
-import { AccountsService } from './accounts.service';
+import { Account, ACCOUNT_TYPES } from '../../data/account';
+import { AccountsService } from '../../data/accounts.service';
 
 const LOAD_FAILED =
   'Something went wrong loading this account. Please try again.';
@@ -87,7 +87,7 @@ export default class AccountDetail implements OnInit {
 
   // `load()` reads the required route input `id`, which the router only binds
   // after construction — so this kicks off from `ngOnInit`, not the constructor
-  // the sibling `Accounts` uses.
+  // the sibling `AccountList` uses.
   ngOnInit(): void {
     this.load();
   }

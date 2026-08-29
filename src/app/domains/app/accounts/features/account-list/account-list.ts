@@ -7,11 +7,14 @@ import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe, sumPesos } from '@/app/core/money';
-import { Account, ACCOUNT_TYPES } from './account';
-import { AccountDeleteBlockedError, AccountModifiedError } from './account-errors';
-import { AccountsService } from './accounts.service';
-import { NewAccountForm } from './new-account-form';
-import { RenameAccountForm } from './rename-account-form';
+import { Account, ACCOUNT_TYPES } from '../../data/account';
+import {
+  AccountDeleteBlockedError,
+  AccountModifiedError,
+} from '../../data/account-errors';
+import { AccountsService } from '../../data/accounts.service';
+import { NewAccountForm } from '../../ui/new-account-form';
+import { RenameAccountForm } from '../../ui/rename-account-form';
 
 const LOAD_FAILED =
   'Something went wrong loading your accounts. Please try again.';
@@ -55,8 +58,8 @@ type RowNotice = {
  * history or money, surfaces as a notice on that row with the way forward.
  */
 @Component({
-  selector: 'accounts',
-  templateUrl: './accounts.html',
+  selector: 'account-list',
+  templateUrl: './account-list.html',
   imports: [
     MatButtonModule,
     MatIconModule,
@@ -70,7 +73,7 @@ type RowNotice = {
     class: 'flex flex-auto flex-col',
   },
 })
-export default class Accounts {
+export default class AccountList {
   // Dependencies
   private service = inject(AccountsService);
   private destroyRef = inject(DestroyRef);

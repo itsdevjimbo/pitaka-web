@@ -13,11 +13,13 @@ const routes: Routes = [
       },
       {
         path: 'accounts',
-        loadComponent: () => import('./accounts/accounts'),
+        loadComponent: () =>
+          import('./accounts/features/account-list/account-list'),
       },
       {
         path: 'accounts/:id',
-        loadComponent: () => import('./accounts/account-detail'),
+        loadComponent: () =>
+          import('./accounts/features/account-detail/account-detail'),
       },
     ],
   },
