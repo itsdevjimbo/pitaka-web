@@ -19,11 +19,15 @@ A container of money the person owns — cash on hand, a bank account, a credit 
 _Avoid_: Wallet, ledger, user account, source
 
 **Transaction**:
-A single recorded movement of money: income received, an expense paid, or a transfer. Its amount and direction are settled at the moment it is recorded and do not change afterward.
+A single recorded movement of money: income received, an expense paid, or a transfer. Its amount and direction are settled at the moment it is recorded and do not change afterward; how it is *filed* — when it is dated, its Category, its note, its Tags — can be corrected later.
 _Avoid_: Entry, record, payment, item
 
+**Direction**:
+Which of the three kinds a Transaction reads as: income, expense, or Transfer. It decides what a Transaction can carry — an income or an expense is filed under a Category, a Transfer names a destination Account instead — and it carries the sign, so a recorded amount is always positive. *Income* and *Expense* are the API's own words; *direction* is this client's word for the choice between them, and is not a fourth translated term.
+_Avoid_: Type, kind, sign
+
 **Transfer**:
-A Transaction moving money between two Accounts the same person owns. Across the pair it is neither income nor expense: it changes where money sits, not how much there is. Against a single Account it is always signed — it leaves the Account it comes from and arrives in the Account it goes to, so one Transfer reads as outgoing from one Account and incoming to the other.
+A Transaction moving money between two Accounts the same person owns. Across the pair it is neither income nor expense: it changes where money sits, not how much there is. It is one Transaction rather than two, appearing in both Accounts' lists as the same record and signed against whichever Account is in view — leaving the one it comes from, arriving in the one it goes to. It is recorded against the Account it leaves, and that is the only place it can be re-filed or removed. It carries no Category, because every Category is a kind of income or expense and a Transfer is neither.
 _Avoid_: Internal transaction, move, send
 
 **Generated transaction**:
