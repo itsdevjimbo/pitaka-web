@@ -73,12 +73,31 @@ describe('TransactionsService', () => {
         amount: 120.5,
         direction: 'expense',
         date: new Date('2026-08-29T07:00:00'),
+        accountId: 3,
+        transferToAccountId: null,
         categoryId: 4,
         generated: false,
         description: 'Coffee',
         tags: [{ id: 1, name: 'treats' }],
       },
     ]);
+  });
+
+  it('keeps the source and destination Account ids so a Transfer can be signed', async () => {
+    const result = firstValueFrom(service.list(3));
+
+    http.expectOne(`${BASE_URL}/api/accounts/3/transactions`).flush([
+      resource({
+        id: 1,
+        type: 'Transfer',
+        accountId: 3,
+        transferToAccountId: 9,
+      }),
+    ]);
+
+    const [tx] = await result;
+    expect(tx.accountId).toBe(3);
+    expect(tx.transferToAccountId).toBe(9);
   });
 
   it('reads each transaction type as a direction', async () => {

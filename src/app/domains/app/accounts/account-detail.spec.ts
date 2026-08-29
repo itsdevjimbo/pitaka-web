@@ -5,11 +5,11 @@ import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
+import { Transaction } from '@/app/domains/app/transactions/transaction';
+import { TransactionsService } from '@/app/domains/app/transactions/transactions.service';
 import { Account } from './account';
 import AccountDetail from './account-detail';
 import { AccountsService } from './accounts.service';
-import { Transaction } from './transaction';
-import { TransactionsService } from './transactions.service';
 
 const ACCOUNT: Account = {
   id: 3,
@@ -30,6 +30,8 @@ function tx(over: Partial<Transaction> = {}): Transaction {
     amount: 120.5,
     direction: 'expense',
     date: new Date('2026-08-29T00:00:00'),
+    accountId: 3,
+    transferToAccountId: null,
     categoryId: 1,
     generated: false,
     description: null,
@@ -166,7 +168,7 @@ describe('AccountDetail', () => {
     expect(text()).toContain(formatPeso(-250));
   });
 
-  it('presents a Transfer as neither income nor expense', () => {
+  it('signs a Transfer leaving the viewed Account as outgoing', () => {
     const { text } = setup({
       list: () =>
         of([
@@ -174,6 +176,8 @@ describe('AccountDetail', () => {
             id: 1,
             direction: 'transfer',
             amount: 500,
+            accountId: 3, // the Account on screen — the money leaves here
+            transferToAccountId: 9,
             categoryId: null,
             description: 'Move to savings',
           }),
@@ -181,8 +185,28 @@ describe('AccountDetail', () => {
     });
 
     expect(text()).toContain('Transfer');
-    expect(text()).toContain(formatPeso(500));
+    expect(text()).toContain(formatPeso(-500));
     expect(text()).not.toContain(`+${formatPeso(500)}`);
+  });
+
+  it('signs a Transfer arriving in the viewed Account as incoming', () => {
+    const { text } = setup({
+      list: () =>
+        of([
+          tx({
+            id: 1,
+            direction: 'transfer',
+            amount: 500,
+            accountId: 9,
+            transferToAccountId: 3, // the Account on screen — the money lands here
+            categoryId: null,
+            description: 'Move from everyday',
+          }),
+        ]),
+    });
+
+    expect(text()).toContain('Transfer');
+    expect(text()).toContain(`+${formatPeso(500)}`);
     expect(text()).not.toContain(formatPeso(-500));
   });
 

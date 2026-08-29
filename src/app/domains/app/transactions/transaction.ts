@@ -5,8 +5,10 @@
  * the Transaction was recorded and are shown, never changed.
  *
  * The hand-written type pins what the OpenAPI document leaves loose and drops
- * what nothing above the adapter reads (`userId`, `accountId`, the raw
- * `isRecurring` flag, `transferToAccountId`).
+ * what nothing above the adapter reads (`userId`, the raw `isRecurring` flag).
+ * The two Account ids are kept: a Transfer is signed against a single Account
+ * (see `CONTEXT.md`), and which way it reads depends on whether the Account
+ * being viewed is the side it leaves or the side it lands in.
  */
 export type Transaction = {
   id: number;
@@ -15,6 +17,19 @@ export type Transaction = {
   amount: number;
 
   direction: TransactionDirection;
+
+  /**
+   * The Account this movement was recorded against — for a Transfer, the side
+   * the money leaves. Compared with the Account on screen to sign a Transfer
+   * row: a match here means outgoing.
+   */
+  accountId: number;
+
+  /**
+   * The Account a Transfer lands in, or `null` when this is not a Transfer. A
+   * match against the Account on screen means the Transfer reads as incoming.
+   */
+  transferToAccountId: number | null;
 
   /**
    * When the movement is dated, as a `Date` to render in the person's own

@@ -130,21 +130,17 @@
                 </span>
               </div>
 
-              <!-- Amount: sign and colour, so income and expense differ by more than a word -->
+              <!-- Amount: sign and colour, so a row's direction carries in more
+                   than a word. A Transfer is signed against this Account — it
+                   adds where the money lands, subtracts where it leaves. -->
               <span
                 class="shrink-0 font-semibold tabular-nums"
                 [class]="directions[row.direction].accent.amount"
               >
-                @switch (row.direction) {
-                  @case ('income') {
-                    +{{ row.amount | peso }}
-                  }
-                  @case ('expense') {
-                    {{ -row.amount | peso }}
-                  }
-                  @default {
-                    {{ row.amount | peso }}
-                  }
+                @if (row.incoming) {
+                  +{{ row.amount | peso }}
+                } @else {
+                  {{ -row.amount | peso }}
                 }
               </span>
             </div>

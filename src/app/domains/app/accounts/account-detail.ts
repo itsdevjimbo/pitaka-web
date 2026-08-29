@@ -16,10 +16,13 @@ import { forkJoin } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
+import {
+  Transaction,
+  TRANSACTION_DIRECTIONS,
+} from '@/app/domains/app/transactions/transaction';
+import { TransactionsService } from '@/app/domains/app/transactions/transactions.service';
 import { Account, ACCOUNT_TYPES } from './account';
 import { AccountsService } from './accounts.service';
-import { Transaction, TRANSACTION_DIRECTIONS } from './transaction';
-import { TransactionsService } from './transactions.service';
 
 const LOAD_FAILED =
   'Something went wrong loading this account. Please try again.';
@@ -28,13 +31,16 @@ const LOAD_FAILED =
 const NO_CATEGORY = 'Uncategorised';
 
 /**
- * A Transaction with the two derived strings the template needs: `categoryName`
- * for the meta line, and `headline` for the row's main line — its note if it
- * has one, otherwise what it is (a Transfer, or its Category).
+ * A Transaction with the fields the row template needs on top of the domain
+ * shape: `categoryName` for the meta line, `headline` for the main line — its
+ * note if it has one, otherwise what it is (a Transfer, or its Category) — and
+ * `incoming`, whether the amount adds to the viewed Account (income, or a
+ * Transfer landing here) or subtracts from it, so the row can be signed.
  */
 type TransactionRow = Transaction & {
   categoryName: string;
   headline: string;
+  incoming: boolean;
 };
 
 /**
@@ -102,7 +108,7 @@ export default class AccountDetail implements OnInit {
       .subscribe({
         next: ({ account, transactions, names }) => {
           this.account.set(account);
-          this.rows.set(transactions.map((t) => withDerivedText(t, names)));
+          this.rows.set(transactions.map((t) => toRow(t, names, accountId)));
           this.loading.set(false);
         },
         error: (error: unknown) => {
@@ -115,10 +121,11 @@ export default class AccountDetail implements OnInit {
   }
 }
 
-/** Resolve the Category name and settle what the row's main line reads. */
-function withDerivedText(
+/** Build the row the template renders: resolved Category name, headline, sign. */
+function toRow(
   transaction: Transaction,
-  names: ReadonlyMap<number, string>
+  names: ReadonlyMap<number, string>,
+  accountId: number
 ): TransactionRow {
   const resolved =
     transaction.categoryId === null
@@ -126,12 +133,21 @@ function withDerivedText(
       : (names.get(transaction.categoryId) ?? null);
   const categoryName = resolved ?? NO_CATEGORY;
 
+  const isTransfer = transaction.direction === 'transfer';
+
   // A Transfer has no Category, so never let "Uncategorised" head its row.
   const headline =
     transaction.description ||
-    (transaction.direction === 'transfer'
-      ? TRANSACTION_DIRECTIONS.transfer.label
-      : categoryName);
+    (isTransfer ? TRANSACTION_DIRECTIONS.transfer.label : categoryName);
 
-  return { ...transaction, categoryName, headline };
+  // Which way the amount is signed against the Account on screen. A Transfer is
+  // signed against a single Account (CONTEXT.md): it adds here when this is the
+  // Account it lands in, subtracts otherwise. The API returns only the outgoing
+  // side today (pitaka#58), so an unmatched Transfer stays outgoing and the
+  // incoming case is already right once that lands.
+  const incoming =
+    transaction.direction === 'income' ||
+    (isTransfer && transaction.transferToAccountId === accountId);
+
+  return { ...transaction, categoryName, headline, incoming };
 }

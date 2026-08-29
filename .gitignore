@@ -43,3 +43,6 @@ Thumbs.db
 
 # Claude
 .claude/launch.json
+
+# Agent scratch space (local ticket notes, never committed)
+.scratch/
