@@ -7,9 +7,9 @@ import { Transaction, TransactionDirection } from './transaction';
 /**
  * Wire shape of one Transaction from the API. `GET /api/accounts/:id/
  * transactions` returns a collection of these, already scoped to the Account
- * and ordered newest first. The API attaches `userId`, `accountId`,
- * `transferToAccountId`, and a raw `isRecurring` flag; nothing this screen
- * shows needs them.
+ * and ordered newest first. The API also attaches `userId` and a raw
+ * `isRecurring` flag, which nothing above the adapter reads. `accountId` and
+ * `transferToAccountId` are kept — they sign a Transfer against one Account.
  */
 type TransactionResource = {
   id: number;
@@ -66,6 +66,8 @@ function toTransaction(resource: TransactionResource): Transaction {
     id: resource.id,
     amount: resource.amount,
     direction: DIRECTION[resource.type],
+    accountId: resource.accountId,
+    transferToAccountId: resource.transferToAccountId,
     // No zone is appended and none is stripped: a real instant arrives with a
     // designator and converts to local, a person-entered wall-clock arrives
     // without one and is read as local (ADR 0007).

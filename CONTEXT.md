@@ -23,7 +23,7 @@ A single recorded movement of money: income received, an expense paid, or a tran
 _Avoid_: Entry, record, payment, item
 
 **Transfer**:
-A Transaction moving money between two Accounts the same person owns. It changes where money sits without changing how much there is, and so is neither income nor expense.
+A Transaction moving money between two Accounts the same person owns. Across the pair it is neither income nor expense: it changes where money sits, not how much there is. Against a single Account it is always signed — it leaves the Account it comes from and arrives in the Account it goes to, so one Transfer reads as outgoing from one Account and incoming to the other.
 _Avoid_: Internal transaction, move, send
 
 **Generated transaction**:
