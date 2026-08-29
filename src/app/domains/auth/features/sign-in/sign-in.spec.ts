@@ -111,6 +111,21 @@ describe('AuthSignIn', () => {
     expect(cmp.errorMessage()).toBeNull();
   });
 
+  it('does not report a post-sign-in navigation failure as a sign-in failure', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const signIn = vi.fn().mockResolvedValue(undefined);
+    const { fixture, cmp, navigateByUrl } = setup(signIn);
+    navigateByUrl.mockRejectedValueOnce(new Error('router boom'));
+
+    await submitAndSettle(fixture, cmp);
+
+    expect(signIn).toHaveBeenCalled();
+    expect(cmp.errorMessage()).toBeNull();
+    expect(error).toHaveBeenCalled();
+
+    error.mockRestore();
+  });
+
   it('returns to where the person was headed when a safe returnUrl was remembered', async () => {
     const { fixture, cmp, navigateByUrl } = setup(
       () => Promise.resolve(),

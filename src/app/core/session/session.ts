@@ -2,7 +2,13 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { AuthService, Credentials, Profile } from '@/app/core/auth';
+import {
+  AuthService,
+  Credentials,
+  Profile,
+  Registration,
+  SignInResult,
+} from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
 import { SIGN_IN_ROUTE, signInRedirect } from './sign-in-route';
 
@@ -46,7 +52,20 @@ export class Session {
 
   /** Exchange credentials for a session. Rejects with an `ApiError` on failure. */
   async signIn(credentials: Credentials): Promise<void> {
-    const { token, profile } = await firstValueFrom(this.auth.login(credentials));
+    this.establish(await firstValueFrom(this.auth.login(credentials)));
+  }
+
+  /**
+   * Register a new Profile and start its session in the same step — the API
+   * hands back a token on register, so no chained sign-in is needed. Rejects
+   * with an `ApiError` on failure (a taken email arrives as a 409).
+   */
+  async register(registration: Registration): Promise<void> {
+    this.establish(await firstValueFrom(this.auth.register(registration)));
+  }
+
+  /** Adopt a freshly minted session: persist the token, hold the Profile. */
+  private establish({ token, profile }: SignInResult): void {
     this.storage.setItem(TOKEN_KEY, token);
     this._token.set(token);
     this._profile.set(profile);
