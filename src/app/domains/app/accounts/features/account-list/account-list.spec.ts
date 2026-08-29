@@ -26,6 +26,7 @@ type AccountsInternals = {
   load(): void;
   startRename(account: Account): void;
   onRenamed(): void;
+  onCreated(account: Account): void;
   toggleActive(account: Account): void;
   askDelete(account: Account): void;
   confirmDelete(account: Account): void;
@@ -34,6 +35,8 @@ type AccountsInternals = {
   readonly confirmingDeleteId: Signal<number | null>;
   readonly busyId: Signal<number | null>;
   readonly notice: Signal<RowNotice | null>;
+  readonly adding: Signal<boolean>;
+  readonly errorMessage: Signal<string | null>;
 };
 
 const CASH: Account = {
@@ -206,6 +209,65 @@ describe('AccountList', () => {
     expect(text()).toContain(
       'Something went wrong loading your accounts. Please try again.'
     );
+  });
+
+  describe('create', () => {
+    const NEW_SAVINGS: Account = {
+      id: 4,
+      name: 'New Savings',
+      type: 'Bank',
+      currentBalance: 0,
+      isActive: true,
+    };
+
+    it('shows the created Account at once and closes the form panel', () => {
+      // The re-read stays in flight, so a visible row can only be the optimistic one.
+      const reReadPending = new Subject<Account[]>();
+      let attempt = 0;
+      const list = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1 ? of([CASH]) : reReadPending.asObservable();
+      });
+      const { fixture, cmp, text } = setup(
+        list as unknown as AccountsService['list']
+      );
+
+      cmp.onCreated(NEW_SAVINGS);
+      fixture.detectChanges();
+
+      expect(text()).toContain('New Savings');
+      expect(cmp.adding()).toBe(false);
+    });
+
+    it('re-reads the list from the server after the create (ADR 0006)', () => {
+      const list = vi.fn(() => of([CASH]));
+      const { cmp } = setup(list as unknown as AccountsService['list']);
+
+      cmp.onCreated(NEW_SAVINGS);
+
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the optimistic row when the re-read fails, rather than flipping to an error', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      let attempt = 0;
+      const list = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1
+          ? of([CASH])
+          : throwError(() => new ApiError('Internal Server Error', 500));
+      });
+      const { fixture, cmp, text } = setup(
+        list as unknown as AccountsService['list']
+      );
+
+      cmp.onCreated(NEW_SAVINGS);
+      fixture.detectChanges();
+
+      expect(text()).toContain('Cash on hand');
+      expect(text()).toContain('New Savings');
+      expect(cmp.errorMessage()).toBeNull();
+    });
   });
 
   describe('rename', () => {
