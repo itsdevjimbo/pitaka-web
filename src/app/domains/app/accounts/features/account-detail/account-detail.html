@@ -58,28 +58,64 @@
   } @else {
     <!-- Which Account this is, and where it stands -->
     @if (account(); as acc) {
-      <header class="flex flex-col gap-y-1">
-        <span
-          class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
-        >
-          <mat-icon
-            class="size-4"
-            [svgIcon]="types[acc.type].icon"
-          />
-          {{ types[acc.type].label }}
-          @if (!acc.isActive) {
-            <span
-              class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
-            >
-              Retired
-            </span>
-          }
-        </span>
-        <h1 class="text-2xl font-bold tracking-tight">{{ acc.name }}</h1>
-        <span class="text-2xl font-bold tracking-tight tabular-nums">
-          {{ acc.currentBalance | peso }}
-        </span>
+      <header class="flex items-start justify-between gap-x-4">
+        <div class="flex flex-col gap-y-1">
+          <span
+            class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
+          >
+            <mat-icon
+              class="size-4"
+              [svgIcon]="types[acc.type].icon"
+            />
+            {{ types[acc.type].label }}
+            @if (!acc.isActive) {
+              <span
+                class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+              >
+                Retired
+              </span>
+            }
+          </span>
+          <h1 class="text-2xl font-bold tracking-tight">{{ acc.name }}</h1>
+          <span class="text-2xl font-bold tracking-tight tabular-nums">
+            {{ acc.currentBalance | peso }}
+          </span>
+        </div>
+
+        <!-- Recording against the Account in view — no Account field on the form.
+             Absent entirely once the Account is retired. -->
+        @if (acc.isActive && !recording()) {
+          <button
+            matButton="filled"
+            (click)="recording.set(true)"
+          >
+            <mat-icon svgIcon="plus" />
+            Record
+          </button>
+        }
       </header>
+
+      @if (!acc.isActive) {
+        <!-- A retired Account cannot record; point at the way back -->
+        <p
+          class="rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-300"
+        >
+          This account is retired, so nothing can be recorded against it.
+          Reactivate it from the
+          <a
+            class="font-medium underline"
+            routerLink="/app/accounts"
+            >accounts list</a
+          >
+          to record here again.
+        </p>
+      } @else if (recording()) {
+        <transactions-record-transaction-form
+          [accountId]="acc.id"
+          (recorded)="onRecorded()"
+          (cancelled)="recording.set(false)"
+        />
+      }
     }
 
     @if (isEmpty()) {

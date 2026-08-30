@@ -11,5 +11,6 @@ export type {
   TransactionDirection,
 } from './data/transaction';
 export { TransactionsService } from './data/transactions.service';
+export { RecordTransactionForm } from './ui/record-transaction-form';
 export { TransactionRow, toTransactionRow } from './ui/transaction-row';
 export type { TransactionRowModel } from './ui/transaction-row';

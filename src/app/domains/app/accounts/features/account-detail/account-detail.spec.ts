@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideNativeDateAdapter } from '@angular/material/core';
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -12,6 +13,12 @@ import {
 import { Account } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
 import AccountDetail from './account-detail';
+
+/** The slice of the component a few tests reach into. */
+type AccountDetailInternals = {
+  recording: { set(value: boolean): void };
+  onRecorded(): void;
+};
 
 const ACCOUNT: Account = {
   id: 3,
@@ -47,19 +54,24 @@ describe('AccountDetail', () => {
     get?: AccountsService['get'];
     list?: TransactionsService['list'];
     names?: CategoriesService['names'];
+    record?: TransactionsService['record'];
+    categoryList?: CategoriesService['list'];
   }) {
     const get = over.get ?? (() => of(ACCOUNT));
     const list = over.list ?? (() => of<Transaction[]>([]));
     const names = over.names ?? (() => of(NAMES));
+    const record = over.record ?? (() => of({} as Transaction));
+    const categoryList = over.categoryList ?? (() => of([]));
 
     TestBed.configureTestingModule({
       imports: [AccountDetail],
       providers: [
         provideIcons(),
+        provideNativeDateAdapter(),
         provideRouter([]),
         { provide: AccountsService, useValue: { get } },
-        { provide: TransactionsService, useValue: { list } },
-        { provide: CategoriesService, useValue: { names } },
+        { provide: TransactionsService, useValue: { list, record } },
+        { provide: CategoriesService, useValue: { names, list: categoryList } },
       ],
     });
 
@@ -69,7 +81,12 @@ describe('AccountDetail', () => {
 
     return {
       fixture,
+      cmp: fixture.componentInstance as unknown as AccountDetailInternals,
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
+      button: (label: string) =>
+        Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll('button')
+        ).find((b) => (b.textContent ?? '').includes(label)),
     };
   }
 
@@ -315,5 +332,85 @@ describe('AccountDetail', () => {
     expect(text()).toContain(
       'Something went wrong loading this account. Please try again.'
     );
+  });
+
+  it('reveals the record form from a control on an active Account', () => {
+    const { fixture, text, button } = setup({ list: () => of([tx()]) });
+
+    expect(text()).not.toContain('Record a transaction');
+
+    button('Record')?.click();
+    fixture.detectChanges();
+
+    expect(text()).toContain('Record a transaction');
+  });
+
+  it('offers no record control on a retired Account, and points at reactivating it', () => {
+    const { fixture, text, button } = setup({
+      get: () => of({ ...ACCOUNT, isActive: false }),
+      list: () => of([tx()]),
+    });
+
+    expect(button('Record')).toBeUndefined();
+    expect(text()).toContain('retired');
+
+    const link = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('a')
+    ).find((a) => (a.textContent ?? '').includes('accounts list'));
+    expect(link?.getAttribute('href')).toBe('/app/accounts');
+  });
+
+  it('re-reads the balance and list in place after a record — no full-page spinner', () => {
+    const get = vi
+      .fn()
+      .mockReturnValueOnce(of(ACCOUNT))
+      .mockReturnValueOnce(of({ ...ACCOUNT, currentBalance: 4079.5 }));
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of<Transaction[]>([]))
+      .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee' })]));
+    const names = vi.fn(() => of(NAMES));
+
+    const { fixture, cmp, text } = setup({
+      get: get as unknown as AccountsService['get'],
+      list: list as unknown as TransactionsService['list'],
+      names: names as unknown as CategoriesService['names'],
+    });
+
+    cmp.onRecorded();
+    fixture.detectChanges();
+
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(names).toHaveBeenCalledTimes(2);
+    expect(text()).not.toContain('Loading transactions…');
+    expect(text()).toContain(formatPeso(4079.5));
+    expect(text()).toContain('Coffee');
+  });
+
+  it('keeps the screen as it was when the post-record re-read fails', () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const get = vi
+      .fn()
+      .mockReturnValueOnce(of(ACCOUNT))
+      .mockReturnValueOnce(throwError(() => new Error('offline')));
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([tx({ description: 'Lunch' })]))
+      .mockReturnValueOnce(throwError(() => new Error('offline')));
+
+    const { fixture, cmp, text } = setup({
+      get: get as unknown as AccountsService['get'],
+      list: list as unknown as TransactionsService['list'],
+    });
+
+    cmp.onRecorded();
+    fixture.detectChanges();
+
+    expect(text()).toContain('Lunch');
+    expect(text()).not.toContain('Please try again');
+    consoleError.mockRestore();
   });
 });

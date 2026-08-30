@@ -16,6 +16,8 @@ import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import {
+  RecordTransactionForm,
+  Transaction,
   TransactionRow,
   TransactionRowModel,
   TransactionsService,
@@ -38,8 +40,13 @@ const LOAD_FAILED =
  *
  * The row itself belongs to the Transactions domain (ADR 0009): this screen
  * resolves the Category names, picks the Account to sign against, and hands each
- * finished row to the `transaction-row` component. Read-only — nothing here
- * creates, edits, or deletes a Transaction, that is a later slice.
+ * finished row to the `transaction-row` component.
+ *
+ * An active Account can record against itself, inline: a signal reveals the
+ * `record-transaction-form`, and a successful record re-reads the balance and
+ * list in place — the rows stay visible, the screen never blanks back to the
+ * spinner (that is for first entry only). A retired Account offers no record
+ * control and points at the reactivate that lives on the accounts list.
  */
 @Component({
   selector: 'account-detail',
@@ -50,6 +57,7 @@ const LOAD_FAILED =
     RouterLink,
     PesoPipe,
     TransactionRow,
+    RecordTransactionForm,
   ],
   host: {
     class: 'flex flex-auto flex-col',
@@ -80,6 +88,9 @@ export default class AccountDetail implements OnInit {
 
   protected readonly types = ACCOUNT_TYPES;
 
+  /** Whether the inline record form is open. Only ever set for an active Account. */
+  protected readonly recording = signal(false);
+
   /** True once a load has succeeded and the Account has no Transactions. */
   protected readonly isEmpty = computed(() => this.rows()?.length === 0);
 
@@ -90,7 +101,10 @@ export default class AccountDetail implements OnInit {
     this.load();
   }
 
-  /** Read the Account, its Transactions, and the Category names together. */
+  /**
+   * First entry: read the Account, its Transactions, and the Category names
+   * together, behind the full-page loading state and error state.
+   */
   protected load(): void {
     this.loading.set(true);
     this.errorMessage.set(null);
@@ -98,18 +112,11 @@ export default class AccountDetail implements OnInit {
 
     const accountId = Number(this.id());
 
-    forkJoin({
-      account: this.accounts.get(accountId),
-      transactions: this.transactions.list(accountId),
-      names: this.categories.names(),
-    })
+    this.fetch(accountId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: ({ account, transactions, names }) => {
-          this.account.set(account);
-          this.rows.set(
-            transactions.map((t) => toTransactionRow(t, names, accountId))
-          );
+        next: (result) => {
+          this.apply(result, accountId);
           this.loading.set(false);
         },
         error: (error: unknown) => {
@@ -119,5 +126,48 @@ export default class AccountDetail implements OnInit {
           this.loading.set(false);
         },
       });
+  }
+
+  /**
+   * A Transaction was recorded. Close the form and re-read the balance and list
+   * from the server (ADR 0006 — never patch a balance locally) *without*
+   * tearing the screen down to the spinner: the rows stay put and refresh in
+   * place. A failed re-read is logged and the screen keeps what it had.
+   */
+  protected onRecorded(): void {
+    this.recording.set(false);
+
+    const accountId = Number(this.id());
+    this.fetch(accountId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (result) => this.apply(result, accountId),
+        error: (error: unknown) =>
+          console.error('[account-detail] refresh after record failed', error),
+      });
+  }
+
+  /** The Account, its Transactions, and the Category names, in one read. */
+  private fetch(accountId: number) {
+    return forkJoin({
+      account: this.accounts.get(accountId),
+      transactions: this.transactions.list(accountId),
+      names: this.categories.names(),
+    });
+  }
+
+  /** Push a completed read into the screen's signals. */
+  private apply(
+    result: {
+      account: Account;
+      transactions: readonly Transaction[];
+      names: ReadonlyMap<number, string>;
+    },
+    accountId: number
+  ): void {
+    this.account.set(result.account);
+    this.rows.set(
+      result.transactions.map((t) => toTransactionRow(t, result.names, accountId))
+    );
   }
 }
