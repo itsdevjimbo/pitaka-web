@@ -23,6 +23,7 @@ import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import { Category } from '@/app/domains/app/categories/category';
+import { combineDateTime } from '../data/combine-date-time';
 import {
   NewTransaction,
   Transaction,
@@ -296,20 +297,4 @@ export class RecordTransactionForm {
       transactionDate: this.recordForm.date,
     };
   }
-}
-
-/**
- * Fold the two controls back into one moment: the calendar day from `date`, the
- * wall-clock from `time`. Seconds are dropped — the person set minutes.
- */
-function combineDateTime(date: Date, time: Date): Date {
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    time.getHours(),
-    time.getMinutes(),
-    0,
-    0
-  );
 }

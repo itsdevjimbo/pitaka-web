@@ -13,6 +13,7 @@ import { RefileTransactionForm } from './refile-transaction-form';
 
 type Model = {
   date: Date | null;
+  time: Date | null;
   categoryId: number | null;
   description: string;
 };
@@ -22,6 +23,7 @@ type RefileFormInternals = {
   model: WritableSignal<Model>;
   refileForm: {
     date: FieldTree<Date | null>;
+    time: FieldTree<Date | null>;
     categoryId: FieldTree<number | null>;
     description: FieldTree<string>;
   };
@@ -60,7 +62,10 @@ function existing(over: Partial<Transaction> = {}): Transaction {
   };
 }
 
-/** The moment the form should send when the day is left untouched: the same day, same time. */
+/**
+ * The moment the form should send when neither the day nor the time is touched:
+ * the Transaction's own moment, with seconds dropped as the folder does.
+ */
 function sameMoment(tx: Transaction): Date {
   const d = tx.date;
   return new Date(
@@ -69,7 +74,7 @@ function sameMoment(tx: Transaction): Date {
     d.getDate(),
     d.getHours(),
     d.getMinutes(),
-    d.getSeconds(),
+    0,
     0
   );
 }
@@ -112,12 +117,13 @@ describe('RefileTransactionForm', () => {
       .map((error) => error.message);
   }
 
-  it('opens carrying the current date, Category, and note', () => {
+  it('opens carrying the current moment, Category, and note', () => {
     const tx = existing();
     const { cmp } = setup(vi.fn(), tx);
 
     expect(cmp.model()).toEqual({
       date: tx.date,
+      time: tx.date,
       categoryId: 1,
       description: 'Coffee',
     });
@@ -195,7 +201,7 @@ describe('RefileTransactionForm', () => {
     });
   });
 
-  it('corrects the date alone, carrying the original time of day onto the new day', async () => {
+  it('corrects the day alone, keeping the original time of day', async () => {
     const tx = existing({ date: new Date(2026, 7, 29, 9, 30, 0) });
     const refile = vi.fn(() => of(tx));
     const { fixture, cmp } = setup(
@@ -209,6 +215,23 @@ describe('RefileTransactionForm', () => {
     expect(refile).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({ date: new Date(2026, 7, 25, 9, 30, 0, 0) })
+    );
+  });
+
+  it('corrects the time alone, keeping the original day', async () => {
+    const tx = existing({ date: new Date(2026, 7, 29, 9, 30, 0) });
+    const refile = vi.fn(() => of(tx));
+    const { fixture, cmp } = setup(
+      refile as unknown as TransactionsService['refile'],
+      tx
+    );
+
+    cmp.model.update((m) => ({ ...m, time: new Date(2000, 0, 1, 18, 45) }));
+    await submitAndSettle(fixture, cmp);
+
+    expect(refile).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ date: new Date(2026, 7, 29, 18, 45, 0, 0) })
     );
   });
 
@@ -239,6 +262,19 @@ describe('RefileTransactionForm', () => {
     await submitAndSettle(fixture, cmp);
 
     expect(messagesOn(cmp.refileForm.date)).toContain('Choose a date');
+    expect(refile).not.toHaveBeenCalled();
+  });
+
+  it('never reaches the service with the time cleared — an omitted time is not midnight', async () => {
+    const refile = vi.fn();
+    const { fixture, cmp } = setup(
+      refile as unknown as TransactionsService['refile']
+    );
+
+    cmp.model.update((m) => ({ ...m, time: null }));
+    await submitAndSettle(fixture, cmp);
+
+    expect(messagesOn(cmp.refileForm.time)).toContain('Choose a time');
     expect(refile).not.toHaveBeenCalled();
   });
 

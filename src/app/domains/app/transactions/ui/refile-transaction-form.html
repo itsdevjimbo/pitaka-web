@@ -46,28 +46,53 @@
     </p>
   </div>
 
-  <!-- When it is dated: the day only — the time of day is kept as it was -->
-  <mat-form-field class="w-full">
-    <mat-label>Date</mat-label>
-    <input
-      id="refile-transaction-date"
-      matInput
-      [matDatepicker]="datePicker"
-      [formField]="refileForm.date"
-    />
-    <mat-datepicker-toggle
-      matIconSuffix
-      [for]="datePicker"
-    />
-    <mat-datepicker #datePicker />
-    <mat-error>
-      @if (refileForm.date().touched() && refileForm.date().invalid()) {
-        @for (error of refileForm.date().errors(); track error) {
-          {{ error.message }}
+  <!-- When it is dated: day and time, both seeded from the current moment,
+       neither skippable (ADR 0007) -->
+  <div class="flex flex-col gap-4 sm:flex-row">
+    <mat-form-field class="w-full">
+      <mat-label>Date</mat-label>
+      <input
+        id="refile-transaction-date"
+        matInput
+        [matDatepicker]="datePicker"
+        [formField]="refileForm.date"
+      />
+      <mat-datepicker-toggle
+        matIconSuffix
+        [for]="datePicker"
+      />
+      <mat-datepicker #datePicker />
+      <mat-error>
+        @if (refileForm.date().touched() && refileForm.date().invalid()) {
+          @for (error of refileForm.date().errors(); track error) {
+            {{ error.message }}
+          }
         }
-      }
-    </mat-error>
-  </mat-form-field>
+      </mat-error>
+    </mat-form-field>
+
+    <mat-form-field class="w-full">
+      <mat-label>Time</mat-label>
+      <input
+        id="refile-transaction-time"
+        matInput
+        [matTimepicker]="timePicker"
+        [formField]="refileForm.time"
+      />
+      <mat-timepicker-toggle
+        matIconSuffix
+        [for]="timePicker"
+      />
+      <mat-timepicker #timePicker />
+      <mat-error>
+        @if (refileForm.time().touched() && refileForm.time().invalid()) {
+          @for (error of refileForm.time().errors(); track error) {
+            {{ error.message }}
+          }
+        }
+      </mat-error>
+    </mat-form-field>
+  </div>
 
   @if (!isTransfer()) {
     <!-- Category: only those of this Transaction's direction (ADR 0010), plus

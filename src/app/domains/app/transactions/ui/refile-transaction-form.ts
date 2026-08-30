@@ -16,11 +16,13 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { MatTimepickerModule } from '@angular/material/timepicker';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { PesoPipe } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import { Category } from '@/app/domains/app/categories/category';
+import { combineDateTime } from '../data/combine-date-time';
 import {
   RefileTransaction,
   Transaction,
@@ -35,13 +37,15 @@ const COULD_NOT_REFILE =
 /**
  * What the re-file form edits. The amount and the direction are not here — they
  * were settled at recording and the form shows them as the row's own text, not
- * as fields (see `CONTEXT.md`). `date` is one control: the person is correcting
- * which day the movement sits on, and the original wall-clock time is carried
- * through untouched so a correction to the day is only that. `description` is a
- * plain string — empty means "clear the note", folded back to `null` on submit.
+ * as fields (see `CONTEXT.md`). `date` and `time` are held apart, each its own
+ * required control — an omitted time is not allowed to mean midnight (ADR 0007)
+ * — and both are seeded from the Transaction's moment so a person can move
+ * either. `description` is a plain string — empty means "clear the note", folded
+ * back to `null` on submit.
  */
 type RefileTransactionModel = {
   date: Date | null;
+  time: Date | null;
   categoryId: number | null;
   description: string;
 };
@@ -49,7 +53,7 @@ type RefileTransactionModel = {
 /**
  * The inline "re-file this Transaction" editor: the row swaps into this the way
  * an Account row swaps into a rename. It corrects *how* a Transaction is filed —
- * its date, its Category, its note — never what moved. The amount and the
+ * when it is dated, its Category, its note — never what moved. The amount and the
  * direction are shown as plain text, deliberately not as disabled inputs that
  * invite a click and then refuse it; someone who mistyped an amount is pointed
  * at removing and recording again, the only correction that can legitimately
@@ -75,6 +79,7 @@ type RefileTransactionModel = {
     MatSelectModule,
     MatButtonModule,
     MatDatepickerModule,
+    MatTimepickerModule,
     MatIconModule,
     PesoPipe,
     FormField,
@@ -117,20 +122,23 @@ export class RefileTransactionForm {
 
   /**
    * Seeded from the Transaction and re-seeded if the input changes: the form
-   * opens carrying the current date, Category and note, so a person who changes
-   * one leaves the other two exactly as they were.
+   * opens carrying the current moment, Category and note, so a person who
+   * changes one leaves the rest exactly as they were. The Transaction's single
+   * `date` fills both the day and the time controls.
    */
   protected readonly model = linkedSignal<RefileTransactionModel>(() => ({
     date: this.transaction().date,
+    time: this.transaction().date,
     categoryId: this.transaction().categoryId,
     description: this.transaction().description ?? '',
   }));
 
   protected readonly refileForm = form(this.model, (path) => {
-    // Only the date is compulsory — a Transaction always has one, and clearing
-    // it would leave the row nowhere. A Category may be corrected to "none" and
-    // a note may be emptied, so neither is required here.
+    // Day and time are each compulsory — a Transaction always has both, and an
+    // omitted time is not allowed to mean midnight (ADR 0007). A Category may be
+    // corrected to "none" and a note may be emptied, so neither is required.
     required(path.date, { message: 'Choose a date' });
+    required(path.time, { message: 'Choose a time' });
   });
 
   protected readonly submitting = signal(false);
@@ -160,13 +168,12 @@ export class RefileTransactionForm {
         this.errorMessage.set(null);
 
         try {
-          const { date, categoryId, description } = this.model();
+          const { date, time, categoryId, description } = this.model();
           const refiled = await firstValueFrom(
             this.service.refile(this.transaction(), {
-              // `required` has ruled out a null date by the time this runs. The
-              // day is the person's; the time of day is carried straight over
-              // from the Transaction so re-dating it changes only the day.
-              date: withCalendarDay(this.transaction().date, date as Date),
+              // `required` has ruled out a null day or time by the time this
+              // runs; fold the two controls back into one moment.
+              date: combineDateTime(date as Date, time as Date),
               categoryId,
               description: description.trim() || null,
               // No Tag entry in this slice: the current ids ride along so a
@@ -213,22 +220,4 @@ export class RefileTransactionForm {
       transactionDate: this.refileForm.date,
     };
   }
-}
-
-/**
- * Put `day`'s calendar date onto `original`'s wall-clock time. The person picked
- * a day; everything finer is the Transaction's own, so a re-date moves the row
- * to the right day without inventing a new time for it. Milliseconds are
- * dropped — the API keeps none.
- */
-function withCalendarDay(original: Date, day: Date): Date {
-  return new Date(
-    day.getFullYear(),
-    day.getMonth(),
-    day.getDate(),
-    original.getHours(),
-    original.getMinutes(),
-    original.getSeconds(),
-    0
-  );
 }
