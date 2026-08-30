@@ -1,11 +1,18 @@
 import { DatePipe } from '@angular/common';
 import { Component, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
+import { RouterLink } from '@angular/router';
 import { PesoPipe } from '@/app/core/money';
 import { Transaction, TRANSACTION_DIRECTIONS } from '../data/transaction';
 
 /** Shown for an income or expense the person never filed under a Category. */
 const NO_CATEGORY = 'Uncategorised';
+
+/** Stand-in when a Transfer's home Account is not in the caller's name map. */
+const UNNAMED_ACCOUNT = 'another account';
+
+/** No account names — the default when a caller has none to resolve against. */
+const NO_ACCOUNT_NAMES: ReadonlyMap<number, string> = new Map();
 
 /**
  * A {@link Transaction} with the three fields the row template needs on top of
@@ -19,6 +26,14 @@ export type TransactionRowModel = Transaction & {
   categoryName: string;
   headline: string;
   incoming: boolean;
+
+  /**
+   * For a Transfer seen from the Account it landed in: the Account it was
+   * recorded against — its home — to name on the row and link back to, since a
+   * Transfer can only be re-filed or removed there (ADR 0010). `null` for every
+   * other row, including a Transfer seen from the side it left.
+   */
+  recordedAgainst: { id: number; name: string } | null;
 };
 
 /**
@@ -35,7 +50,7 @@ export type TransactionRowModel = Transaction & {
 @Component({
   selector: 'li[transaction-row]',
   templateUrl: './transaction-row.html',
-  imports: [DatePipe, MatIconModule, PesoPipe],
+  imports: [DatePipe, MatIconModule, PesoPipe, RouterLink],
   host: {
     class:
       'flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800',
@@ -56,12 +71,15 @@ export class TransactionRow {
  * A Transfer is signed against a single Account (ADR 0010): it adds where the
  * money lands — this Account is its destination — and subtracts where it leaves.
  * The rule needs an Account in view, which every screen rendering a Transaction
- * today has.
+ * today has. Seen from the landing side, the row also names the Account the
+ * Transfer was recorded against and links there; `accountNames` resolves that
+ * name the way `categoryNames` resolves a Category's.
  */
 export function toTransactionRow(
   transaction: Transaction,
   categoryNames: ReadonlyMap<number, string>,
-  viewedAccountId: number
+  viewedAccountId: number,
+  accountNames: ReadonlyMap<number, string> = NO_ACCOUNT_NAMES
 ): TransactionRowModel {
   const resolved =
     transaction.categoryId === null
@@ -76,9 +94,19 @@ export function toTransactionRow(
     transaction.description ||
     (isTransfer ? TRANSACTION_DIRECTIONS.transfer.label : categoryName);
 
-  const incoming =
-    transaction.direction === 'income' ||
-    (isTransfer && transaction.transferToAccountId === viewedAccountId);
+  const landedHere =
+    isTransfer && transaction.transferToAccountId === viewedAccountId;
 
-  return { ...transaction, categoryName, headline, incoming };
+  const incoming = transaction.direction === 'income' || landedHere;
+
+  // Only on the landing side: `accountId` is the Transfer's home, the one place
+  // it can be acted on. The row points there.
+  const recordedAgainst = landedHere
+    ? {
+        id: transaction.accountId,
+        name: accountNames.get(transaction.accountId) ?? UNNAMED_ACCOUNT,
+      }
+    : null;
+
+  return { ...transaction, categoryName, headline, incoming, recordedAgainst };
 }

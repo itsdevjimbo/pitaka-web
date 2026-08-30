@@ -67,6 +67,22 @@ export type Tag = {
 };
 
 /**
+ * The little an Account brings to recording a Transfer: an id to send and to
+ * link to, a name to show in the picker, and whether it is still active. The
+ * record form takes a list of these — every Account the person owns — and does
+ * the excluding itself (the source, and every retired one), so that safety
+ * argument is visible and testable at the form seam rather than upstream.
+ *
+ * A hand-rolled subset, not an `Account` import: the Transactions domain does
+ * not depend on Accounts (ADR 0009), the dependency runs the other way.
+ */
+export type TransferDestinationAccount = {
+  id: number;
+  name: string;
+  isActive: boolean;
+};
+
+/**
  * What a person supplies to record a Transaction: which Account it is against,
  * its direction, a positive amount (the direction carries the sign), the moment
  * it is dated, and then one of the two things the direction decides — a Category

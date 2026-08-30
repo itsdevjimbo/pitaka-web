@@ -9,6 +9,7 @@ export type {
   Tag,
   Transaction,
   TransactionDirection,
+  TransferDestinationAccount,
 } from './data/transaction';
 export { TransactionsService } from './data/transactions.service';
 export { RecordTransactionForm } from './ui/record-transaction-form';

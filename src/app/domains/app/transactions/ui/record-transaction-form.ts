@@ -28,6 +28,7 @@ import {
   Transaction,
   TransactionDirection,
   TRANSACTION_DIRECTIONS,
+  TransferDestinationAccount,
 } from '../data/transaction';
 import { TransactionsService } from '../data/transactions.service';
 
@@ -37,20 +38,21 @@ const COULD_NOT_RECORD =
 
 /**
  * The directions this form offers, in display order — expense leads, being the
- * movement a person records most. Transfer follows in a later slice (#26): it
- * needs a destination-Account picker and its own field set. Derived from the
- * canonical record so a label only ever lives in one place.
+ * movement a person records most, then income, then Transfer. Choosing Transfer
+ * swaps the Category field for a destination Account: a Transfer is neither
+ * income nor expense, so no Category could classify one (ADR 0010). Derived from
+ * the canonical record so a label only ever lives in one place.
  */
-const DIRECTION_OPTIONS = (['expense', 'income'] as const).map((value) => ({
-  value,
-  label: TRANSACTION_DIRECTIONS[value].label,
-}));
+const DIRECTION_OPTIONS = (['expense', 'income', 'transfer'] as const).map(
+  (value) => ({ value, label: TRANSACTION_DIRECTIONS[value].label })
+);
 
 /**
  * `date` and `time` are held apart so each is its own required control — an
  * omitted time is not allowed to mean midnight (ADR 0007) — and recombined into
- * one moment on submit. Both start at "now"; `categoryId` starts unset so the
- * picker shows nothing the person did not choose.
+ * one moment on submit. Both start at "now". `categoryId` and
+ * `transferToAccountId` start unset so the pickers show nothing the person did
+ * not choose; the direction decides which of the two is asked for and required.
  */
 type RecordTransactionModel = {
   direction: TransactionDirection;
@@ -58,6 +60,7 @@ type RecordTransactionModel = {
   date: Date | null;
   time: Date | null;
   categoryId: number | null;
+  transferToAccountId: number | null;
 };
 
 /**
@@ -68,10 +71,13 @@ type RecordTransactionModel = {
  * leave you on a list without the row) and, on success, re-reads the balance
  * and list in place.
  *
- * Direction is the first control and decides the rest: an income or an expense
+ * Direction is the first control and decides the rest. An income or an expense
  * is filed under a Category, and the picker offers only Categories of that
- * direction (ADR 0010), so an expense cannot be filed under a salary. The amount
- * is entered positive — the sign is the direction's, never a minus the person
+ * direction (ADR 0010), so an expense cannot be filed under a salary. A Transfer
+ * swaps that Category field for a destination Account and sends no Category; the
+ * destination picker offers only active Accounts other than the one in view, so
+ * a self-transfer or a retired container never reaches the API. The amount is
+ * entered positive — the sign is the direction's, never a minus the person
  * types. `submit()` refuses re-entry and the button disables while a request is
  * in flight, so a double-click records once. A rejection the API attributes to a
  * field marks it; a bodyless one becomes a single form-level line.
@@ -101,6 +107,14 @@ export class RecordTransactionForm {
   /** The Account the Transaction is recorded against. The form has no field for it. */
   readonly accountId = input.required<number>();
 
+  /**
+   * Every Account the person owns, supplied by the screen (the Transactions
+   * domain does not read Accounts — ADR 0009). The form filters this itself for
+   * the Transfer destination picker: out goes the source Account and every
+   * retired one, so that safety argument stays visible at the form seam.
+   */
+  readonly accounts = input<readonly TransferDestinationAccount[]>([]);
+
   // Outputs
   readonly recorded = output<Transaction>();
   readonly cancelled = output<void>();
@@ -122,12 +136,34 @@ export class RecordTransactionForm {
     date: new Date(),
     time: new Date(),
     categoryId: null,
+    transferToAccountId: null,
   });
+
+  /** True while the chosen direction is Transfer — the form asks for a destination, not a Category. */
+  protected readonly isTransfer = computed(
+    () => this.model().direction === 'transfer'
+  );
 
   /** Only the Categories matching the chosen direction (ADR 0010). */
   protected readonly categoryOptions = computed(() => {
     const direction = this.model().direction;
     return this.categories().filter((category) => category.kind === direction);
+  });
+
+  /**
+   * The Accounts a Transfer may land in: every active Account except the one
+   * being viewed. A self-transfer nets to zero and comes back as a row claiming
+   * money moved when none did; a retired Account is one the API refuses with an
+   * unattributable rejection. Excluding both here closes both by construction.
+   *
+   * Empty off a Transfer — there is no destination to pick — which is also what
+   * lets one stale-pick pruner serve both this field and the Category.
+   */
+  protected readonly destinationOptions = computed(() => {
+    if (!this.isTransfer()) return [];
+    return this.accounts().filter(
+      (account) => account.isActive && account.id !== this.accountId()
+    );
   });
 
   protected readonly recordForm = form(this.model, (path) => {
@@ -137,9 +173,17 @@ export class RecordTransactionForm {
     min(path.amount, 0.01, { message: 'Enter an amount greater than zero' });
     required(path.date, { message: 'Choose a date' });
     required(path.time, { message: 'Choose a time' });
-    // An income or an expense is filed under a Category (ADR 0010). Transfer,
-    // which carries none, is a later slice and this form does not offer it.
-    required(path.categoryId, { message: 'Choose a category' });
+    // The direction decides which of the last two is asked for: an income or an
+    // expense is filed under a Category, a Transfer names a destination Account
+    // instead, and never both (ADR 0010).
+    required(path.categoryId, {
+      message: 'Choose a category',
+      when: ({ valueOf }) => valueOf(path.direction) !== 'transfer',
+    });
+    required(path.transferToAccountId, {
+      message: 'Choose a destination account',
+      when: ({ valueOf }) => valueOf(path.direction) === 'transfer',
+    });
   });
 
   protected readonly submitting = signal(false);
@@ -159,17 +203,28 @@ export class RecordTransactionForm {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((categories) => this.categories.set(categories));
 
-    // Changing direction re-filters the picker; a Category from the old
-    // direction must not ride along and file, say, an expense under a salary.
-    effect(() => {
-      const valid = new Set(this.categoryOptions().map((category) => category.id));
-      if (
-        this.model().categoryId !== null &&
-        !valid.has(this.model().categoryId as number)
-      ) {
-        this.model.update((model) => ({ ...model, categoryId: null }));
-      }
-    });
+    // A picked id must not outlive the direction that made it valid: a Category
+    // from the old direction would file, say, an expense under a salary; a
+    // destination left over from a Transfer would ride along on an income. Each
+    // picker empties when it no longer applies, so pruning to its options
+    // covers the direction switch too.
+    effect(() =>
+      this.pruneStalePick('categoryId', this.categoryOptions())
+    );
+    effect(() =>
+      this.pruneStalePick('transferToAccountId', this.destinationOptions())
+    );
+  }
+
+  /** Null a picked id its picker no longer offers. */
+  private pruneStalePick(
+    key: 'categoryId' | 'transferToAccountId',
+    options: readonly { id: number }[]
+  ): void {
+    const picked = this.model()[key];
+    if (picked !== null && !options.some((option) => option.id === picked)) {
+      this.model.update((model) => ({ ...model, [key]: null }));
+    }
   }
 
   save(event: Event): void {
@@ -181,7 +236,14 @@ export class RecordTransactionForm {
         this.errorMessage.set(null);
 
         try {
-          const { direction, amount, date, time, categoryId } = this.model();
+          const { direction, amount, date, time, categoryId, transferToAccountId } =
+            this.model();
+          // Derive the mutually exclusive pair straight from `direction`, the
+          // field being submitted: the stale-pick pruners reconcile the siblings
+          // too, but they run as effects and need not have flushed by the time
+          // an eager submit reads the model. The adapter enforces the same rule
+          // once more on the wire (ADR 0010).
+          const isTransfer = direction === 'transfer';
           const recorded = await firstValueFrom(
             this.service.record({
               accountId: this.accountId(),
@@ -190,8 +252,8 @@ export class RecordTransactionForm {
               // date or time by the time the action runs.
               amount: amount as number,
               date: combineDateTime(date as Date, time as Date),
-              categoryId,
-              transferToAccountId: null,
+              categoryId: isTransfer ? null : categoryId,
+              transferToAccountId: isTransfer ? transferToAccountId : null,
             } satisfies NewTransaction)
           );
           this.recorded.emit(recorded);
@@ -229,6 +291,7 @@ export class RecordTransactionForm {
     return {
       amount: this.recordForm.amount,
       categoryId: this.recordForm.categoryId,
+      transferToAccountId: this.recordForm.transferToAccountId,
       date: this.recordForm.date,
       transactionDate: this.recordForm.date,
     };

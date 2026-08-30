@@ -7,7 +7,11 @@ import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import { Category } from '@/app/domains/app/categories/category';
-import { Transaction, TransactionDirection } from '../data/transaction';
+import {
+  Transaction,
+  TransactionDirection,
+  TransferDestinationAccount,
+} from '../data/transaction';
 import { TransactionsService } from '../data/transactions.service';
 import { RecordTransactionForm } from './record-transaction-form';
 
@@ -17,6 +21,7 @@ type Model = {
   date: Date | null;
   time: Date | null;
   categoryId: number | null;
+  transferToAccountId: number | null;
 };
 
 /** The slice of the component the tests reach into. */
@@ -27,8 +32,10 @@ type RecordFormInternals = {
     date: FieldTree<Date | null>;
     time: FieldTree<Date | null>;
     categoryId: FieldTree<number | null>;
+    transferToAccountId: FieldTree<number | null>;
   };
   categoryOptions: () => Category[];
+  destinationOptions: () => TransferDestinationAccount[];
   errorMessage: () => string | null;
   recorded: OutputEmitterRef<Transaction>;
   cancelled: OutputEmitterRef<void>;
@@ -58,6 +65,18 @@ const RECORDED: Transaction = {
   tags: [],
 };
 
+/**
+ * The Account pool the screen hands the form. Id 3 is the one in view — it must
+ * never be offered as a Transfer destination — id 5 is retired, and ids 4 and 6
+ * are the two the destination picker should actually show.
+ */
+const ACCOUNTS: TransferDestinationAccount[] = [
+  { id: 3, name: 'Everyday cash', isActive: true },
+  { id: 4, name: 'Savings', isActive: true },
+  { id: 5, name: 'Old wallet', isActive: false },
+  { id: 6, name: 'Joint account', isActive: true },
+];
+
 /** A day at midnight and a time-of-day, as the two pickers hand them over. */
 const DAY = new Date(2026, 7, 29);
 const AT_1405 = new Date(2000, 0, 1, 14, 5);
@@ -67,7 +86,8 @@ const COMBINED = new Date(2026, 7, 29, 14, 5, 0, 0);
 describe('RecordTransactionForm', () => {
   function setup(
     record: TransactionsService['record'],
-    list: CategoriesService['list'] = () => of(CATEGORIES)
+    list: CategoriesService['list'] = () => of(CATEGORIES),
+    accounts: TransferDestinationAccount[] = ACCOUNTS
   ) {
     TestBed.configureTestingModule({
       imports: [RecordTransactionForm],
@@ -81,6 +101,7 @@ describe('RecordTransactionForm', () => {
 
     const fixture = TestBed.createComponent(RecordTransactionForm);
     fixture.componentRef.setInput('accountId', 3);
+    fixture.componentRef.setInput('accounts', accounts);
     const cmp = fixture.componentInstance as unknown as RecordFormInternals;
     fixture.detectChanges();
     return { fixture, cmp };
@@ -108,6 +129,7 @@ describe('RecordTransactionForm', () => {
       date: DAY,
       time: AT_1405,
       categoryId: 1,
+      transferToAccountId: null,
       ...over,
     });
   }
@@ -315,6 +337,94 @@ describe('RecordTransactionForm', () => {
       'That is more than this account holds.'
     );
     expect(cmp.errorMessage()).toBeNull();
+  });
+
+  describe('transfer', () => {
+    it('offers every active Account except the one in view, and no retired one', () => {
+      const { cmp } = setup(vi.fn());
+
+      cmp.model.update((m) => ({ ...m, direction: 'transfer' }));
+
+      expect(cmp.destinationOptions().map((a) => a.id)).toEqual([4, 6]);
+    });
+
+    it('does not ask for a Category, and does ask for a destination', async () => {
+      const record = vi.fn();
+      const { fixture, cmp } = setup(
+        record as unknown as TransactionsService['record']
+      );
+
+      fill(cmp, {
+        direction: 'transfer',
+        categoryId: null,
+        transferToAccountId: null,
+      });
+      await submitAndSettle(fixture, cmp);
+
+      // A missing Category is not what stops this submission…
+      expect(messagesOn(cmp.recordForm.categoryId)).toEqual([]);
+      // …a missing destination is.
+      expect(messagesOn(cmp.recordForm.transferToAccountId)).toContain(
+        'Choose a destination account'
+      );
+      expect(record).not.toHaveBeenCalled();
+    });
+
+    it('records a Transfer: a destination Account and a null Category', async () => {
+      const record = vi.fn((_tx) => of({ ...RECORDED, direction: 'transfer' }));
+      const { fixture, cmp } = setup(
+        record as unknown as TransactionsService['record']
+      );
+
+      fill(cmp, {
+        direction: 'transfer',
+        amount: 750,
+        categoryId: null,
+        transferToAccountId: 4,
+      });
+      await submitAndSettle(fixture, cmp);
+
+      expect(record).toHaveBeenCalledWith({
+        accountId: 3,
+        direction: 'transfer',
+        amount: 750,
+        date: COMBINED,
+        categoryId: null,
+        transferToAccountId: 4,
+      });
+    });
+
+    it('sends a null Category even if one was chosen before the switch to Transfer', async () => {
+      const record = vi.fn((_tx) => of({ ...RECORDED, direction: 'transfer' }));
+      const { fixture, cmp } = setup(
+        record as unknown as TransactionsService['record']
+      );
+
+      // A Category picked as an expense, then the direction flipped.
+      fill(cmp, { direction: 'expense', categoryId: 1 });
+      await fixture.whenStable();
+      cmp.model.update((m) => ({
+        ...m,
+        direction: 'transfer',
+        transferToAccountId: 6,
+      }));
+      await submitAndSettle(fixture, cmp);
+
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({ categoryId: null, transferToAccountId: 6 })
+      );
+    });
+
+    it('drops a destination left over from a switch back to an expense', async () => {
+      const { fixture, cmp } = setup(vi.fn());
+
+      fill(cmp, { direction: 'transfer', transferToAccountId: 4 });
+      await fixture.whenStable();
+      cmp.model.update((m) => ({ ...m, direction: 'expense' }));
+      await fixture.whenStable();
+
+      expect(cmp.model().transferToAccountId).toBeNull();
+    });
   });
 
   it('emits cancelled without touching the service', () => {

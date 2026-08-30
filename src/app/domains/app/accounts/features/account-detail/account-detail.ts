@@ -78,6 +78,8 @@ export default class AccountDetail implements OnInit {
 
   // State
   protected readonly account = signal<Account | null>(null);
+  /** Every Account the person owns — the record form's Transfer destination pool. */
+  protected readonly accountsList = signal<readonly Account[]>([]);
   protected readonly rows = signal<readonly TransactionRowModel[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
@@ -147,12 +149,19 @@ export default class AccountDetail implements OnInit {
       });
   }
 
-  /** The Account, its Transactions, and the Category names, in one read. */
+  /**
+   * The Account, its Transactions, the Category names, and every Account — in
+   * one read. The full Account list feeds two things: the record form's Transfer
+   * destination picker, and the name a Transfer that landed here shows for the
+   * Account it was recorded against (ADR 0010). It is re-read on every entry
+   * like the balance beside it (ADR 0006).
+   */
   private read() {
     return forkJoin({
       account: this.accounts.get(this.accountId()),
       transactions: this.transactions.list(this.accountId()),
       names: this.categories.names(),
+      accounts: this.accounts.list(),
     });
   }
 
@@ -161,11 +170,16 @@ export default class AccountDetail implements OnInit {
     account: Account;
     transactions: readonly Transaction[];
     names: ReadonlyMap<number, string>;
+    accounts: readonly Account[];
   }): void {
     this.account.set(result.account);
+    this.accountsList.set(result.accounts);
+    const accountNames = new Map(
+      result.accounts.map((account) => [account.id, account.name])
+    );
     this.rows.set(
       result.transactions.map((t) =>
-        toTransactionRow(t, result.names, this.accountId())
+        toTransactionRow(t, result.names, this.accountId(), accountNames)
       )
     );
   }

@@ -26,6 +26,20 @@
         <span aria-hidden="true">·</span>
         <span class="truncate">{{ row().categoryName }}</span>
       }
+      <!-- A Transfer seen from where it landed: name the Account it was
+           recorded against and link there — the only place it can be acted
+           on (ADR 0010). -->
+      @if (row().recordedAgainst; as home) {
+        <span aria-hidden="true">·</span>
+        <span class="truncate">
+          Recorded against
+          <a
+            class="font-medium underline hover:no-underline"
+            [routerLink]="['/app/accounts', home.id]"
+            >{{ home.name }}</a
+          >
+        </span>
+      }
       @if (row().generated) {
         <span
           class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
