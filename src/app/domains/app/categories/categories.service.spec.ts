@@ -10,8 +10,8 @@ import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { CategoriesService } from './categories.service';
 
 /** One Category row shaped the way `GET /api/categories` sends it. */
-function resource(id: number, name: string) {
-  return { id, name, type: 'Expense', isDefault: true, parentId: null };
+function resource(id: number, name: string, type: 'Income' | 'Expense' = 'Expense') {
+  return { id, name, type, isDefault: true, parentId: null };
 }
 
 /**
@@ -49,6 +49,31 @@ describe('CategoriesService', () => {
     expect(names.get(1)).toBe('Groceries');
     expect(names.get(2)).toBe('Salary');
     expect(names.get(99)).toBeUndefined();
+  });
+
+  it('keeps each Category’s income/expense kind for a direction-filtered picker', async () => {
+    const result = firstValueFrom(service.list());
+
+    http
+      .expectOne(`${BASE_URL}/api/categories`)
+      .flush([resource(1, 'Groceries', 'Expense'), resource(2, 'Salary', 'Income')]);
+
+    await expect(result).resolves.toEqual([
+      { id: 1, name: 'Groceries', kind: 'expense' },
+      { id: 2, name: 'Salary', kind: 'income' },
+    ]);
+  });
+
+  it('shares the one cached request between list() and names()', async () => {
+    const list = firstValueFrom(service.list());
+    http
+      .expectOne(`${BASE_URL}/api/categories`)
+      .flush([resource(1, 'Groceries')]);
+    await list;
+
+    const names = await firstValueFrom(service.names());
+    http.expectNone(`${BASE_URL}/api/categories`);
+    expect(names.get(1)).toBe('Groceries');
   });
 
   it('fetches once and replays to every later reader', async () => {

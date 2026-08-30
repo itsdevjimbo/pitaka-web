@@ -49,6 +49,15 @@ export class CategoriesService {
     );
   }
 
+  /**
+   * The whole set, each carrying its income/expense `kind` — for a picker that
+   * offers only the Categories of a chosen direction (ADR 0010). Shares the one
+   * cached request with {@link names}.
+   */
+  list(): Observable<Category[]> {
+    return this.categories();
+  }
+
   /** The shared collection: one request, replayed — rebuilt after a failure. */
   private categories(): Observable<Category[]> {
     this.cached ??= this.http
@@ -65,7 +74,13 @@ export class CategoriesService {
   }
 }
 
-/** Drop the fields nothing above the adapter reads (`type`, `isDefault`, `parentId`). */
+/** The API's `CategoryType`, lowered to a {@link Category}'s `kind`. */
+const KIND: Record<CategoryResource['type'], Category['kind']> = {
+  Income: 'income',
+  Expense: 'expense',
+};
+
+/** Keep id, name, and `kind`; drop what nothing above the adapter reads (`isDefault`, `parentId`). */
 function toCategory(resource: CategoryResource): Category {
-  return { id: resource.id, name: resource.name };
+  return { id: resource.id, name: resource.name, kind: KIND[resource.type] };
 }
