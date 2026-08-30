@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import {
   Component,
   computed,
@@ -17,31 +16,16 @@ import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import {
-  Transaction,
-  TRANSACTION_DIRECTIONS,
-} from '@/app/domains/app/transactions/transaction';
-import { TransactionsService } from '@/app/domains/app/transactions/transactions.service';
+  TransactionRow,
+  TransactionRowModel,
+  TransactionsService,
+  toTransactionRow,
+} from '@/app/domains/app/transactions';
 import { Account, ACCOUNT_TYPES } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
 
 const LOAD_FAILED =
   'Something went wrong loading this account. Please try again.';
-
-/** Shown for an income or expense the person never filed under a Category. */
-const NO_CATEGORY = 'Uncategorised';
-
-/**
- * A Transaction with the fields the row template needs on top of the domain
- * shape: `categoryName` for the meta line, `headline` for the main line — its
- * note if it has one, otherwise what it is (a Transfer, or its Category) — and
- * `incoming`, whether the amount adds to the viewed Account (income, or a
- * Transfer landing here) or subtracts from it, so the row can be signed.
- */
-type TransactionRow = Transaction & {
-  categoryName: string;
-  headline: string;
-  incoming: boolean;
-};
 
 /**
  * One Account opened up: its current balance, and the Transactions recorded
@@ -52,13 +36,21 @@ type TransactionRow = Transaction & {
  * per row. A generated transaction is marked as one; a Transfer reads as
  * neither income nor expense.
  *
- * Read-only. Nothing here creates, edits, or deletes a Transaction — that is a
- * later slice.
+ * The row itself belongs to the Transactions domain (ADR 0009): this screen
+ * resolves the Category names, picks the Account to sign against, and hands each
+ * finished row to the `transaction-row` component. Read-only — nothing here
+ * creates, edits, or deletes a Transaction, that is a later slice.
  */
 @Component({
   selector: 'account-detail',
   templateUrl: './account-detail.html',
-  imports: [DatePipe, MatButtonModule, MatIconModule, RouterLink, PesoPipe],
+  imports: [
+    MatButtonModule,
+    MatIconModule,
+    RouterLink,
+    PesoPipe,
+    TransactionRow,
+  ],
   host: {
     class: 'flex flex-auto flex-col',
   },
@@ -75,7 +67,7 @@ export default class AccountDetail implements OnInit {
 
   // State
   protected readonly account = signal<Account | null>(null);
-  protected readonly rows = signal<readonly TransactionRow[] | null>(null);
+  protected readonly rows = signal<readonly TransactionRowModel[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
 
@@ -87,7 +79,6 @@ export default class AccountDetail implements OnInit {
   protected readonly notFound = signal(false);
 
   protected readonly types = ACCOUNT_TYPES;
-  protected readonly directions = TRANSACTION_DIRECTIONS;
 
   /** True once a load has succeeded and the Account has no Transactions. */
   protected readonly isEmpty = computed(() => this.rows()?.length === 0);
@@ -116,7 +107,9 @@ export default class AccountDetail implements OnInit {
       .subscribe({
         next: ({ account, transactions, names }) => {
           this.account.set(account);
-          this.rows.set(transactions.map((t) => toRow(t, names, accountId)));
+          this.rows.set(
+            transactions.map((t) => toTransactionRow(t, names, accountId))
+          );
           this.loading.set(false);
         },
         error: (error: unknown) => {
@@ -127,35 +120,4 @@ export default class AccountDetail implements OnInit {
         },
       });
   }
-}
-
-/** Build the row the template renders: resolved Category name, headline, sign. */
-function toRow(
-  transaction: Transaction,
-  names: ReadonlyMap<number, string>,
-  accountId: number
-): TransactionRow {
-  const resolved =
-    transaction.categoryId === null
-      ? null
-      : (names.get(transaction.categoryId) ?? null);
-  const categoryName = resolved ?? NO_CATEGORY;
-
-  const isTransfer = transaction.direction === 'transfer';
-
-  // A Transfer has no Category, so never let "Uncategorised" head its row.
-  const headline =
-    transaction.description ||
-    (isTransfer ? TRANSACTION_DIRECTIONS.transfer.label : categoryName);
-
-  // Which way the amount is signed against the Account on screen. A Transfer is
-  // signed against a single Account (CONTEXT.md): it adds here when this is the
-  // Account it lands in, subtracts otherwise. The API returns only the outgoing
-  // side today (pitaka#58), so an unmatched Transfer stays outgoing and the
-  // incoming case is already right once that lands.
-  const incoming =
-    transaction.direction === 'income' ||
-    (isTransfer && transaction.transferToAccountId === accountId);
-
-  return { ...transaction, categoryName, headline, incoming };
 }

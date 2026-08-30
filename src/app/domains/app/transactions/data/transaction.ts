@@ -67,6 +67,40 @@ export type Tag = {
 };
 
 /**
+ * What a person supplies to record a Transaction: which Account it is against,
+ * its direction, a positive amount (the direction carries the sign), the moment
+ * it is dated, and then one of the two things the direction decides — a Category
+ * for an income or an expense, or a destination Account for a Transfer, never
+ * both (ADR 0010).
+ *
+ * The adapter lowers `direction` to the API's `TransactionType` and stamps
+ * `date` with its UTC offset on the way out; the write endpoint is not
+ * Account-scoped even though the list is, and carries `accountId` in the body
+ * (ADR 0009).
+ */
+export type NewTransaction = {
+  accountId: number;
+
+  direction: TransactionDirection;
+
+  /** A positive magnitude — zero is not a movement. The sign is the direction's. */
+  amount: number;
+
+  /** When the movement is dated. Sent carrying its UTC offset, never naive. */
+  date: Date;
+
+  /**
+   * The Category an income or expense is filed under, or `null` for a Transfer —
+   * every Category is a kind of income or expense, so none can classify one
+   * (ADR 0010).
+   */
+  categoryId: number | null;
+
+  /** The Account a Transfer lands in, or `null` when this is not a Transfer. */
+  transferToAccountId: number | null;
+};
+
+/**
  * Which of the three kinds a Transaction reads as. A view concept, not a rename
  * of the API's `TransactionType` (ADR 0003) — the glossary has no single word
  * for "income vs expense vs transfer", and the spec asks a row to show "the
