@@ -35,19 +35,16 @@ import { TransactionsService } from '../data/transactions.service';
 const COULD_NOT_RECORD =
   'Something went wrong recording this transaction. Please try again.';
 
-/** Shown under the Category picker when the reference list could not be read. */
-const CATEGORIES_UNAVAILABLE =
-  'Categories could not be loaded, so there is nothing to file this under. Please try again.';
-
 /**
- * The directions this form offers. Transfer follows in a later slice (#26); it
- * needs a destination-Account picker and its own field set. Expense leads —
- * it is the movement a person records most.
+ * The directions this form offers, in display order — expense leads, being the
+ * movement a person records most. Transfer follows in a later slice (#26): it
+ * needs a destination-Account picker and its own field set. Derived from the
+ * canonical record so a label only ever lives in one place.
  */
-const DIRECTION_OPTIONS: { value: TransactionDirection; label: string }[] = [
-  { value: 'expense', label: TRANSACTION_DIRECTIONS.expense.label },
-  { value: 'income', label: TRANSACTION_DIRECTIONS.income.label },
-];
+const DIRECTION_OPTIONS = (['expense', 'income'] as const).map((value) => ({
+  value,
+  label: TRANSACTION_DIRECTIONS[value].label,
+}));
 
 /**
  * `date` and `time` are held apart so each is its own required control — an
@@ -57,7 +54,7 @@ const DIRECTION_OPTIONS: { value: TransactionDirection; label: string }[] = [
  */
 type RecordTransactionModel = {
   direction: TransactionDirection;
-  amount: number;
+  amount: number | null;
   date: Date | null;
   time: Date | null;
   categoryId: number | null;
@@ -111,16 +108,17 @@ export class RecordTransactionForm {
   // State
   protected readonly directionOptions = DIRECTION_OPTIONS;
 
-  /** Every Category, each with its `kind`; filtered per direction for the picker. */
+  /**
+   * Every Category, each with its `kind`; filtered per direction for the picker.
+   * From the shared reference cache, which the detail screen has already
+   * resolved for the row list before this form can open, so `list()` replays a
+   * settled value rather than making its own request.
+   */
   private readonly categories = signal<readonly Category[]>([]);
-
-  /** True when the reference list failed to load — the picker has nothing to show. */
-  protected readonly categoriesFailed = signal(false);
-  protected readonly categoriesUnavailable = CATEGORIES_UNAVAILABLE;
 
   protected readonly model = signal<RecordTransactionModel>({
     direction: 'expense',
-    amount: 0,
+    amount: null,
     date: new Date(),
     time: new Date(),
     categoryId: null,
@@ -133,16 +131,15 @@ export class RecordTransactionForm {
   });
 
   protected readonly recordForm = form(this.model, (path) => {
-    min(path.amount, 0.01, {
-      message: 'Enter an amount greater than zero',
-    });
+    // Entered positive — the sign is the direction's, never a minus the person
+    // types. `required` covers a cleared field, `min` a zero or a negative.
+    required(path.amount, { message: 'Enter an amount greater than zero' });
+    min(path.amount, 0.01, { message: 'Enter an amount greater than zero' });
     required(path.date, { message: 'Choose a date' });
     required(path.time, { message: 'Choose a time' });
-    required(path.categoryId, {
-      message: 'Choose a category',
-      // A Transfer carries none (ADR 0010); every other direction must.
-      when: ({ valueOf }) => valueOf(path.direction) !== 'transfer',
-    });
+    // An income or an expense is filed under a Category (ADR 0010). Transfer,
+    // which carries none, is a later slice and this form does not offer it.
+    required(path.categoryId, { message: 'Choose a category' });
   });
 
   protected readonly submitting = signal(false);
@@ -160,10 +157,7 @@ export class RecordTransactionForm {
     this.categoriesService
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (categories) => this.categories.set(categories),
-        error: () => this.categoriesFailed.set(true),
-      });
+      .subscribe((categories) => this.categories.set(categories));
 
     // Changing direction re-filters the picker; a Category from the old
     // direction must not ride along and file, say, an expense under a salary.
@@ -192,8 +186,9 @@ export class RecordTransactionForm {
             this.service.record({
               accountId: this.accountId(),
               direction,
-              amount,
-              // `required` has already ruled out a null date or time.
+              // `required` / `min` have ruled out a null amount and a null
+              // date or time by the time the action runs.
+              amount: amount as number,
               date: combineDateTime(date as Date, time as Date),
               categoryId,
               transferToAccountId: null,

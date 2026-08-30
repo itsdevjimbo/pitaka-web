@@ -13,7 +13,7 @@ import { RecordTransactionForm } from './record-transaction-form';
 
 type Model = {
   direction: TransactionDirection;
-  amount: number;
+  amount: number | null;
   date: Date | null;
   time: Date | null;
   categoryId: number | null;
@@ -174,6 +174,21 @@ describe('RecordTransactionForm', () => {
       categoryId: 2,
       transferToAccountId: null,
     });
+  });
+
+  it('never reaches the service with the amount left blank', async () => {
+    const record = vi.fn();
+    const { fixture, cmp } = setup(
+      record as unknown as TransactionsService['record']
+    );
+
+    fill(cmp, { amount: null });
+    await submitAndSettle(fixture, cmp);
+
+    expect(messagesOn(cmp.recordForm.amount)).toContain(
+      'Enter an amount greater than zero'
+    );
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('never reaches the service for an amount of zero', async () => {

@@ -73,6 +73,9 @@ export default class AccountDetail implements OnInit {
   /** The Account id from the route (`accounts/:id`), bound by the router. */
   readonly id = input.required<string>();
 
+  /** The route id as a number — the shape every service call and the row builder want. */
+  private readonly accountId = computed(() => Number(this.id()));
+
   // State
   protected readonly account = signal<Account | null>(null);
   protected readonly rows = signal<readonly TransactionRowModel[] | null>(null);
@@ -110,13 +113,11 @@ export default class AccountDetail implements OnInit {
     this.errorMessage.set(null);
     this.notFound.set(false);
 
-    const accountId = Number(this.id());
-
-    this.fetch(accountId)
+    this.read()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
-          this.apply(result, accountId);
+          this.apply(result);
           this.loading.set(false);
         },
         error: (error: unknown) => {
@@ -137,37 +138,35 @@ export default class AccountDetail implements OnInit {
   protected onRecorded(): void {
     this.recording.set(false);
 
-    const accountId = Number(this.id());
-    this.fetch(accountId)
+    this.read()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (result) => this.apply(result, accountId),
+        next: (result) => this.apply(result),
         error: (error: unknown) =>
           console.error('[account-detail] refresh after record failed', error),
       });
   }
 
   /** The Account, its Transactions, and the Category names, in one read. */
-  private fetch(accountId: number) {
+  private read() {
     return forkJoin({
-      account: this.accounts.get(accountId),
-      transactions: this.transactions.list(accountId),
+      account: this.accounts.get(this.accountId()),
+      transactions: this.transactions.list(this.accountId()),
       names: this.categories.names(),
     });
   }
 
   /** Push a completed read into the screen's signals. */
-  private apply(
-    result: {
-      account: Account;
-      transactions: readonly Transaction[];
-      names: ReadonlyMap<number, string>;
-    },
-    accountId: number
-  ): void {
+  private apply(result: {
+    account: Account;
+    transactions: readonly Transaction[];
+    names: ReadonlyMap<number, string>;
+  }): void {
     this.account.set(result.account);
     this.rows.set(
-      result.transactions.map((t) => toTransactionRow(t, result.names, accountId))
+      result.transactions.map((t) =>
+        toTransactionRow(t, result.names, this.accountId())
+      )
     );
   }
 }

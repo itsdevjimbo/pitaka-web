@@ -117,11 +117,6 @@
         <mat-option [value]="option.id">{{ option.name }}</mat-option>
       }
     </mat-select>
-    @if (categoriesFailed()) {
-      <mat-hint class="text-red-700 dark:text-red-300">
-        {{ categoriesUnavailable }}
-      </mat-hint>
-    }
     <mat-error>
       @if (
         recordForm.categoryId().touched() && recordForm.categoryId().invalid()
