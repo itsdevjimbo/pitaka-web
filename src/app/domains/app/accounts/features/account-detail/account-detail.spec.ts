@@ -52,12 +52,14 @@ function tx(over: Partial<Transaction> = {}): Transaction {
 describe('AccountDetail', () => {
   function setup(over: {
     get?: AccountsService['get'];
+    accountsList?: AccountsService['list'];
     list?: TransactionsService['list'];
     names?: CategoriesService['names'];
     record?: TransactionsService['record'];
     categoryList?: CategoriesService['list'];
   }) {
     const get = over.get ?? (() => of(ACCOUNT));
+    const accountsList = over.accountsList ?? (() => of([ACCOUNT]));
     const list = over.list ?? (() => of<Transaction[]>([]));
     const names = over.names ?? (() => of(NAMES));
     const record = over.record ?? (() => of({} as Transaction));
@@ -69,7 +71,7 @@ describe('AccountDetail', () => {
         provideIcons(),
         provideNativeDateAdapter(),
         provideRouter([]),
-        { provide: AccountsService, useValue: { get } },
+        { provide: AccountsService, useValue: { get, list: accountsList } },
         { provide: TransactionsService, useValue: { list, record } },
         { provide: CategoriesService, useValue: { names, list: categoryList } },
       ],
@@ -227,6 +229,40 @@ describe('AccountDetail', () => {
     expect(text()).toContain('Transfer');
     expect(text()).toContain(`+${formatPeso(500)}`);
     expect(text()).not.toContain(formatPeso(-500));
+  });
+
+  it('names the Account a landed Transfer was recorded against, and links there', () => {
+    const { fixture, text } = setup({
+      accountsList: () =>
+        of([
+          ACCOUNT,
+          {
+            id: 9,
+            name: 'Everyday savings',
+            type: 'Bank',
+            currentBalance: 10000,
+            isActive: true,
+          } as Account,
+        ]),
+      list: () =>
+        of([
+          tx({
+            id: 1,
+            direction: 'transfer',
+            amount: 500,
+            accountId: 9, // recorded against another Account…
+            transferToAccountId: 3, // …and it landed here
+            categoryId: null,
+            description: 'Move from savings',
+          }),
+        ]),
+    });
+
+    expect(text()).toContain('Recorded against');
+    const link = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('a')
+    ).find((a) => (a.textContent ?? '').includes('Everyday savings'));
+    expect(link?.getAttribute('href')).toBe('/app/accounts/9');
   });
 
   it('never heads a Transfer with a Category label, even with no note', () => {

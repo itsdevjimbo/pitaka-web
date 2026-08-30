@@ -112,6 +112,7 @@
       } @else if (recording()) {
         <transactions-record-transaction-form
           [accountId]="acc.id"
+          [accounts]="accountsList()"
           (recorded)="onRecorded()"
           (cancelled)="recording.set(false)"
         />

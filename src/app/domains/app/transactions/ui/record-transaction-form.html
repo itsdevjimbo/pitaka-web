@@ -109,24 +109,47 @@
     </mat-form-field>
   </div>
 
-  <!-- Category: only those of the chosen direction (ADR 0010) -->
-  <mat-form-field class="w-full">
-    <mat-label>Category</mat-label>
-    <mat-select [formField]="recordForm.categoryId">
-      @for (option of categoryOptions(); track option.id) {
-        <mat-option [value]="option.id">{{ option.name }}</mat-option>
-      }
-    </mat-select>
-    <mat-error>
-      @if (
-        recordForm.categoryId().touched() && recordForm.categoryId().invalid()
-      ) {
-        @for (error of recordForm.categoryId().errors(); track error) {
-          {{ error.message }}
+  @if (isTransfer()) {
+    <!-- Transfer: a destination Account in place of the Category. The picker
+         excludes the Account in view and every retired one (ADR 0010). -->
+    <mat-form-field class="w-full">
+      <mat-label>To account</mat-label>
+      <mat-select [formField]="recordForm.transferToAccountId">
+        @for (option of destinationOptions(); track option.id) {
+          <mat-option [value]="option.id">{{ option.name }}</mat-option>
         }
-      }
-    </mat-error>
-  </mat-form-field>
+      </mat-select>
+      <mat-error>
+        @if (
+          recordForm.transferToAccountId().touched() &&
+          recordForm.transferToAccountId().invalid()
+        ) {
+          @for (error of recordForm.transferToAccountId().errors(); track error) {
+            {{ error.message }}
+          }
+        }
+      </mat-error>
+    </mat-form-field>
+  } @else {
+    <!-- Category: only those of the chosen direction (ADR 0010) -->
+    <mat-form-field class="w-full">
+      <mat-label>Category</mat-label>
+      <mat-select [formField]="recordForm.categoryId">
+        @for (option of categoryOptions(); track option.id) {
+          <mat-option [value]="option.id">{{ option.name }}</mat-option>
+        }
+      </mat-select>
+      <mat-error>
+        @if (
+          recordForm.categoryId().touched() && recordForm.categoryId().invalid()
+        ) {
+          @for (error of recordForm.categoryId().errors(); track error) {
+            {{ error.message }}
+          }
+        }
+      </mat-error>
+    </mat-form-field>
+  }
 
   <div class="mt-2 flex items-center justify-end gap-x-3">
     <button

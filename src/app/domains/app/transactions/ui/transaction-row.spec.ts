@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { Transaction } from '../data/transaction';
@@ -11,6 +12,11 @@ import {
 const NAMES = new Map<number, string>([
   [1, 'Groceries'],
   [2, 'Salary'],
+]);
+
+const ACCOUNT_NAMES = new Map<number, string>([
+  [3, 'Everyday cash'],
+  [9, 'Savings'],
 ]);
 
 function tx(over: Partial<Transaction> = {}): Transaction {
@@ -97,18 +103,57 @@ describe('toTransactionRow', () => {
     expect(leaving.incoming).toBe(false);
     expect(landing.incoming).toBe(true);
   });
+
+  it('names the Account a landed Transfer was recorded against, for a link back (ADR 0010)', () => {
+    const landing = toTransactionRow(
+      tx({ direction: 'transfer', accountId: 9, transferToAccountId: 3 }),
+      NAMES,
+      3,
+      ACCOUNT_NAMES
+    );
+
+    expect(landing.recordedAgainst).toEqual({ id: 9, name: 'Savings' });
+  });
+
+  it('leaves recordedAgainst null on the side a Transfer left, and on a plain income or expense', () => {
+    const leaving = toTransactionRow(
+      tx({ direction: 'transfer', accountId: 3, transferToAccountId: 9 }),
+      NAMES,
+      3,
+      ACCOUNT_NAMES
+    );
+    const expense = toTransactionRow(tx({ direction: 'expense' }), NAMES, 3, ACCOUNT_NAMES);
+
+    expect(leaving.recordedAgainst).toBeNull();
+    expect(expense.recordedAgainst).toBeNull();
+  });
+
+  it('falls back to a stand-in name when the home Account is not in the map', () => {
+    const landing = toTransactionRow(
+      tx({ direction: 'transfer', accountId: 42, transferToAccountId: 3 }),
+      NAMES,
+      3,
+      ACCOUNT_NAMES
+    );
+
+    expect(landing.recordedAgainst).toEqual({ id: 42, name: 'another account' });
+  });
 });
 
 describe('TransactionRow', () => {
-  function render(row: TransactionRowModel) {
+  function renderElement(row: TransactionRowModel) {
     TestBed.configureTestingModule({
       imports: [TransactionRow],
-      providers: [provideIcons()],
+      providers: [provideIcons(), provideRouter([])],
     });
     const fixture = TestBed.createComponent(TransactionRow);
     fixture.componentRef.setInput('row', row);
     fixture.detectChanges();
-    return (fixture.nativeElement as HTMLElement).textContent ?? '';
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function render(row: TransactionRowModel) {
+    return renderElement(row).textContent ?? '';
   }
 
   it('shows the date and time, the direction, the Category, and a signed amount', () => {
@@ -166,6 +211,29 @@ describe('TransactionRow', () => {
 
     expect(text).toContain('Transfer');
     expect(text).not.toContain('Uncategorised');
+  });
+
+  it('names the source Account on a landed Transfer and links to it', () => {
+    const host = renderElement(
+      toTransactionRow(
+        tx({
+          direction: 'transfer',
+          accountId: 9,
+          transferToAccountId: 3,
+          categoryId: null,
+          description: 'Move from savings',
+        }),
+        NAMES,
+        3,
+        ACCOUNT_NAMES
+      )
+    );
+
+    expect(host.textContent).toContain('Recorded against');
+    const link = Array.from(host.querySelectorAll('a')).find((a) =>
+      (a.textContent ?? '').includes('Savings')
+    );
+    expect(link?.getAttribute('href')).toBe('/app/accounts/9');
   });
 
   it('renders the Tags on a Transaction', () => {
