@@ -117,6 +117,42 @@ export type NewTransaction = {
 };
 
 /**
+ * What a person may correct about a Transaction that is already recorded: when
+ * it is dated, the Category it is filed under, its note, and its Tags. The
+ * amount and the direction are settled at recording and are not here — this is
+ * re-filing, not editing (see `CONTEXT.md`, ADR 0009).
+ *
+ * Every field is a full replacement, never a patch. The API's update endpoint
+ * writes the Category and the note unconditionally from what it receives, so an
+ * omitted key silently nulls them; it leaves Tags alone only when the key is
+ * absent and clears them when it is an empty list. The adapter therefore sends
+ * the whole set every time, so correcting one field cannot erase another. A
+ * caller with no Tag editing surface (this slice has none) passes the
+ * Transaction's current `tagIds` straight through, and they survive untouched.
+ */
+export type RefileTransaction = {
+  /** When the movement is dated. Sent carrying its UTC offset, never naive. */
+  date: Date;
+
+  /**
+   * The Category an income or expense is filed under, or `null` to leave it
+   * uncategorised. Always `null` for a Transfer — no Category classifies one
+   * (ADR 0010) — and the adapter holds that line on the wire.
+   */
+  categoryId: number | null;
+
+  /** The person's free-text note, or `null` to clear it. */
+  description: string | null;
+
+  /**
+   * The ids of every Tag the Transaction should carry afterwards — the full
+   * set, not a delta. Sent every time so the list is a replacement; passing the
+   * Transaction's existing ids keeps its Tags exactly as they were.
+   */
+  tagIds: readonly number[];
+};
+
+/**
  * Which of the three kinds a Transaction reads as. A view concept, not a rename
  * of the API's `TransactionType` (ADR 0003) — the glossary has no single word
  * for "income vs expense vs transfer", and the spec asks a row to show "the

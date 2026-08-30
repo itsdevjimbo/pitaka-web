@@ -6,6 +6,7 @@
 export { TRANSACTION_DIRECTIONS } from './data/transaction';
 export type {
   NewTransaction,
+  RefileTransaction,
   Tag,
   Transaction,
   TransactionDirection,
@@ -13,5 +14,6 @@ export type {
 } from './data/transaction';
 export { TransactionsService } from './data/transactions.service';
 export { RecordTransactionForm } from './ui/record-transaction-form';
+export { RefileTransactionForm } from './ui/refile-transaction-form';
 export { TransactionRow, toTransactionRow } from './ui/transaction-row';
 export type { TransactionRowModel } from './ui/transaction-row';

@@ -17,6 +17,7 @@ import { PesoPipe } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import {
   RecordTransactionForm,
+  RefileTransactionForm,
   Transaction,
   TransactionRow,
   TransactionRowModel,
@@ -58,6 +59,7 @@ const LOAD_FAILED =
     PesoPipe,
     TransactionRow,
     RecordTransactionForm,
+    RefileTransactionForm,
   ],
   host: {
     class: 'flex flex-auto flex-col',
@@ -96,6 +98,13 @@ export default class AccountDetail implements OnInit {
   /** Whether the inline record form is open. Only ever set for an active Account. */
   protected readonly recording = signal(false);
 
+  /**
+   * The id of the Transaction whose row is currently swapped for the re-file
+   * form, or `null` when none is. One at a time — the row itself only offers the
+   * control where a Transaction can be corrected (its home, for a Transfer).
+   */
+  protected readonly refilingId = signal<number | null>(null);
+
   /** True once a load has succeeded and the Account has no Transactions. */
   protected readonly isEmpty = computed(() => this.rows()?.length === 0);
 
@@ -131,21 +140,39 @@ export default class AccountDetail implements OnInit {
       });
   }
 
-  /**
-   * A Transaction was recorded. Close the form and re-read the balance and list
-   * from the server (ADR 0006 — never patch a balance locally) *without*
-   * tearing the screen down to the spinner: the rows stay put and refresh in
-   * place. A failed re-read is logged and the screen keeps what it had.
-   */
+  /** A Transaction was recorded: close the form and refresh the screen in place. */
   protected onRecorded(): void {
     this.recording.set(false);
+    this.refreshInPlace('record');
+  }
 
+  /**
+   * A Transaction was re-filed: close the form and refresh in place. A
+   * corrected date or Category can move where the row sits or change what it
+   * says, and the balance shown afterwards is always the server's (ADR 0006) —
+   * even though re-filing never moves one.
+   */
+  protected onRefiled(): void {
+    this.refilingId.set(null);
+    this.refreshInPlace('refile');
+  }
+
+  /**
+   * Re-read the balance and list from the server (ADR 0006 — never patch a
+   * balance locally) *without* tearing the screen down to the spinner: the rows
+   * stay put and refresh in place. A failed re-read is logged and the screen
+   * keeps what it had.
+   */
+  private refreshInPlace(after: 'record' | 'refile'): void {
     this.read()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => this.apply(result),
         error: (error: unknown) =>
-          console.error('[account-detail] refresh after record failed', error),
+          console.error(
+            `[account-detail] refresh after ${after} failed`,
+            error
+          ),
       });
   }
 

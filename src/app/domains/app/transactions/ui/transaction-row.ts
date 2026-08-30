@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
-import { Component, input } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { PesoPipe } from '@/app/core/money';
@@ -50,7 +51,7 @@ export type TransactionRowModel = Transaction & {
 @Component({
   selector: 'li[transaction-row]',
   templateUrl: './transaction-row.html',
-  imports: [DatePipe, MatIconModule, PesoPipe, RouterLink],
+  imports: [DatePipe, MatButtonModule, MatIconModule, PesoPipe, RouterLink],
   host: {
     class:
       'flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800',
@@ -60,7 +61,19 @@ export class TransactionRow {
   /** The finished row: domain fields plus resolved Category, headline, and sign. */
   readonly row = input.required<TransactionRowModel>();
 
+  /** Asks the screen to swap this row for the re-file form. */
+  readonly refile = output<void>();
+
   protected readonly directions = TRANSACTION_DIRECTIONS;
+
+  /**
+   * Whether this row offers a re-file control. A Transaction is corrected where
+   * it was recorded: a Transfer seen from the Account it landed in (`recordedAgainst`
+   * set) is read-only there and links back to its home instead (ADR 0010). Every
+   * other row — an income, an expense, a Transfer seen from the side it left — can
+   * be re-filed in place.
+   */
+  protected readonly canRefile = computed(() => this.row().recordedAgainst === null);
 }
 
 /**

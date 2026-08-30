@@ -63,6 +63,20 @@
       {{ -row().amount | peso }}
     }
   </span>
+
+  <!-- Re-file: swap the row for the form that corrects how it is filed. Absent
+       on a Transfer seen from where it landed — that side is read-only. -->
+  @if (canRefile()) {
+    <button
+      matIconButton
+      type="button"
+      class="shrink-0"
+      aria-label="Re-file transaction"
+      (click)="refile.emit()"
+    >
+      <mat-icon svgIcon="pencil" />
+    </button>
+  }
 </div>
 
 @if (row().tags.length) {

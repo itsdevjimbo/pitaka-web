@@ -328,4 +328,165 @@ describe('TransactionsService', () => {
       expect((error as ApiError).message.length).toBeGreaterThan(0);
     });
   });
+
+  describe('refile', () => {
+    // As with `record`, the sent `transactionDate` carries the process
+    // timezone's offset — pin it DST-free so the wire value is exact.
+    const pinTimezone = withPinnedTimezone();
+    beforeEach(() => pinTimezone('Asia/Kolkata'));
+
+    /** The Transaction as it stands before the correction, an expense by default. */
+    function existing(over: Partial<Record<string, unknown>> = {}) {
+      return {
+        id: 42,
+        amount: 120.5,
+        direction: 'expense' as const,
+        accountId: 3,
+        transferToAccountId: null,
+        date: new Date(2026, 7, 29, 9, 0, 0),
+        categoryId: 4,
+        generated: false,
+        description: 'Coffee',
+        tags: [{ id: 1, name: 'treats' }],
+        ...over,
+      };
+    }
+
+    /** The full mutable set the form hands over, defaulting to "nothing changed". */
+    function correction(over: Partial<Record<string, unknown>> = {}) {
+      return {
+        date: new Date(2026, 7, 29, 9, 0, 0),
+        categoryId: 4,
+        description: 'Coffee',
+        tagIds: [1],
+        ...over,
+      };
+    }
+
+    it('PUTs the by-id endpoint with the whole mutable set and an offset-stamped date', async () => {
+      const result = firstValueFrom(
+        service.refile(existing(), correction({ categoryId: 7 }))
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual({
+        transactionDate: '2026-08-29T09:00:00+05:30',
+        categoryId: 7,
+        description: 'Coffee',
+        tagIds: [1],
+      });
+
+      request.flush(resource({ id: 42, categoryId: 7 }));
+      await result;
+    });
+
+    it('carries an untouched note and Tags through a Category correction, so neither is nulled', async () => {
+      const result = firstValueFrom(
+        service.refile(
+          existing({ description: 'Flat white', tags: [{ id: 2, name: 'work' }] }),
+          correction({
+            categoryId: 9,
+            description: 'Flat white',
+            tagIds: [2],
+          })
+        )
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
+      expect(request.request.body).toEqual({
+        transactionDate: '2026-08-29T09:00:00+05:30',
+        categoryId: 9,
+        description: 'Flat white',
+        tagIds: [2],
+      });
+
+      request.flush(resource({ id: 42 }));
+      await result;
+    });
+
+    it('sends categoryId and description as explicit keys even when cleared', async () => {
+      const result = firstValueFrom(
+        service.refile(
+          existing(),
+          correction({ categoryId: null, description: null, tagIds: [] })
+        )
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
+      expect(request.request.body).toEqual({
+        transactionDate: '2026-08-29T09:00:00+05:30',
+        categoryId: null,
+        description: null,
+        tagIds: [],
+      });
+
+      request.flush(resource({ id: 42, categoryId: null, description: null }));
+      await result;
+    });
+
+    it('forces a Transfer to send no Category, even if the caller passes one', async () => {
+      const result = firstValueFrom(
+        service.refile(
+          existing({ direction: 'transfer', transferToAccountId: 9, categoryId: null }),
+          correction({ categoryId: 4 })
+        )
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
+      expect(request.request.body).toMatchObject({ categoryId: null });
+
+      request.flush(
+        resource({ id: 42, type: 'Transfer', categoryId: null, transferToAccountId: 9 })
+      );
+      await result;
+    });
+
+    it('maps the re-filed row back to the domain shape', async () => {
+      const result = firstValueFrom(
+        service.refile(existing(), correction({ categoryId: 7 }))
+      );
+
+      http
+        .expectOne(`${BASE_URL}/api/transactions/42`)
+        .flush(resource({ id: 42, type: 'Expense', categoryId: 7 }));
+
+      await expect(result).resolves.toMatchObject({
+        id: 42,
+        direction: 'expense',
+        categoryId: 7,
+      });
+    });
+
+    it('keeps a generated transaction generated after a re-file', async () => {
+      const result = firstValueFrom(
+        service.refile(
+          existing({ generated: true }),
+          correction({ categoryId: 7 })
+        )
+      );
+
+      http
+        .expectOne(`${BASE_URL}/api/transactions/42`)
+        .flush(resource({ id: 42, recurringTransactionId: 88, categoryId: 7 }));
+
+      await expect(result).resolves.toMatchObject({ generated: true });
+    });
+
+    it('surfaces a bodyless rejection as a form-level ApiError with an empty field map', async () => {
+      const result = firstValueFrom(
+        service.refile(existing(), correction())
+      );
+
+      http
+        .expectOne(`${BASE_URL}/api/transactions/42`)
+        .flush(null, { status: 400, statusText: 'Bad Request' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(400);
+      expect((error as ApiError).fieldErrors).toEqual({});
+      expect((error as ApiError).message.length).toBeGreaterThan(0);
+    });
+  });
 });
