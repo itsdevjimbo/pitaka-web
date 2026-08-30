@@ -1,0 +1,146 @@
+<form
+  class="flex flex-col gap-y-4 rounded-xl border border-neutral-200 p-4 sm:p-6 dark:border-neutral-800"
+  (submit)="save($event)"
+>
+  <div class="flex items-center justify-between">
+    <h2 class="text-lg font-semibold tracking-tight">Re-file transaction</h2>
+    <button
+      matIconButton
+      type="button"
+      aria-label="Cancel"
+      (click)="cancel()"
+    >
+      <mat-icon svgIcon="x" />
+    </button>
+  </div>
+
+  <!-- Failed re-file with nothing to pin to a field -->
+  @if (errorMessage(); as message) {
+    <div
+      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+      role="alert"
+    >
+      {{ message }}
+    </div>
+  }
+
+  <!-- Amount and direction: the row's own text, not fields. What moved was
+       settled at recording; only how it is filed can be corrected here. -->
+  <div
+    class="flex flex-col gap-y-1 rounded-lg bg-neutral-50 px-4 py-3 dark:bg-neutral-900"
+  >
+    <div class="flex items-baseline justify-between gap-x-3">
+      <span class="text-sm text-neutral-500 dark:text-neutral-400">
+        {{ directions[transaction().direction].label }}
+      </span>
+      <span
+        class="font-semibold tabular-nums"
+        [class]="directions[transaction().direction].accent.amount"
+      >
+        {{ transaction().amount | peso }}
+      </span>
+    </div>
+    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+      The amount and direction can’t change. To fix an amount, remove this
+      transaction and record it again.
+    </p>
+  </div>
+
+  <!-- When it is dated: day and time, both seeded from the current moment,
+       neither skippable (ADR 0007) -->
+  <div class="flex flex-col gap-4 sm:flex-row">
+    <mat-form-field class="w-full">
+      <mat-label>Date</mat-label>
+      <input
+        id="refile-transaction-date"
+        matInput
+        [matDatepicker]="datePicker"
+        [formField]="refileForm.date"
+      />
+      <mat-datepicker-toggle
+        matIconSuffix
+        [for]="datePicker"
+      />
+      <mat-datepicker #datePicker />
+      <mat-error>
+        @if (refileForm.date().touched() && refileForm.date().invalid()) {
+          @for (error of refileForm.date().errors(); track error) {
+            {{ error.message }}
+          }
+        }
+      </mat-error>
+    </mat-form-field>
+
+    <mat-form-field class="w-full">
+      <mat-label>Time</mat-label>
+      <input
+        id="refile-transaction-time"
+        matInput
+        [matTimepicker]="timePicker"
+        [formField]="refileForm.time"
+      />
+      <mat-timepicker-toggle
+        matIconSuffix
+        [for]="timePicker"
+      />
+      <mat-timepicker #timePicker />
+      <mat-error>
+        @if (refileForm.time().touched() && refileForm.time().invalid()) {
+          @for (error of refileForm.time().errors(); track error) {
+            {{ error.message }}
+          }
+        }
+      </mat-error>
+    </mat-form-field>
+  </div>
+
+  @if (!isTransfer()) {
+    <!-- Category: only those of this Transaction's direction (ADR 0010), plus
+         the option to leave it uncategorised -->
+    <mat-form-field class="w-full">
+      <mat-label>Category</mat-label>
+      <mat-select [formField]="refileForm.categoryId">
+        <mat-option [value]="null">Uncategorised</mat-option>
+        @for (option of categoryOptions(); track option.id) {
+          <mat-option [value]="option.id">{{ option.name }}</mat-option>
+        }
+      </mat-select>
+      <mat-error>
+        @if (
+          refileForm.categoryId().touched() && refileForm.categoryId().invalid()
+        ) {
+          @for (error of refileForm.categoryId().errors(); track error) {
+            {{ error.message }}
+          }
+        }
+      </mat-error>
+    </mat-form-field>
+  }
+
+  <!-- Note: free text, no length limit; empty clears it -->
+  <mat-form-field class="w-full">
+    <mat-label>Note</mat-label>
+    <input
+      id="refile-transaction-note"
+      matInput
+      [formField]="refileForm.description"
+    />
+  </mat-form-field>
+
+  <div class="mt-2 flex items-center justify-end gap-x-3">
+    <button
+      matButton
+      type="button"
+      (click)="cancel()"
+    >
+      Cancel
+    </button>
+    <button
+      matButton="filled"
+      type="submit"
+      [disabled]="refileForm().invalid() || submitting()"
+    >
+      {{ submitting() ? 'Saving…' : 'Save' }}
+    </button>
+  </div>
+</form>

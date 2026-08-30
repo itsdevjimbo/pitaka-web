@@ -141,7 +141,7 @@ describe('toTransactionRow', () => {
 });
 
 describe('TransactionRow', () => {
-  function renderElement(row: TransactionRowModel) {
+  function renderFixture(row: TransactionRowModel) {
     TestBed.configureTestingModule({
       imports: [TransactionRow],
       providers: [provideIcons(), provideRouter([])],
@@ -149,7 +149,11 @@ describe('TransactionRow', () => {
     const fixture = TestBed.createComponent(TransactionRow);
     fixture.componentRef.setInput('row', row);
     fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
+    return fixture;
+  }
+
+  function renderElement(row: TransactionRowModel) {
+    return renderFixture(row).nativeElement as HTMLElement;
   }
 
   function render(row: TransactionRowModel) {
@@ -234,6 +238,51 @@ describe('TransactionRow', () => {
       (a.textContent ?? '').includes('Savings')
     );
     expect(link?.getAttribute('href')).toBe('/app/accounts/9');
+  });
+
+  function refileButton(host: HTMLElement) {
+    return Array.from(host.querySelectorAll('button')).find(
+      (b) => b.getAttribute('aria-label') === 'Re-file transaction'
+    );
+  }
+
+  it('offers a re-file control on an income or expense, and emits when it is used', () => {
+    const fixture = renderFixture(toTransactionRow(tx(), NAMES, 3));
+
+    const emitted: unknown[] = [];
+    fixture.componentInstance.refile.subscribe(() => emitted.push('refile'));
+
+    const button = refileButton(fixture.nativeElement as HTMLElement);
+    expect(button).toBeDefined();
+    button?.click();
+
+    expect(emitted).toEqual(['refile']);
+  });
+
+  it('offers a re-file control on a Transfer seen from the side it left', () => {
+    const host = renderElement(
+      toTransactionRow(
+        tx({ direction: 'transfer', accountId: 3, transferToAccountId: 9, categoryId: null }),
+        NAMES,
+        3,
+        ACCOUNT_NAMES
+      )
+    );
+
+    expect(refileButton(host)).toBeDefined();
+  });
+
+  it('offers no re-file control on a Transfer seen from where it landed', () => {
+    const host = renderElement(
+      toTransactionRow(
+        tx({ direction: 'transfer', accountId: 9, transferToAccountId: 3, categoryId: null }),
+        NAMES,
+        3,
+        ACCOUNT_NAMES
+      )
+    );
+
+    expect(refileButton(host)).toBeUndefined();
   });
 
   it('renders the Tags on a Transaction', () => {

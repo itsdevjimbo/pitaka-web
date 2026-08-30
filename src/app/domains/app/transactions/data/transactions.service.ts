@@ -5,6 +5,7 @@ import { API_BASE_URL } from '@/app/core/api';
 import { toOffsetTimestamp } from './offset-timestamp';
 import {
   NewTransaction,
+  RefileTransaction,
   Transaction,
   TransactionDirection,
 } from './transaction';
@@ -34,10 +35,10 @@ type TransactionResource = {
 
 /**
  * The hand-written resource service over the API's Transactions endpoints (ADR
- * 0002). It reads one Account's list and records a new Transaction; it does not
- * edit or delete. Failures arrive already normalised to `ApiError` by the
- * interceptor — a 404 on the list means the Account is not the person's, or is
- * gone.
+ * 0002). It reads one Account's list, records a new Transaction, and re-files an
+ * existing one; it does not delete. Failures arrive already normalised to
+ * `ApiError` by the interceptor — a 404 on the list means the Account is not the
+ * person's, or is gone.
  */
 @Injectable({ providedIn: 'root' })
 export class TransactionsService {
@@ -87,6 +88,46 @@ export class TransactionsService {
           ? transaction.transferToAccountId
           : null,
       })
+      .pipe(map(toTransaction));
+  }
+
+  /**
+   * Re-file an existing Transaction: `PUT /api/transactions/:id`, not
+   * Account-scoped (ADR 0009). Only how a Transaction is filed can be corrected
+   * — its date, Category, note and Tags — never its amount or direction, which
+   * were settled at recording (see `CONTEXT.md`).
+   *
+   * The body is a **full replacement of the mutable set, never a patch**. The
+   * API writes `categoryId` and `description` unconditionally from what it
+   * receives, so every key goes every time — a missing one would null the field
+   * it names. `tagIds` is always an array for the same reason: absent, it would
+   * leave Tags untouched rather than replace them, which is not a replacement.
+   * A caller correcting one field passes the Transaction's untouched values for
+   * the rest, so nothing it did not mean to change is lost.
+   *
+   * A Transfer carries no Category on any write path (ADR 0010); the adapter
+   * forces `categoryId: null` so a caller cannot cross that line. The date is
+   * offset-stamped because the API rejects a naive `transactionDate` outright.
+   *
+   * Failures arrive already normalised — a bodyless rejection becomes a
+   * form-level `ApiError` with an empty field map.
+   */
+  refile(
+    transaction: Transaction,
+    correction: RefileTransaction
+  ): Observable<Transaction> {
+    const isTransfer = transaction.direction === 'transfer';
+
+    return this.http
+      .put<TransactionResource>(
+        `${this.baseUrl}/api/transactions/${transaction.id}`,
+        {
+          transactionDate: toOffsetTimestamp(correction.date),
+          categoryId: isTransfer ? null : correction.categoryId,
+          description: correction.description,
+          tagIds: [...correction.tagIds],
+        }
+      )
       .pipe(map(toTransaction));
   }
 }

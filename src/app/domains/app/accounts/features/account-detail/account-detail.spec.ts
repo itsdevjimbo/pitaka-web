@@ -17,7 +17,9 @@ import AccountDetail from './account-detail';
 /** The slice of the component a few tests reach into. */
 type AccountDetailInternals = {
   recording: { set(value: boolean): void };
+  refilingId: { set(value: number | null): void };
   onRecorded(): void;
+  onRefiled(): void;
 };
 
 const ACCOUNT: Account = {
@@ -56,6 +58,7 @@ describe('AccountDetail', () => {
     list?: TransactionsService['list'];
     names?: CategoriesService['names'];
     record?: TransactionsService['record'];
+    refile?: TransactionsService['refile'];
     categoryList?: CategoriesService['list'];
   }) {
     const get = over.get ?? (() => of(ACCOUNT));
@@ -63,6 +66,7 @@ describe('AccountDetail', () => {
     const list = over.list ?? (() => of<Transaction[]>([]));
     const names = over.names ?? (() => of(NAMES));
     const record = over.record ?? (() => of({} as Transaction));
+    const refile = over.refile ?? (() => of({} as Transaction));
     const categoryList = over.categoryList ?? (() => of([]));
 
     TestBed.configureTestingModule({
@@ -72,7 +76,7 @@ describe('AccountDetail', () => {
         provideNativeDateAdapter(),
         provideRouter([]),
         { provide: AccountsService, useValue: { get, list: accountsList } },
-        { provide: TransactionsService, useValue: { list, record } },
+        { provide: TransactionsService, useValue: { list, record, refile } },
         { provide: CategoriesService, useValue: { names, list: categoryList } },
       ],
     });
@@ -448,5 +452,92 @@ describe('AccountDetail', () => {
     expect(text()).toContain('Lunch');
     expect(text()).not.toContain('Please try again');
     consoleError.mockRestore();
+  });
+
+  it('swaps a row for the re-file form from the control on the row', () => {
+    const { fixture, text } = setup({
+      list: () => of([tx({ id: 7, description: 'Coffee' })]),
+    });
+
+    expect(text()).not.toContain('Re-file transaction');
+
+    const pencil = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
+    ).find((b) => b.getAttribute('aria-label') === 'Re-file transaction');
+    pencil?.click();
+    fixture.detectChanges();
+
+    expect(text()).toContain('Re-file transaction');
+  });
+
+  it('restores the row when the re-file form is abandoned', () => {
+    const { fixture, cmp, text } = setup({
+      list: () => of([tx({ id: 7, description: 'Coffee' })]),
+    });
+
+    cmp.refilingId.set(7);
+    fixture.detectChanges();
+    expect(text()).toContain('Re-file transaction');
+
+    const cancel = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
+    ).find((b) => (b.textContent ?? '').trim() === 'Cancel');
+    cancel?.click();
+    fixture.detectChanges();
+
+    expect(text()).not.toContain('Re-file transaction');
+    expect(text()).toContain('Coffee');
+  });
+
+  it('re-reads the balance and list in place after a re-file — no full-page spinner', () => {
+    const get = vi
+      .fn()
+      .mockReturnValueOnce(of(ACCOUNT))
+      .mockReturnValueOnce(of({ ...ACCOUNT, currentBalance: 4200 }));
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee', categoryId: 1 })]))
+      .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee', categoryId: 2 })]));
+    const names = vi.fn(() => of(NAMES));
+
+    const { fixture, cmp, text } = setup({
+      get: get as unknown as AccountsService['get'],
+      list: list as unknown as TransactionsService['list'],
+      names: names as unknown as CategoriesService['names'],
+    });
+
+    cmp.onRefiled();
+    fixture.detectChanges();
+
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(text()).not.toContain('Loading transactions…');
+    expect(text()).toContain('Salary');
+  });
+
+  it('offers no re-file control on a Transfer seen from where it landed', () => {
+    const { fixture } = setup({
+      accountsList: () =>
+        of([
+          ACCOUNT,
+          { id: 9, name: 'Savings', type: 'Bank', currentBalance: 0, isActive: true } as Account,
+        ]),
+      list: () =>
+        of([
+          tx({
+            id: 1,
+            direction: 'transfer',
+            accountId: 9,
+            transferToAccountId: 3,
+            categoryId: null,
+            description: 'Move from savings',
+          }),
+        ]),
+    });
+
+    const pencil = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
+    ).find((b) => b.getAttribute('aria-label') === 'Re-file transaction');
+    expect(pencil).toBeUndefined();
   });
 });
