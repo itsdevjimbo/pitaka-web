@@ -489,4 +489,57 @@ describe('TransactionsService', () => {
       expect((error as ApiError).message.length).toBeGreaterThan(0);
     });
   });
+
+  describe('remove', () => {
+    it('DELETEs the by-id endpoint and completes on a 204', async () => {
+      const result = firstValueFrom(service.remove(42));
+
+      const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
+      expect(request.request.method).toBe('DELETE');
+      request.flush(null, { status: 204, statusText: 'No Content' });
+
+      await expect(result).resolves.toBeUndefined();
+    });
+
+    it('collapses a 404 — the Transaction is gone or was never ours — to one not-found ApiError', async () => {
+      const result = firstValueFrom(service.remove(42));
+
+      http
+        .expectOne(`${BASE_URL}/api/transactions/42`)
+        .flush(null, { status: 404, statusText: 'Not Found' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(404);
+      expect((error as ApiError).message.length).toBeGreaterThan(0);
+    });
+
+    it('gives a 403 the same not-found wording, never leaking that the row exists', async () => {
+      const result = firstValueFrom(service.remove(42));
+
+      http
+        .expectOne(`${BASE_URL}/api/transactions/42`)
+        .flush(null, { status: 403, statusText: 'Forbidden' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(403);
+      expect((error as ApiError).message).toBe(
+        "We couldn't find that. It may have been deleted, or it may not be yours."
+      );
+    });
+
+    it('surfaces a server failure as a normalised ApiError the caller can show', async () => {
+      const result = firstValueFrom(service.remove(42));
+
+      http
+        .expectOne(`${BASE_URL}/api/transactions/42`)
+        .flush(null, { status: 500, statusText: 'Server Error' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(500);
+      expect((error as ApiError).message.length).toBeGreaterThan(0);
+    });
+  });
 });

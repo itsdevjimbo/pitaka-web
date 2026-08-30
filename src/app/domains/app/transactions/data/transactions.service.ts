@@ -35,8 +35,8 @@ type TransactionResource = {
 
 /**
  * The hand-written resource service over the API's Transactions endpoints (ADR
- * 0002). It reads one Account's list, records a new Transaction, and re-files an
- * existing one; it does not delete. Failures arrive already normalised to
+ * 0002). It reads one Account's list, records a new Transaction, re-files an
+ * existing one, and removes one. Failures arrive already normalised to
  * `ApiError` by the interceptor — a 404 on the list means the Account is not the
  * person's, or is gone.
  */
@@ -129,6 +129,36 @@ export class TransactionsService {
         }
       )
       .pipe(map(toTransaction));
+  }
+
+  /**
+   * Remove one Transaction: `DELETE /api/transactions/:id`, not Account-scoped
+   * (ADR 0009). This is the one correction that legitimately moves a balance —
+   * re-filing never touches an amount, so a wrong amount is fixed by removing
+   * and recording again (see `CONTEXT.md`). The API moves the balance back by
+   * exactly what the Transaction moved; the caller re-reads that figure from the
+   * server afterwards rather than doing the arithmetic (ADR 0006).
+   *
+   * A Transfer is one Transaction (ADR 0010): removing it unwinds both Accounts
+   * at once, and it is removed only from the Account it was recorded against —
+   * the sole place the UI offers this. A generated transaction removes like any
+   * other and stays removed: the Schedule's next-run date has already advanced,
+   * so nothing regenerates it.
+   *
+   * Landmine for the goals slice, invisible today: the API also deletes any Goal
+   * contribution attached to this Transaction, silently. Goals are not built
+   * yet, so nothing surfaces here and there is nothing to do — but a
+   * contribution is destroyed, and the goals slice will have to reckon with a
+   * removal reaching into its data when it lands.
+   *
+   * Failures arrive already normalised: a 404 or 403 means the Transaction is
+   * gone or was never the person's, collapsed to one not-found line; anything
+   * else is a form-level `ApiError` the caller shows and leaves the row put.
+   */
+  remove(id: number): Observable<void> {
+    return this.http
+      .delete<void>(`${this.baseUrl}/api/transactions/${id}`)
+      .pipe(map(() => undefined));
   }
 }
 
