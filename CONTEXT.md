@@ -41,8 +41,20 @@ A standing instruction that creates a Transaction on a repeating cadence. It is 
 _Avoid_: Recurring transaction, recurring, repeat, subscription
 
 **Budget**:
-A spending ceiling for a period, optionally narrowed to one Category. The person succeeds by staying under it.
+A recurring spending ceiling for one Cycle, optionally narrowed to a single Category. Only expenses count against it — never income, never a Transfer — and an unnarrowed Budget watches all spending. The person succeeds by staying under it.
 _Avoid_: Limit, cap, allowance, plan
+
+**Period**:
+How often a Budget renews — daily, weekly, monthly, quarterly, or yearly.
+_Avoid_: Frequency, cadence, interval, cycle
+
+**Cycle**:
+One dated window of a Budget, the span its Spent figure covers. Cycles follow the calendar rather than the day the Budget began, so the first and last may be short — and a short Cycle still carries the full ceiling.
+_Avoid_: Window, term, month, period
+
+**Spent**:
+How much of a Budget's ceiling the current Cycle has used: the expenses inside the Cycle that match its Category.
+_Avoid_: Used, consumed, progress, current amount
 
 **Goal**:
 A savings target the person accumulates toward over time. The person succeeds by reaching it. Distinct from a Budget, which is a ceiling rather than a target.
