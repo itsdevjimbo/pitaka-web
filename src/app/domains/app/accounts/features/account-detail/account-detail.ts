@@ -19,7 +19,8 @@ import { CategoriesService } from '@/app/domains/app/categories/categories.servi
 import {
   RecordTransactionDialog,
   RecordTransactionDialogData,
-  RefileTransactionForm,
+  RefileTransactionDialog,
+  RefileTransactionDialogData,
   Transaction,
   TransactionRow,
   TransactionRowModel,
@@ -56,6 +57,11 @@ const LOAD_FAILED =
  * retired Account excluded); the form does no filtering. A retired Account
  * offers no record control and points at the reactivate that lives on the
  * accounts list.
+ *
+ * A row's own menu carries *Refile*, which opens the `refile-transaction-dialog`
+ * the same way, seeded with that Transaction's moment, Category, and note; the
+ * row stays legible behind it. A successful refile closes the dialog and
+ * re-reads in place, so a corrected date reorders the row to where it belongs.
  */
 @Component({
   selector: 'account-detail',
@@ -66,7 +72,6 @@ const LOAD_FAILED =
     RouterLink,
     PesoPipe,
     TransactionRow,
-    RefileTransactionForm,
   ],
   host: {
     class: 'flex flex-auto flex-col',
@@ -123,13 +128,6 @@ export default class AccountDetail implements OnInit {
         .map((account) => ({ id: account.id, name: account.name }));
     }
   );
-
-  /**
-   * The id of the Transaction whose row is currently swapped for the refile
-   * form, or `null` when none is. One at a time — the row itself only offers the
-   * control where a Transaction can be corrected (its home, for a Transfer).
-   */
-  protected readonly refilingId = signal<number | null>(null);
 
   /** True once a load has succeeded and the Account has no Transactions. */
   protected readonly isEmpty = computed(() => this.rows()?.length === 0);
@@ -198,13 +196,38 @@ export default class AccountDetail implements OnInit {
   }
 
   /**
-   * A Transaction was refiled: close the form and refresh in place. A
+   * Open the *Refile transaction* dialog over this screen, seeded with the
+   * Transaction as it stands now — its date, time, Category, and note. The row
+   * stays legible behind it and nothing reflows. It closes with the corrected
+   * Transaction on a successful refile, or with nothing on Cancel, the close
+   * control, or Escape. The row only offers this where a Transaction can be
+   * corrected (its home, for a Transfer — ADR 0010), so this is never reached
+   * for a Transfer seen from the side it landed on.
+   */
+  protected openRefileDialog(transaction: Transaction): void {
+    const ref = this.dialog.open<
+      RefileTransactionDialog,
+      RefileTransactionDialogData,
+      Transaction
+    >(RefileTransactionDialog, { data: { transaction } });
+
+    ref
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((refiled) => {
+        if (refiled) {
+          this.onRefiled();
+        }
+      });
+  }
+
+  /**
+   * A Transaction was refiled: close the dialog and refresh in place. A
    * corrected date or Category can move where the row sits or change what it
    * says, and the balance shown afterwards is always the server's (ADR 0006) —
    * even though refiling never moves one.
    */
   protected onRefiled(): void {
-    this.refilingId.set(null);
     this.refreshInPlace('refile');
   }
 

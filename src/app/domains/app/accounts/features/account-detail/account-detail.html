@@ -130,22 +130,12 @@
     } @else {
       <ul class="flex flex-col gap-y-2">
         @for (row of rows(); track row.id) {
-          @if (refilingId() === row.id) {
-            <li>
-              <transactions-refile-transaction-form
-                [transaction]="row"
-                (refiled)="onRefiled()"
-                (cancelled)="refilingId.set(null)"
-              />
-            </li>
-          } @else {
-            <li
-              transaction-row
-              [row]="row"
-              (refile)="refilingId.set(row.id)"
-              (removed)="onRemoved()"
-            ></li>
-          }
+          <li
+            transaction-row
+            [row]="row"
+            (refile)="openRefileDialog(row)"
+            (removed)="onRemoved()"
+          ></li>
         }
       </ul>
     }

@@ -22,8 +22,8 @@ import AccountDetail from './account-detail';
 
 /** The slice of the component a few tests reach into. */
 type AccountDetailInternals = {
-  refilingId: { set(value: number | null): void };
   openRecordDialog(): void;
+  openRefileDialog(transaction: Transaction): void;
   onRecorded(): void;
   onRefiled(): void;
   onRemoved(): void;
@@ -682,56 +682,290 @@ describe('AccountDetail', () => {
     });
   });
 
-  it('swaps a row for the refile form from the Refile entry in the row menu', () => {
-    const { fixture, text } = setup({
-      list: () => of([tx({ id: 7, description: 'Coffee' })]),
+  describe('refile, in a dialog', () => {
+    const CATEGORIES: Category[] = [
+      { id: 1, name: 'Groceries', kind: 'expense' },
+      { id: 2, name: 'Salary', kind: 'income' },
+      { id: 3, name: 'Rent', kind: 'expense' },
+    ];
+
+    /** A filed, noted, tagged expense — the row the menu's Refile acts on. */
+    function filed(over: Partial<Transaction> = {}): Transaction {
+      return tx({
+        id: 7,
+        description: 'Coffee',
+        categoryId: 1,
+        tags: [{ id: 9, name: 'treats' }],
+        date: new Date('2026-08-29T09:30:00'),
+        ...over,
+      });
+    }
+
+    /** Open the row's menu and choose Refile, the way a person would. */
+    async function refileFromRowMenu(
+      fixture: ComponentFixture<unknown>,
+      host: HTMLElement
+    ) {
+      const trigger = Array.from(host.querySelectorAll('button')).find(
+        (b) => b.getAttribute('aria-label') === 'Transaction actions'
+      );
+      trigger!.click();
+      await settle(fixture);
+      overlayButton('Refile').click();
+      await settle(fixture);
+    }
+
+    it('opens from the Refile menu entry, seeded with the transaction, and leaves the row legible behind it', async () => {
+      const { fixture, text, dialog, dialogText } = setup({
+        list: () => of([filed()]),
+        categoryList: () => of(CATEGORIES),
+      });
+      const host = fixture.nativeElement as HTMLElement;
+      const before = text();
+
+      expect(dialog()).toBeNull();
+      await refileFromRowMenu(fixture, host);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Refile transaction');
+      // Seeded from the row's own moment (2026-08-29 09:30), Category, and note.
+      expect(
+        overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!
+          .value
+      ).toBe('Coffee');
+      expect(dialogText()).toContain('Groceries');
+      expect(
+        overlay().querySelector<HTMLInputElement>('#refile-transaction-date')!
+          .value
+      ).toContain('2026');
+      expect(
+        overlay().querySelector<HTMLInputElement>('#refile-transaction-date')!
+          .value
+      ).toContain('29');
+      expect(
+        overlay().querySelector<HTMLInputElement>('#refile-transaction-time')!
+          .value
+      ).toContain('9:30');
+      // The screen behind the dialog is untouched — nothing reflowed.
+      expect(text()).toContain(before);
     });
 
-    expect(text()).not.toContain('Refile transaction');
+    it('follows the app-wide dialog behaviour — closes on Escape, stays on a backdrop click', async () => {
+      const { fixture, cmp, dialog } = setup({ list: () => of([filed()]) });
 
-    const menuTrigger = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    ).find((b) => b.getAttribute('aria-label') === 'Transaction actions');
-    menuTrigger?.click();
-    fixture.detectChanges();
+      cmp.openRefileDialog(filed());
+      await settle(fixture);
+      expect(dialog()).not.toBeNull();
 
-    const refile = Array.from(
-      overlay().querySelectorAll<HTMLButtonElement>('button')
-    ).find((b) => (b.textContent ?? '').trim() === 'Refile');
-    refile?.click();
-    fixture.detectChanges();
+      overlay().querySelector<HTMLElement>('.cdk-overlay-backdrop')!.click();
+      await settle(fixture);
+      expect(dialog()).not.toBeNull();
 
-    expect(text()).toContain('Refile transaction');
-  });
-
-  it('restores the row when the refile form is abandoned', () => {
-    const { fixture, cmp, text } = setup({
-      list: () => of([tx({ id: 7, description: 'Coffee' })]),
+      pressEscape();
+      await settle(fixture);
+      expect(dialog()).toBeNull();
     });
 
-    cmp.refilingId.set(7);
-    fixture.detectChanges();
-    expect(text()).toContain('Refile transaction');
+    it('moves focus into the dialog on open and back to the opener on close', async () => {
+      const { fixture, cmp, dialog } = setup({ list: () => of([filed()]) });
+      const host = fixture.nativeElement as HTMLElement;
+      const trigger = Array.from(host.querySelectorAll('button')).find(
+        (b) => b.getAttribute('aria-label') === 'Transaction actions'
+      )!;
 
-    const cancel = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    ).find((b) => (b.textContent ?? '').trim() === 'Cancel');
-    cancel?.click();
-    fixture.detectChanges();
+      trigger.focus();
+      cmp.openRefileDialog(filed());
+      await settle(fixture);
 
-    expect(text()).not.toContain('Refile transaction');
-    expect(text()).toContain('Coffee');
+      expect(overlay().contains(document.activeElement)).toBe(true);
+
+      pressEscape();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it('shows the amount and direction as text, not as fields, and still points at removing to fix an amount', async () => {
+      const { fixture, cmp, dialogText } = setup({
+        list: () => of([filed({ amount: 120.5 })]),
+      });
+
+      cmp.openRefileDialog(filed({ amount: 120.5 }));
+      await settle(fixture);
+
+      expect(dialogText()).toContain('Expense');
+      expect(dialogText()).toContain('120.50');
+      expect(overlay().querySelector('input[type="number"]')).toBeNull();
+      expect(overlay().querySelector('mat-button-toggle-group')).toBeNull();
+      expect(dialogText().toLowerCase()).toContain(
+        'remove this transaction and record it again'
+      );
+    });
+
+    it('offers nothing that removes the transaction', async () => {
+      const { fixture, cmp } = setup({ list: () => of([filed()]) });
+
+      cmp.openRefileDialog(filed());
+      await settle(fixture);
+
+      const removeButton = Array.from(
+        overlay().querySelectorAll('button')
+      ).find((b) => (b.textContent ?? '').trim() === 'Remove');
+      expect(removeButton).toBeUndefined();
+      expect(overlay().querySelector('[aria-label="Confirm remove"]')).toBeNull();
+    });
+
+    it('refiles a Transfer from the Account it was recorded against, with no Category field', async () => {
+      const transfer = filed({
+        direction: 'transfer',
+        categoryId: null,
+        transferToAccountId: 9,
+        description: 'Move to savings',
+      });
+      const { fixture, cmp, dialog, dialogText } = setup({
+        list: () => of([transfer]),
+      });
+
+      cmp.openRefileDialog(transfer);
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Transfer');
+      expect(overlay().querySelector('mat-select')).toBeNull();
+    });
+
+    it('on a successful refile, closes the dialog and re-reads the balance and list (ADR 0006)', async () => {
+      const get = vi
+        .fn()
+        .mockReturnValueOnce(of(ACCOUNT))
+        .mockReturnValueOnce(of({ ...ACCOUNT, currentBalance: 4200 }));
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([filed({ description: 'Coffee' })]))
+        .mockReturnValueOnce(of([filed({ description: 'Flat white' })]));
+      const refile = vi.fn(() => of(filed()));
+
+      const { fixture, cmp, text, dialog } = setup({
+        get: get as unknown as AccountsService['get'],
+        list: list as unknown as TransactionsService['list'],
+        refile: refile as unknown as TransactionsService['refile'],
+        categoryList: () => of(CATEGORIES),
+      });
+
+      cmp.openRefileDialog(filed());
+      await settle(fixture);
+      overlayButton('Save').click();
+      await settle(fixture);
+
+      expect(refile).toHaveBeenCalledTimes(1);
+      expect(dialog()).toBeNull();
+      expect(get).toHaveBeenCalledTimes(2);
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).not.toContain('Loading transactions…');
+      expect(text()).toContain('Flat white');
+    });
+
+    it('fixing the Category alone leaves the note and Tags on the row', async () => {
+      const original = filed({ tags: [{ id: 9, name: 'treats' }] });
+      const refile = vi.fn(() => of(original));
+      // The server re-read after the refile: same note and Tag, new Category.
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([original]))
+        .mockReturnValueOnce(
+          of([filed({ categoryId: 3, tags: [{ id: 9, name: 'treats' }] })])
+        );
+
+      const { fixture, cmp, text } = setup({
+        refile: refile as unknown as TransactionsService['refile'],
+        list: list as unknown as TransactionsService['list'],
+        names: () => of(new Map([...NAMES, [3, 'Rent']])),
+        categoryList: () => of(CATEGORIES),
+      });
+
+      cmp.openRefileDialog(original);
+      await settle(fixture);
+      await pickFromSelect(fixture, 'mat-select', 'Rent');
+      overlayButton('Save').click();
+      await settle(fixture);
+
+      // The change went in, and nothing else was quietly dropped.
+      expect(refile).toHaveBeenCalledWith(
+        original,
+        expect.objectContaining({ categoryId: 3 })
+      );
+      expect(text()).toContain('Rent');
+      expect(text()).toContain('Coffee');
+      expect(text()).toContain('#treats');
+    });
+
+    it('on a failed refile, leaves the dialog open with the input intact and the reason shown', async () => {
+      const refile = vi.fn(() => throwError(() => new Error('offline')));
+      const list = vi.fn(() => of([filed()]));
+
+      const { fixture, cmp, dialog, dialogText } = setup({
+        list: list as unknown as TransactionsService['list'],
+        refile: refile as unknown as TransactionsService['refile'],
+        categoryList: () => of(CATEGORIES),
+      });
+
+      cmp.openRefileDialog(filed());
+      await settle(fixture);
+      typeIntoOverlay('#refile-transaction-note', 'Flat white');
+      await settle(fixture);
+      overlayButton('Save').click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(
+        overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!
+          .value
+      ).toBe('Flat white');
+      expect(dialogText()).toContain(
+        'Something went wrong refiling this transaction'
+      );
+      // A failed refile does not re-read.
+      expect(list).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes with no refile on Cancel, without calling the service', async () => {
+      const refile = vi.fn();
+      const { fixture, cmp, dialog } = setup({
+        list: () => of([filed()]),
+        refile: refile as unknown as TransactionsService['refile'],
+      });
+
+      cmp.openRefileDialog(filed());
+      await settle(fixture);
+      overlayButton('Cancel').click();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(refile).not.toHaveBeenCalled();
+    });
   });
 
-  it('re-reads the balance and list in place after a refile — no full-page spinner', () => {
+  it('re-reads the balance and list in place after a refile, reordering a corrected row — no full-page spinner', () => {
     const get = vi
       .fn()
       .mockReturnValueOnce(of(ACCOUNT))
       .mockReturnValueOnce(of({ ...ACCOUNT, currentBalance: 4200 }));
     const list = vi
       .fn()
-      .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee', categoryId: 1 })]))
-      .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee', categoryId: 2 })]));
+      .mockReturnValueOnce(
+        of([
+          tx({ id: 7, description: 'Coffee', categoryId: 1 }),
+          tx({ id: 8, description: 'Lunch', categoryId: 1 }),
+        ])
+      )
+      // The corrected row's new date drops it below Lunch on the server re-read.
+      .mockReturnValueOnce(
+        of([
+          tx({ id: 8, description: 'Lunch', categoryId: 1 }),
+          tx({ id: 7, description: 'Coffee', categoryId: 2 }),
+        ])
+      );
     const names = vi.fn(() => of(NAMES));
 
     const { fixture, cmp, text } = setup({
@@ -747,6 +981,8 @@ describe('AccountDetail', () => {
     expect(list).toHaveBeenCalledTimes(2);
     expect(text()).not.toContain('Loading transactions…');
     expect(text()).toContain('Salary');
+    // Coffee now sits after Lunch — the row moved to where its new date belongs.
+    expect(text().indexOf('Lunch')).toBeLessThan(text().indexOf('Coffee'));
   });
 
   it('re-reads the balance and list in place after a removal — the row is gone, no spinner', () => {
