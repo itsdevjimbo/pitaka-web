@@ -1,6 +1,7 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { RouterLink } from '@angular/router';
@@ -13,8 +14,8 @@ import {
   AccountModifiedError,
 } from '../../data/account-errors';
 import { AccountsService } from '../../data/accounts.service';
-import { NewAccountForm } from '../../ui/new-account-form';
-import { RenameAccountForm } from '../../ui/rename-account-form';
+import { NewAccountDialog } from '../../ui/new-account-dialog';
+import { RenameAccountDialog } from '../../ui/rename-account-dialog';
 
 const LOAD_FAILED =
   'Something went wrong loading your accounts. Please try again.';
@@ -66,8 +67,6 @@ type RowNotice = {
     MatMenuModule,
     RouterLink,
     PesoPipe,
-    NewAccountForm,
-    RenameAccountForm,
   ],
   host: {
     class: 'flex flex-auto flex-col',
@@ -77,18 +76,13 @@ export default class AccountList {
   // Dependencies
   private service = inject(AccountsService);
   private destroyRef = inject(DestroyRef);
+  private dialog = inject(MatDialog);
 
   // State
   protected readonly accounts = signal<readonly Account[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly showRetired = signal(false);
-
-  /** Whether the "new account" form is open. */
-  protected readonly adding = signal(false);
-
-  /** The id of the Account whose row is in rename mode, or `null`. */
-  protected readonly renamingId = signal<number | null>(null);
 
   /** The id of the Account whose delete is awaiting confirmation, or `null`. */
   protected readonly confirmingDeleteId = signal<number | null>(null);
@@ -165,6 +159,55 @@ export default class AccountList {
   }
 
   /**
+   * Open the *Add account* dialog. It closes with the created Account on a
+   * successful save, or with nothing on Cancel, the close control, or Escape.
+   */
+  protected openNewAccountDialog(): void {
+    this.onDialogResult(
+      this.dialog.open<NewAccountDialog, undefined, Account>(NewAccountDialog),
+      (created) => this.onCreated(created)
+    );
+  }
+
+  /**
+   * Open the *Rename* dialog for one row, seeded with its Account. It closes
+   * with the renamed Account on a successful save, or with nothing otherwise.
+   * The row is left as it is, so its name, type, balance and retired badge stay
+   * on screen underneath.
+   */
+  protected openRenameDialog(account: Account): void {
+    this.notice.set(null);
+    this.confirmingDeleteId.set(null);
+
+    this.onDialogResult(
+      this.dialog.open<RenameAccountDialog, Account, Account>(
+        RenameAccountDialog,
+        { data: account }
+      ),
+      () => this.onRenamed()
+    );
+  }
+
+  /**
+   * Run `handle` once a dialog closes with a result — a saved Account — and do
+   * nothing when it closes with none (Cancel, the close control, Escape). The
+   * subscription is torn down with the component.
+   */
+  private onDialogResult<R>(
+    ref: MatDialogRef<unknown, R>,
+    handle: (result: R) => void
+  ): void {
+    ref
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((result) => {
+        if (result) {
+          handle(result);
+        }
+      });
+  }
+
+  /**
    * A new Account was created. Show it at once — its balance is the server's own
    * figure from the create response, not a remembered one — then re-read the
    * list so it lands in the server's order and picks up anything changed
@@ -172,22 +215,13 @@ export default class AccountList {
    * local splice). A failed reconcile keeps the optimistic row rather than
    * replacing the screen with an error.
    */
-  protected onCreated(account: Account): void {
+  private onCreated(account: Account): void {
     this.accounts.update((list) => [...(list ?? []), account]);
-    this.adding.set(false);
     this.reconcile();
   }
 
-  /** Open the inline rename editor for one row, clearing any other row state. */
-  protected startRename(account: Account): void {
-    this.notice.set(null);
-    this.confirmingDeleteId.set(null);
-    this.renamingId.set(account.id);
-  }
-
-  /** The rename saved. Close the editor and re-read so the new name lands everywhere. */
-  protected onRenamed(): void {
-    this.renamingId.set(null);
+  /** The rename saved. Re-read so the new name lands everywhere (ADR 0006). */
+  private onRenamed(): void {
     this.reconcile();
   }
 
@@ -207,7 +241,6 @@ export default class AccountList {
   /** Ask before removing a container of money. */
   protected askDelete(account: Account): void {
     this.notice.set(null);
-    this.renamingId.set(null);
     this.confirmingDeleteId.set(account.id);
   }
 

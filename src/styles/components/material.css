@@ -495,6 +495,34 @@
   /* ------------------------------------------------------------------------ */
   --mat-dialog-container-shape: 1rem;
 
+  /*
+   * Every app dialog's overlay panel carries `app-dialog-panel`
+   * (`provideDialogDefaults`). Above the phone breakpoint it is a centred card
+   * over the dimmed page, sized by the global `maxWidth`. Below it — the same
+   * 640px phone/desktop boundary the form-field and select adjustments in this
+   * file use — the panel drops its bound and its rounding and fills the screen.
+   */
+  .app-dialog-panel {
+    @media screen and (max-width: 640px) {
+      max-width: none !important;
+      width: 100vw;
+      height: 100dvh;
+      max-height: 100dvh;
+
+      --mat-dialog-container-shape: 0;
+
+      .mat-mdc-dialog-container,
+      .mat-mdc-dialog-surface {
+        border-radius: 0;
+      }
+
+      .mat-mdc-dialog-content {
+        max-height: none;
+        flex: 1 1 auto;
+      }
+    }
+  }
+
   /* ------------------------------------------------------------------------ */
   /* Divider                                                                  */
   /* ------------------------------------------------------------------------ */

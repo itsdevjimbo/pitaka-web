@@ -1,10 +1,13 @@
 import { Signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
+import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
+import { withOverlayContainer } from '@/testing/overlay';
 import { Account } from '../../data/account';
 import {
   AccountDeleteBlockedError,
@@ -24,18 +27,15 @@ type RowNotice = {
 type AccountsInternals = {
   toggleRetired(): void;
   load(): void;
-  startRename(account: Account): void;
-  onRenamed(): void;
-  onCreated(account: Account): void;
+  openNewAccountDialog(): void;
+  openRenameDialog(account: Account): void;
   toggleActive(account: Account): void;
   askDelete(account: Account): void;
   confirmDelete(account: Account): void;
   cancelDelete(): void;
-  readonly renamingId: Signal<number | null>;
   readonly confirmingDeleteId: Signal<number | null>;
   readonly busyId: Signal<number | null>;
   readonly notice: Signal<RowNotice | null>;
-  readonly adding: Signal<boolean>;
   readonly errorMessage: Signal<string | null>;
 };
 
@@ -62,6 +62,8 @@ const OLD_WALLET: Account = {
 };
 
 describe('AccountList', () => {
+  const overlay = withOverlayContainer();
+
   function setup(
     list: AccountsService['list'],
     overrides: Partial<AccountsService> = {}
@@ -71,6 +73,8 @@ describe('AccountList', () => {
       providers: [
         provideIcons(),
         provideRouter([]),
+        provideDialogDefaults(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: AccountsService, useValue: { list, ...overrides } },
       ],
     });
@@ -83,7 +87,21 @@ describe('AccountList', () => {
       fixture,
       cmp,
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
+      dialog: () => overlay().querySelector<HTMLElement>('[role="dialog"]'),
+      dialogText: () => overlay().textContent ?? '',
     };
+  }
+
+  /**
+   * Push change detection through the component and the overlay, and let any
+   * pending form-submit microtasks resolve.
+   */
+  async function settle(fixture: ComponentFixture<AccountList>) {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
   }
 
   function clickButton(fixture: ComponentFixture<AccountList>, label: string) {
@@ -95,6 +113,60 @@ describe('AccountList', () => {
     }
     button.click();
     fixture.detectChanges();
+  }
+
+  /** Find a button by its text, anywhere in the open overlay. */
+  function overlayButton(label: string): HTMLButtonElement {
+    const button = Array.from(
+      overlay().querySelectorAll('button')
+    ).find((element) => (element.textContent ?? '').includes(label));
+    if (!button) {
+      throw new Error(`No overlay button labelled "${label}"`);
+    }
+    return button;
+  }
+
+  /** Type a value into a text/number input in the open overlay. */
+  function typeInto(selector: string, value: string) {
+    const input = overlay().querySelector<HTMLInputElement>(selector);
+    if (!input) {
+      throw new Error(`No overlay input matching "${selector}"`);
+    }
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  /**
+   * Fill and submit the new-account form the dialog renders. Mirrors what a
+   * person does: a name, a type from the picker, a starting balance, then the
+   * submit button.
+   */
+  async function submitNewAccount(
+    fixture: ComponentFixture<AccountList>,
+    values: { name: string; type: string; balance: string }
+  ) {
+    typeInto('#account-name', values.name);
+    typeInto('#account-initial-balance', values.balance);
+
+    overlay().querySelector<HTMLElement>('mat-select')!.click();
+    await settle(fixture);
+    const option = Array.from(
+      overlay().querySelectorAll<HTMLElement>('mat-option')
+    ).find((element) => (element.textContent ?? '').trim() === values.type);
+    if (!option) {
+      throw new Error(`No type option "${values.type}"`);
+    }
+    option.click();
+    await settle(fixture);
+
+    overlayButton('Add account').click();
+    await settle(fixture);
+  }
+
+  function pressEscape() {
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
   }
 
   it('shows that it is working while the load is in flight, then the list', () => {
@@ -211,44 +283,206 @@ describe('AccountList', () => {
     );
   });
 
-  describe('create', () => {
-    const NEW_SAVINGS: Account = {
+  describe('create, in a dialog', () => {
+    const SERVER_SAVINGS: Account = {
       id: 4,
       name: 'New Savings',
       type: 'Bank',
-      currentBalance: 0,
+      // Deliberately not the balance the person will type — the row must show
+      // the server's figure, not the entered one.
+      currentBalance: 250,
       isActive: true,
     };
 
-    it('shows the created Account at once and closes the form panel', () => {
-      // The re-read stays in flight, so a visible row can only be the optimistic one.
+    async function openAddDialog(fixture: ComponentFixture<AccountList>) {
+      clickButton(fixture, 'Add account');
+      await settle(fixture);
+    }
+
+    it('opens the new-account form in a dialog from the heading, without reflowing the list', async () => {
+      const { fixture, text, dialog, dialogText } = setup(() =>
+        of([CASH, BANK])
+      );
+      const before = text();
+
+      await openAddDialog(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('New account');
+      expect(dialogText()).toContain('Name');
+      // The list behind the dialog is untouched.
+      expect(text()).toContain(before);
+    });
+
+    it('opens the same dialog from the empty state', async () => {
+      const { fixture, text, dialog, dialogText } = setup(() => of([]));
+
+      expect(text()).toContain('No accounts yet');
+      await openAddDialog(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('New account');
+    });
+
+    it('offers nothing destructive inside the dialog', async () => {
+      const { fixture, dialogText } = setup(() => of([CASH]));
+
+      await openAddDialog(fixture);
+
+      expect(dialogText()).not.toContain('Delete');
+      expect(dialogText()).not.toContain('Retire');
+      expect(dialogText()).not.toContain('Reactivate');
+    });
+
+    it('moves focus into the dialog on open and back to the opener on close', async () => {
+      const { fixture, dialog } = setup(() => of([CASH]));
+
+      const addButton = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('button')
+      ).find((element) => (element.textContent ?? '').includes('Add account'))!;
+      addButton.focus();
+      addButton.click();
+      await settle(fixture);
+
+      expect(overlay().contains(document.activeElement)).toBe(true);
+
+      pressEscape();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(document.activeElement).toBe(addButton);
+    });
+
+    it('closes on Escape', async () => {
+      const { fixture, dialog } = setup(() => of([CASH]));
+
+      await openAddDialog(fixture);
+      pressEscape();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+    });
+
+    it('stays open on a backdrop click', async () => {
+      const { fixture, dialog } = setup(() => of([CASH]));
+
+      await openAddDialog(fixture);
+      overlay().querySelector<HTMLElement>('.cdk-overlay-backdrop')!.click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+    });
+
+    it('dismisses on Cancel without calling the service', async () => {
+      const create = vi.fn();
+      const { fixture, dialog } = setup(() => of([CASH]), {
+        create: create as unknown as AccountsService['create'],
+      });
+
+      await openAddDialog(fixture);
+      overlayButton('Cancel').click();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('dismisses on the close control without calling the service', async () => {
+      const create = vi.fn();
+      const { fixture, dialog } = setup(() => of([CASH]), {
+        create: create as unknown as AccountsService['create'],
+      });
+
+      await openAddDialog(fixture);
+      overlay()
+        .querySelector<HTMLButtonElement>('button[aria-label="Close"]')!
+        .click();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('on a successful create, closes the dialog and shows the Account at the server balance, then re-reads (ADR 0006)', async () => {
       const reReadPending = new Subject<Account[]>();
       let attempt = 0;
       const list = vi.fn(() => {
         attempt += 1;
         return attempt === 1 ? of([CASH]) : reReadPending.asObservable();
       });
-      const { fixture, cmp, text } = setup(
-        list as unknown as AccountsService['list']
+      const create = vi.fn(() => of(SERVER_SAVINGS));
+      const { fixture, text, dialog } = setup(
+        list as unknown as AccountsService['list'],
+        { create: create as unknown as AccountsService['create'] }
       );
 
-      cmp.onCreated(NEW_SAVINGS);
-      fixture.detectChanges();
+      await openAddDialog(fixture);
+      await submitNewAccount(fixture, {
+        name: 'New Savings',
+        type: 'Bank',
+        balance: '0',
+      });
 
+      expect(create).toHaveBeenCalledWith({
+        name: 'New Savings',
+        type: 'Bank',
+        initialBalance: 0,
+      });
+      expect(dialog()).toBeNull();
       expect(text()).toContain('New Savings');
-      expect(cmp.adding()).toBe(false);
-    });
-
-    it('re-reads the list from the server after the create (ADR 0006)', () => {
-      const list = vi.fn(() => of([CASH]));
-      const { cmp } = setup(list as unknown as AccountsService['list']);
-
-      cmp.onCreated(NEW_SAVINGS);
-
+      expect(text()).toContain(formatPeso(250));
       expect(list).toHaveBeenCalledTimes(2);
     });
 
-    it('keeps the optimistic row when the re-read fails, rather than flipping to an error', () => {
+    it('on a failed create, keeps the dialog open with the input intact and the reason shown', async () => {
+      const create = vi.fn(() => throwError(() => new Error('offline')));
+      const { fixture, dialog, dialogText } = setup(() => of([CASH]), {
+        create: create as unknown as AccountsService['create'],
+      });
+
+      await openAddDialog(fixture);
+      await submitNewAccount(fixture, {
+        name: 'Brokerage',
+        type: 'Investment',
+        balance: '0',
+      });
+
+      expect(dialog()).not.toBeNull();
+      expect(
+        overlay().querySelector<HTMLInputElement>('#account-name')!.value
+      ).toBe('Brokerage');
+      expect(dialogText()).toContain(
+        'Something went wrong creating your account'
+      );
+    });
+
+    it('shows a server-rejected field its own message, in the still-open dialog', async () => {
+      const create = vi.fn(() =>
+        throwError(
+          () =>
+            new ApiError('An account with this name already exists.', 409, {
+              name: ['An account with this name already exists.'],
+            })
+        )
+      );
+      const { fixture, dialog, dialogText } = setup(() => of([CASH]), {
+        create: create as unknown as AccountsService['create'],
+      });
+
+      await openAddDialog(fixture);
+      await submitNewAccount(fixture, {
+        name: 'Cash on hand',
+        type: 'Cash',
+        balance: '0',
+      });
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain(
+        'An account with this name already exists.'
+      );
+    });
+
+    it('keeps the optimistic row when the re-read fails, rather than flipping to an error', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       let attempt = 0;
       const list = vi.fn(() => {
@@ -257,12 +491,18 @@ describe('AccountList', () => {
           ? of([CASH])
           : throwError(() => new ApiError('Internal Server Error', 500));
       });
+      const create = vi.fn(() => of(SERVER_SAVINGS));
       const { fixture, cmp, text } = setup(
-        list as unknown as AccountsService['list']
+        list as unknown as AccountsService['list'],
+        { create: create as unknown as AccountsService['create'] }
       );
 
-      cmp.onCreated(NEW_SAVINGS);
-      fixture.detectChanges();
+      await openAddDialog(fixture);
+      await submitNewAccount(fixture, {
+        name: 'New Savings',
+        type: 'Bank',
+        balance: '0',
+      });
 
       expect(text()).toContain('Cash on hand');
       expect(text()).toContain('New Savings');
@@ -270,21 +510,75 @@ describe('AccountList', () => {
     });
   });
 
-  describe('rename', () => {
-    it('opens an inline editor for the row and closes it on cancel', () => {
-      const { fixture, cmp, text } = setup(() => of([CASH, BANK]));
+  describe('rename, in a dialog', () => {
+    it('opens the rename form in a dialog seeded with the current name', async () => {
+      const { fixture, cmp, dialog, dialogText } = setup(() => of([CASH, BANK]));
 
-      cmp.startRename(CASH);
-      fixture.detectChanges();
+      cmp.openRenameDialog(CASH);
+      await settle(fixture);
 
-      expect(cmp.renamingId()).toBe(1);
-      expect(text()).toContain('Save');
-
-      clickButton(fixture, 'Cancel');
-      expect(cmp.renamingId()).toBeNull();
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Rename account');
+      expect(
+        overlay().querySelector<HTMLInputElement>('#rename-account-name')!.value
+      ).toBe('Cash on hand');
     });
 
-    it('re-reads the list once a rename saved, so the new name shows everywhere', () => {
+    it('leaves the row showing name, type, balance and retired badge while it is open', async () => {
+      const { fixture, cmp, text } = setup(() => of([OLD_WALLET]));
+
+      cmp.toggleRetired();
+      fixture.detectChanges();
+      cmp.openRenameDialog(OLD_WALLET);
+      await settle(fixture);
+
+      expect(text()).toContain('Old GCash');
+      expect(text()).toContain('Wallet');
+      expect(text()).toContain(formatPeso(300));
+      expect(text()).toContain('Retired');
+    });
+
+    it('offers nothing destructive inside the dialog', async () => {
+      const { fixture, cmp, dialogText } = setup(() => of([CASH]));
+
+      cmp.openRenameDialog(CASH);
+      await settle(fixture);
+
+      expect(dialogText()).not.toContain('Delete');
+      expect(dialogText()).not.toContain('Retire');
+      expect(dialogText()).not.toContain('Reactivate');
+    });
+
+    it('dismisses on Cancel, the close control, and Escape without calling the service', async () => {
+      const rename = vi.fn();
+      const { fixture, cmp, dialog } = setup(() => of([CASH]), {
+        rename: rename as unknown as AccountsService['rename'],
+      });
+
+      cmp.openRenameDialog(CASH);
+      await settle(fixture);
+      overlayButton('Cancel').click();
+      await settle(fixture);
+      expect(dialog()).toBeNull();
+
+      cmp.openRenameDialog(CASH);
+      await settle(fixture);
+      overlay()
+        .querySelector<HTMLButtonElement>('button[aria-label="Close"]')!
+        .click();
+      await settle(fixture);
+      expect(dialog()).toBeNull();
+
+      cmp.openRenameDialog(CASH);
+      await settle(fixture);
+      pressEscape();
+      await settle(fixture);
+      expect(dialog()).toBeNull();
+
+      expect(rename).not.toHaveBeenCalled();
+    });
+
+    it('on a successful rename, closes the dialog and the new name shows everywhere, after a re-read', async () => {
       let attempt = 0;
       const list = vi.fn(() => {
         attempt += 1;
@@ -292,18 +586,73 @@ describe('AccountList', () => {
           ? of([CASH, BANK])
           : of([{ ...CASH, name: 'Everyday cash' }, BANK]);
       });
-      const { fixture, cmp, text } = setup(
-        list as unknown as AccountsService['list']
+      const rename = vi.fn((_id: number, _name: string) =>
+        of({ ...CASH, name: 'Everyday cash' })
+      );
+      const { fixture, cmp, text, dialog } = setup(
+        list as unknown as AccountsService['list'],
+        { rename: rename as unknown as AccountsService['rename'] }
       );
 
-      cmp.startRename(CASH);
-      cmp.onRenamed();
-      fixture.detectChanges();
+      cmp.openRenameDialog(CASH);
+      await settle(fixture);
+      typeInto('#rename-account-name', 'Everyday cash');
+      overlayButton('Save').click();
+      await settle(fixture);
 
+      expect(rename).toHaveBeenCalledWith(1, 'Everyday cash');
+      expect(dialog()).toBeNull();
       expect(list).toHaveBeenCalledTimes(2);
-      expect(cmp.renamingId()).toBeNull();
       expect(text()).toContain('Everyday cash');
       expect(text()).not.toContain('Cash on hand');
+    });
+
+    it('on a failed rename, keeps the dialog open with the reason shown', async () => {
+      const rename = vi.fn(() =>
+        throwError(
+          () =>
+            new AccountModifiedError(
+              'This account was updated by another request. Please try again.'
+            )
+        )
+      );
+      const { fixture, cmp, dialog, dialogText } = setup(() => of([CASH]), {
+        rename: rename as unknown as AccountsService['rename'],
+      });
+
+      cmp.openRenameDialog(CASH);
+      await settle(fixture);
+      typeInto('#rename-account-name', 'Everyday cash');
+      overlayButton('Save').click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('updated by another request');
+    });
+
+    it('shows a server-rejected name its own message, in the still-open dialog', async () => {
+      const rename = vi.fn(() =>
+        throwError(
+          () =>
+            new ApiError('An account with this name already exists.', 409, {
+              name: ['An account with this name already exists.'],
+            })
+        )
+      );
+      const { fixture, cmp, dialog, dialogText } = setup(() => of([CASH, BANK]), {
+        rename: rename as unknown as AccountsService['rename'],
+      });
+
+      cmp.openRenameDialog(CASH);
+      await settle(fixture);
+      typeInto('#rename-account-name', 'BPI Savings');
+      overlayButton('Save').click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain(
+        'An account with this name already exists.'
+      );
     });
   });
 

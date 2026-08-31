@@ -9,7 +9,6 @@ import {
 } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
@@ -59,7 +58,6 @@ type NewAccountModel = {
     MatInputModule,
     MatSelectModule,
     MatButtonModule,
-    MatIconModule,
     FormField,
   ],
 })
