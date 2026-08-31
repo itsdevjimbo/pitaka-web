@@ -66,15 +66,14 @@ const RECORDED: Transaction = {
 };
 
 /**
- * The Account pool the screen hands the form. Id 3 is the one in view — it must
- * never be offered as a Transfer destination — id 5 is retired, and ids 4 and 6
- * are the two the destination picker should actually show.
+ * The Transfer destinations the screen hands the form — already narrowed to the
+ * valid ones (the Account in view and every retired one excluded upstream). The
+ * form shows exactly this list; the narrowing itself is the screen's job and is
+ * covered in `account-detail.spec.ts`.
  */
-const ACCOUNTS: TransferDestinationAccount[] = [
-  { id: 3, name: 'Everyday cash', isActive: true },
-  { id: 4, name: 'Savings', isActive: true },
-  { id: 5, name: 'Old wallet', isActive: false },
-  { id: 6, name: 'Joint account', isActive: true },
+const DESTINATIONS: TransferDestinationAccount[] = [
+  { id: 4, name: 'Savings' },
+  { id: 6, name: 'Joint account' },
 ];
 
 /** A day at midnight and a time-of-day, as the two pickers hand them over. */
@@ -87,7 +86,7 @@ describe('RecordTransactionForm', () => {
   function setup(
     record: TransactionsService['record'],
     list: CategoriesService['list'] = () => of(CATEGORIES),
-    accounts: TransferDestinationAccount[] = ACCOUNTS
+    destinations: TransferDestinationAccount[] = DESTINATIONS
   ) {
     TestBed.configureTestingModule({
       imports: [RecordTransactionForm],
@@ -100,8 +99,8 @@ describe('RecordTransactionForm', () => {
     });
 
     const fixture = TestBed.createComponent(RecordTransactionForm);
-    fixture.componentRef.setInput('accountId', 3);
-    fixture.componentRef.setInput('accounts', accounts);
+    fixture.componentRef.setInput('fromAccountId', 3);
+    fixture.componentRef.setInput('destinations', destinations);
     const cmp = fixture.componentInstance as unknown as RecordFormInternals;
     fixture.detectChanges();
     return { fixture, cmp };
@@ -340,7 +339,7 @@ describe('RecordTransactionForm', () => {
   });
 
   describe('transfer', () => {
-    it('offers every active Account except the one in view, and no retired one', () => {
+    it('offers exactly the destinations the screen handed it, and does no filtering of its own', () => {
       const { cmp } = setup(vi.fn());
 
       cmp.model.update((m) => ({ ...m, direction: 'transfer' }));
