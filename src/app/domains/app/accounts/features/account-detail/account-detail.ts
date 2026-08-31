@@ -99,7 +99,7 @@ export default class AccountDetail implements OnInit {
   protected readonly recording = signal(false);
 
   /**
-   * The id of the Transaction whose row is currently swapped for the re-file
+   * The id of the Transaction whose row is currently swapped for the refile
    * form, or `null` when none is. One at a time — the row itself only offers the
    * control where a Transaction can be corrected (its home, for a Transfer).
    */
@@ -147,10 +147,10 @@ export default class AccountDetail implements OnInit {
   }
 
   /**
-   * A Transaction was re-filed: close the form and refresh in place. A
+   * A Transaction was refiled: close the form and refresh in place. A
    * corrected date or Category can move where the row sits or change what it
    * says, and the balance shown afterwards is always the server's (ADR 0006) —
-   * even though re-filing never moves one.
+   * even though refiling never moves one.
    */
   protected onRefiled(): void {
     this.refilingId.set(null);

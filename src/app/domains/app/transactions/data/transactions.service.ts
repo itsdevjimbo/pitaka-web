@@ -35,7 +35,7 @@ type TransactionResource = {
 
 /**
  * The hand-written resource service over the API's Transactions endpoints (ADR
- * 0002). It reads one Account's list, records a new Transaction, re-files an
+ * 0002). It reads one Account's list, records a new Transaction, refiles an
  * existing one, and removes one. Failures arrive already normalised to
  * `ApiError` by the interceptor — a 404 on the list means the Account is not the
  * person's, or is gone.
@@ -92,7 +92,7 @@ export class TransactionsService {
   }
 
   /**
-   * Re-file an existing Transaction: `PUT /api/transactions/:id`, not
+   * Refile an existing Transaction: `PUT /api/transactions/:id`, not
    * Account-scoped (ADR 0009). Only how a Transaction is filed can be corrected
    * — its date, Category, note and Tags — never its amount or direction, which
    * were settled at recording (see `CONTEXT.md`).
@@ -134,7 +134,7 @@ export class TransactionsService {
   /**
    * Remove one Transaction: `DELETE /api/transactions/:id`, not Account-scoped
    * (ADR 0009). This is the one correction that legitimately moves a balance —
-   * re-filing never touches an amount, so a wrong amount is fixed by removing
+   * refiling never touches an amount, so a wrong amount is fixed by removing
    * and recording again (see `CONTEXT.md`). The API moves the balance back by
    * exactly what the Transaction moved; the caller re-reads that figure from the
    * server afterwards rather than doing the arithmetic (ADR 0006).

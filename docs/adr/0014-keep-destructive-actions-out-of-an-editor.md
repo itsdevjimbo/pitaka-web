@@ -4,16 +4,16 @@ status: accepted
 
 # Keep destructive actions out of an editor
 
-Removing a Transaction no longer starts by opening the re-file form. A
+Removing a Transaction no longer starts by opening the refile form. A
 Transaction row's actions sit behind an ellipsis menu — the same affordance an
-Account row uses — holding *Re-file* and *Remove*. Choosing *Remove* asks for
+Account row uses — holding *Refile* and *Remove*. Choosing *Remove* asks for
 confirmation on the row itself, with the amount and date about to be erased
 still on screen, and a removal the server rejects pins a notice to that row with
 a *Try again*.
 
 ## What this replaces
 
-Story 32 shipped removal **inside** the re-file form: a red *Remove* button in
+Story 32 shipped removal **inside** the refile form: a red *Remove* button in
 the form's footer, an inline confirmation, and a `removed` output. The rationale
 was recorded in `refile-transaction-form.ts`'s class comment — removal would
 inherit the form's "recorded against" placement for free, since the form only
@@ -29,7 +29,7 @@ that one condition.
 
 ## Why
 
-Erasing is not editing. Opening the re-file form to remove a Transaction means
+Erasing is not editing. Opening the refile form to remove a Transaction means
 opening an editor for a record you did not want to edit, scrolling past every
 field, and pressing a destructive control that sits directly beneath the inputs
 someone was just typing into — one stray click from the *Save* they meant to
@@ -42,7 +42,7 @@ way.
 
 ## Consequences
 
-- The re-file form has no *Remove* button, no removal confirmation, no removal
+- The refile form has no *Remove* button, no removal confirmation, no removal
   error message, and no `removed` output. Its class comment no longer argues for
   removal living inside it.
 - `TransactionRow` owns the removal: the ellipsis menu, the on-row confirmation

@@ -284,11 +284,11 @@ describe('TransactionRow', () => {
   });
 
   describe('the actions menu', () => {
-    it('offers Re-file and Remove behind an ellipsis on an expense', () => {
+    it('offers Refile and Remove behind an ellipsis on an expense', () => {
       const fixture = renderFixture(toTransactionRow(tx(), NAMES, 3));
 
       const items = openMenu(fixture);
-      expect(menuItem(items, 'Re-file')).toBeDefined();
+      expect(menuItem(items, 'Refile')).toBeDefined();
       expect(menuItem(items, 'Remove')).toBeDefined();
     });
 
@@ -301,7 +301,7 @@ describe('TransactionRow', () => {
         actionsTrigger(fixture.nativeElement as HTMLElement)
       ).toBeDefined();
       const items = openMenu(fixture);
-      expect(menuItem(items, 'Re-file')).toBeDefined();
+      expect(menuItem(items, 'Refile')).toBeDefined();
       expect(menuItem(items, 'Remove')).toBeDefined();
     });
 
@@ -335,7 +335,7 @@ describe('TransactionRow', () => {
       );
 
       const items = openMenu(fixture);
-      expect(menuItem(items, 'Re-file')).toBeDefined();
+      expect(menuItem(items, 'Refile')).toBeDefined();
       expect(menuItem(items, 'Remove')).toBeDefined();
     });
 
@@ -359,12 +359,12 @@ describe('TransactionRow', () => {
       expect(host.textContent).toContain('Recorded against');
     });
 
-    it('emits refile when the Re-file entry is chosen', () => {
+    it('emits refile when the Refile entry is chosen', () => {
       const fixture = renderFixture(toTransactionRow(tx(), NAMES, 3));
       const emitted: unknown[] = [];
       fixture.componentInstance.refile.subscribe(() => emitted.push('refile'));
 
-      menuItem(openMenu(fixture), 'Re-file')?.click();
+      menuItem(openMenu(fixture), 'Refile')?.click();
 
       expect(emitted).toEqual(['refile']);
     });

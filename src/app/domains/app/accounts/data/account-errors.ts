@@ -6,7 +6,7 @@
  * and nothing machine-readable to tell them apart. Which meaning a 409 on these
  * endpoints carries is a fact about the resource, so `AccountsService` reads the
  * `detail` once, at the seam, and re-throws one of these — the same move
- * `asNameConflict` makes when it re-files a duplicate-name 409 as a field error.
+ * `asNameConflict` makes when it refiles a duplicate-name 409 as a field error.
  */
 
 /** Why a delete was refused: the person is pointed somewhere different for each. */

@@ -467,12 +467,12 @@ describe('AccountDetail', () => {
     consoleError.mockRestore();
   });
 
-  it('swaps a row for the re-file form from the Re-file entry in the row menu', () => {
+  it('swaps a row for the refile form from the Refile entry in the row menu', () => {
     const { fixture, text } = setup({
       list: () => of([tx({ id: 7, description: 'Coffee' })]),
     });
 
-    expect(text()).not.toContain('Re-file transaction');
+    expect(text()).not.toContain('Refile transaction');
 
     const menuTrigger = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button')
@@ -482,21 +482,21 @@ describe('AccountDetail', () => {
 
     const refile = Array.from(
       overlay().querySelectorAll<HTMLButtonElement>('button')
-    ).find((b) => (b.textContent ?? '').trim() === 'Re-file');
+    ).find((b) => (b.textContent ?? '').trim() === 'Refile');
     refile?.click();
     fixture.detectChanges();
 
-    expect(text()).toContain('Re-file transaction');
+    expect(text()).toContain('Refile transaction');
   });
 
-  it('restores the row when the re-file form is abandoned', () => {
+  it('restores the row when the refile form is abandoned', () => {
     const { fixture, cmp, text } = setup({
       list: () => of([tx({ id: 7, description: 'Coffee' })]),
     });
 
     cmp.refilingId.set(7);
     fixture.detectChanges();
-    expect(text()).toContain('Re-file transaction');
+    expect(text()).toContain('Refile transaction');
 
     const cancel = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button')
@@ -504,11 +504,11 @@ describe('AccountDetail', () => {
     cancel?.click();
     fixture.detectChanges();
 
-    expect(text()).not.toContain('Re-file transaction');
+    expect(text()).not.toContain('Refile transaction');
     expect(text()).toContain('Coffee');
   });
 
-  it('re-reads the balance and list in place after a re-file — no full-page spinner', () => {
+  it('re-reads the balance and list in place after a refile — no full-page spinner', () => {
     const get = vi
       .fn()
       .mockReturnValueOnce(of(ACCOUNT))

@@ -442,7 +442,7 @@ describe('TransactionsService', () => {
       await result;
     });
 
-    it('maps the re-filed row back to the domain shape', async () => {
+    it('maps the refiled row back to the domain shape', async () => {
       const result = firstValueFrom(
         service.refile(existing(), correction({ categoryId: 7 }))
       );
@@ -458,7 +458,7 @@ describe('TransactionsService', () => {
       });
     });
 
-    it('keeps a generated transaction generated after a re-file', async () => {
+    it('keeps a generated transaction generated after a refile', async () => {
       const result = firstValueFrom(
         service.refile(
           existing({ generated: true }),

@@ -64,7 +64,7 @@
     }
   </span>
 
-  <!-- Actions: an ellipsis menu holding Re-file and Remove, matching an Account
+  <!-- Actions: an ellipsis menu holding Refile and Remove, matching an Account
        row. The whole menu is absent on a Transfer seen from where it landed —
        that side is read-only and links back to its home instead (ADR 0010). -->
   @if (canActOnHere()) {
@@ -83,7 +83,7 @@
         (click)="refile.emit()"
       >
         <mat-icon svgIcon="pencil" />
-        <span>Re-file</span>
+        <span>Refile</span>
       </button>
       <button
         mat-menu-item
