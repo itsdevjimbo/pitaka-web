@@ -11,6 +11,7 @@ import {
   withInMemoryScrolling,
 } from '@angular/router';
 import { errorInterceptor, provideApiBaseUrl } from '@/app/core/api';
+import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons/provider';
 import { authInterceptor, provideSession } from '@/app/core/session';
 import { BRAND_ACCENT, provideTheming } from '@/app/core/theming';
@@ -40,6 +41,7 @@ export const appConfig: ApplicationConfig = {
       },
     },
     provideNativeDateAdapter(),
+    provideDialogDefaults(),
 
     // Core
     provideIcons(),
