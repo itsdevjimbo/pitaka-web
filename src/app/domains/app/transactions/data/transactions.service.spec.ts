@@ -18,6 +18,8 @@ function resource(over: Partial<Record<string, unknown>> = {}) {
     accountId: 3,
     type: 'Expense',
     amount: 120.5,
+    // The API stores a person-recorded instant UTC, and its MySQL round-trip
+    // drops the `Z` — so the wire value is naive but names a UTC time.
     transactionDate: '2026-08-29T07:00:00',
     isRecurring: false,
     categoryId: 4,
@@ -73,7 +75,7 @@ describe('TransactionsService', () => {
         id: 10,
         amount: 120.5,
         direction: 'expense',
-        date: new Date('2026-08-29T07:00:00'),
+        date: new Date('2026-08-29T07:00:00Z'),
         accountId: 3,
         transferToAccountId: null,
         categoryId: 4,
@@ -129,17 +131,37 @@ describe('TransactionsService', () => {
     expect((await result).map((t) => t.generated)).toEqual([true, false]);
   });
 
-  it('parses a wall-clock timestamp (no zone) as local, keeping the calendar day', async () => {
-    const result = firstValueFrom(service.list(3));
+  describe('reading transactionDate off the wire', () => {
+    const pinTimezone = withPinnedTimezone();
+    beforeEach(() => pinTimezone('Asia/Manila')); // fixed, DST-free +08:00
 
-    http
-      .expectOne(`${BASE_URL}/api/accounts/3/transactions`)
-      .flush([resource({ transactionDate: '2026-08-29T00:00:00' })]);
+    it('reads a person-recorded naive timestamp as UTC, converting to local time', async () => {
+      const result = firstValueFrom(service.list(3));
 
-    const [tx] = await result;
-    expect(tx.date.getFullYear()).toBe(2026);
-    expect(tx.date.getMonth()).toBe(7); // August
-    expect(tx.date.getDate()).toBe(29);
+      http.expectOne(`${BASE_URL}/api/accounts/3/transactions`).flush([
+        resource({ recurringTransactionId: null, transactionDate: '2026-08-29T05:00:00' }),
+      ]);
+
+      // 05:00 UTC is 13:00 in Manila — the 1 PM the person entered, not 5 AM.
+      const [tx] = await result;
+      expect(tx.date.getHours()).toBe(13);
+      expect(tx.date.getDate()).toBe(29);
+    });
+
+    it('reads a generated naive timestamp as a local wall-clock day', async () => {
+      const result = firstValueFrom(service.list(3));
+
+      http.expectOne(`${BASE_URL}/api/accounts/3/transactions`).flush([
+        resource({ recurringTransactionId: 88, transactionDate: '2026-08-29T00:00:00' }),
+      ]);
+
+      // The bare midnight day is kept as written, never pulled UTC-wards.
+      const [tx] = await result;
+      expect(tx.date.getFullYear()).toBe(2026);
+      expect(tx.date.getMonth()).toBe(7); // August
+      expect(tx.date.getDate()).toBe(29);
+      expect(tx.date.getHours()).toBe(0);
+    });
   });
 
   it('yields an empty list, not an error, for an Account with no Transactions', async () => {
