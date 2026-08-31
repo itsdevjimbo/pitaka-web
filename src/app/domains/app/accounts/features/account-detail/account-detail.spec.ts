@@ -20,6 +20,7 @@ type AccountDetailInternals = {
   refilingId: { set(value: number | null): void };
   onRecorded(): void;
   onRefiled(): void;
+  onRemoved(): void;
 };
 
 const ACCOUNT: Account = {
@@ -59,6 +60,7 @@ describe('AccountDetail', () => {
     names?: CategoriesService['names'];
     record?: TransactionsService['record'];
     refile?: TransactionsService['refile'];
+    remove?: TransactionsService['remove'];
     categoryList?: CategoriesService['list'];
   }) {
     const get = over.get ?? (() => of(ACCOUNT));
@@ -67,6 +69,7 @@ describe('AccountDetail', () => {
     const names = over.names ?? (() => of(NAMES));
     const record = over.record ?? (() => of({} as Transaction));
     const refile = over.refile ?? (() => of({} as Transaction));
+    const remove = over.remove ?? (() => of(undefined));
     const categoryList = over.categoryList ?? (() => of([]));
 
     TestBed.configureTestingModule({
@@ -76,7 +79,10 @@ describe('AccountDetail', () => {
         provideNativeDateAdapter(),
         provideRouter([]),
         { provide: AccountsService, useValue: { get, list: accountsList } },
-        { provide: TransactionsService, useValue: { list, record, refile } },
+        {
+          provide: TransactionsService,
+          useValue: { list, record, refile, remove },
+        },
         { provide: CategoriesService, useValue: { names, list: categoryList } },
       ],
     });
@@ -513,6 +519,69 @@ describe('AccountDetail', () => {
     expect(list).toHaveBeenCalledTimes(2);
     expect(text()).not.toContain('Loading transactions…');
     expect(text()).toContain('Salary');
+  });
+
+  it('re-reads the balance and list in place after a removal — the row is gone, no spinner', () => {
+    const get = vi
+      .fn()
+      .mockReturnValueOnce(of(ACCOUNT))
+      .mockReturnValueOnce(of({ ...ACCOUNT, currentBalance: 4320.5 }));
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(
+        of([
+          tx({ id: 7, description: 'Coffee' }),
+          tx({ id: 8, description: 'Lunch' }),
+        ])
+      )
+      .mockReturnValueOnce(of([tx({ id: 8, description: 'Lunch' })]));
+
+    const { fixture, cmp, text } = setup({
+      get: get as unknown as AccountsService['get'],
+      list: list as unknown as TransactionsService['list'],
+    });
+
+    cmp.onRemoved();
+    fixture.detectChanges();
+
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(text()).not.toContain('Loading transactions…');
+    expect(text()).toContain(formatPeso(4320.5));
+    expect(text()).toContain('Lunch');
+    expect(text()).not.toContain('Coffee');
+  });
+
+  it('drives a removal end to end from the re-file form and closes it', async () => {
+    const remove = vi.fn(() => of(undefined));
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee' })]))
+      .mockReturnValueOnce(of<Transaction[]>([]));
+
+    const { fixture, cmp, text } = setup({
+      list: list as unknown as TransactionsService['list'],
+      remove: remove as unknown as TransactionsService['remove'],
+    });
+
+    cmp.refilingId.set(7);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const clickButton = (match: (label: string) => boolean) =>
+      Array.from(host.querySelectorAll('button'))
+        .find((b) => match((b.textContent ?? '').trim()))
+        ?.click();
+
+    clickButton((label) => label === 'Remove');
+    fixture.detectChanges();
+    clickButton((label) => label === 'Remove');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(remove).toHaveBeenCalledWith(7);
+    expect(text()).not.toContain('Re-file transaction');
+    expect(text()).toContain('No transactions yet');
   });
 
   it('offers no re-file control on a Transfer seen from where it landed', () => {

@@ -158,12 +158,23 @@ export default class AccountDetail implements OnInit {
   }
 
   /**
+   * A Transaction was removed: close the form and refresh in place. The row is
+   * gone and the balance has moved back by exactly what moved — the figure shown
+   * is the server's re-read, not local arithmetic (ADR 0006), and the rows stay
+   * visible rather than blanking to the spinner.
+   */
+  protected onRemoved(): void {
+    this.refilingId.set(null);
+    this.refreshInPlace('remove');
+  }
+
+  /**
    * Re-read the balance and list from the server (ADR 0006 — never patch a
    * balance locally) *without* tearing the screen down to the spinner: the rows
    * stay put and refresh in place. A failed re-read is logged and the screen
    * keeps what it had.
    */
-  private refreshInPlace(after: 'record' | 'refile'): void {
+  private refreshInPlace(after: 'record' | 'refile' | 'remove'): void {
     this.read()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
