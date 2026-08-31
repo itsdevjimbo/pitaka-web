@@ -18,6 +18,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTimepickerModule } from '@angular/material/timepicker';
 import { firstValueFrom } from 'rxjs';
+import { ApiError } from '@/app/core/api';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { PesoPipe } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
@@ -33,6 +34,10 @@ import { TransactionsService } from '../data/transactions.service';
 /** The banner line for a re-file that failed before it could be attributed. */
 const COULD_NOT_REFILE =
   'Something went wrong re-filing this transaction. Please try again.';
+
+/** The banner line for a removal that failed with nothing more specific to say. */
+const COULD_NOT_REMOVE =
+  'Something went wrong removing this transaction. Please try again.';
 
 /**
  * What the re-file form edits. The amount and the direction are not here — they
@@ -67,8 +72,16 @@ type RefileTransactionModel = {
  * entry surface in this slice, so the Transaction's current Tag ids ride along
  * unchanged.
  *
- * On success the parent re-reads the balance and list in place (ADR 0006); the
- * form itself never touches a balance.
+ * This is also where a Transaction is **removed** — the correction re-filing
+ * cannot make. A Transaction's amount is settled at recording (`CONTEXT.md`), so
+ * a wrong one is fixed by removing and recording again, the only correction that
+ * legitimately moves a balance. Removal is gated behind an inline confirmation
+ * so a mis-click cannot move a balance, and it inherits this form's "recorded
+ * against" placement for free: a Transfer can only be removed from its home
+ * Account because that is the only place this form opens (ADR 0010).
+ *
+ * On success — of either a re-file or a removal — the parent re-reads the
+ * balance and list in place (ADR 0006); the form itself never touches a balance.
  */
 @Component({
   selector: 'transactions-refile-transaction-form',
@@ -97,6 +110,8 @@ export class RefileTransactionForm {
 
   // Outputs
   readonly refiled = output<Transaction>();
+  /** The Transaction was removed — the row is gone; the parent refreshes in place. */
+  readonly removed = output<void>();
   readonly cancelled = output<void>();
 
   // State
@@ -142,6 +157,16 @@ export class RefileTransactionForm {
   });
 
   protected readonly submitting = signal(false);
+
+  /**
+   * True once "Remove" has been pressed and the inline confirmation is showing.
+   * Nothing has been sent yet — a mis-click is undone by dismissing it, and the
+   * balance has not moved (story 30).
+   */
+  protected readonly confirmingRemove = signal(false);
+
+  /** True while the removal request is in flight — guards a double confirm. */
+  protected readonly removing = signal(false);
 
   /** The form-level banner. Linked to the model so any edit clears a stale message. */
   protected readonly errorMessage = linkedSignal<
@@ -205,6 +230,43 @@ export class RefileTransactionForm {
 
   protected cancel(): void {
     this.cancelled.emit();
+  }
+
+  /** Reveal the inline confirmation. Sends nothing — the balance stays put. */
+  protected askRemove(): void {
+    this.errorMessage.set(null);
+    this.confirmingRemove.set(true);
+  }
+
+  /** Dismiss the confirmation with nothing removed (story 30). */
+  protected cancelRemove(): void {
+    this.confirmingRemove.set(false);
+  }
+
+  /**
+   * The confirmation was confirmed: remove the Transaction. On success the
+   * parent re-reads the balance from the server (ADR 0006) — the API has moved
+   * it back by exactly what moved. On failure a banner explains and the row is
+   * left in place; the confirmation stays open so a retry is one press, matching
+   * how a failed re-file keeps its form.
+   */
+  protected async confirmRemove(): Promise<void> {
+    if (this.removing()) {
+      return;
+    }
+    this.removing.set(true);
+    this.errorMessage.set(null);
+
+    try {
+      await firstValueFrom(this.service.remove(this.transaction().id));
+      this.removed.emit();
+    } catch (error) {
+      this.errorMessage.set(
+        error instanceof ApiError ? error.message : COULD_NOT_REMOVE
+      );
+    } finally {
+      this.removing.set(false);
+    }
   }
 
   /**

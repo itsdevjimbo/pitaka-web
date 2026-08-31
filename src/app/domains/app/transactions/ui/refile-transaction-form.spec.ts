@@ -30,14 +30,23 @@ type RefileFormInternals = {
   categoryOptions: () => Category[];
   isTransfer: () => boolean;
   errorMessage: () => string | null;
+  confirmingRemove: () => boolean;
+  removing: () => boolean;
   refiled: OutputEmitterRef<Transaction>;
+  removed: OutputEmitterRef<void>;
   cancelled: OutputEmitterRef<void>;
   save(event: Event): void;
   cancel(): void;
+  askRemove(): void;
+  cancelRemove(): void;
+  confirmRemove(): Promise<void>;
 };
 
 const COULD_NOT_REFILE =
   'Something went wrong re-filing this transaction. Please try again.';
+
+const COULD_NOT_REMOVE =
+  'Something went wrong removing this transaction. Please try again.';
 
 const CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense' },
@@ -83,14 +92,15 @@ describe('RefileTransactionForm', () => {
   function setup(
     refile: TransactionsService['refile'],
     transaction: Transaction = existing(),
-    list: CategoriesService['list'] = () => of(CATEGORIES)
+    list: CategoriesService['list'] = () => of(CATEGORIES),
+    remove: TransactionsService['remove'] = () => of(undefined)
   ) {
     TestBed.configureTestingModule({
       imports: [RefileTransactionForm],
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
-        { provide: TransactionsService, useValue: { refile } },
+        { provide: TransactionsService, useValue: { refile, remove } },
         { provide: CategoriesService, useValue: { list } },
       ],
     });
@@ -382,6 +392,198 @@ describe('RefileTransactionForm', () => {
       generated,
       expect.objectContaining({ categoryId: 3, description: 'Rent' })
     );
+  });
+
+  describe('removing', () => {
+    it('sends nothing until the confirmation is confirmed', () => {
+      const remove = vi.fn(() => of(undefined));
+      const { cmp } = setup(
+        vi.fn(),
+        existing(),
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+
+      cmp.askRemove();
+
+      expect(cmp.confirmingRemove()).toBe(true);
+      expect(remove).not.toHaveBeenCalled();
+    });
+
+    it('shows the inline confirmation, warning the balance moves and it cannot be undone', () => {
+      const { fixture, cmp, text } = setup(vi.fn());
+
+      cmp.askRemove();
+      fixture.detectChanges();
+
+      const confirm = (fixture.nativeElement as HTMLElement).querySelector(
+        '[role="alertdialog"]'
+      );
+      expect(confirm?.getAttribute('aria-label')).toBe('Confirm remove');
+      expect(text().toLowerCase()).toContain('balance moves back');
+      expect(text().toLowerCase()).toContain('can’t be undone');
+    });
+
+    it('removes by id and emits removed once confirmed', async () => {
+      const tx = existing();
+      const remove = vi.fn(() => of(undefined));
+      const { fixture, cmp } = setup(
+        vi.fn(),
+        tx,
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+      const emitted: string[] = [];
+      cmp.removed.subscribe(() => emitted.push('removed'));
+
+      cmp.askRemove();
+      await cmp.confirmRemove();
+      await fixture.whenStable();
+
+      expect(remove).toHaveBeenCalledWith(42);
+      expect(emitted).toEqual(['removed']);
+      expect(cmp.errorMessage()).toBeNull();
+    });
+
+    it('dismisses the confirmation from the Keep button in the DOM, removing nothing', () => {
+      const remove = vi.fn(() => of(undefined));
+      const { fixture, cmp } = setup(
+        vi.fn(),
+        existing(),
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+
+      cmp.askRemove();
+      fixture.detectChanges();
+
+      const keep = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('button')
+      ).find((b) => (b.textContent ?? '').trim() === 'Keep');
+      keep?.click();
+      fixture.detectChanges();
+
+      expect(cmp.confirmingRemove()).toBe(false);
+      expect(remove).not.toHaveBeenCalled();
+    });
+
+    it('dismissing the confirmation removes nothing and emits nothing', () => {
+      const remove = vi.fn(() => of(undefined));
+      const { cmp } = setup(
+        vi.fn(),
+        existing(),
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+      const emitted: string[] = [];
+      cmp.removed.subscribe(() => emitted.push('removed'));
+
+      cmp.askRemove();
+      cmp.cancelRemove();
+
+      expect(cmp.confirmingRemove()).toBe(false);
+      expect(remove).not.toHaveBeenCalled();
+      expect(emitted).toEqual([]);
+    });
+
+    it('sends exactly one request when the confirm is pressed twice', async () => {
+      const inFlight = new Subject<void>();
+      const remove = vi.fn(() => inFlight.asObservable());
+      const { fixture, cmp } = setup(
+        vi.fn(),
+        existing(),
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+
+      cmp.askRemove();
+      void cmp.confirmRemove();
+      void cmp.confirmRemove();
+      await fixture.whenStable();
+
+      expect(remove).toHaveBeenCalledTimes(1);
+      inFlight.next();
+      inFlight.complete();
+    });
+
+    it('explains a failed removal, keeps the confirmation open for a retry, and emits nothing', async () => {
+      const remove = vi.fn(() =>
+        throwError(() => new ApiError('That could not be removed just now.', 500))
+      );
+      const { fixture, cmp } = setup(
+        vi.fn(),
+        existing(),
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+      const emitted: string[] = [];
+      cmp.removed.subscribe(() => emitted.push('removed'));
+
+      cmp.askRemove();
+      await cmp.confirmRemove();
+      await fixture.whenStable();
+
+      expect(cmp.errorMessage()).toBe('That could not be removed just now.');
+      // The row is left in place and a retry is one press — the confirm stays up.
+      expect(cmp.confirmingRemove()).toBe(true);
+      expect(cmp.removing()).toBe(false);
+      expect(emitted).toEqual([]);
+    });
+
+    it('falls back to the generic banner when a failed removal is not an ApiError', async () => {
+      const remove = vi.fn(() => throwError(() => new Error('offline')));
+      const { fixture, cmp } = setup(
+        vi.fn(),
+        existing(),
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+
+      cmp.askRemove();
+      await cmp.confirmRemove();
+      await fixture.whenStable();
+
+      expect(cmp.errorMessage()).toBe(COULD_NOT_REMOVE);
+    });
+
+    it('removes a Transfer from the Account it was recorded against', async () => {
+      const transfer = existing({
+        direction: 'transfer',
+        categoryId: null,
+        transferToAccountId: 9,
+        description: 'Move to savings',
+      });
+      const remove = vi.fn(() => of(undefined));
+      const { fixture, cmp } = setup(
+        vi.fn(),
+        transfer,
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+
+      cmp.askRemove();
+      await cmp.confirmRemove();
+      await fixture.whenStable();
+
+      expect(remove).toHaveBeenCalledWith(42);
+    });
+
+    it('removes a generated transaction like any other', async () => {
+      const generated = existing({ generated: true, description: 'Rent' });
+      const remove = vi.fn(() => of(undefined));
+      const { fixture, cmp } = setup(
+        vi.fn(),
+        generated,
+        () => of(CATEGORIES),
+        remove as unknown as TransactionsService['remove']
+      );
+
+      cmp.askRemove();
+      await cmp.confirmRemove();
+      await fixture.whenStable();
+
+      expect(remove).toHaveBeenCalledWith(42);
+    });
   });
 
   it('emits cancelled without touching the service', () => {

@@ -127,20 +127,66 @@
     />
   </mat-form-field>
 
-  <div class="mt-2 flex items-center justify-end gap-x-3">
-    <button
-      matButton
-      type="button"
-      (click)="cancel()"
+  @if (confirmingRemove()) {
+    <!-- Inline confirm: a mis-click must not move a balance (story 30). Nothing
+         has been sent until "Remove" here is pressed. -->
+    <div
+      class="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
+      role="alertdialog"
+      aria-label="Confirm remove"
     >
-      Cancel
-    </button>
-    <button
-      matButton="filled"
-      type="submit"
-      [disabled]="refileForm().invalid() || submitting()"
-    >
-      {{ submitting() ? 'Saving…' : 'Save' }}
-    </button>
-  </div>
+      <p class="text-sm text-neutral-700 dark:text-neutral-200">
+        Remove this transaction? The balance moves back by this amount. This
+        can’t be undone.
+      </p>
+      <div class="flex gap-x-2">
+        <button
+          matButton
+          type="button"
+          [disabled]="removing()"
+          (click)="cancelRemove()"
+        >
+          Keep
+        </button>
+        <button
+          matButton="filled"
+          type="button"
+          [disabled]="removing()"
+          (click)="confirmRemove()"
+        >
+          {{ removing() ? 'Removing…' : 'Remove' }}
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+      <!-- The correction re-filing cannot make: a wrong amount is fixed by
+           removing and recording again (story 27). -->
+      <button
+        matButton
+        type="button"
+        class="text-expense"
+        (click)="askRemove()"
+      >
+        <mat-icon svgIcon="trash-2" />
+        Remove
+      </button>
+      <div class="flex items-center gap-x-3">
+        <button
+          matButton
+          type="button"
+          (click)="cancel()"
+        >
+          Cancel
+        </button>
+        <button
+          matButton="filled"
+          type="submit"
+          [disabled]="refileForm().invalid() || submitting()"
+        >
+          {{ submitting() ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
+    </div>
+  }
 </form>
