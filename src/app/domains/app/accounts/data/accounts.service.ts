@@ -110,7 +110,7 @@ export class AccountsService {
    * server's own recomputed figure (ADR 0006).
    *
    * A 409 on this endpoint means one of two things and the person is pointed
-   * differently for each: the new name is already taken — re-filed as a `name`
+   * differently for each: the new name is already taken — refiled as a `name`
    * field error so it surfaces under the control, as {@link create} does — or
    * the Account moved underneath the write, which becomes an
    * {@link AccountModifiedError} the caller offers a retry for.
@@ -170,7 +170,7 @@ function isConflict(error: unknown, pattern: RegExp): error is ApiError {
   );
 }
 
-/** Re-file a duplicate-name 409 as a `name` field error; pass anything else on. */
+/** Refile a duplicate-name 409 as a `name` field error; pass anything else on. */
 function asNameConflict(error: unknown): unknown {
   if (error instanceof ApiError && error.status === 409) {
     return new ApiError(error.message, error.status, {

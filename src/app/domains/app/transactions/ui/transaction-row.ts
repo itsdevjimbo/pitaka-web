@@ -65,7 +65,7 @@ export type TransactionRowModel = Transaction & {
  * The dependency runs one way: nothing here reaches back into Accounts.
  *
  * The row's actions sit behind an ellipsis menu — the same affordance an
- * Account row uses — holding *Re-file* and *Remove*. Re-file asks the screen to
+ * Account row uses — holding *Refile* and *Remove*. Refile asks the screen to
  * swap the row for the inline form. Remove is destructive, so it never sits
  * inside that editor (ADR 0014): it is confirmed on the row itself, with the
  * amount and date still visible behind the prompt, and only then does the row
@@ -96,7 +96,7 @@ export class TransactionRow {
   /** The finished row: domain fields plus resolved Category, headline, and sign. */
   readonly row = input.required<TransactionRowModel>();
 
-  /** Asks the screen to swap this row for the re-file form. */
+  /** Asks the screen to swap this row for the refile form. */
   readonly refile = output<void>();
 
   /**

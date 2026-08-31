@@ -188,7 +188,7 @@ describe('AccountsService', () => {
       });
     });
 
-    it('re-files a duplicate-name 409 as a name field error against the conflict reason', async () => {
+    it('refiles a duplicate-name 409 as a name field error against the conflict reason', async () => {
       const result = firstValueFrom(
         service.create({
           name: 'Savings',
@@ -266,7 +266,7 @@ describe('AccountsService', () => {
       });
     });
 
-    it('re-files a duplicate-name 409 as a name field error against the conflict reason', async () => {
+    it('refiles a duplicate-name 409 as a name field error against the conflict reason', async () => {
       const result = firstValueFrom(service.rename(9, 'Savings'));
 
       http

@@ -30,12 +30,12 @@ import {
 } from '../data/transaction';
 import { TransactionsService } from '../data/transactions.service';
 
-/** The banner line for a re-file that failed before it could be attributed. */
+/** The banner line for a refile that failed before it could be attributed. */
 const COULD_NOT_REFILE =
-  'Something went wrong re-filing this transaction. Please try again.';
+  'Something went wrong refiling this transaction. Please try again.';
 
 /**
- * What the re-file form edits. The amount and the direction are not here — they
+ * What the refile form edits. The amount and the direction are not here — they
  * were settled at recording and the form shows them as the row's own text, not
  * as fields (see `CONTEXT.md`). `date` and `time` are held apart, each its own
  * required control — an omitted time is not allowed to mean midnight (ADR 0007)
@@ -51,7 +51,7 @@ type RefileTransactionModel = {
 };
 
 /**
- * The inline "re-file this Transaction" editor: the row swaps into this the way
+ * The inline "refile this Transaction" editor: the row swaps into this the way
  * an Account row swaps into a rename. It corrects *how* a Transaction is filed —
  * when it is dated, its Category, its note — never what moved. The amount and the
  * direction are shown as plain text, deliberately not as disabled inputs that
@@ -61,7 +61,7 @@ type RefileTransactionModel = {
  *
  * Every submit sends the whole mutable set — a full replacement, never a patch —
  * so correcting one field cannot null another (the adapter and its spec carry
- * that contract). A Transfer is re-filed only from the Account it was recorded
+ * that contract). A Transfer is refiled only from the Account it was recorded
  * against; the screen offers this form nowhere else, and the adapter still
  * forces a Transfer's Category to null on the wire (ADR 0010). Tags have no
  * entry surface in this slice, so the Transaction's current Tag ids ride along
@@ -75,7 +75,7 @@ type RefileTransactionModel = {
  * on the row's own menu, confirmed on the row. This form has no removal button,
  * no removal confirmation, and no `removed` output.
  *
- * On a successful re-file the parent re-reads the balance and list in place
+ * On a successful refile the parent re-reads the balance and list in place
  * (ADR 0006); the form itself never touches a balance.
  */
 @Component({

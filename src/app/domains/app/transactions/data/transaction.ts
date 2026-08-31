@@ -120,7 +120,7 @@ export type NewTransaction = {
  * What a person may correct about a Transaction that is already recorded: when
  * it is dated, the Category it is filed under, its note, and its Tags. The
  * amount and the direction are settled at recording and are not here — this is
- * re-filing, not editing (see `CONTEXT.md`, ADR 0009).
+ * refiling, not editing (see `CONTEXT.md`, ADR 0009).
  *
  * Every field is a full replacement, never a patch. The API's update endpoint
  * writes the Category and the note unconditionally from what it receives, so an

@@ -37,7 +37,7 @@ type RefileFormInternals = {
 };
 
 const COULD_NOT_REFILE =
-  'Something went wrong re-filing this transaction. Please try again.';
+  'Something went wrong refiling this transaction. Please try again.';
 
 const CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense' },
@@ -307,12 +307,12 @@ describe('RefileTransactionForm', () => {
 
   it('shows a bodyless rejection as one form-level line that blames no field', async () => {
     const { fixture, cmp } = setup(() =>
-      throwError(() => new ApiError('We could not re-file that just now.', 400, {}))
+      throwError(() => new ApiError('We could not refile that just now.', 400, {}))
     );
 
     await submitAndSettle(fixture, cmp);
 
-    expect(cmp.errorMessage()).toBe('We could not re-file that just now.');
+    expect(cmp.errorMessage()).toBe('We could not refile that just now.');
     expect(cmp.refileForm.date().errors()).toEqual([]);
     expect(cmp.refileForm.categoryId().errors()).toEqual([]);
   });
@@ -361,7 +361,7 @@ describe('RefileTransactionForm', () => {
       ).toBeNull();
     });
 
-    it('re-files with a null Category and the untouched destination-side fields', async () => {
+    it('refiles with a null Category and the untouched destination-side fields', async () => {
       const refile = vi.fn(() => of(transfer));
       const { fixture, cmp } = setup(
         refile as unknown as TransactionsService['refile'],
@@ -380,7 +380,7 @@ describe('RefileTransactionForm', () => {
     });
   });
 
-  it('re-files a generated transaction like any other', async () => {
+  it('refiles a generated transaction like any other', async () => {
     const generated = existing({ generated: true, description: 'Rent' });
     const refile = vi.fn(() => of(generated));
     const { fixture, cmp } = setup(

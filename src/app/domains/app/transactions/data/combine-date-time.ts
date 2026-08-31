@@ -4,7 +4,7 @@
  * — the person set minutes, and a list of `…:00` rows is false precision (ADR
  * 0007).
  *
- * Both the record form and the re-file form hold the day and the time apart as
+ * Both the record form and the refile form hold the day and the time apart as
  * their own required controls — an omitted time is not allowed to mean midnight
  * — and recombine here on submit. The result is naive; the adapter stamps it
  * with its UTC offset on the way out (`toOffsetTimestamp`).
