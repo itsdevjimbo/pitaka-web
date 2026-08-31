@@ -13,8 +13,9 @@ export type {
   TransferDestinationAccount,
 } from './data/transaction';
 export type { RecordTransactionDialogData } from './ui/record-transaction-dialog';
+export type { RefileTransactionDialogData } from './ui/refile-transaction-dialog';
 export { TransactionsService } from './data/transactions.service';
 export { RecordTransactionDialog } from './ui/record-transaction-dialog';
-export { RefileTransactionForm } from './ui/refile-transaction-form';
+export { RefileTransactionDialog } from './ui/refile-transaction-dialog';
 export { TransactionRow, toTransactionRow } from './ui/transaction-row';
 export type { TransactionRowModel } from './ui/transaction-row';

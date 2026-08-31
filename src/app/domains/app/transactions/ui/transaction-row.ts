@@ -66,7 +66,7 @@ export type TransactionRowModel = Transaction & {
  *
  * The row's actions sit behind an ellipsis menu — the same affordance an
  * Account row uses — holding *Refile* and *Remove*. Refile asks the screen to
- * swap the row for the inline form. Remove is destructive, so it never sits
+ * open the refile dialog over it. Remove is destructive, so it never sits
  * inside that editor (ADR 0014): it is confirmed on the row itself, with the
  * amount and date still visible behind the prompt, and only then does the row
  * send the delete and, on success, tell the screen to re-read the balance and
@@ -96,7 +96,7 @@ export class TransactionRow {
   /** The finished row: domain fields plus resolved Category, headline, and sign. */
   readonly row = input.required<TransactionRowModel>();
 
-  /** Asks the screen to swap this row for the refile form. */
+  /** Asks the screen to open the refile dialog for this Transaction. */
   readonly refile = output<void>();
 
   /**

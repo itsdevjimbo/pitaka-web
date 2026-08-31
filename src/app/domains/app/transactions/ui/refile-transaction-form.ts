@@ -13,7 +13,6 @@ import { form, FormField, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTimepickerModule } from '@angular/material/timepicker';
@@ -51,13 +50,14 @@ type RefileTransactionModel = {
 };
 
 /**
- * The inline "refile this Transaction" editor: the row swaps into this the way
- * an Account row swaps into a rename. It corrects *how* a Transaction is filed —
- * when it is dated, its Category, its note — never what moved. The amount and the
- * direction are shown as plain text, deliberately not as disabled inputs that
- * invite a click and then refuse it; someone who mistyped an amount is pointed
- * at removing and recording again, the only correction that can legitimately
- * move a balance (ADR 0009).
+ * The "refile this Transaction" form, rendered inside the refile-transaction
+ * dialog over an Account's detail screen — the row stays legible behind it
+ * rather than being replaced by the form. It corrects *how* a Transaction is
+ * filed — when it is dated, its Category, its note — never what moved. The
+ * amount and the direction are shown as plain text, deliberately not as disabled
+ * inputs that invite a click and then refuse it; someone who mistyped an amount
+ * is pointed at removing and recording again, the only correction that can
+ * legitimately move a balance (ADR 0009).
  *
  * Every submit sends the whole mutable set — a full replacement, never a patch —
  * so correcting one field cannot null another (the adapter and its spec carry
@@ -88,7 +88,6 @@ type RefileTransactionModel = {
     MatButtonModule,
     MatDatepickerModule,
     MatTimepickerModule,
-    MatIconModule,
     PesoPipe,
     FormField,
   ],
