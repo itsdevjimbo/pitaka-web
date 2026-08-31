@@ -8,6 +8,7 @@ import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe, sumPesos } from '@/app/core/money';
+import { RowNotice } from '@/app/core/notices';
 import { Account, ACCOUNT_TYPES } from '../../data/account';
 import {
   AccountDeleteBlockedError,
@@ -34,12 +35,13 @@ const DELETE_BLOCK_HINT: Record<
 };
 
 /**
- * A message pinned to one Account's row after a lifecycle action failed:
- * a refused delete, a retire that lost a race, a rename conflict the form
- * could not word itself. `retry` re-runs the action that failed; `retire`
- * offers the way out of a delete blocked by Transaction history.
+ * The state behind one row's {@link RowNotice} after a lifecycle action failed:
+ * a refused delete, a retire that lost a race, a rename conflict the form could
+ * not word itself. `id` picks the row it belongs to; `retry` re-runs the action
+ * that failed; `retire` offers the way out of a delete blocked by Transaction
+ * history.
  */
-type RowNotice = {
+type RowNoticeState = {
   id: number;
   message: string;
   retry?: () => void;
@@ -67,6 +69,7 @@ type RowNotice = {
     MatMenuModule,
     RouterLink,
     PesoPipe,
+    RowNotice,
   ],
   host: {
     class: 'flex flex-auto flex-col',
@@ -91,7 +94,7 @@ export default class AccountList {
   protected readonly busyId = signal<number | null>(null);
 
   /** A per-row message left by a failed lifecycle action. */
-  protected readonly notice = signal<RowNotice | null>(null);
+  protected readonly notice = signal<RowNoticeState | null>(null);
 
   protected readonly types = ACCOUNT_TYPES;
 
@@ -265,7 +268,7 @@ export default class AccountList {
   private runRowWrite(
     id: number,
     write$: Observable<unknown>,
-    noticeFor: (error: unknown) => RowNotice
+    noticeFor: (error: unknown) => RowNoticeState
   ): void {
     this.notice.set(null);
     this.busyId.set(id);
@@ -283,9 +286,9 @@ export default class AccountList {
   }
 
   /** Turn a failed delete into a row notice with the right way forward. */
-  private noticeForFailedDelete(account: Account, error: unknown): RowNotice {
+  private noticeForFailedDelete(account: Account, error: unknown): RowNoticeState {
     if (error instanceof AccountDeleteBlockedError) {
-      const notice: RowNotice = {
+      const notice: RowNoticeState = {
         id: account.id,
         message: `${error.message} ${DELETE_BLOCK_HINT[error.reason]}`,
       };

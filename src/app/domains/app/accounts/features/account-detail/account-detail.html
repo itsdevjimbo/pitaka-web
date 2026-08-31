@@ -141,7 +141,6 @@
               <transactions-refile-transaction-form
                 [transaction]="row"
                 (refiled)="onRefiled()"
-                (removed)="onRemoved()"
                 (cancelled)="refilingId.set(null)"
               />
             </li>
@@ -150,6 +149,7 @@
               transaction-row
               [row]="row"
               (refile)="refilingId.set(row.id)"
+              (removed)="onRemoved()"
             ></li>
           }
         }

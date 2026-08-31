@@ -230,13 +230,12 @@
 
           @if (notice(); as n) {
             @if (n.id === account.id) {
-              <div
-                class="flex flex-col gap-y-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200"
-                role="alert"
-              >
-                <span class="font-medium">{{ n.message }}</span>
+              <app-row-notice [message]="n.message">
                 @if (n.retire || n.retry) {
-                  <div class="flex gap-x-2">
+                  <div
+                    row-notice-actions
+                    class="flex gap-x-2"
+                  >
                     @if (n.retire; as retire) {
                       <button
                         matButton
@@ -257,7 +256,7 @@
                     }
                   </div>
                 }
-              </div>
+              </app-row-notice>
             }
           }
         </li>

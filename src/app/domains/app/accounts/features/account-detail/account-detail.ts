@@ -158,13 +158,12 @@ export default class AccountDetail implements OnInit {
   }
 
   /**
-   * A Transaction was removed: close the form and refresh in place. The row is
-   * gone and the balance has moved back by exactly what moved — the figure shown
-   * is the server's re-read, not local arithmetic (ADR 0006), and the rows stay
+   * A Transaction was removed from its row: refresh in place. The row is gone
+   * and the balance has moved back by exactly what moved — the figure shown is
+   * the server's re-read, not local arithmetic (ADR 0006), and the rows stay
    * visible rather than blanking to the spinner.
    */
   protected onRemoved(): void {
-    this.refilingId.set(null);
     this.refreshInPlace('remove');
   }
 
