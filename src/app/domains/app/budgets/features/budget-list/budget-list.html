@@ -1,0 +1,113 @@
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
+  <!-- Heading -->
+  <header class="flex items-start justify-between gap-x-4">
+    <div class="flex flex-col gap-y-1">
+      <h1 class="text-2xl font-bold tracking-tight">Budgets</h1>
+      <p class="text-neutral-500 dark:text-neutral-400">
+        What you mean to stay under.
+      </p>
+    </div>
+
+    @if (!loading() && !errorMessage() && !isEmpty()) {
+      <button
+        matButton="filled"
+        (click)="openNewBudgetDialog()"
+      >
+        <mat-icon svgIcon="plus" />
+        New budget
+      </button>
+    }
+  </header>
+
+  @if (loading()) {
+    <!-- Slow load: show that it is working -->
+    <div
+      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+      role="status"
+    >
+      <mat-icon
+        class="size-6 animate-spin"
+        svgIcon="loader-circle"
+      />
+      <span>Loading your budgets…</span>
+    </div>
+  } @else if (errorMessage(); as message) {
+    <!-- Failed load: explain, and offer a retry -->
+    <div
+      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
+      role="alert"
+    >
+      <mat-icon
+        class="size-8 text-neutral-400"
+        svgIcon="circle-alert"
+      />
+      <p class="max-w-sm text-neutral-600 dark:text-neutral-300">
+        {{ message }}
+      </p>
+      <button
+        matButton="filled"
+        (click)="load()"
+      >
+        <mat-icon svgIcon="refresh-cw" />
+        Try again
+      </button>
+    </div>
+  } @else if (isEmpty()) {
+    <!-- Nothing yet: say what a Budget is for -->
+    <div
+      class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+    >
+      <mat-icon
+        class="size-10 text-neutral-400"
+        svgIcon="gauge"
+      />
+      <p class="text-lg font-semibold">No budgets yet</p>
+      <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
+        A budget is a spending ceiling for one period — for everything, or for a
+        single category. Create one to see where your spending stands against it.
+      </p>
+      <button
+        matButton="filled"
+        class="mt-2"
+        (click)="openNewBudgetDialog()"
+      >
+        <mat-icon svgIcon="plus" />
+        New budget
+      </button>
+    </div>
+  } @else {
+    @for (group of groups(); track group.phase) {
+      <section class="flex flex-col gap-y-2">
+        <h2
+          class="text-sm font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400"
+        >
+          {{ group.label }}
+        </h2>
+
+        <ul class="flex flex-col gap-y-2">
+          @for (row of group.rows; track row.budget.id) {
+            <li
+              class="flex flex-col gap-y-1 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
+            >
+              <div class="flex items-center justify-between gap-x-3">
+                <span class="truncate font-medium">{{ row.budget.name }}</span>
+                <span class="shrink-0 font-semibold tabular-nums">
+                  {{ row.budget.amountLimit | peso }}
+                </span>
+              </div>
+              <div
+                class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500 dark:text-neutral-400"
+              >
+                <span>{{ periods[row.budget.period].label }}</span>
+                <span aria-hidden="true">·</span>
+                <span>{{ row.categoryLabel }}</span>
+                <span aria-hidden="true">·</span>
+                <span>Starts {{ row.budget.startDate | date: 'mediumDate' }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+</div>

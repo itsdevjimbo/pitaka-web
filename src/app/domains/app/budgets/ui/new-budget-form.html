@@ -1,0 +1,133 @@
+<form
+  class="flex flex-col gap-y-4"
+  (submit)="save($event)"
+>
+  <!-- Failed create with nothing to pin to a field -->
+  @if (errorMessage(); as message) {
+    <div
+      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+      role="alert"
+    >
+      {{ message }}
+    </div>
+  }
+
+  <!-- Name -->
+  <mat-form-field class="w-full">
+    <mat-label>Name</mat-label>
+    <input
+      id="budget-name"
+      matInput
+      [formField]="budgetForm.name"
+    />
+    <mat-error>
+      @if (budgetForm.name().touched() && budgetForm.name().invalid()) {
+        @for (error of budgetForm.name().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <!-- Amount: the ceiling, entered positive -->
+  <mat-form-field class="w-full">
+    <mat-label>Amount</mat-label>
+    <span
+      matTextPrefix
+      aria-hidden="true"
+      >₱&nbsp;</span
+    >
+    <input
+      id="budget-amount"
+      matInput
+      type="number"
+      step="0.01"
+      inputmode="decimal"
+      [formField]="budgetForm.amountLimit"
+    />
+    <mat-hint>The most you plan to spend in one period.</mat-hint>
+    <mat-error>
+      @if (
+        budgetForm.amountLimit().touched() && budgetForm.amountLimit().invalid()
+      ) {
+        @for (error of budgetForm.amountLimit().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <!-- Period: no default; picking one fills in the start date below -->
+  <mat-form-field class="w-full">
+    <mat-label>Period</mat-label>
+    <mat-select [formField]="budgetForm.period">
+      @for (option of periodOptions; track option.value) {
+        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+    <mat-error>
+      @if (budgetForm.period().touched() && budgetForm.period().invalid()) {
+        @for (error of budgetForm.period().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <!-- Start date: fills itself from the Period until the person edits it -->
+  <mat-form-field class="w-full">
+    <mat-label>Start date</mat-label>
+    <input
+      id="budget-start-date"
+      matInput
+      [matDatepicker]="startPicker"
+      [formField]="budgetForm.startDate"
+      (dateInput)="onStartDateEdited()"
+      (dateChange)="onStartDateEdited()"
+    />
+    <mat-datepicker-toggle
+      matIconSuffix
+      [for]="startPicker"
+    />
+    <mat-datepicker #startPicker />
+    <mat-hint>Cycles follow the calendar from here.</mat-hint>
+    <mat-error>
+      @if (
+        budgetForm.startDate().touched() && budgetForm.startDate().invalid()
+      ) {
+        @for (error of budgetForm.startDate().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <!-- Category: "All spending" first and selected; expense Categories only -->
+  <mat-form-field class="w-full">
+    <mat-label>Category</mat-label>
+    <mat-select [formField]="budgetForm.categoryId">
+      <mat-option [value]="allSpending">All spending</mat-option>
+      @for (option of categoryOptions(); track option.id) {
+        <mat-option [value]="option.id">{{ option.name }}</mat-option>
+      }
+    </mat-select>
+    <mat-hint>Leave as “All spending” to watch every expense.</mat-hint>
+  </mat-form-field>
+
+  <div class="mt-2 flex items-center justify-end gap-x-3">
+    <button
+      matButton
+      type="button"
+      (click)="cancel()"
+    >
+      Cancel
+    </button>
+    <button
+      matButton="filled"
+      type="submit"
+      [disabled]="budgetForm().invalid() || submitting()"
+    >
+      {{ submitting() ? 'Creating…' : 'Create budget' }}
+    </button>
+  </div>
+</form>
