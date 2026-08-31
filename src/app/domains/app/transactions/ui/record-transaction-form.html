@@ -1,19 +1,7 @@
 <form
-  class="flex flex-col gap-y-4 rounded-xl border border-neutral-200 p-4 sm:p-6 dark:border-neutral-800"
+  class="flex flex-col gap-y-4"
   (submit)="save($event)"
 >
-  <div class="flex items-center justify-between">
-    <h2 class="text-lg font-semibold tracking-tight">Record a transaction</h2>
-    <button
-      matIconButton
-      type="button"
-      aria-label="Cancel"
-      (click)="cancel()"
-    >
-      <mat-icon svgIcon="x" />
-    </button>
-  </div>
-
   <!-- Failed record with nothing to pin to a field -->
   @if (errorMessage(); as message) {
     <div

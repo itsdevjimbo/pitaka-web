@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
   MATERIAL_ANIMATIONS,
   provideNativeDateAdapter,
@@ -6,22 +6,24 @@ import {
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
+import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
+import { Category } from '@/app/domains/app/categories/category';
 import {
   Transaction,
   TransactionsService,
 } from '@/app/domains/app/transactions';
-import { withOverlayContainer } from '@/testing/overlay';
+import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Account } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
 import AccountDetail from './account-detail';
 
 /** The slice of the component a few tests reach into. */
 type AccountDetailInternals = {
-  recording: { set(value: boolean): void };
   refilingId: { set(value: number | null): void };
+  openRecordDialog(): void;
   onRecorded(): void;
   onRefiled(): void;
   onRemoved(): void;
@@ -84,6 +86,7 @@ describe('AccountDetail', () => {
         provideIcons(),
         provideNativeDateAdapter(),
         provideRouter([]),
+        provideDialogDefaults(),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: AccountsService, useValue: { get, list: accountsList } },
         {
@@ -106,7 +109,56 @@ describe('AccountDetail', () => {
         Array.from(
           (fixture.nativeElement as HTMLElement).querySelectorAll('button')
         ).find((b) => (b.textContent ?? '').includes(label)),
+      dialog: () => overlay().querySelector<HTMLElement>('[role="dialog"]'),
+      dialogText: () => overlay().textContent ?? '',
     };
+  }
+
+  /** Push change detection through the component and the overlay, and drain microtasks. */
+  async function settle(fixture: ComponentFixture<unknown>) {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  /** Find a button by its trimmed text, anywhere in the open overlay. */
+  function overlayButton(label: string): HTMLButtonElement {
+    const button = Array.from(
+      overlay().querySelectorAll('button')
+    ).find((b) => (b.textContent ?? '').trim() === label);
+    if (!button) {
+      throw new Error(`No overlay button labelled "${label}"`);
+    }
+    return button;
+  }
+
+  function typeIntoOverlay(selector: string, value: string) {
+    const input = overlay().querySelector<HTMLInputElement>(selector);
+    if (!input) {
+      throw new Error(`No overlay input matching "${selector}"`);
+    }
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  /** Pick the option with the given text from a `mat-select` in the overlay. */
+  async function pickFromSelect(
+    fixture: ComponentFixture<unknown>,
+    selector: string,
+    optionText: string
+  ) {
+    overlay().querySelector<HTMLElement>(selector)!.click();
+    await settle(fixture);
+    const option = Array.from(
+      overlay().querySelectorAll<HTMLElement>('mat-option')
+    ).find((el) => (el.textContent ?? '').trim() === optionText);
+    if (!option) {
+      throw new Error(`No option "${optionText}" in "${selector}"`);
+    }
+    option.click();
+    await settle(fixture);
   }
 
   it('shows progress while the load is in flight, then the list', () => {
@@ -387,15 +439,21 @@ describe('AccountDetail', () => {
     );
   });
 
-  it('reveals the record form from a control on an active Account', () => {
-    const { fixture, text, button } = setup({ list: () => of([tx()]) });
+  it('opens the record dialog from a control on an active Account, without reflowing the balance or list', async () => {
+    const { fixture, text, button, dialog, dialogText } = setup({
+      list: () => of([tx({ description: 'Coffee' })]),
+    });
+    const before = text();
 
-    expect(text()).not.toContain('Record a transaction');
+    expect(dialog()).toBeNull();
 
     button('Record')?.click();
-    fixture.detectChanges();
+    await settle(fixture);
 
-    expect(text()).toContain('Record a transaction');
+    expect(dialog()).not.toBeNull();
+    expect(dialogText()).toContain('Record a transaction');
+    // The screen behind the dialog is untouched — nothing reflowed.
+    expect(text()).toContain(before);
   });
 
   it('offers no record control on a retired Account, and points at reactivating it', () => {
@@ -465,6 +523,163 @@ describe('AccountDetail', () => {
     expect(text()).toContain('Lunch');
     expect(text()).not.toContain('Please try again');
     consoleError.mockRestore();
+  });
+
+  describe('record, in a dialog', () => {
+    const SAVINGS: Account = {
+      id: 9,
+      name: 'Savings',
+      type: 'Bank',
+      currentBalance: 10000,
+      isActive: true,
+    };
+    const RETIRED: Account = {
+      id: 10,
+      name: 'Old wallet',
+      type: 'Wallet',
+      currentBalance: 0,
+      isActive: false,
+    };
+    const EXPENSE_CATEGORIES: Category[] = [
+      { id: 1, name: 'Groceries', kind: 'expense' },
+    ];
+
+    async function openRecordDialog(
+      fixture: ComponentFixture<unknown>,
+      button: (label: string) => HTMLButtonElement | undefined
+    ) {
+      button('Record')!.click();
+      await settle(fixture);
+    }
+
+    it('follows the app-wide dialog behaviour — closes on Escape, stays on a backdrop click', async () => {
+      const { fixture, button, dialog } = setup({ list: () => of([tx()]) });
+
+      await openRecordDialog(fixture, button);
+      expect(dialog()).not.toBeNull();
+
+      overlay().querySelector<HTMLElement>('.cdk-overlay-backdrop')!.click();
+      await settle(fixture);
+      expect(dialog()).not.toBeNull();
+
+      pressEscape();
+      await settle(fixture);
+      expect(dialog()).toBeNull();
+    });
+
+    it('moves focus into the dialog on open and back to the opener on close', async () => {
+      const { fixture, button, dialog } = setup({ list: () => of([tx()]) });
+
+      const record = button('Record')!;
+      record.focus();
+      record.click();
+      await settle(fixture);
+
+      expect(overlay().contains(document.activeElement)).toBe(true);
+
+      pressEscape();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(document.activeElement).toBe(record);
+    });
+
+    it('hands the form only valid Transfer destinations — the Account in view and retired ones excluded', async () => {
+      const { fixture, button } = setup({
+        get: () => of(ACCOUNT),
+        accountsList: () => of([ACCOUNT, SAVINGS, RETIRED]),
+        list: () => of([tx()]),
+      });
+
+      await openRecordDialog(fixture, button);
+
+      // Choose Transfer so the destination picker is the field on show.
+      overlayButton('Transfer').click();
+      await settle(fixture);
+
+      overlay().querySelector<HTMLElement>('mat-select')!.click();
+      await settle(fixture);
+      const options = Array.from(
+        overlay().querySelectorAll<HTMLElement>('mat-option')
+      ).map((el) => (el.textContent ?? '').trim());
+
+      expect(options).toEqual(['Savings']);
+    });
+
+    it('on a successful record, closes the dialog and re-reads the balance and list (ADR 0006)', async () => {
+      const get = vi
+        .fn()
+        .mockReturnValueOnce(of(ACCOUNT))
+        .mockReturnValueOnce(of({ ...ACCOUNT, currentBalance: 4079.5 }));
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of<Transaction[]>([]))
+        .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee' })]));
+      const record = vi.fn(() => of(tx({ id: 7 })));
+
+      const { fixture, button, text, dialog } = setup({
+        get: get as unknown as AccountsService['get'],
+        list: list as unknown as TransactionsService['list'],
+        record: record as unknown as TransactionsService['record'],
+        categoryList: () => of(EXPENSE_CATEGORIES),
+      });
+
+      await openRecordDialog(fixture, button);
+      typeIntoOverlay('#transaction-amount', '120.5');
+      await pickFromSelect(fixture, 'mat-select', 'Groceries');
+      overlayButton('Record').click();
+      await settle(fixture);
+
+      expect(record).toHaveBeenCalledTimes(1);
+      expect(dialog()).toBeNull();
+      expect(get).toHaveBeenCalledTimes(2);
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).toContain(formatPeso(4079.5));
+      expect(text()).toContain('Coffee');
+      expect(text()).not.toContain('Loading transactions…');
+    });
+
+    it('on a failed record, leaves the dialog open with the input intact and the reason shown', async () => {
+      const record = vi.fn(() => throwError(() => new Error('offline')));
+      const list = vi.fn(() => of<Transaction[]>([]));
+
+      const { fixture, button, dialog, dialogText } = setup({
+        list: list as unknown as TransactionsService['list'],
+        record: record as unknown as TransactionsService['record'],
+        categoryList: () => of(EXPENSE_CATEGORIES),
+      });
+
+      await openRecordDialog(fixture, button);
+      typeIntoOverlay('#transaction-amount', '120.5');
+      await pickFromSelect(fixture, 'mat-select', 'Groceries');
+      overlayButton('Record').click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(
+        overlay().querySelector<HTMLInputElement>('#transaction-amount')!.value
+      ).toBe('120.5');
+      expect(dialogText()).toContain(
+        'Something went wrong recording this transaction'
+      );
+      // A failed record does not re-read.
+      expect(list).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes with no record on Cancel, without calling the service', async () => {
+      const record = vi.fn();
+      const { fixture, button, dialog } = setup({
+        list: () => of([tx()]),
+        record: record as unknown as TransactionsService['record'],
+      });
+
+      await openRecordDialog(fixture, button);
+      overlayButton('Cancel').click();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(record).not.toHaveBeenCalled();
+    });
   });
 
   it('swaps a row for the refile form from the Refile entry in the row menu', () => {

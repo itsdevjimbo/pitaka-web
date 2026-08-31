@@ -26,3 +26,14 @@ export function withOverlayContainer(): () => HTMLElement {
 
   return () => TestBed.inject(OverlayContainer).getContainerElement();
 }
+
+/**
+ * Send the Escape keydown a dialog listens for. Dispatched on `document.body`
+ * rather than a specific element because `DialogShell` subscribes through the
+ * `MatDialogRef`'s own key-event stream, which is document-scoped.
+ */
+export function pressEscape(): void {
+  document.body.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  );
+}

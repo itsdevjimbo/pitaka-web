@@ -15,7 +15,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTimepickerModule } from '@angular/material/timepicker';
@@ -65,23 +64,24 @@ type RecordTransactionModel = {
 };
 
 /**
- * The inline "record a Transaction" form, revealed on an Account's detail screen
- * by a signal — the same reveal-and-swap the Accounts slice uses, no dialog. It
- * owns only the form; the parent supplies the Account (there is no Account
- * field — a form that recorded into an Account you are not looking at would
- * leave you on a list without the row) and, on success, re-reads the balance
- * and list in place.
+ * The "record a Transaction" form, rendered inside the record-transaction dialog
+ * over an Account's detail screen. It owns only the form: the screen supplies
+ * the Account the money moves from as a plain value (the form has no field for
+ * it and does not reason about which Account it belongs to), hands down the
+ * Transfer destinations already narrowed to the valid ones, and on success
+ * closes the dialog and re-reads the balance and list.
  *
  * Direction is the first control and decides the rest. An income or an expense
  * is filed under a Category, and the picker offers only Categories of that
  * direction (ADR 0010), so an expense cannot be filed under a salary. A Transfer
  * swaps that Category field for a destination Account and sends no Category; the
- * destination picker offers only active Accounts other than the one in view, so
- * a self-transfer or a retired container never reaches the API. The amount is
- * entered positive — the sign is the direction's, never a minus the person
- * types. `submit()` refuses re-entry and the button disables while a request is
- * in flight, so a double-click records once. A rejection the API attributes to a
- * field marks it; a bodyless one becomes a single form-level line.
+ * destination picker shows exactly the Accounts the screen handed it — the one
+ * in view and every retired one already excluded upstream — so the form does no
+ * filtering of its own. The amount is entered positive — the sign is the
+ * direction's, never a minus the person types. `submit()` refuses re-entry and
+ * the button disables while a request is in flight, so a double-click records
+ * once. A rejection the API attributes to a field marks it; a bodyless one
+ * becomes a single form-level line.
  */
 @Component({
   selector: 'transactions-record-transaction-form',
@@ -94,7 +94,6 @@ type RecordTransactionModel = {
     MatButtonToggleModule,
     MatDatepickerModule,
     MatTimepickerModule,
-    MatIconModule,
     FormField,
   ],
 })
@@ -105,16 +104,20 @@ export class RecordTransactionForm {
   private destroyRef = inject(DestroyRef);
 
   // Inputs
-  /** The Account the Transaction is recorded against. The form has no field for it. */
-  readonly accountId = input.required<number>();
 
   /**
-   * Every Account the person owns, supplied by the screen (the Transactions
-   * domain does not read Accounts — ADR 0009). The form filters this itself for
-   * the Transfer destination picker: out goes the source Account and every
-   * retired one, so that safety argument stays visible at the form seam.
+   * The Account the money moves from, carried as a plain value the way `amount`
+   * is. The form has no field for it and does not decide which Account it
+   * belongs to — the screen does, and passes the id down.
    */
-  readonly accounts = input<readonly TransferDestinationAccount[]>([]);
+  readonly fromAccountId = input.required<number>();
+
+  /**
+   * The Accounts a Transfer may land in, already narrowed to the valid ones by
+   * the screen (the Transactions domain does not read Accounts — ADR 0009). The
+   * form shows exactly this list and filters nothing.
+   */
+  readonly destinations = input<readonly TransferDestinationAccount[]>([]);
 
   // Outputs
   readonly recorded = output<Transaction>();
@@ -152,20 +155,14 @@ export class RecordTransactionForm {
   });
 
   /**
-   * The Accounts a Transfer may land in: every active Account except the one
-   * being viewed. A self-transfer nets to zero and comes back as a row claiming
-   * money moved when none did; a retired Account is one the API refuses with an
-   * unattributable rejection. Excluding both here closes both by construction.
-   *
-   * Empty off a Transfer — there is no destination to pick — which is also what
-   * lets one stale-pick pruner serve both this field and the Category.
+   * The Accounts the destination picker offers: exactly what the screen handed
+   * down (already narrowed to valid destinations), and nothing off a Transfer —
+   * there is no destination to pick, which is also what lets one stale-pick
+   * pruner serve both this field and the Category.
    */
-  protected readonly destinationOptions = computed(() => {
-    if (!this.isTransfer()) return [];
-    return this.accounts().filter(
-      (account) => account.isActive && account.id !== this.accountId()
-    );
-  });
+  protected readonly destinationOptions = computed(() =>
+    this.isTransfer() ? this.destinations() : []
+  );
 
   protected readonly recordForm = form(this.model, (path) => {
     // Entered positive — the sign is the direction's, never a minus the person
@@ -247,7 +244,7 @@ export class RecordTransactionForm {
           const isTransfer = direction === 'transfer';
           const recorded = await firstValueFrom(
             this.service.record({
-              accountId: this.accountId(),
+              accountId: this.fromAccountId(),
               direction,
               // `required` / `min` have ruled out a null amount and a null
               // date or time by the time the action runs.

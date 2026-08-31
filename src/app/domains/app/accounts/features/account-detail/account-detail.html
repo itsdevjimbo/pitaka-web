@@ -82,12 +82,13 @@
           </span>
         </div>
 
-        <!-- Recording against the Account in view — no Account field on the form.
-             Absent entirely once the Account is retired. -->
-        @if (acc.isActive && !recording()) {
+        <!-- Opens the record dialog over this screen — the balance and list
+             behind it do not reflow. Absent entirely once the Account is
+             retired. -->
+        @if (acc.isActive) {
           <button
             matButton="filled"
-            (click)="recording.set(true)"
+            (click)="openRecordDialog()"
           >
             <mat-icon svgIcon="plus" />
             Record
@@ -109,13 +110,6 @@
           >
           to record here again.
         </p>
-      } @else if (recording()) {
-        <transactions-record-transaction-form
-          [accountId]="acc.id"
-          [accounts]="accountsList()"
-          (recorded)="onRecorded()"
-          (cancelled)="recording.set(false)"
-        />
       }
     }
 

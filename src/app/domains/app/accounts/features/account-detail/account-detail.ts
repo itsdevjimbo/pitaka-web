@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -16,12 +17,14 @@ import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import {
-  RecordTransactionForm,
+  RecordTransactionDialog,
+  RecordTransactionDialogData,
   RefileTransactionForm,
   Transaction,
   TransactionRow,
   TransactionRowModel,
   TransactionsService,
+  TransferDestinationAccount,
   toTransactionRow,
 } from '@/app/domains/app/transactions';
 import { Account, ACCOUNT_TYPES } from '../../data/account';
@@ -43,11 +46,16 @@ const LOAD_FAILED =
  * resolves the Category names, picks the Account to sign against, and hands each
  * finished row to the `transaction-row` component.
  *
- * An active Account can record against itself, inline: a signal reveals the
- * `record-transaction-form`, and a successful record re-reads the balance and
- * list in place — the rows stay visible, the screen never blanks back to the
- * spinner (that is for first entry only). A retired Account offers no record
- * control and points at the reactivate that lives on the accounts list.
+ * An active Account can record against itself: *Record* opens the
+ * `record-transaction-dialog` over this screen — the balance and the list stay
+ * put behind it, so a person can see what they already recorded and not record
+ * it twice — and a successful record closes the dialog and re-reads the balance
+ * and list in place, the rows staying visible rather than blanking back to the
+ * spinner (that is for first entry only). The screen hands the form the Account
+ * the money moves from and the valid Transfer destinations (itself and every
+ * retired Account excluded); the form does no filtering. A retired Account
+ * offers no record control and points at the reactivate that lives on the
+ * accounts list.
  */
 @Component({
   selector: 'account-detail',
@@ -58,7 +66,6 @@ const LOAD_FAILED =
     RouterLink,
     PesoPipe,
     TransactionRow,
-    RecordTransactionForm,
     RefileTransactionForm,
   ],
   host: {
@@ -71,6 +78,7 @@ export default class AccountDetail implements OnInit {
   private transactions = inject(TransactionsService);
   private categories = inject(CategoriesService);
   private destroyRef = inject(DestroyRef);
+  private dialog = inject(MatDialog);
 
   /** The Account id from the route (`accounts/:id`), bound by the router. */
   readonly id = input.required<string>();
@@ -80,7 +88,12 @@ export default class AccountDetail implements OnInit {
 
   // State
   protected readonly account = signal<Account | null>(null);
-  /** Every Account the person owns — the record form's Transfer destination pool. */
+
+  /**
+   * Every Account the person owns. Feeds two things: the `destinations` the
+   * record dialog is seeded with, and the name a Transfer that landed here shows
+   * for the Account it was recorded against (ADR 0010).
+   */
   protected readonly accountsList = signal<readonly Account[]>([]);
   protected readonly rows = signal<readonly TransactionRowModel[] | null>(null);
   protected readonly loading = signal(true);
@@ -95,8 +108,21 @@ export default class AccountDetail implements OnInit {
 
   protected readonly types = ACCOUNT_TYPES;
 
-  /** Whether the inline record form is open. Only ever set for an active Account. */
-  protected readonly recording = signal(false);
+  /**
+   * The Accounts a Transfer recorded here may land in: every active Account
+   * except the one in view. A self-transfer nets to zero and comes back as a row
+   * claiming money moved when none did; a retired Account is one the API refuses
+   * with an unattributable rejection. Excluding both here — the screen's job, not
+   * the form's — closes both by construction before the form ever opens.
+   */
+  protected readonly destinations = computed<readonly TransferDestinationAccount[]>(
+    () => {
+      const current = this.accountId();
+      return this.accountsList()
+        .filter((account) => account.isActive && account.id !== current)
+        .map((account) => ({ id: account.id, name: account.name }));
+    }
+  );
 
   /**
    * The id of the Transaction whose row is currently swapped for the refile
@@ -140,9 +166,34 @@ export default class AccountDetail implements OnInit {
       });
   }
 
-  /** A Transaction was recorded: close the form and refresh the screen in place. */
+  /**
+   * Open the *Record a transaction* dialog over this screen, seeded with the
+   * Account the money moves from and the valid Transfer destinations. The
+   * balance and list behind it do not reflow. It closes with the recorded
+   * Transaction on a successful record, or with nothing on Cancel, the close
+   * control, or Escape. Only ever reachable for an active Account.
+   */
+  protected openRecordDialog(): void {
+    const ref = this.dialog.open<
+      RecordTransactionDialog,
+      RecordTransactionDialogData,
+      Transaction
+    >(RecordTransactionDialog, {
+      data: { fromAccountId: this.accountId(), destinations: this.destinations() },
+    });
+
+    ref
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((recorded) => {
+        if (recorded) {
+          this.onRecorded();
+        }
+      });
+  }
+
+  /** A Transaction was recorded: refresh the balance and list in place (ADR 0006). */
   protected onRecorded(): void {
-    this.recording.set(false);
     this.refreshInPlace('record');
   }
 
@@ -188,10 +239,10 @@ export default class AccountDetail implements OnInit {
 
   /**
    * The Account, its Transactions, the Category names, and every Account — in
-   * one read. The full Account list feeds two things: the record form's Transfer
-   * destination picker, and the name a Transfer that landed here shows for the
-   * Account it was recorded against (ADR 0010). It is re-read on every entry
-   * like the balance beside it (ADR 0006).
+   * one read. The full Account list feeds two things: the `destinations` the
+   * record dialog is seeded with, and the name a Transfer that landed here shows
+   * for the Account it was recorded against (ADR 0010). It is re-read on every
+   * entry like the balance beside it (ADR 0006).
    */
   private read() {
     return forkJoin({

@@ -7,7 +7,7 @@ import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
-import { withOverlayContainer } from '@/testing/overlay';
+import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Account } from '../../data/account';
 import {
   AccountDeleteBlockedError,
@@ -161,12 +161,6 @@ describe('AccountList', () => {
 
     overlayButton('Add account').click();
     await settle(fixture);
-  }
-
-  function pressEscape() {
-    document.body.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-    );
   }
 
   it('shows that it is working while the load is in flight, then the list', () => {
