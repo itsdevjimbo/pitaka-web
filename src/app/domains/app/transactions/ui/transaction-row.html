@@ -64,18 +64,35 @@
     }
   </span>
 
-  <!-- Re-file: swap the row for the form that corrects how it is filed. Absent
-       on a Transfer seen from where it landed — that side is read-only. -->
-  @if (canRefile()) {
+  <!-- Actions: an ellipsis menu holding Re-file and Remove, matching an Account
+       row. The whole menu is absent on a Transfer seen from where it landed —
+       that side is read-only and links back to its home instead (ADR 0010). -->
+  @if (canActOnHere()) {
     <button
       matIconButton
       type="button"
       class="shrink-0"
-      aria-label="Re-file transaction"
-      (click)="refile.emit()"
+      aria-label="Transaction actions"
+      [matMenuTriggerFor]="rowMenu"
     >
-      <mat-icon svgIcon="pencil" />
+      <mat-icon svgIcon="ellipsis-vertical" />
     </button>
+    <mat-menu #rowMenu>
+      <button
+        mat-menu-item
+        (click)="refile.emit()"
+      >
+        <mat-icon svgIcon="pencil" />
+        <span>Re-file</span>
+      </button>
+      <button
+        mat-menu-item
+        (click)="askRemove()"
+      >
+        <mat-icon svgIcon="trash-2" />
+        <span>Remove</span>
+      </button>
+    </mat-menu>
   }
 </div>
 
@@ -89,4 +106,54 @@
       </span>
     }
   </div>
+}
+
+@if (canActOnHere() && confirmingRemove()) {
+  <!-- Confirm on the row: the amount and date about to be erased are still
+       visible above this prompt. Nothing is sent until "Remove" here. -->
+  <div
+    class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
+    role="alertdialog"
+    aria-label="Confirm remove"
+  >
+    <p class="text-sm text-neutral-700 dark:text-neutral-200">
+      Removing this transaction moves the balance back by
+      {{ row().amount | peso }}. This can’t be undone.
+    </p>
+    <div class="flex gap-x-2">
+      <button
+        matButton
+        type="button"
+        [disabled]="removing()"
+        (click)="cancelRemove()"
+      >
+        Keep
+      </button>
+      <button
+        matButton="filled"
+        type="button"
+        [disabled]="removing()"
+        (click)="confirmRemove()"
+      >
+        {{ removing() ? 'Removing…' : 'Remove' }}
+      </button>
+    </div>
+  </div>
+}
+
+@if (canActOnHere() && removeError(); as message) {
+  <!-- The removal was rejected: a notice keeps the row on screen and offers a
+       one-press retry, the way an Account row surfaces a failed action. -->
+  <app-row-notice [message]="message">
+    <div row-notice-actions>
+      <button
+        matButton
+        type="button"
+        [disabled]="removing()"
+        (click)="confirmRemove()"
+      >
+        {{ removing() ? 'Removing…' : 'Try again' }}
+      </button>
+    </div>
+  </app-row-notice>
 }

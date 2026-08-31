@@ -1,5 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { provideNativeDateAdapter } from '@angular/material/core';
+import {
+  MATERIAL_ANIMATIONS,
+  provideNativeDateAdapter,
+} from '@angular/material/core';
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -10,6 +13,7 @@ import {
   Transaction,
   TransactionsService,
 } from '@/app/domains/app/transactions';
+import { withOverlayContainer } from '@/testing/overlay';
 import { Account } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
 import AccountDetail from './account-detail';
@@ -53,6 +57,8 @@ function tx(over: Partial<Transaction> = {}): Transaction {
 }
 
 describe('AccountDetail', () => {
+  const overlay = withOverlayContainer();
+
   function setup(over: {
     get?: AccountsService['get'];
     accountsList?: AccountsService['list'];
@@ -78,6 +84,7 @@ describe('AccountDetail', () => {
         provideIcons(),
         provideNativeDateAdapter(),
         provideRouter([]),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: AccountsService, useValue: { get, list: accountsList } },
         {
           provide: TransactionsService,
@@ -460,17 +467,23 @@ describe('AccountDetail', () => {
     consoleError.mockRestore();
   });
 
-  it('swaps a row for the re-file form from the control on the row', () => {
+  it('swaps a row for the re-file form from the Re-file entry in the row menu', () => {
     const { fixture, text } = setup({
       list: () => of([tx({ id: 7, description: 'Coffee' })]),
     });
 
     expect(text()).not.toContain('Re-file transaction');
 
-    const pencil = Array.from(
+    const menuTrigger = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    ).find((b) => b.getAttribute('aria-label') === 'Re-file transaction');
-    pencil?.click();
+    ).find((b) => b.getAttribute('aria-label') === 'Transaction actions');
+    menuTrigger?.click();
+    fixture.detectChanges();
+
+    const refile = Array.from(
+      overlay().querySelectorAll<HTMLButtonElement>('button')
+    ).find((b) => (b.textContent ?? '').trim() === 'Re-file');
+    refile?.click();
     fixture.detectChanges();
 
     expect(text()).toContain('Re-file transaction');
@@ -552,39 +565,45 @@ describe('AccountDetail', () => {
     expect(text()).not.toContain('Coffee');
   });
 
-  it('drives a removal end to end from the re-file form and closes it', async () => {
+  it('drives a removal end to end from the row menu, then re-reads with the row gone', async () => {
     const remove = vi.fn(() => of(undefined));
     const list = vi
       .fn()
       .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee' })]))
       .mockReturnValueOnce(of<Transaction[]>([]));
 
-    const { fixture, cmp, text } = setup({
+    const { fixture, text } = setup({
       list: list as unknown as TransactionsService['list'],
       remove: remove as unknown as TransactionsService['remove'],
     });
 
-    cmp.refilingId.set(7);
-    fixture.detectChanges();
-
     const host = fixture.nativeElement as HTMLElement;
-    const clickButton = (match: (label: string) => boolean) =>
-      Array.from(host.querySelectorAll('button'))
-        .find((b) => match((b.textContent ?? '').trim()))
-        ?.click();
-
-    clickButton((label) => label === 'Remove');
+    const menuTrigger = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.getAttribute('aria-label') === 'Transaction actions'
+    );
+    menuTrigger?.click();
     fixture.detectChanges();
-    clickButton((label) => label === 'Remove');
+
+    Array.from(overlay().querySelectorAll<HTMLButtonElement>('button'))
+      .find((b) => (b.textContent ?? '').trim() === 'Remove')
+      ?.click();
+    fixture.detectChanges();
+
+    Array.from(host.querySelectorAll('button'))
+      .find((b) => (b.textContent ?? '').trim() === 'Remove')
+      ?.click();
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(remove).toHaveBeenCalledWith(7);
-    expect(text()).not.toContain('Re-file transaction');
+    expect(list).toHaveBeenCalledTimes(2);
+    // The list re-reads in place — it never blanks back to the spinner.
+    expect(text()).not.toContain('Loading transactions…');
     expect(text()).toContain('No transactions yet');
+    expect(text()).not.toContain('Coffee');
   });
 
-  it('offers no re-file control on a Transfer seen from where it landed', () => {
+  it('offers no actions menu on a Transfer seen from where it landed', () => {
     const { fixture } = setup({
       accountsList: () =>
         of([
@@ -604,9 +623,9 @@ describe('AccountDetail', () => {
         ]),
     });
 
-    const pencil = Array.from(
+    const menuTrigger = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    ).find((b) => b.getAttribute('aria-label') === 'Re-file transaction');
-    expect(pencil).toBeUndefined();
+    ).find((b) => b.getAttribute('aria-label') === 'Transaction actions');
+    expect(menuTrigger).toBeUndefined();
   });
 });
