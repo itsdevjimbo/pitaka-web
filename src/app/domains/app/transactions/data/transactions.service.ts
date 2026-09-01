@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { API_BASE_URL } from '@/app/core/api';
 import { toOffsetTimestamp } from './offset-timestamp';
+import { parseTransactionDate } from './parse-transaction-date';
 import {
   NewTransaction,
   RefileTransaction,
@@ -178,19 +179,22 @@ const API_TYPE: Record<TransactionDirection, TransactionResource['type']> = {
 
 /** Lift the wire row to the domain shape the list renders. */
 function toTransaction(resource: TransactionResource): Transaction {
+  // The foreign key to the Schedule is the truthful "the app made this" signal,
+  // and it also decides how the date is read below.
+  const generated = resource.recurringTransactionId !== null;
+
   return {
     id: resource.id,
     amount: resource.amount,
     direction: DIRECTION[resource.type],
     accountId: resource.accountId,
     transferToAccountId: resource.transferToAccountId,
-    // No zone is appended and none is stripped: a real instant arrives with a
-    // designator and converts to local, a person-entered wall-clock arrives
-    // without one and is read as local (ADR 0007).
-    date: new Date(resource.transactionDate),
+    // A person-recorded instant is stored UTC but comes back off MySQL with no
+    // `Z`; a generated transaction is a bare wall-clock day. `generated` tells
+    // the two naive strings apart so each reads to the right instant (ADR 0007).
+    date: parseTransactionDate(resource.transactionDate, generated),
     categoryId: resource.categoryId,
-    // The foreign key to the Schedule is the truthful "the app made this" signal.
-    generated: resource.recurringTransactionId !== null,
+    generated,
     description: resource.description,
     tags: resource.tags.map((tag) => ({ id: tag.id, name: tag.name })),
   };
