@@ -25,6 +25,13 @@ export const NAVIGATION: NavigationItem[] = [
         icon: 'wallet-cards',
         activeOptions: { exact: false },
       },
+      {
+        id: 'budgets',
+        label: 'Budgets',
+        route: '/app/budgets',
+        icon: 'gauge',
+        activeOptions: { exact: false },
+      },
     ],
   },
 ];
