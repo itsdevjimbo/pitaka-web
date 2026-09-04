@@ -12,6 +12,14 @@ This glossary fixes the words the client uses. In three places those words delib
 The person's own identity and credentials — their name, email, and password. It is never called an account.
 _Avoid_: Account, user account, my account, user settings
 
+**Confirmed / unconfirmed**:
+A Profile that has, or has not, proven control of its email address. Registering creates an unconfirmed Profile and does not sign the person in; confirming is the one step between registering and signing in.
+_Avoid_: Verified, activated, validated
+
+**Locked out**:
+A Profile temporarily barred from signing in after repeated failed attempts. A timed state that clears itself — distinct from Retire, which is a deliberate choice and never applies to a Profile.
+_Avoid_: Banned, suspended, disabled, blocked
+
 ### Money that has moved
 
 **Account**:
