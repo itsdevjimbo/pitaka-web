@@ -11,7 +11,8 @@ import { TransactionsService } from '../data/transactions.service';
 import {
   TransactionRow,
   TransactionRowModel,
-  toTransactionRow,
+  toAccountRow,
+  toLedgerRow,
 } from './transaction-row';
 
 const NAMES = new Map<number, string>([
@@ -41,41 +42,41 @@ function tx(over: Partial<Transaction> = {}): Transaction {
 }
 
 /**
- * The pure builder that turns a domain {@link Transaction} into the finished
- * row: it resolves the Category name through the caller's shared cache, chooses
- * the headline, and signs the amount against the Account in view.
+ * The two pure builders that turn a domain {@link Transaction} into the finished
+ * row. Both resolve the Category name through the caller's shared cache and
+ * choose the headline; they differ only in the reading they attach — one for a
+ * screen with an Account in view, one for a list spanning every Account.
  */
-describe('toTransactionRow', () => {
+describe('toAccountRow', () => {
   it('resolves the Category name from the shared cache', () => {
-    expect(toTransactionRow(tx({ categoryId: 2 }), NAMES, 3).categoryName).toBe(
+    expect(toAccountRow(tx({ categoryId: 2 }), NAMES, 3).categoryName).toBe(
       'Salary'
     );
   });
 
   it('labels an uncategorised income or expense rather than leaving it blank', () => {
-    expect(
-      toTransactionRow(tx({ categoryId: null }), NAMES, 3).categoryName
-    ).toBe('Uncategorised');
-    expect(
-      toTransactionRow(tx({ categoryId: 999 }), NAMES, 3).categoryName
-    ).toBe('Uncategorised');
+    expect(toAccountRow(tx({ categoryId: null }), NAMES, 3).categoryName).toBe(
+      'Uncategorised'
+    );
+    expect(toAccountRow(tx({ categoryId: 999 }), NAMES, 3).categoryName).toBe(
+      'Uncategorised'
+    );
   });
 
   it('heads a row with its note when it has one', () => {
-    expect(
-      toTransactionRow(tx({ description: 'Coffee' }), NAMES, 3).headline
-    ).toBe('Coffee');
+    expect(toAccountRow(tx({ description: 'Coffee' }), NAMES, 3).headline).toBe(
+      'Coffee'
+    );
   });
 
   it('falls back to the Category for an un-noted income or expense', () => {
     expect(
-      toTransactionRow(tx({ description: null, categoryId: 1 }), NAMES, 3)
-        .headline
+      toAccountRow(tx({ description: null, categoryId: 1 }), NAMES, 3).headline
     ).toBe('Groceries');
   });
 
   it('never heads a Transfer with a Category label, even with no note', () => {
-    const row = toTransactionRow(
+    const row = toAccountRow(
       tx({ direction: 'transfer', description: null, categoryId: null }),
       NAMES,
       3
@@ -84,64 +85,162 @@ describe('toTransactionRow', () => {
     expect(row.headline).toBe('Transfer');
   });
 
+  it('carries an account reading', () => {
+    expect(toAccountRow(tx(), NAMES, 3).reading.kind).toBe('account');
+  });
+
   it('signs income as incoming and expense as outgoing', () => {
-    expect(
-      toTransactionRow(tx({ direction: 'income' }), NAMES, 3).incoming
-    ).toBe(true);
-    expect(
-      toTransactionRow(tx({ direction: 'expense' }), NAMES, 3).incoming
-    ).toBe(false);
+    expect(toAccountRow(tx({ direction: 'income' }), NAMES, 3).reading).toEqual({
+      kind: 'account',
+      incoming: true,
+      recordedAgainst: null,
+    });
+    expect(toAccountRow(tx({ direction: 'expense' }), NAMES, 3).reading).toEqual({
+      kind: 'account',
+      incoming: false,
+      recordedAgainst: null,
+    });
   });
 
   it('signs a Transfer against the Account in view — outgoing where it leaves, incoming where it lands', () => {
-    const leaving = toTransactionRow(
+    const leaving = toAccountRow(
       tx({ direction: 'transfer', accountId: 3, transferToAccountId: 9 }),
       NAMES,
-      3
+      3,
+      ACCOUNT_NAMES
     );
-    const landing = toTransactionRow(
-      tx({ direction: 'transfer', accountId: 9, transferToAccountId: 3 }),
-      NAMES,
-      3
-    );
-
-    expect(leaving.incoming).toBe(false);
-    expect(landing.incoming).toBe(true);
-  });
-
-  it('names the Account a landed Transfer was recorded against, for a link back (ADR 0010)', () => {
-    const landing = toTransactionRow(
+    const landing = toAccountRow(
       tx({ direction: 'transfer', accountId: 9, transferToAccountId: 3 }),
       NAMES,
       3,
       ACCOUNT_NAMES
     );
 
-    expect(landing.recordedAgainst).toEqual({ id: 9, name: 'Savings' });
+    expect(leaving.reading).toEqual({
+      kind: 'account',
+      incoming: false,
+      recordedAgainst: null,
+    });
+    expect(landing.reading).toEqual({
+      kind: 'account',
+      incoming: true,
+      recordedAgainst: { id: 9, name: 'Savings' },
+    });
   });
 
   it('leaves recordedAgainst null on the side a Transfer left, and on a plain income or expense', () => {
-    const leaving = toTransactionRow(
+    const leaving = toAccountRow(
       tx({ direction: 'transfer', accountId: 3, transferToAccountId: 9 }),
       NAMES,
       3,
       ACCOUNT_NAMES
     );
-    const expense = toTransactionRow(tx({ direction: 'expense' }), NAMES, 3, ACCOUNT_NAMES);
+    const expense = toAccountRow(
+      tx({ direction: 'expense' }),
+      NAMES,
+      3,
+      ACCOUNT_NAMES
+    );
 
-    expect(leaving.recordedAgainst).toBeNull();
-    expect(expense.recordedAgainst).toBeNull();
+    expect(leaving.reading).toMatchObject({ recordedAgainst: null });
+    expect(expense.reading).toMatchObject({ recordedAgainst: null });
   });
 
   it('falls back to a stand-in name when the home Account is not in the map', () => {
-    const landing = toTransactionRow(
+    const landing = toAccountRow(
       tx({ direction: 'transfer', accountId: 42, transferToAccountId: 3 }),
       NAMES,
       3,
       ACCOUNT_NAMES
     );
 
-    expect(landing.recordedAgainst).toEqual({ id: 42, name: 'another account' });
+    expect(landing.reading).toMatchObject({
+      recordedAgainst: { id: 42, name: 'another account' },
+    });
+  });
+});
+
+describe('toLedgerRow', () => {
+  it('resolves the Category name and headline the same way the account reading does', () => {
+    const row = toLedgerRow(tx({ categoryId: 2 }), NAMES, ACCOUNT_NAMES);
+
+    expect(row.categoryName).toBe('Salary');
+    expect(row.headline).toBe('Salary');
+  });
+
+  it('never heads a Transfer with a Category label', () => {
+    const row = toLedgerRow(
+      tx({ direction: 'transfer', description: null, categoryId: null }),
+      NAMES,
+      ACCOUNT_NAMES
+    );
+
+    expect(row.headline).toBe('Transfer');
+  });
+
+  it('carries a ledger reading with no sign to set', () => {
+    const row = toLedgerRow(tx({ direction: 'income' }), NAMES, ACCOUNT_NAMES);
+
+    expect(row.reading.kind).toBe('ledger');
+    expect(row.reading).not.toHaveProperty('incoming');
+  });
+
+  it('names the row’s own Account on every row', () => {
+    const income = toLedgerRow(
+      tx({ direction: 'income', accountId: 9 }),
+      NAMES,
+      ACCOUNT_NAMES
+    );
+
+    expect(income.reading).toEqual({
+      kind: 'ledger',
+      account: { id: 9, name: 'Savings' },
+      transferTo: null,
+    });
+  });
+
+  it('names both ends of a Transfer as the movement between them', () => {
+    const transfer = toLedgerRow(
+      tx({
+        direction: 'transfer',
+        accountId: 3,
+        transferToAccountId: 9,
+        categoryId: null,
+      }),
+      NAMES,
+      ACCOUNT_NAMES
+    );
+
+    expect(transfer.reading).toEqual({
+      kind: 'ledger',
+      account: { id: 3, name: 'Everyday cash' },
+      transferTo: { id: 9, name: 'Savings' },
+    });
+  });
+
+  it('falls back to a stand-in name for an Account absent from the map', () => {
+    const transfer = toLedgerRow(
+      tx({
+        direction: 'transfer',
+        accountId: 42,
+        transferToAccountId: 77,
+        categoryId: null,
+      }),
+      NAMES,
+      ACCOUNT_NAMES
+    );
+
+    expect(transfer.reading).toEqual({
+      kind: 'ledger',
+      account: { id: 42, name: 'another account' },
+      transferTo: { id: 77, name: 'another account' },
+    });
+  });
+
+  it('leaves transferTo null on an income or an expense', () => {
+    expect(
+      toLedgerRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES).reading
+    ).toMatchObject({ transferTo: null });
   });
 });
 
@@ -205,7 +304,7 @@ describe('TransactionRow', () => {
 
   it('shows the date and time, the direction, the Category, and a signed amount', () => {
     const text = render(
-      toTransactionRow(
+      toAccountRow(
         tx({
           amount: 120.5,
           categoryId: 1,
@@ -226,7 +325,7 @@ describe('TransactionRow', () => {
 
   it('marks a generated transaction and shows only its wall-clock day', () => {
     const text = render(
-      toTransactionRow(
+      toAccountRow(
         tx({
           generated: true,
           description: 'Rent',
@@ -244,7 +343,7 @@ describe('TransactionRow', () => {
 
   it('drops the Category segment for a Transfer', () => {
     const text = render(
-      toTransactionRow(
+      toAccountRow(
         tx({
           direction: 'transfer',
           categoryId: null,
@@ -262,7 +361,7 @@ describe('TransactionRow', () => {
 
   it('names the source Account on a landed Transfer and links to it', () => {
     const host = renderElement(
-      toTransactionRow(
+      toAccountRow(
         tx({
           direction: 'transfer',
           accountId: 9,
@@ -283,9 +382,127 @@ describe('TransactionRow', () => {
     expect(link?.getAttribute('href')).toBe('/app/accounts/9');
   });
 
+  describe('the ledger reading', () => {
+    it('renders an income with a plus', () => {
+      const text = render(
+        toLedgerRow(
+          tx({ direction: 'income', amount: 1000, categoryId: 2 }),
+          NAMES,
+          ACCOUNT_NAMES
+        )
+      );
+
+      expect(text).toContain(`+${formatPeso(1000)}`);
+    });
+
+    it('renders an expense with a minus', () => {
+      const text = render(
+        toLedgerRow(
+          tx({ direction: 'expense', amount: 250 }),
+          NAMES,
+          ACCOUNT_NAMES
+        )
+      );
+
+      expect(text).toContain(formatPeso(-250));
+    });
+
+    it('renders a Transfer with neither a plus nor a minus', () => {
+      const text = render(
+        toLedgerRow(
+          tx({
+            direction: 'transfer',
+            amount: 500,
+            accountId: 3,
+            transferToAccountId: 9,
+            categoryId: null,
+          }),
+          NAMES,
+          ACCOUNT_NAMES
+        )
+      );
+
+      expect(text).toContain(formatPeso(500));
+      expect(text).not.toContain(`+${formatPeso(500)}`);
+      expect(text).not.toContain(formatPeso(-500));
+    });
+
+    it('names the row’s own Account and links to it, without making the row a link', () => {
+      const host = renderElement(
+        toLedgerRow(
+          tx({ direction: 'expense', accountId: 9, description: 'Coffee' }),
+          NAMES,
+          ACCOUNT_NAMES
+        )
+      );
+
+      const link = Array.from(host.querySelectorAll('a')).find((a) =>
+        (a.textContent ?? '').includes('Savings')
+      );
+      expect(link?.getAttribute('href')).toBe('/app/accounts/9');
+      // The row's own element is a list item, not an anchor.
+      expect(host.closest('a')).toBeNull();
+    });
+
+    it('names both ends of a Transfer, each linking to its Account', () => {
+      const host = renderElement(
+        toLedgerRow(
+          tx({
+            direction: 'transfer',
+            accountId: 3,
+            transferToAccountId: 9,
+            categoryId: null,
+          }),
+          NAMES,
+          ACCOUNT_NAMES
+        )
+      );
+
+      const hrefs = Array.from(host.querySelectorAll('a')).map((a) =>
+        a.getAttribute('href')
+      );
+      expect(hrefs).toContain('/app/accounts/3');
+      expect(hrefs).toContain('/app/accounts/9');
+      expect(host.textContent).toContain('Everyday cash');
+      expect(host.textContent).toContain('Savings');
+    });
+
+    it('renders the date, Category, Tags and Generated badge the same as the account reading', () => {
+      const text = render(
+        toLedgerRow(
+          tx({
+            direction: 'expense',
+            categoryId: 1,
+            generated: true,
+            description: 'Rent',
+            date: new Date('2026-08-29T00:00:00'),
+            tags: [{ id: 1, name: 'home' }],
+          }),
+          NAMES,
+          ACCOUNT_NAMES
+        )
+      );
+
+      expect(text).toContain('29 Aug 2026');
+      expect(text).toContain('Groceries');
+      expect(text).toContain('#home');
+      expect(text).toContain('Generated');
+    });
+
+    it('still offers no whole-row link and keeps the actions menu in place', () => {
+      const fixture = renderFixture(
+        toLedgerRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES)
+      );
+
+      expect(
+        actionsTrigger(fixture.nativeElement as HTMLElement)
+      ).toBeDefined();
+    });
+  });
+
   describe('the actions menu', () => {
     it('offers Refile and Remove behind an ellipsis on an expense', () => {
-      const fixture = renderFixture(toTransactionRow(tx(), NAMES, 3));
+      const fixture = renderFixture(toAccountRow(tx(), NAMES, 3));
 
       const items = openMenu(fixture);
       expect(menuItem(items, 'Refile')).toBeDefined();
@@ -294,7 +511,7 @@ describe('TransactionRow', () => {
 
     it('offers the menu on an income', () => {
       const fixture = renderFixture(
-        toTransactionRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3)
+        toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3)
       );
 
       expect(
@@ -307,7 +524,7 @@ describe('TransactionRow', () => {
 
     it('offers the menu on a Transfer seen from the side it left', () => {
       const fixture = renderFixture(
-        toTransactionRow(
+        toAccountRow(
           tx({
             direction: 'transfer',
             accountId: 3,
@@ -327,11 +544,7 @@ describe('TransactionRow', () => {
 
     it('offers the same actions on a generated transaction', () => {
       const fixture = renderFixture(
-        toTransactionRow(
-          tx({ generated: true, description: 'Rent' }),
-          NAMES,
-          3
-        )
+        toAccountRow(tx({ generated: true, description: 'Rent' }), NAMES, 3)
       );
 
       const items = openMenu(fixture);
@@ -341,7 +554,7 @@ describe('TransactionRow', () => {
 
     it('offers no menu at all on a Transfer seen from where it landed', () => {
       const host = renderElement(
-        toTransactionRow(
+        toAccountRow(
           tx({
             direction: 'transfer',
             accountId: 9,
@@ -360,7 +573,7 @@ describe('TransactionRow', () => {
     });
 
     it('emits refile when the Refile entry is chosen', () => {
-      const fixture = renderFixture(toTransactionRow(tx(), NAMES, 3));
+      const fixture = renderFixture(toAccountRow(tx(), NAMES, 3));
       const emitted: unknown[] = [];
       fixture.componentInstance.refile.subscribe(() => emitted.push('refile'));
 
@@ -374,11 +587,7 @@ describe('TransactionRow', () => {
     it('asks for confirmation on the row, the Transaction still visible, and sends nothing yet', () => {
       const remove = vi.fn(() => of(undefined));
       const fixture = renderFixture(
-        toTransactionRow(
-          tx({ amount: 120.5, description: 'Coffee' }),
-          NAMES,
-          3
-        ),
+        toAccountRow(tx({ amount: 120.5, description: 'Coffee' }), NAMES, 3),
         remove as unknown as TransactionsService['remove']
       );
 
@@ -399,7 +608,7 @@ describe('TransactionRow', () => {
     it('declining with Keep sends nothing, emits nothing, and restores the row', () => {
       const remove = vi.fn(() => of(undefined));
       const fixture = renderFixture(
-        toTransactionRow(tx({ description: 'Coffee' }), NAMES, 3),
+        toAccountRow(tx({ description: 'Coffee' }), NAMES, 3),
         remove as unknown as TransactionsService['remove']
       );
       const removed: unknown[] = [];
@@ -420,7 +629,7 @@ describe('TransactionRow', () => {
     it('on confirm, removes by id and emits removed', async () => {
       const remove = vi.fn(() => of(undefined));
       const fixture = renderFixture(
-        toTransactionRow(tx({ id: 7 }), NAMES, 3),
+        toAccountRow(tx({ id: 7 }), NAMES, 3),
         remove as unknown as TransactionsService['remove']
       );
       const removed: unknown[] = [];
@@ -439,7 +648,7 @@ describe('TransactionRow', () => {
       const inFlight = new Subject<void>();
       const remove = vi.fn(() => inFlight.asObservable());
       const fixture = renderFixture(
-        toTransactionRow(tx({ id: 7 }), NAMES, 3),
+        toAccountRow(tx({ id: 7 }), NAMES, 3),
         remove as unknown as TransactionsService['remove']
       );
 
@@ -460,7 +669,7 @@ describe('TransactionRow', () => {
         throwError(() => new ApiError('That could not be removed just now.', 500))
       );
       const fixture = renderFixture(
-        toTransactionRow(tx({ id: 7, description: 'Coffee' }), NAMES, 3),
+        toAccountRow(tx({ id: 7, description: 'Coffee' }), NAMES, 3),
         remove as unknown as TransactionsService['remove']
       );
       const removed: unknown[] = [];
@@ -483,7 +692,7 @@ describe('TransactionRow', () => {
     it('falls back to a generic notice when a failed removal is not an ApiError', async () => {
       const remove = vi.fn(() => throwError(() => new Error('offline')));
       const fixture = renderFixture(
-        toTransactionRow(tx({ id: 7 }), NAMES, 3),
+        toAccountRow(tx({ id: 7 }), NAMES, 3),
         remove as unknown as TransactionsService['remove']
       );
 
@@ -508,7 +717,7 @@ describe('TransactionRow', () => {
           : of(undefined);
       });
       const fixture = renderFixture(
-        toTransactionRow(tx({ id: 7 }), NAMES, 3),
+        toAccountRow(tx({ id: 7 }), NAMES, 3),
         remove as unknown as TransactionsService['remove']
       );
       const removed: unknown[] = [];
@@ -530,7 +739,7 @@ describe('TransactionRow', () => {
 
   it('renders the Tags on a Transaction', () => {
     const text = render(
-      toTransactionRow(
+      toAccountRow(
         tx({
           description: 'Lunch',
           tags: [

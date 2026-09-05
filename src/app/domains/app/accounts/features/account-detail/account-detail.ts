@@ -26,7 +26,7 @@ import {
   TransactionRowModel,
   TransactionsService,
   TransferDestinationAccount,
-  toTransactionRow,
+  toAccountRow,
 } from '@/app/domains/app/transactions';
 import { Account, ACCOUNT_TYPES } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
@@ -290,7 +290,7 @@ export default class AccountDetail implements OnInit {
     );
     this.rows.set(
       result.transactions.map((t) =>
-        toTransactionRow(t, result.names, this.accountId(), accountNames)
+        toAccountRow(t, result.names, this.accountId(), accountNames)
       )
     );
   }

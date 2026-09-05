@@ -35,7 +35,7 @@ Which of the three kinds a Transaction reads as: income, expense, or Transfer. I
 _Avoid_: Type, kind, sign
 
 **Transfer**:
-A Transaction moving money between two Accounts the same person owns. Across the pair it is neither income nor expense: it changes where money sits, not how much there is. It is one Transaction rather than two, appearing in both Accounts' lists as the same record and signed against whichever Account is in view — leaving the one it comes from, arriving in the one it goes to. It is recorded against the Account it leaves, and that is the only place it can be refiled or removed. It carries no Category, because every Category is a kind of income or expense and a Transfer is neither.
+A Transaction moving money between two Accounts the same person owns. Across the pair it is neither income nor expense: it changes where money sits, not how much there is. It is one Transaction rather than two, appearing in both Accounts' lists as the same record and signed against whichever Account is in view — leaving the one it comes from, arriving in the one it goes to. Where no Account is in view, it is neither incoming nor outgoing and reads as the movement between its two ends. It is recorded against the Account it leaves, and that is the only place it can be refiled or removed. It carries no Category, because every Category is a kind of income or expense and a Transfer is neither.
 _Avoid_: Internal transaction, move, send
 
 **Generated transaction**:

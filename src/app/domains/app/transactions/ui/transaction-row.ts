@@ -32,37 +32,61 @@ const UNNAMED_ACCOUNT = 'another account';
 const NO_ACCOUNT_NAMES: ReadonlyMap<number, string> = new Map();
 
 /**
+ * How a Transaction row is being read — the decision that fixes what its sign
+ * means and which Account, if any, it names. One row component renders either;
+ * a screen picks the reading by calling {@link toAccountRow} or {@link
+ * toLedgerRow}, never by passing a flag.
+ *
+ * `account` — an Account is in view (Account detail). The amount is signed
+ * against it: `incoming` is `true` where the money adds (an income, or a
+ * Transfer landing here) and `false` where it subtracts. Where a Transfer
+ * landed, `recordedAgainst` names the Account it was recorded against — its
+ * home — to link back to, the one place it can be acted on (ADR 0010); it is
+ * `null` for every other row, including a Transfer seen from the side it left.
+ *
+ * `ledger` — no Account is in view (a list spanning every Account). There is no
+ * `incoming` field because the sign is derivable and nothing should be able to
+ * set it: an income adds, an expense subtracts, and a Transfer is neither
+ * incoming nor outgoing — it reads as the movement between its two ends
+ * (ADR 0010). `account` names this row's own Account, always; `transferTo`
+ * names the far end of a Transfer, and is `null` on an income or an expense.
+ */
+export type Reading =
+  | {
+      kind: 'account';
+      incoming: boolean;
+      recordedAgainst: { id: number; name: string } | null;
+    }
+  | {
+      kind: 'ledger';
+      account: { id: number; name: string };
+      transferTo: { id: number; name: string } | null;
+    };
+
+/**
  * A {@link Transaction} with the three fields the row template needs on top of
  * the domain shape: `categoryName` for the meta line, `headline` for the main
  * line — its note if it has one, otherwise what it is (a Transfer, or its
- * Category) — and `incoming`, whether the amount adds to the Account in view
- * (income, or a Transfer landing here) or subtracts from it, so the row can be
- * signed.
+ * Category) — and a discriminated {@link Reading} that carries the sign and the
+ * Account names, resolved for whichever of the two ways the row is being read.
  */
 export type TransactionRowModel = Transaction & {
   categoryName: string;
   headline: string;
-  incoming: boolean;
-
-  /**
-   * For a Transfer seen from the Account it landed in: the Account it was
-   * recorded against — its home — to name on the row and link back to, since a
-   * Transfer can only be acted on there (ADR 0010). `null` for every other row,
-   * including a Transfer seen from the side it left.
-   */
-  recordedAgainst: { id: number; name: string } | null;
+  reading: Reading;
 };
 
 /**
- * One Transaction as a row in an Account's list: the direction carried by an
- * icon and a colour as much as a word, the date in the person's own timezone
- * (ADR 0007), the Category, the amount signed against the Account in view, its
+ * One Transaction as a row: the direction carried by an icon and a colour as
+ * much as a word, the date in the person's own timezone (ADR 0007), the
+ * Category, the amount signed for whichever {@link Reading} the row carries, its
  * Tags, and a "Generated" badge when a Schedule created it.
  *
  * The Transactions domain owns this row. A screen that shows it resolves the
- * Category names and picks the Account to sign against — with {@link
- * toTransactionRow} — then hands over a finished {@link TransactionRowModel}.
- * The dependency runs one way: nothing here reaches back into Accounts.
+ * Category and Account names and picks the reading — {@link toAccountRow} where
+ * an Account is in view, {@link toLedgerRow} where none is — then hands over a
+ * finished {@link TransactionRowModel}. The dependency runs one way: nothing
+ * here reaches back into Accounts.
  *
  * The row's actions sit behind an ellipsis menu — the same affordance an
  * Account row uses — holding *Refile* and *Remove*. Refile asks the screen to
@@ -110,15 +134,41 @@ export class TransactionRow {
   /**
    * Whether this row can be acted on here at all — the single condition both
    * menu entries and the menu itself hang off, so ADR 0010's placement rule
-   * lives in one place. A Transaction is acted on where it was recorded: a
-   * Transfer seen from the Account it landed in (`recordedAgainst` set) is
-   * read-only there and links back to its home instead. Every other row — an
-   * income, an expense, a Transfer seen from the side it left, a generated
-   * transaction — offers the full menu in place.
+   * lives in one place. A Transaction is acted on where it was recorded: under
+   * the account reading, a Transfer seen from the Account it landed in
+   * (`recordedAgainst` set) is read-only there and links back to its home
+   * instead. Every other row — an income, an expense, a Transfer seen from the
+   * side it left, a generated transaction — offers the full menu in place.
+   * Under the ledger reading the row always names its Transaction's home
+   * Account (ADR 0010), so the menu is always in place there.
    */
-  protected readonly canActOnHere = computed(
-    () => this.row().recordedAgainst === null
-  );
+  protected readonly canActOnHere = computed(() => {
+    const reading = this.row().reading;
+    return reading.kind === 'ledger' || reading.recordedAgainst === null;
+  });
+
+  /**
+   * The sign the amount renders with: a plus where the money adds, a minus
+   * where it subtracts, and neither for a Transfer read with no Account in
+   * view. Under the account reading the sign is `incoming`, already resolved
+   * against the Account on screen. Under the ledger reading it comes from the
+   * direction — an income adds, an expense subtracts, a Transfer is neither
+   * (ADR 0010).
+   */
+  protected readonly amountSign = computed<'plus' | 'minus' | 'none'>(() => {
+    const reading = this.row().reading;
+    if (reading.kind === 'account') {
+      return reading.incoming ? 'plus' : 'minus';
+    }
+    switch (this.row().direction) {
+      case 'income':
+        return 'plus';
+      case 'expense':
+        return 'minus';
+      case 'transfer':
+        return 'none';
+    }
+  });
 
   /**
    * True once *Remove* has been chosen and the inline confirmation is showing.
@@ -177,49 +227,99 @@ export class TransactionRow {
 }
 
 /**
- * Build the row an Account's list renders: resolve the Category name through the
- * caller's shared cache, choose the headline, and sign the amount against the
- * Account in view.
- *
- * A Transfer is signed against a single Account (ADR 0010): it adds where the
- * money lands — this Account is its destination — and subtracts where it leaves.
- * The rule needs an Account in view, which every screen rendering a Transaction
- * today has. Seen from the landing side, the row also names the Account the
- * Transfer was recorded against and links there; `accountNames` resolves that
- * name the way `categoryNames` resolves a Category's.
+ * The part of a row that is the same whichever way it is read: the Category name
+ * resolved through the caller's shared cache, and the headline — the note if
+ * there is one, otherwise what the Transaction is. A Transfer has no Category,
+ * so "Uncategorised" never heads its row.
  */
-export function toTransactionRow(
+function baseRow(
   transaction: Transaction,
-  categoryNames: ReadonlyMap<number, string>,
-  viewedAccountId: number,
-  accountNames: ReadonlyMap<number, string> = NO_ACCOUNT_NAMES
-): TransactionRowModel {
+  categoryNames: ReadonlyMap<number, string>
+): { categoryName: string; headline: string } {
   const resolved =
     transaction.categoryId === null
       ? null
       : (categoryNames.get(transaction.categoryId) ?? null);
   const categoryName = resolved ?? NO_CATEGORY;
 
-  const isTransfer = transaction.direction === 'transfer';
-
-  // A Transfer has no Category, so never let "Uncategorised" head its row.
   const headline =
     transaction.description ||
-    (isTransfer ? TRANSACTION_DIRECTIONS.transfer.label : categoryName);
+    (transaction.direction === 'transfer'
+      ? TRANSACTION_DIRECTIONS.transfer.label
+      : categoryName);
 
+  return { categoryName, headline };
+}
+
+/** An Account's id and name, or a stand-in name when the id is not in the map. */
+function nameAccount(
+  id: number,
+  accountNames: ReadonlyMap<number, string>
+): { id: number; name: string } {
+  return { id, name: accountNames.get(id) ?? UNNAMED_ACCOUNT };
+}
+
+/**
+ * Build a row for a screen with an Account in view — Account detail. The amount
+ * is signed against that Account: a Transfer adds where the money lands (this
+ * Account is its destination) and subtracts where it leaves (ADR 0010). Seen
+ * from the landing side, the row also names the Account the Transfer was
+ * recorded against and links there — the one place it can be acted on;
+ * `accountNames` resolves that name the way `categoryNames` resolves a
+ * Category's.
+ */
+export function toAccountRow(
+  transaction: Transaction,
+  categoryNames: ReadonlyMap<number, string>,
+  viewedAccountId: number,
+  accountNames: ReadonlyMap<number, string> = NO_ACCOUNT_NAMES
+): TransactionRowModel {
   const landedHere =
-    isTransfer && transaction.transferToAccountId === viewedAccountId;
+    transaction.direction === 'transfer' &&
+    transaction.transferToAccountId === viewedAccountId;
 
   const incoming = transaction.direction === 'income' || landedHere;
 
   // Only on the landing side: `accountId` is the Transfer's home, the one place
   // it can be acted on. The row points there.
   const recordedAgainst = landedHere
-    ? {
-        id: transaction.accountId,
-        name: accountNames.get(transaction.accountId) ?? UNNAMED_ACCOUNT,
-      }
+    ? nameAccount(transaction.accountId, accountNames)
     : null;
 
-  return { ...transaction, categoryName, headline, incoming, recordedAgainst };
+  return {
+    ...transaction,
+    ...baseRow(transaction, categoryNames),
+    reading: { kind: 'account', incoming, recordedAgainst },
+  };
+}
+
+/**
+ * Build a row for a screen with no Account in view — a list spanning every
+ * Account. No amount is signed against a viewpoint: the row derives its sign
+ * from the direction (ADR 0010). Every row names its own Account, and a Transfer
+ * names both ends — the movement from the one it leaves to the one it lands in.
+ * `accountNames` is required, not optional: the ledger reading always names an
+ * Account, so a caller with no names to resolve against would render every row
+ * as "another account".
+ */
+export function toLedgerRow(
+  transaction: Transaction,
+  categoryNames: ReadonlyMap<number, string>,
+  accountNames: ReadonlyMap<number, string>
+): TransactionRowModel {
+  const transferTo =
+    transaction.direction === 'transfer' &&
+    transaction.transferToAccountId !== null
+      ? nameAccount(transaction.transferToAccountId, accountNames)
+      : null;
+
+  return {
+    ...transaction,
+    ...baseRow(transaction, categoryNames),
+    reading: {
+      kind: 'ledger',
+      account: nameAccount(transaction.accountId, accountNames),
+      transferTo,
+    },
+  };
 }
