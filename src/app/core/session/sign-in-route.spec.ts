@@ -1,4 +1,9 @@
-import { isSessionLapse, safeReturnUrl, signInRedirect } from './sign-in-route';
+import {
+  reasonMessage,
+  reasonQueryParams,
+  safeReturnUrl,
+  signInRedirect,
+} from './sign-in-route';
 
 describe('safeReturnUrl', () => {
   it('keeps an in-app path', () => {
@@ -32,8 +37,10 @@ describe('signInRedirect', () => {
     ]);
   });
 
-  it('adds the lapse marker when asked', () => {
-    expect(signInRedirect('/app/accounts/42', { lapsed: true })).toEqual([
+  it('adds the reason marker when asked', () => {
+    expect(
+      signInRedirect('/app/accounts/42', { reason: 'session-expired' })
+    ).toEqual([
       ['/auth/sign-in'],
       {
         queryParams: {
@@ -45,17 +52,35 @@ describe('signInRedirect', () => {
   });
 });
 
-describe('isSessionLapse', () => {
-  it('accepts the exact marker signInRedirect mints', () => {
-    const [, { queryParams }] = signInRedirect('/x', { lapsed: true });
-    expect(isSessionLapse(queryParams?.['reason'] as string)).toBe(true);
+describe('reasonQueryParams', () => {
+  it('mints the exact param signInRedirect adds', () => {
+    expect(reasonQueryParams('email-confirmed')).toEqual({
+      reason: 'email-confirmed',
+    });
+  });
+});
+
+describe('reasonMessage', () => {
+  it('gives the session-expired wording for its exact marker', () => {
+    const [, { queryParams }] = signInRedirect('/x', {
+      reason: 'session-expired',
+    });
+    expect(reasonMessage(queryParams?.['reason'] as string)).toBe(
+      'Your session has ended. Please sign in again.'
+    );
   });
 
-  it('rejects anything else, including every flavour of absent', () => {
-    expect(isSessionLapse(null)).toBe(false);
-    expect(isSessionLapse(undefined)).toBe(false);
-    expect(isSessionLapse('')).toBe(false);
-    expect(isSessionLapse('expired')).toBe(false);
-    expect(isSessionLapse('session-expired ')).toBe(false);
+  it('gives the email-confirmed wording for its exact marker', () => {
+    expect(reasonMessage('email-confirmed')).toBe(
+      'Your email is confirmed. Sign in to continue.'
+    );
+  });
+
+  it('yields nothing for anything else, including every flavour of absent', () => {
+    expect(reasonMessage(null)).toBeNull();
+    expect(reasonMessage(undefined)).toBeNull();
+    expect(reasonMessage('')).toBeNull();
+    expect(reasonMessage('expired')).toBeNull();
+    expect(reasonMessage('session-expired ')).toBeNull();
   });
 });

@@ -1,11 +1,12 @@
 import { Route } from '@angular/router';
-import { authGuard, guestGuard } from '@/app/core/session';
+import { authGuard } from '@/app/core/session';
 
 export const routes: Route[] = [
-  // Auth
+  // Auth. `guestGuard` sits on the individual child routes, not here — the
+  // two link-landing screens (confirm-email, and reset once #71 lands) must
+  // not assume the absence of a session (ADR 0015).
   {
     path: 'auth',
-    canActivate: [guestGuard],
     loadChildren: () => import('./domains/auth/routes'),
   },
 

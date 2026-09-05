@@ -5,15 +5,14 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { SESSION_ENDED_MESSAGE } from '@/app/core/api';
 import { EmailNotConfirmedError } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import {
   APP_HOME_ROUTE,
-  isSessionLapse,
+  reasonMessage,
   safeReturnUrl,
   Session,
-  SESSION_LAPSE_PARAM,
+  SIGN_IN_REASON_PARAM,
 } from '@/app/core/session';
 import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation';
 
@@ -55,16 +54,15 @@ export default class AuthSignIn {
   protected submitting = signal(false);
 
   /**
-   * The information notice shown when the person was bounced here by a lapsed
-   * session (story 11). Distinct from `errorMessage`: it is not about anything
-   * they typed, so it is not the red banner. Read once off the query string —
+   * The information notice shown when the person was bounced here with a
+   * `reason` attached — a lapsed session (story 11), or a confirmation link
+   * just spent. Distinct from `errorMessage`: it is not about anything they
+   * typed, so it is not the red banner. Read once off the query string —
    * matched exactly, since anyone can rewrite it — and cleared on the first
    * sign-in attempt so a failed attempt never stacks two banners.
    */
   protected sessionNotice = signal<string | null>(
-    isSessionLapse(this.route.snapshot.queryParamMap.get(SESSION_LAPSE_PARAM))
-      ? SESSION_ENDED_MESSAGE
-      : null
+    reasonMessage(this.route.snapshot.queryParamMap.get(SIGN_IN_REASON_PARAM))
   );
 
   /**
