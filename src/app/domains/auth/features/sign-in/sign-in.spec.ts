@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { FieldTree } from '@angular/forms/signals';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { ApiError } from '@/app/core/api';
+import { AuthService, EmailNotConfirmedError } from '@/app/core/auth';
 import { Session } from '@/app/core/session';
 import AuthSignIn from './sign-in';
 
@@ -12,6 +13,7 @@ type SignInInternals = {
   signInForm: { email: FieldTree<string>; password: FieldTree<string> };
   errorMessage: () => string | null;
   sessionNotice: () => string | null;
+  unconfirmedEmail: () => string | null;
   signIn(event: Event): void;
 };
 
@@ -25,6 +27,9 @@ describe('AuthSignIn', () => {
       providers: [
         provideRouter([]),
         { provide: Session, useValue: { signIn } },
+        // Only reached by the resend control on the unconfirmed-email state;
+        // stubbed so its host doesn't need a real HTTP setup.
+        { provide: AuthService, useValue: { resendConfirmation: vi.fn() } },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -96,6 +101,58 @@ describe('AuthSignIn', () => {
     expect(cmp.errorMessage()).toBe(
       'That email and password do not match. Please try again.'
     );
+    // The other auth failure that must never carry the resend affordance.
+    expect(cmp.unconfirmedEmail()).toBeNull();
+  });
+
+  it('shows a locked-out failure as one form-level message, not a field error', async () => {
+    const { fixture, cmp } = setup(() =>
+      Promise.reject(
+        new ApiError(
+          'Too many failed attempts. Please wait a few minutes and try again.',
+          423
+        )
+      )
+    );
+
+    await submitAndSettle(fixture, cmp);
+
+    expect(cmp.signInForm.email().errors()).toEqual([]);
+    expect(cmp.errorMessage()).toBe(
+      'Too many failed attempts. Please wait a few minutes and try again.'
+    );
+    // The one auth failure that should never carry the resend affordance.
+    expect(cmp.unconfirmedEmail()).toBeNull();
+  });
+
+  it('offers the resend control on an unconfirmed-email failure, seeded with the typed address', async () => {
+    const { fixture, cmp } = setup(() =>
+      Promise.reject(new EmailNotConfirmedError('nobody@example.com'))
+    );
+
+    await submitAndSettle(fixture, cmp);
+
+    expect(cmp.unconfirmedEmail()).toBe('nobody@example.com');
+    expect(cmp.errorMessage()).not.toBeNull();
+    // Never a suggestion the password was right.
+    expect(cmp.errorMessage()).not.toMatch(/password/i);
+    expect(cmp.signInForm.email().errors()).toEqual([]);
+  });
+
+  it('clears the resend affordance as soon as the person edits the form', async () => {
+    const { fixture, cmp } = setup(() =>
+      Promise.reject(new EmailNotConfirmedError('nobody@example.com'))
+    );
+
+    await submitAndSettle(fixture, cmp);
+    expect(cmp.unconfirmedEmail()).not.toBeNull();
+
+    cmp.signInFormModel.set({
+      email: 'nobody@example.com',
+      password: 'secret2!',
+    });
+
+    expect(cmp.unconfirmedEmail()).toBeNull();
   });
 
   it('navigates to the app on a successful sign-in', async () => {

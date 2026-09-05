@@ -15,7 +15,7 @@
         Sign in
       </div>
       <div class="mt-0.5 flex items-baseline font-medium">
-        <div class="text-neutral-500">Don't have an account?</div>
+        <div class="text-neutral-500">New to Pitaka?</div>
         <a
           class="ml-1 underline"
           routerLink="/auth/sign-up"
@@ -47,6 +47,15 @@
           >
             {{ message }}
           </div>
+        }
+
+        <!-- Unconfirmed email: the one failure that offers a way out other
+             than trying again (issue #68) -->
+        @if (unconfirmedEmail(); as email) {
+          <auth-resend-confirmation
+            class="mb-4 block"
+            [email]="email"
+          />
         }
 
         <div class="flex flex-col gap-y-4">

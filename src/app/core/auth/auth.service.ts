@@ -46,6 +46,35 @@ const WRONG_CREDENTIALS = 'That email and password do not match. Please try agai
 const EMAIL_ALREADY_REGISTERED =
   'That email is already registered. Try signing in instead.';
 
+/**
+ * A 423 from `POST /api/auth/login` means too many recent failures. No
+ * countdown: Identity's lockout duration is a server default the response
+ * does not carry, and a guessed figure would be a fabrication (ADR 0015).
+ */
+const TOO_MANY_ATTEMPTS =
+  'Too many failed attempts. Please wait a few minutes and try again.';
+
+/**
+ * A 403 from `POST /api/auth/login` means the Profile has not confirmed its
+ * email — Identity's `PreSignInCheck` returns this before the password is ever
+ * checked, so it says nothing about whether the password was right (issue
+ * #68). It is the one auth failure that drives UI, so it gets its own type
+ * rather than a status check in a screen (ADR 0015): sign-in asks `instanceof`,
+ * never `error.status === 403`.
+ */
+export class EmailNotConfirmedError extends Error {
+  /** The address to seed the shared resend control with. */
+  readonly email: string;
+
+  constructor(email: string) {
+    super(
+      'Confirm your email before signing in. Check your inbox for the link.'
+    );
+    this.name = 'EmailNotConfirmedError';
+    this.email = email;
+  }
+}
+
 /** Wire shape of `POST /api/auth/login` — the API names the identity `user`. */
 type LoginResponse = {
   token: string;
@@ -71,7 +100,13 @@ export class AuthService {
   private http = inject(HttpClient);
   private baseUrl = inject(API_BASE_URL);
 
-  /** Exchange credentials for a token. A wrong pair fails with a 401 `ApiError`. */
+  /**
+   * Exchange credentials for a token. A wrong pair fails with a 401 `ApiError`;
+   * too many recent failures fail with a 423 `ApiError`; an unconfirmed Profile
+   * fails with an `EmailNotConfirmedError` regardless of the password typed
+   * (issue #68) — the three are mutually exclusive, since `PreSignInCheck`
+   * returns the 403 before a locked-out check ever runs.
+   */
   login(credentials: Credentials): Observable<SignInResult> {
     return this.http
       .post<LoginResponse>(`${this.baseUrl}/api/auth/login`, credentials, {
@@ -79,13 +114,20 @@ export class AuthService {
       })
       .pipe(
         map((response) => ({ token: response.token, profile: response.user })),
-        catchError((error: unknown) =>
-          throwError(() =>
-            error instanceof ApiError && error.status === 401
-              ? new ApiError(WRONG_CREDENTIALS, error.status)
-              : error
-          )
-        )
+        catchError((error: unknown) => {
+          if (error instanceof ApiError && error.status === 403) {
+            return throwError(
+              () => new EmailNotConfirmedError(credentials.email)
+            );
+          }
+          if (error instanceof ApiError && error.status === 401) {
+            return throwError(() => new ApiError(WRONG_CREDENTIALS, error.status));
+          }
+          if (error instanceof ApiError && error.status === 423) {
+            return throwError(() => new ApiError(TOO_MANY_ATTEMPTS, error.status));
+          }
+          return throwError(() => error);
+        })
       );
   }
 

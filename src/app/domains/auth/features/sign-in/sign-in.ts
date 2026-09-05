@@ -5,6 +5,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { EmailNotConfirmedError } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import {
   APP_HOME_ROUTE,
@@ -13,6 +14,7 @@ import {
   Session,
   SIGN_IN_REASON_PARAM,
 } from '@/app/core/session';
+import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation';
 
 /** The banner line for a sign-in that failed before it could be attributed. */
 const COULD_NOT_SIGN_IN =
@@ -28,6 +30,7 @@ const COULD_NOT_SIGN_IN =
     MatButtonModule,
     MatIconModule,
     FormField,
+    ResendConfirmation,
   ],
 })
 export default class AuthSignIn {
@@ -74,6 +77,21 @@ export default class AuthSignIn {
     computation: () => null,
   });
 
+  /**
+   * The address to seed the resend control with, once an `EmailNotConfirmedError`
+   * has named it — `null` otherwise, which is also what keeps the control off
+   * the wrong-password and locked-out states (issue #68). Linked to the model
+   * for the same reason `errorMessage` is: an edit means the person is trying
+   * again, not still looking at the last failure.
+   */
+  protected unconfirmedEmail = linkedSignal<
+    { email: string; password: string },
+    string | null
+  >({
+    source: this.signInFormModel,
+    computation: () => null,
+  });
+
   signIn(event: Event) {
     event.preventDefault();
 
@@ -82,10 +100,17 @@ export default class AuthSignIn {
         this.submitting.set(true);
         this.errorMessage.set(null);
         this.sessionNotice.set(null);
+        this.unconfirmedEmail.set(null);
 
         try {
           await this.session.signIn(this.signInFormModel());
         } catch (error) {
+          if (error instanceof EmailNotConfirmedError) {
+            this.errorMessage.set(error.message);
+            this.unconfirmedEmail.set(error.email);
+            return undefined;
+          }
+
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
