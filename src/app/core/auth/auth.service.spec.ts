@@ -12,7 +12,11 @@ import {
   HANDLES_OWN_401,
 } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
-import { AuthService, EmailNotConfirmedError } from './auth.service';
+import {
+  AuthService,
+  EmailNotConfirmedError,
+  ResetLinkRejectedError,
+} from './auth.service';
 
 /**
  * The HTTP adapter boundary — the primary seam (see the spec's Testing
@@ -405,12 +409,12 @@ describe('AuthService', () => {
   });
 
   /**
-   * Same shape as confirm-email: a genuine outcome the caller must see, so a
-   * failure propagates rather than being swallowed (ADR 0015: the API
-   * collapses every failure cause — expired, used, tampered, wrong — into one
-   * undifferentiated 400).
+   * A 400 with no field error means the token itself was rejected — expired,
+   * used, tampered, or wrong, indistinguishable per ADR 0015 — so it surfaces
+   * as `ResetLinkRejectedError` rather than a raw `ApiError`: the caller asks
+   * `instanceof`, never `error.status === 400`.
    */
-  it('lets a reset-password failure propagate as an ApiError', async () => {
+  it('turns an undifferentiated reset-password 400 into a ResetLinkRejectedError', async () => {
     const result = firstValueFrom(
       service.resetPassword(7, 'stale-token', 'a-new-password')
     );
@@ -420,8 +424,7 @@ describe('AuthService', () => {
       .flush(null, { status: 400, statusText: 'Bad Request' });
 
     const error = await result.catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).status).toBe(400);
+    expect(error).toBeInstanceOf(ResetLinkRejectedError);
   });
 
   it('normalises a ValidationProblemDetails reset-password response into a password field error', async () => {

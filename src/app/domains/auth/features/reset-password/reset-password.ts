@@ -6,8 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { ApiError } from '@/app/core/api';
-import { AuthService } from '@/app/core/auth';
+import { AuthService, ResetLinkRejectedError } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Session } from '@/app/core/session';
 import { passwordRules } from '../../password-rules';
@@ -104,24 +103,19 @@ export default class AuthResetPassword {
         try {
           await firstValueFrom(this.auth.resetPassword(userId, token, newPassword));
         } catch (error) {
+          // The token itself was rejected, not the password — the dead-link
+          // state takes over rather than showing a banner over a form that can
+          // no longer succeed.
+          if (error instanceof ResetLinkRejectedError) {
+            this.dead.set(true);
+            return undefined;
+          }
+
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
             COULD_NOT_RESET
           );
-
-          // A weak password comes back bound to the field above; anything else
-          // on a 400 is the token itself, not the password (ADR 0015) — the
-          // dead-link state takes over rather than showing a banner over a form
-          // that can no longer succeed.
-          if (
-            boundErrors.length === 0 &&
-            error instanceof ApiError &&
-            error.status === 400
-          ) {
-            this.dead.set(true);
-            return undefined;
-          }
 
           if (boundErrors.length > 0) {
             this.resetForm().markAsTouched();

@@ -75,6 +75,21 @@ export class EmailNotConfirmedError extends Error {
   }
 }
 
+/**
+ * A `400` from `POST /api/auth/reset-password` with no field error means the
+ * token itself was rejected — expired, already used, tampered, or wrong,
+ * indistinguishable per ADR 0015 — rather than the password failing
+ * validation. It is the one reset failure that drives the dead-link state, so
+ * it gets its own type rather than a status check in the screen (ADR 0015):
+ * the screen asks `instanceof`, never `error.status === 400`.
+ */
+export class ResetLinkRejectedError extends Error {
+  constructor() {
+    super('This reset link is no longer valid.');
+    this.name = 'ResetLinkRejectedError';
+  }
+}
+
 /** Wire shape of `POST /api/auth/login` — the API names the identity `user`. */
 type LoginResponse = {
   token: string;
@@ -241,8 +256,10 @@ export class AuthService {
    * collapses every failure — expired, already used, tampered, or wrong — into
    * one undifferentiated `400` (ADR 0015). A weak password comes back as a
    * ValidationProblemDetails naming `Password`, which the normalizer already
-   * camelCases; the caller tells the two `400` shapes apart by whether that
-   * came with field errors.
+   * camelCases; a rejected token comes back the same status with no field
+   * error, so this tells the two apart here and throws
+   * `ResetLinkRejectedError` for the latter — the caller asks `instanceof`,
+   * never `error.status === 400` (ADR 0015).
    *
    * Flagged `handlesOwn401` for the same reason `confirmEmail` is: a signed-in
    * visitor can open a reset link too, and this screen must not assume the
@@ -255,7 +272,19 @@ export class AuthService {
         { userId, token, password },
         { context: handlesOwn401() }
       )
-      .pipe(map(() => undefined));
+      .pipe(
+        map(() => undefined),
+        catchError((error: unknown) => {
+          if (
+            error instanceof ApiError &&
+            error.status === 400 &&
+            Object.keys(error.fieldErrors).length === 0
+          ) {
+            return throwError(() => new ResetLinkRejectedError());
+          }
+          return throwError(() => error);
+        })
+      );
   }
 
   /**

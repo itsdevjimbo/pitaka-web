@@ -4,7 +4,7 @@ import { FieldTree } from '@angular/forms/signals';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { AuthService } from '@/app/core/auth';
+import { AuthService, ResetLinkRejectedError } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import AuthResetPassword from './reset-password';
@@ -166,16 +166,17 @@ describe('AuthResetPassword', () => {
   });
 
   /**
-   * An undifferentiated 400 with no field errors is the token itself, not the
-   * password (ADR 0015) — the dead-link state takes over rather than a banner
-   * over a form that can no longer succeed.
+   * `AuthService.resetPassword` turns an undifferentiated 400 with no field
+   * errors into a `ResetLinkRejectedError` — the token itself, not the
+   * password (ADR 0015) — and the screen asks `instanceof`, never
+   * `error.status === 400`. The dead-link state takes over rather than a
+   * banner over a form that can no longer succeed.
    */
-  it('lands on the dead-link state when the reset is rejected with no field error', async () => {
+  it('lands on the dead-link state when the reset link is rejected', async () => {
     const { fixture, cmp, completePasswordReset } = setup(
       { userId: '7', token: 'stale-token' },
       {
-        resetPassword: () =>
-          throwError(() => new ApiError('The request was rejected.', 400)),
+        resetPassword: () => throwError(() => new ResetLinkRejectedError()),
       }
     );
     cmp.resetFormModel.set({ newPassword: 'a-new-password' });
