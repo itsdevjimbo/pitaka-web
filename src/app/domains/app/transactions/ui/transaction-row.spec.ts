@@ -12,7 +12,7 @@ import {
   TransactionRow,
   TransactionRowModel,
   toAccountRow,
-  toLedgerRow,
+  toSpanningRow,
 } from './transaction-row';
 
 const NAMES = new Map<number, string>([
@@ -160,16 +160,16 @@ describe('toAccountRow', () => {
   });
 });
 
-describe('toLedgerRow', () => {
+describe('toSpanningRow', () => {
   it('resolves the Category name and headline the same way the account reading does', () => {
-    const row = toLedgerRow(tx({ categoryId: 2 }), NAMES, ACCOUNT_NAMES);
+    const row = toSpanningRow(tx({ categoryId: 2 }), NAMES, ACCOUNT_NAMES);
 
     expect(row.categoryName).toBe('Salary');
     expect(row.headline).toBe('Salary');
   });
 
   it('never heads a Transfer with a Category label', () => {
-    const row = toLedgerRow(
+    const row = toSpanningRow(
       tx({ direction: 'transfer', description: null, categoryId: null }),
       NAMES,
       ACCOUNT_NAMES
@@ -178,29 +178,29 @@ describe('toLedgerRow', () => {
     expect(row.headline).toBe('Transfer');
   });
 
-  it('carries a ledger reading with no sign to set', () => {
-    const row = toLedgerRow(tx({ direction: 'income' }), NAMES, ACCOUNT_NAMES);
+  it('carries a spanning reading with no sign to set', () => {
+    const row = toSpanningRow(tx({ direction: 'income' }), NAMES, ACCOUNT_NAMES);
 
-    expect(row.reading.kind).toBe('ledger');
+    expect(row.reading.kind).toBe('spanning');
     expect(row.reading).not.toHaveProperty('incoming');
   });
 
   it('names the row’s own Account on every row', () => {
-    const income = toLedgerRow(
+    const income = toSpanningRow(
       tx({ direction: 'income', accountId: 9 }),
       NAMES,
       ACCOUNT_NAMES
     );
 
     expect(income.reading).toEqual({
-      kind: 'ledger',
+      kind: 'spanning',
       account: { id: 9, name: 'Savings' },
       transferTo: null,
     });
   });
 
   it('names both ends of a Transfer as the movement between them', () => {
-    const transfer = toLedgerRow(
+    const transfer = toSpanningRow(
       tx({
         direction: 'transfer',
         accountId: 3,
@@ -212,14 +212,14 @@ describe('toLedgerRow', () => {
     );
 
     expect(transfer.reading).toEqual({
-      kind: 'ledger',
+      kind: 'spanning',
       account: { id: 3, name: 'Everyday cash' },
       transferTo: { id: 9, name: 'Savings' },
     });
   });
 
   it('falls back to a stand-in name for an Account absent from the map', () => {
-    const transfer = toLedgerRow(
+    const transfer = toSpanningRow(
       tx({
         direction: 'transfer',
         accountId: 42,
@@ -231,7 +231,7 @@ describe('toLedgerRow', () => {
     );
 
     expect(transfer.reading).toEqual({
-      kind: 'ledger',
+      kind: 'spanning',
       account: { id: 42, name: 'another account' },
       transferTo: { id: 77, name: 'another account' },
     });
@@ -239,7 +239,7 @@ describe('toLedgerRow', () => {
 
   it('leaves transferTo null on an income or an expense', () => {
     expect(
-      toLedgerRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES).reading
+      toSpanningRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES).reading
     ).toMatchObject({ transferTo: null });
   });
 });
@@ -382,10 +382,10 @@ describe('TransactionRow', () => {
     expect(link?.getAttribute('href')).toBe('/app/accounts/9');
   });
 
-  describe('the ledger reading', () => {
+  describe('the spanning reading', () => {
     it('renders an income with a plus', () => {
       const text = render(
-        toLedgerRow(
+        toSpanningRow(
           tx({ direction: 'income', amount: 1000, categoryId: 2 }),
           NAMES,
           ACCOUNT_NAMES
@@ -397,7 +397,7 @@ describe('TransactionRow', () => {
 
     it('renders an expense with a minus', () => {
       const text = render(
-        toLedgerRow(
+        toSpanningRow(
           tx({ direction: 'expense', amount: 250 }),
           NAMES,
           ACCOUNT_NAMES
@@ -409,7 +409,7 @@ describe('TransactionRow', () => {
 
     it('renders a Transfer with neither a plus nor a minus', () => {
       const text = render(
-        toLedgerRow(
+        toSpanningRow(
           tx({
             direction: 'transfer',
             amount: 500,
@@ -429,7 +429,7 @@ describe('TransactionRow', () => {
 
     it('names the row’s own Account and links to it, without making the row a link', () => {
       const host = renderElement(
-        toLedgerRow(
+        toSpanningRow(
           tx({ direction: 'expense', accountId: 9, description: 'Coffee' }),
           NAMES,
           ACCOUNT_NAMES
@@ -446,7 +446,7 @@ describe('TransactionRow', () => {
 
     it('names both ends of a Transfer, each linking to its Account', () => {
       const host = renderElement(
-        toLedgerRow(
+        toSpanningRow(
           tx({
             direction: 'transfer',
             accountId: 3,
@@ -469,7 +469,7 @@ describe('TransactionRow', () => {
 
     it('renders the date, Category, Tags and Generated badge the same as the account reading', () => {
       const text = render(
-        toLedgerRow(
+        toSpanningRow(
           tx({
             direction: 'expense',
             categoryId: 1,
@@ -491,7 +491,7 @@ describe('TransactionRow', () => {
 
     it('still offers no whole-row link and keeps the actions menu in place', () => {
       const fixture = renderFixture(
-        toLedgerRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES)
+        toSpanningRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES)
       );
 
       expect(

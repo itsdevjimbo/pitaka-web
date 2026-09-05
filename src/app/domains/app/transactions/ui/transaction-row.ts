@@ -43,7 +43,7 @@ function isTransfer(transaction: Transaction): boolean {
  * How a Transaction row is being read — the decision that fixes what its sign
  * means and which Account, if any, it names. One row component renders either;
  * a screen picks the reading by calling {@link toAccountRow} or {@link
- * toLedgerRow}, never by passing a flag.
+ * toSpanningRow}, never by passing a flag.
  *
  * `account` — an Account is in view (Account detail). The amount is signed
  * against it: `incoming` is `true` where the money adds (an income, or a
@@ -52,7 +52,7 @@ function isTransfer(transaction: Transaction): boolean {
  * home — to link back to, the one place it can be acted on (ADR 0010); it is
  * `null` for every other row, including a Transfer seen from the side it left.
  *
- * `ledger` — no Account is in view (a list spanning every Account). There is no
+ * `spanning` — no Account is in view (a list spanning every Account). There is no
  * `incoming` field because the sign is derivable and nothing should be able to
  * set it: an income adds, an expense subtracts, and a Transfer is neither
  * incoming nor outgoing — it reads as the movement between its two ends
@@ -61,7 +61,7 @@ function isTransfer(transaction: Transaction): boolean {
  */
 export type TransactionRowReading =
   | { kind: 'account'; incoming: boolean; recordedAgainst: NamedAccount | null }
-  | { kind: 'ledger'; account: NamedAccount; transferTo: NamedAccount | null };
+  | { kind: 'spanning'; account: NamedAccount; transferTo: NamedAccount | null };
 
 /**
  * A {@link Transaction} with the three fields the row template needs on top of
@@ -85,7 +85,7 @@ export type TransactionRowModel = Transaction & {
  *
  * The Transactions domain owns this row. A screen that shows it resolves the
  * Category and Account names and picks the reading — {@link toAccountRow} where
- * an Account is in view, {@link toLedgerRow} where none is — then hands over a
+ * an Account is in view, {@link toSpanningRow} where none is — then hands over a
  * finished {@link TransactionRowModel}. The dependency runs one way: nothing
  * here reaches back into Accounts.
  *
@@ -140,19 +140,19 @@ export class TransactionRow {
    * (`recordedAgainst` set) is read-only there and links back to its home
    * instead. Every other row — an income, an expense, a Transfer seen from the
    * side it left, a generated transaction — offers the full menu in place.
-   * Under the ledger reading the row always names its Transaction's home
+   * Under the spanning reading the row always names its Transaction's home
    * Account (ADR 0010), so the menu is always in place there.
    */
   protected readonly canActOnHere = computed(() => {
     const reading = this.row().reading;
-    return reading.kind === 'ledger' || reading.recordedAgainst === null;
+    return reading.kind === 'spanning' || reading.recordedAgainst === null;
   });
 
   /**
    * The sign the amount renders with: a plus where the money adds, a minus
    * where it subtracts, and neither for a Transfer read with no Account in
    * view. Under the account reading the sign is `incoming`, already resolved
-   * against the Account on screen. Under the ledger reading it comes from the
+   * against the Account on screen. Under the spanning reading it comes from the
    * direction — an income adds, an expense subtracts, a Transfer is neither
    * (ADR 0010).
    */
@@ -299,11 +299,11 @@ export function toAccountRow(
  * Account. No amount is signed against a viewpoint: the row derives its sign
  * from the direction (ADR 0010). Every row names its own Account, and a Transfer
  * names both ends — the movement from the one it leaves to the one it lands in.
- * `accountNames` is required, not optional: the ledger reading always names an
+ * `accountNames` is required, not optional: the spanning reading always names an
  * Account, so a caller with no names to resolve against would render every row
  * as "another account".
  */
-export function toLedgerRow(
+export function toSpanningRow(
   transaction: Transaction,
   categoryNames: ReadonlyMap<number, string>,
   accountNames: ReadonlyMap<number, string>
@@ -317,7 +317,7 @@ export function toLedgerRow(
     ...transaction,
     ...baseRow(transaction, categoryNames),
     reading: {
-      kind: 'ledger',
+      kind: 'spanning',
       account: nameAccount(transaction.accountId, accountNames),
       transferTo,
     },
