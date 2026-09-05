@@ -8,7 +8,9 @@ import { routes } from '@/app/app.routes';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import { AccountsService } from './accounts';
+import { CategoriesService } from './categories/categories.service';
 import { AppLayout } from './layout/layout';
+import { TransactionsService } from './transactions';
 
 /**
  * Acceptance criterion: signing in lands on the Accounts route. Sign-in
@@ -40,5 +42,37 @@ describe('the app area routes', () => {
     expect(
       (harness.routeNativeElement as HTMLElement).textContent
     ).toContain('No accounts yet');
+  });
+
+  it('resolves /app/transactions to the Transactions list, lazily loaded', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideIcons(),
+        { provide: Session, useValue: { isAuthenticated: () => true } },
+        { provide: AccountsService, useValue: { list: () => of([]) } },
+        {
+          provide: TransactionsService,
+          useValue: { search: () => of({ transactions: [], totalCount: 0 }) },
+        },
+        {
+          provide: CategoriesService,
+          useValue: { names: () => of(new Map<number, string>()) },
+        },
+      ],
+    });
+    TestBed.overrideComponent(AppLayout, {
+      set: { template: '<router-outlet />', imports: [RouterOutlet] },
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/transactions');
+
+    expect(TestBed.inject(Router).url).toBe('/app/transactions');
+    expect(
+      (harness.routeNativeElement as HTMLElement).textContent
+    ).toContain('No transactions yet');
   });
 });
