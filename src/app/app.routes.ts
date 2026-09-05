@@ -3,8 +3,8 @@ import { authGuard } from '@/app/core/session';
 
 export const routes: Route[] = [
   // Auth. `guestGuard` sits on the individual child routes, not here — the
-  // two link-landing screens (confirm-email, and reset once #71 lands) must
-  // not assume the absence of a session (ADR 0015).
+  // two link-landing screens, confirm-email and reset-password, must not
+  // assume the absence of a session (ADR 0015).
   {
     path: 'auth',
     loadChildren: () => import('./domains/auth/routes'),

@@ -10,14 +10,27 @@ import { DeadLink } from './dead-link';
  */
 describe('DeadLink', () => {
   function setup(
-    resendConfirmation: AuthService['resendConfirmation'] = () => of(undefined)
+    {
+      resendConfirmation = () => of(undefined),
+      forgotPassword = () => of(undefined),
+      kind,
+    }: {
+      resendConfirmation?: AuthService['resendConfirmation'];
+      forgotPassword?: AuthService['forgotPassword'];
+      kind?: 'confirm-email' | 'reset-password';
+    } = {}
   ) {
     TestBed.configureTestingModule({
       imports: [DeadLink],
-      providers: [{ provide: AuthService, useValue: { resendConfirmation } }],
+      providers: [
+        { provide: AuthService, useValue: { resendConfirmation, forgotPassword } },
+      ],
     });
 
     const fixture = TestBed.createComponent(DeadLink);
+    if (kind) {
+      fixture.componentRef.setInput('kind', kind);
+    }
     fixture.detectChanges();
     return fixture;
   }
@@ -57,8 +70,8 @@ describe('DeadLink', () => {
   });
 
   it('asks the service to resend to the address entered', async () => {
-    const resend = vi.fn(() => of(undefined));
-    const fixture = setup(resend);
+    const resendConfirmation = vi.fn(() => of(undefined));
+    const fixture = setup({ resendConfirmation });
 
     input(fixture).value = 'ada@example.com';
     input(fixture).dispatchEvent(new Event('input'));
@@ -67,6 +80,29 @@ describe('DeadLink', () => {
     resendButton(fixture)?.click();
     await fixture.whenStable();
 
-    expect(resend).toHaveBeenCalledWith('ada@example.com');
+    expect(resendConfirmation).toHaveBeenCalledWith('ada@example.com');
+  });
+
+  /**
+   * The reset screen's dead-link fix is a different endpoint entirely (issue
+   * #71): `kind="reset-password"` swaps which control gets revealed, so the
+   * two links are never confused about which one their "send a new one" spends.
+   */
+  it('offers a fresh reset link, not a confirmation resend, when kind is reset-password', async () => {
+    const forgotPassword = vi.fn(() => of(undefined));
+    const fixture = setup({ forgotPassword, kind: 'reset-password' });
+
+    input(fixture).value = 'ada@example.com';
+    input(fixture).dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Send new reset link'
+    );
+
+    resendButton(fixture)?.click();
+    await fixture.whenStable();
+
+    expect(forgotPassword).toHaveBeenCalledWith('ada@example.com');
   });
 });

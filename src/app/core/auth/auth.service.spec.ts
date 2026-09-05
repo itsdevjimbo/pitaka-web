@@ -386,4 +386,79 @@ describe('AuthService', () => {
     expect(request.request.context.get(HANDLES_OWN_401)).toBe(true);
     request.flush(null, { status: 204, statusText: 'No Content' });
   });
+
+  it('POSTs the userId, token and new password to /api/auth/reset-password', async () => {
+    const result = firstValueFrom(
+      service.resetPassword(7, 'a-token', 'a-new-password')
+    );
+
+    const request = http.expectOne(`${BASE_URL}/api/auth/reset-password`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      userId: 7,
+      token: 'a-token',
+      password: 'a-new-password',
+    });
+    request.flush(null, { status: 204, statusText: 'No Content' });
+
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  /**
+   * Same shape as confirm-email: a genuine outcome the caller must see, so a
+   * failure propagates rather than being swallowed (ADR 0015: the API
+   * collapses every failure cause — expired, used, tampered, wrong — into one
+   * undifferentiated 400).
+   */
+  it('lets a reset-password failure propagate as an ApiError', async () => {
+    const result = firstValueFrom(
+      service.resetPassword(7, 'stale-token', 'a-new-password')
+    );
+
+    http
+      .expectOne(`${BASE_URL}/api/auth/reset-password`)
+      .flush(null, { status: 400, statusText: 'Bad Request' });
+
+    const error = await result.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(400);
+  });
+
+  it('normalises a ValidationProblemDetails reset-password response into a password field error', async () => {
+    const result = firstValueFrom(service.resetPassword(7, 'a-token', 'short'));
+
+    http.expectOne(`${BASE_URL}/api/auth/reset-password`).flush(
+      {
+        title: 'One or more validation errors occurred.',
+        status: 400,
+        errors: {
+          Password: [
+            'The field Password must be a string with a minimum length of 8.',
+          ],
+        },
+      },
+      { status: 400, statusText: 'Bad Request' }
+    );
+
+    const error = await result.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).fieldErrors).toEqual({
+      password: [
+        'The field Password must be a string with a minimum length of 8.',
+      ],
+    });
+    expect((error as ApiError).message).toBe(
+      'Please correct the highlighted fields and try again.'
+    );
+  });
+
+  it('marks reset-password as handling its own 401', () => {
+    firstValueFrom(
+      service.resetPassword(7, 'a-token', 'a-new-password')
+    ).catch(() => undefined);
+
+    const request = http.expectOne(`${BASE_URL}/api/auth/reset-password`);
+    expect(request.request.context.get(HANDLES_OWN_401)).toBe(true);
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  });
 });

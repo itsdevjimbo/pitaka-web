@@ -236,6 +236,29 @@ export class AuthService {
   }
 
   /**
+   * Spend a reset link, setting a new password. Same shape as `confirmEmail`
+   * for the same reason: a genuine outcome the caller must see, and the API
+   * collapses every failure — expired, already used, tampered, or wrong — into
+   * one undifferentiated `400` (ADR 0015). A weak password comes back as a
+   * ValidationProblemDetails naming `Password`, which the normalizer already
+   * camelCases; the caller tells the two `400` shapes apart by whether that
+   * came with field errors.
+   *
+   * Flagged `handlesOwn401` for the same reason `confirmEmail` is: a signed-in
+   * visitor can open a reset link too, and this screen must not assume the
+   * absence of a session.
+   */
+  resetPassword(userId: number, token: string, password: string): Observable<void> {
+    return this.http
+      .post<void>(
+        `${this.baseUrl}/api/auth/reset-password`,
+        { userId, token, password },
+        { context: handlesOwn401() }
+      )
+      .pipe(map(() => undefined));
+  }
+
+  /**
    * Verify the current token against the server and read back the live Profile.
    * The API returns 401 even for a cryptographically valid token whose user row
    * is gone (ADR 0004), so this is a genuine check, not a decode.

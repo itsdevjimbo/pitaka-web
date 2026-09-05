@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, Credentials, Profile, SignInResult } from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
-import { SIGN_IN_ROUTE, signInRedirect } from './sign-in-route';
+import { reasonQueryParams, SIGN_IN_ROUTE, signInRedirect } from './sign-in-route';
 
 const TOKEN_KEY = 'pitaka.token';
 
@@ -106,6 +106,23 @@ export class Session {
         ...signInRedirect(this.router.url, { reason: 'session-expired' })
       );
     }
+  }
+
+  /**
+   * A password was just reset from this device. Clear whatever session it held
+   * — a live token survives a reset for up to an hour and the API cannot
+   * revoke it (`pitaka` ADR 0011), so the one token we control is the one we
+   * clear (ADR 0015) — and return to sign-in, told why. Unlike `expire`, this
+   * always navigates even with no session to clear: the reset itself is the
+   * event, not a lapse this device happened to witness. No return URL, for the
+   * same reason `signOut` keeps none — re-authenticating from scratch has
+   * nowhere to resume.
+   */
+  completePasswordReset(): void {
+    this.teardown();
+    this.router.navigate([SIGN_IN_ROUTE], {
+      queryParams: reasonQueryParams('password-reset'),
+    });
   }
 
   /**

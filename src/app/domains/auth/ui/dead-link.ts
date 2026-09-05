@@ -1,7 +1,8 @@
-import { Component, signal } from '@angular/core';
+import { Component, input, signal } from '@angular/core';
 import { email, form, FormField, required } from '@angular/forms/signals';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { RequestResetLink } from './request-reset-link';
 import { ResendConfirmation } from './resend-confirmation';
 
 /**
@@ -14,18 +15,28 @@ import { ResendConfirmation } from './resend-confirmation';
  * shared one-hour token lifespan (`pitaka` `IdentityExtensions`) makes this the
  * ordinary result of opening an email the next morning (ADR 0015).
  *
- * Shared between confirm-email (its first host) and the reset screen once #71
- * adds it. Neither host reaches this state already knowing an email address
+ * Shared between confirm-email and the reset screen (#71); `kind` picks which
+ * one of them the "fix" is, since the two links are spent by different
+ * endpoints. Neither host reaches this state already knowing an email address
  * the way sign-up's check-your-inbox state or sign-in's unconfirmed error do,
- * so it asks for one itself before revealing `ResendConfirmation` — a link
- * this stale carries no address to prefill from.
+ * so it asks for one itself before revealing the fix — a link this stale
+ * carries no address to prefill from.
  */
 @Component({
   selector: 'auth-dead-link',
   templateUrl: './dead-link.html',
-  imports: [MatFormFieldModule, MatInputModule, FormField, ResendConfirmation],
+  imports: [
+    MatFormFieldModule,
+    MatInputModule,
+    FormField,
+    RequestResetLink,
+    ResendConfirmation,
+  ],
 })
 export class DeadLink {
+  /** Which link this is standing in for, and so which endpoint the fix spends. */
+  readonly kind = input<'confirm-email' | 'reset-password'>('confirm-email');
+
   protected emailFormModel = signal({ email: '' });
   protected emailForm = form(this.emailFormModel, (form) => {
     required(form.email, { message: 'You must enter an email address' });

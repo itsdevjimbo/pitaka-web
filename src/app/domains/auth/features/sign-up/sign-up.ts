@@ -1,13 +1,5 @@
 import { Component, inject, linkedSignal, signal } from '@angular/core';
-import {
-  email,
-  form,
-  FormField,
-  maxLength,
-  minLength,
-  required,
-  submit,
-} from '@angular/forms/signals';
+import { email, form, FormField, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -16,15 +8,12 @@ import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService, Registration } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { passwordRules } from '@/app/domains/auth/password-rules';
 import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation';
 
 /** The banner line for a registration that failed before it could be attributed. */
 const COULD_NOT_REGISTER =
   'Something went wrong creating your profile. Please try again.';
-
-/** The API's password bounds (`pitaka` RegisterRequest: 8–128, length only). */
-const PASSWORD_MIN = 8;
-const PASSWORD_MAX = 128;
 
 @Component({
   selector: 'auth-sign-up',
@@ -57,14 +46,9 @@ export default class AuthSignUp {
 
     // Mirror the API's length-only password rule so a too-short password is
     // caught here rather than after a round trip (ticket #5: client rules are
-    // the only guard). No complexity check — the API deliberately has none.
-    required(form.password, { message: 'You must enter a password' });
-    minLength(form.password, PASSWORD_MIN, {
-      message: `Your password must be at least ${PASSWORD_MIN} characters`,
-    });
-    maxLength(form.password, PASSWORD_MAX, {
-      message: `Your password must be ${PASSWORD_MAX} characters or fewer`,
-    });
+    // the only guard), shared with reset-password so the two cannot drift
+    // apart (issue #71).
+    passwordRules(form.password);
   });
 
   protected submitting = signal(false);

@@ -23,7 +23,8 @@ import { TEST_API_BASE_URL } from '@/testing/api-base-url';
 describe('the auth area routes', () => {
   function setup(
     isAuthenticated = false,
-    confirmEmail: AuthService['confirmEmail'] = () => of(undefined)
+    confirmEmail: AuthService['confirmEmail'] = () => of(undefined),
+    resetPassword: AuthService['resetPassword'] = () => of(undefined)
   ) {
     TestBed.configureTestingModule({
       providers: [
@@ -34,12 +35,16 @@ describe('the auth area routes', () => {
         { provide: API_BASE_URL, useValue: TEST_API_BASE_URL },
         {
           provide: Session,
-          useValue: { isAuthenticated: () => isAuthenticated },
+          useValue: {
+            isAuthenticated: () => isAuthenticated,
+            completePasswordReset: () => undefined,
+          },
         },
         { provide: AccountsService, useValue: { list: () => of([]) } },
-        // confirm-email fires this on init; stubbed here so it never depends
-        // on a real HTTP round trip nobody in these tests flushes.
-        { provide: AuthService, useValue: { confirmEmail } },
+        // confirm-email fires this on init, and reset-password's form calls the
+        // other on submit; both stubbed here so neither depends on a real HTTP
+        // round trip nobody in these tests flushes.
+        { provide: AuthService, useValue: { confirmEmail, resetPassword } },
       ],
     });
     // Where the guard sends a signed-in visitor is the app shell, whose chrome
@@ -104,5 +109,23 @@ describe('the auth area routes', () => {
     await harness.navigateByUrl('/auth/confirm-email?userId=7&token=a-token');
 
     expect(confirmEmail).toHaveBeenCalledWith(7, 'a-token');
+  });
+
+  /**
+   * The same guard exemption, proved for reset-password (#71). A signed-in
+   * visitor who opens a reset link must stay on the screen rather than being
+   * bounced to `/app` before it can even render the form — if `guestGuard`
+   * were ever swept back onto this route, the token the person came to spend
+   * would be destroyed before this test's navigation ever settled.
+   */
+  it('stays on reset-password for a signed-in visitor rather than bouncing them off the guard', async () => {
+    setup(true);
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/auth/reset-password?userId=7&token=a-token');
+
+    expect(TestBed.inject(Router).url).toBe(
+      '/auth/reset-password?userId=7&token=a-token'
+    );
   });
 });
