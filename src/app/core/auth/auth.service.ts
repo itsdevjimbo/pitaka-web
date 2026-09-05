@@ -165,6 +165,29 @@ export class AuthService {
   }
 
   /**
+   * Spend a confirmation link. Unlike `resendConfirmation`, this has a genuine
+   * outcome the caller must see: success confirms the Profile, and the API
+   * collapses every other case — expired, already used, tampered, or wrong —
+   * into one undifferentiated `400` (ADR 0015), which arrives here as an
+   * `ApiError` the caller is left to treat uniformly, exactly as that
+   * indistinguishability demands.
+   *
+   * Flagged `handlesOwn401` because this screen must not assume the absence of
+   * a session (ADR 0015): a signed-in visitor who opens the link keeps their
+   * session, and without the flag a stray 401 here would tear it down before
+   * this call's own error handling ever ran.
+   */
+  confirmEmail(userId: number, token: string): Observable<void> {
+    return this.http
+      .post<void>(
+        `${this.baseUrl}/api/auth/confirm-email`,
+        { userId, token },
+        { context: handlesOwn401() }
+      )
+      .pipe(map(() => undefined));
+  }
+
+  /**
    * Verify the current token against the server and read back the live Profile.
    * The API returns 401 even for a cryptographically valid token whose user row
    * is gone (ADR 0004), so this is a genuine check, not a decode.

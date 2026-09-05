@@ -307,4 +307,41 @@ describe('AuthService', () => {
 
     warn.mockRestore();
   });
+
+  it('POSTs the userId and token to /api/auth/confirm-email', async () => {
+    const result = firstValueFrom(service.confirmEmail(7, 'a-token'));
+
+    const request = http.expectOne(`${BASE_URL}/api/auth/confirm-email`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ userId: 7, token: 'a-token' });
+    request.flush(null, { status: 204, statusText: 'No Content' });
+
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  /**
+   * Unlike resend and forgot-password, confirming has a genuine outcome the
+   * caller must see, so a failure is left to propagate rather than swallowed
+   * (ADR 0015: the API collapses every failure cause into one undifferentiated
+   * 400, and the caller is left to treat them all alike).
+   */
+  it('lets a confirm-email failure propagate as an ApiError', async () => {
+    const result = firstValueFrom(service.confirmEmail(7, 'stale-token'));
+
+    http
+      .expectOne(`${BASE_URL}/api/auth/confirm-email`)
+      .flush(null, { status: 400, statusText: 'Bad Request' });
+
+    const error = await result.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(400);
+  });
+
+  it('marks confirm-email as handling its own 401', () => {
+    firstValueFrom(service.confirmEmail(7, 'a-token')).catch(() => undefined);
+
+    const request = http.expectOne(`${BASE_URL}/api/auth/confirm-email`);
+    expect(request.request.context.get(HANDLES_OWN_401)).toBe(true);
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  });
 });

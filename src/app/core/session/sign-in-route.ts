@@ -1,4 +1,5 @@
 import { UrlCreationOptions } from '@angular/router';
+import { SESSION_ENDED_MESSAGE } from '@/app/core/api';
 
 /**
  * The route an unauthenticated visitor — or one whose session has lapsed — is
@@ -15,43 +16,65 @@ export const SIGN_IN_ROUTE = '/auth/sign-in';
 export const APP_HOME_ROUTE = '/app';
 
 /**
- * Query parameter that marks a redirect to sign-in as a session that lapsed
- * mid-use, as opposed to a visitor who was never signed in. Only `Session.expire`
- * sets it; `authGuard` and `Session.signOut` do not — a first visit needs no
- * account of itself, and a deliberate exit even less. The value is matched
- * exactly on the way back in ({@link isSessionLapse}), the way `safeReturnUrl`
- * treats `returnUrl`, because it rides the same rewritable query string.
+ * Query parameter carrying why a visitor was sent to sign-in — a set of fixed
+ * values we mint, never the server's or the visitor's own words. The value is
+ * matched exactly on the way back in ({@link reasonMessage}), the way
+ * `safeReturnUrl` treats `returnUrl`, because it rides the same rewritable
+ * query string.
  */
-export const SESSION_LAPSE_PARAM = 'reason';
-const SESSION_LAPSE_VALUE = 'session-expired';
+export const SIGN_IN_REASON_PARAM = 'reason';
+
+/**
+ * The fixed set of reasons this client ever sends someone to sign-in with an
+ * explanation attached. Each is a value `signInRedirect`/`reasonQueryParams`
+ * mints and `reasonMessage` reads back — never a string built from anything a
+ * visitor could rewrite.
+ */
+export type SignInReason = 'session-expired' | 'email-confirmed';
+
+/** The line shown when a confirmation link has just been spent successfully. */
+const EMAIL_CONFIRMED_MESSAGE = 'Your email is confirmed. Sign in to continue.';
+
+const REASON_MESSAGES: Record<SignInReason, string> = {
+  'session-expired': SESSION_ENDED_MESSAGE,
+  'email-confirmed': EMAIL_CONFIRMED_MESSAGE,
+};
+
+/** The `{ reason }` query params for a `SignInReason`, in the one shape both mints agree on. */
+export function reasonQueryParams(reason: SignInReason): Record<string, string> {
+  return { [SIGN_IN_REASON_PARAM]: reason };
+}
+
+/**
+ * The notice line for a `reason` query value, or `null` for anything that is
+ * not an exact match on one of `SignInReason`'s fixed values. Exact match or
+ * nothing: the value comes off a query string where anyone can write it, and a
+ * wrong explanation is a lie, not a cosmetic slip.
+ */
+export function reasonMessage(reason: string | null | undefined): string | null {
+  if (reason == null) {
+    return null;
+  }
+  return (REASON_MESSAGES as Record<string, string>)[reason] ?? null;
+}
 
 /**
  * Router arguments for sending someone to sign-in while remembering where they
  * were headed. Spread into `Router.createUrlTree` (the guard, which must return
  * a `UrlTree`) or `Router.navigate` (Session, reacting to a mid-use lapse) so
- * both build the identical `returnUrl` redirect. Pass `lapsed` to add the
- * {@link SESSION_LAPSE_PARAM} marker so sign-in can explain why the person is
+ * both build the identical `returnUrl` redirect. Pass `reason` to add the
+ * {@link SIGN_IN_REASON_PARAM} marker so sign-in can explain why the person is
  * back.
  */
 export function signInRedirect(
   returnUrl: string,
-  { lapsed = false }: { lapsed?: boolean } = {}
+  { reason }: { reason?: SignInReason } = {}
 ): [commands: string[], extras: UrlCreationOptions] {
   const queryParams: Record<string, string> = { returnUrl };
-  if (lapsed) {
-    queryParams[SESSION_LAPSE_PARAM] = SESSION_LAPSE_VALUE;
+  if (reason) {
+    Object.assign(queryParams, reasonQueryParams(reason));
   }
   return [[SIGN_IN_ROUTE], { queryParams }];
-}
-
-/**
- * Whether a `reason` query value is the session-lapse marker `signInRedirect`
- * mints. Exact match or nothing: the value comes off a query string where
- * anyone can write it, and a wrong "your session ended" is a lie, not a
- * cosmetic slip.
- */
-export function isSessionLapse(reason: string | null | undefined): boolean {
-  return reason === SESSION_LAPSE_VALUE;
 }
 
 /**
