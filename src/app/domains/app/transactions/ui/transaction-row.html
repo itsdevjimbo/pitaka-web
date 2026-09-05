@@ -1,3 +1,5 @@
+@let reading = row().reading;
+
 <div class="flex items-center gap-x-3">
   <!-- Direction: the icon and colour carry it without leaning on the label -->
   <span
@@ -26,18 +28,40 @@
         <span aria-hidden="true">·</span>
         <span class="truncate">{{ row().categoryName }}</span>
       }
-      <!-- A Transfer seen from where it landed: name the Account it was
-           recorded against and link there — the only place it can be acted
-           on (ADR 0010). -->
-      @if (row().recordedAgainst; as home) {
+      @if (reading.kind === 'account') {
+        <!-- A Transfer seen from where it landed: name the Account it was
+             recorded against and link there — the only place it can be acted
+             on (ADR 0010). -->
+        @if (reading.recordedAgainst; as home) {
+          <span aria-hidden="true">·</span>
+          <span class="truncate">
+            Recorded against
+            <a
+              class="font-medium underline hover:no-underline"
+              [routerLink]="['/app/accounts', home.id]"
+              >{{ home.name }}</a
+            >
+          </span>
+        }
+      } @else {
+        <!-- No Account in view: name this row's own Account, and both ends of a
+             Transfer as the movement between them (ADR 0010). The names link;
+             the row itself does not. -->
         <span aria-hidden="true">·</span>
         <span class="truncate">
-          Recorded against
           <a
             class="font-medium underline hover:no-underline"
-            [routerLink]="['/app/accounts', home.id]"
-            >{{ home.name }}</a
+            [routerLink]="['/app/accounts', reading.account.id]"
+            >{{ reading.account.name }}</a
           >
+          @if (reading.transferTo; as dest) {
+            <span aria-hidden="true">→</span>
+            <a
+              class="font-medium underline hover:no-underline"
+              [routerLink]="['/app/accounts', dest.id]"
+              >{{ dest.name }}</a
+            >
+          }
         </span>
       }
       @if (row().generated) {
@@ -51,16 +75,23 @@
   </div>
 
   <!-- Amount: sign and colour, so a row's direction carries in more than a
-       word. A Transfer is signed against this Account — it adds where the money
-       lands, subtracts where it leaves. -->
+       word. With an Account in view a Transfer is signed against it — adding
+       where the money lands, subtracting where it leaves; with none in view a
+       Transfer shows no sign, since it is neither incoming nor outgoing. -->
   <span
     class="shrink-0 font-semibold tabular-nums"
     [class]="directions[row().direction].accent.amount"
   >
-    @if (row().incoming) {
-      +{{ row().amount | peso }}
-    } @else {
-      {{ -row().amount | peso }}
+    @switch (amountSign()) {
+      @case ('plus') {
+        +{{ row().amount | peso }}
+      }
+      @case ('minus') {
+        {{ -row().amount | peso }}
+      }
+      @case ('none') {
+        {{ row().amount | peso }}
+      }
     }
   </span>
 
