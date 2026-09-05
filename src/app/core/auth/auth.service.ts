@@ -53,6 +53,14 @@ type LoginResponse = {
 };
 
 /**
+ * Wire shape of `POST /api/auth/register` — a Profile only, no token: the
+ * confirmation gate (ADR 0015) means there is no session to hand back yet.
+ */
+type RegisterResponse = {
+  user: Profile;
+};
+
+/**
  * The hand-written resource service over the API's auth endpoints (ADR 0002).
  * This is the only place that knows the transport shapes; callers see `Profile`
  * and `SignInResult`, and failures arrive already normalised to `ApiError`.
@@ -82,19 +90,17 @@ export class AuthService {
   }
 
   /**
-   * Register a new Profile and get back a session in the same step: the endpoint
-   * returns the same `{ token, user }` body a login does, so there is no chained
-   * sign-in call (ADR 0004). A taken email fails with a 409 `ApiError` carrying
-   * our sign-in-pointing wording.
+   * Register a new Profile. There is no session to hand back — the confirmation
+   * gate (ADR 0015) means the endpoint answers with the Profile alone and sends
+   * a confirmation email — so this returns a `Profile`, not a `SignInResult`. A
+   * taken email fails with a 409 `ApiError` carrying our sign-in-pointing
+   * wording.
    */
-  register(registration: Registration): Observable<SignInResult> {
+  register(registration: Registration): Observable<Profile> {
     return this.http
-      .post<LoginResponse>(
-        `${this.baseUrl}/api/auth/register`,
-        registration
-      )
+      .post<RegisterResponse>(`${this.baseUrl}/api/auth/register`, registration)
       .pipe(
-        map((response) => ({ token: response.token, profile: response.user })),
+        map((response) => response.user),
         catchError((error: unknown) =>
           throwError(() =>
             error instanceof ApiError && error.status === 409

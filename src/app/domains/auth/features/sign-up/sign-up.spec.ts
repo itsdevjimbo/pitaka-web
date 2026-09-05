@@ -1,9 +1,10 @@
 import { WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FieldTree } from '@angular/forms/signals';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
+import { Observable, of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { Session } from '@/app/core/session';
+import { AuthService, Profile } from '@/app/core/auth';
 import AuthSignUp from './sign-up';
 
 /** The slice of the component the tests reach into. */
@@ -19,23 +20,16 @@ type SignUpInternals = {
     password: FieldTree<string>;
   };
   errorMessage: () => string | null;
+  registeredEmail: () => string | null;
   signUp(event: Event): void;
 };
 
 describe('AuthSignUp', () => {
-  function setup(register: () => Promise<void>) {
+  function setup(register: () => Observable<Profile>) {
     TestBed.configureTestingModule({
       imports: [AuthSignUp],
-      providers: [
-        provideRouter([]),
-        { provide: Session, useValue: { register } },
-      ],
+      providers: [provideRouter([]), { provide: AuthService, useValue: { register } }],
     });
-
-    const router = TestBed.inject(Router);
-    const navigateByUrl = vi
-      .spyOn(router, 'navigateByUrl')
-      .mockResolvedValue(true);
 
     const fixture = TestBed.createComponent(AuthSignUp);
     const cmp = fixture.componentInstance as unknown as SignUpInternals;
@@ -45,7 +39,7 @@ describe('AuthSignUp', () => {
       password: 'secret1!',
     });
     fixture.detectChanges();
-    return { fixture, cmp, navigateByUrl };
+    return { fixture, cmp };
   }
 
   /** Drive a submit to completion. */
@@ -58,9 +52,13 @@ describe('AuthSignUp', () => {
     await fixture.whenStable();
   }
 
-  it('lands the person inside the app on a successful registration', async () => {
-    const register = vi.fn().mockResolvedValue(undefined);
-    const { fixture, cmp, navigateByUrl } = setup(register);
+  it('swaps to the check-your-inbox state, naming the address, on a successful registration', async () => {
+    const register = vi
+      .fn()
+      .mockReturnValue(
+        of<Profile>({ id: 7, name: 'Ada', email: 'ada@example.com' })
+      );
+    const { fixture, cmp } = setup(register);
 
     await submitAndSettle(fixture, cmp);
 
@@ -69,12 +67,12 @@ describe('AuthSignUp', () => {
       email: 'ada@example.com',
       password: 'secret1!',
     });
-    expect(navigateByUrl).toHaveBeenCalledWith('/app');
+    expect(cmp.registeredEmail()).toBe('ada@example.com');
     expect(cmp.errorMessage()).toBeNull();
   });
 
   it('does not call the server when the password is under the API length floor', async () => {
-    const register = vi.fn().mockResolvedValue(undefined);
+    const register = vi.fn();
     const { fixture, cmp } = setup(register);
     cmp.signUpFormModel.set({
       name: 'Ada',
@@ -86,33 +84,18 @@ describe('AuthSignUp', () => {
     await submitAndSettle(fixture, cmp);
 
     expect(register).not.toHaveBeenCalled();
-  });
-
-  it('does not report a post-registration navigation failure as a registration failure', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const register = vi.fn().mockResolvedValue(undefined);
-    const { fixture, cmp, navigateByUrl } = setup(register);
-    navigateByUrl.mockRejectedValueOnce(new Error('router boom'));
-
-    await submitAndSettle(fixture, cmp);
-
-    // The person is registered and signed in; a stumble on the way into the
-    // shell must not tell them registration failed.
-    expect(register).toHaveBeenCalled();
-    expect(cmp.errorMessage()).toBeNull();
-    expect(error).toHaveBeenCalled();
-
-    error.mockRestore();
+    expect(cmp.registeredEmail()).toBeNull();
   });
 
   it('binds server-blamed fields onto the matching form controls', async () => {
     const { fixture, cmp } = setup(() =>
-      Promise.reject(
-        new ApiError(
-          'Please correct the highlighted fields and try again.',
-          400,
-          { password: ['The Password must be at least 8 characters.'] }
-        )
+      throwError(
+        () =>
+          new ApiError(
+            'Please correct the highlighted fields and try again.',
+            400,
+            { password: ['The Password must be at least 8 characters.'] }
+          )
       )
     );
 
@@ -124,15 +107,17 @@ describe('AuthSignUp', () => {
       .map((error) => error.message);
     expect(messages).toContain('The Password must be at least 8 characters.');
     expect(cmp.errorMessage()).toBeNull();
+    expect(cmp.registeredEmail()).toBeNull();
   });
 
   it('shows an already-registered email as one form-level message pointing at sign-in', async () => {
     const { fixture, cmp } = setup(() =>
-      Promise.reject(
-        new ApiError(
-          'That email is already registered. Try signing in instead.',
-          409
-        )
+      throwError(
+        () =>
+          new ApiError(
+            'That email is already registered. Try signing in instead.',
+            409
+          )
       )
     );
 
@@ -142,25 +127,28 @@ describe('AuthSignUp', () => {
     expect(cmp.errorMessage()).toBe(
       'That email is already registered. Try signing in instead.'
     );
+    expect(cmp.registeredEmail()).toBeNull();
   });
 
   it('explains a failure that never reached the server rather than blanking out', async () => {
-    const { fixture, cmp } = setup(() => Promise.reject(new Error('offline')));
+    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
 
     await submitAndSettle(fixture, cmp);
 
     expect(cmp.errorMessage()).toBe(
       'Something went wrong creating your profile. Please try again.'
     );
+    expect(cmp.registeredEmail()).toBeNull();
   });
 
   it('clears the banner as soon as the person edits the form', async () => {
     const { fixture, cmp } = setup(() =>
-      Promise.reject(
-        new ApiError(
-          'That email is already registered. Try signing in instead.',
-          409
-        )
+      throwError(
+        () =>
+          new ApiError(
+            'That email is already registered. Try signing in instead.',
+            409
+          )
       )
     );
 

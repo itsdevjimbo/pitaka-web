@@ -12,10 +12,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { Router, RouterLink } from '@angular/router';
-import { Registration } from '@/app/core/auth';
+import { RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
+import { AuthService, Registration } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import { APP_HOME_ROUTE, Session } from '@/app/core/session';
+import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation';
 
 /** The banner line for a registration that failed before it could be attributed. */
 const COULD_NOT_REGISTER =
@@ -35,12 +36,12 @@ const PASSWORD_MAX = 128;
     MatButtonModule,
     MatIconModule,
     FormField,
+    ResendConfirmation,
   ],
 })
 export default class AuthSignUp {
   // Dependencies
-  private router = inject(Router);
-  private session = inject(Session);
+  private auth = inject(AuthService);
 
   // State
   protected signUpFormModel = signal<Registration>({
@@ -77,6 +78,14 @@ export default class AuthSignUp {
     computation: () => null,
   });
 
+  /**
+   * The address a successful registration went to, or `null` before one has.
+   * Holding it here — never in the URL, a route, or browser history — is what
+   * lets the inbox state name it and seed the resend control (ADR 0015: no
+   * session is established, so there is nowhere else for it to live).
+   */
+  protected registeredEmail = signal<string | null>(null);
+
   signUp(event: Event) {
     event.preventDefault();
 
@@ -85,10 +94,13 @@ export default class AuthSignUp {
         this.submitting.set(true);
         this.errorMessage.set(null);
 
+        const registration = this.signUpFormModel();
+
         try {
-          // Registration returns a live session, so there is nothing more to
-          // type — the person is signed in the moment this resolves (ticket #5).
-          await this.session.register(this.signUpFormModel());
+          // Registration no longer returns a session (ADR 0015): it goes
+          // straight to `AuthService`, and the inbox state below is the only
+          // thing a success produces.
+          await firstValueFrom(this.auth.register(registration));
         } catch (error) {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
@@ -106,14 +118,7 @@ export default class AuthSignUp {
           this.submitting.set(false);
         }
 
-        // Registered and signed in. A navigation hiccup from here is not a
-        // registration failure — the session already exists — so it is kept out
-        // of the catch above and only logged; the shell is one nav away.
-        await this.router
-          .navigateByUrl(APP_HOME_ROUTE)
-          .catch((error: unknown) =>
-            console.error('[sign-up] navigation after registration failed', error)
-          );
+        this.registeredEmail.set(registration.email);
         return undefined;
       },
     });
