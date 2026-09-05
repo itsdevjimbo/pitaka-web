@@ -87,7 +87,7 @@ describe('AuthService', () => {
     warn.mockRestore();
   });
 
-  it('marks its two requests as handling their own 401', () => {
+  it('marks its three guest-or-boot requests as handling their own 401', () => {
     firstValueFrom(service.login({ email: 'a@b.co', password: 'x' })).catch(
       () => undefined
     );
@@ -99,6 +99,11 @@ describe('AuthService', () => {
     const me = http.expectOne(`${BASE_URL}/api/auth/me`);
     expect(me.request.context.get(HANDLES_OWN_401)).toBe(true);
     me.flush({ id: 1, name: 'A', email: 'a@b.co' });
+
+    firstValueFrom(service.resendConfirmation('a@b.co'));
+    const resend = http.expectOne(`${BASE_URL}/api/auth/resend-confirmation`);
+    expect(resend.request.context.get(HANDLES_OWN_401)).toBe(true);
+    resend.flush(null, { status: 202, statusText: 'Accepted' });
   });
 
   it('normalises a ValidationProblemDetails response into the same error type, camelCasing keys', async () => {
@@ -234,5 +239,36 @@ describe('AuthService', () => {
       name: 'Ada',
       email: 'ada@example.com',
     });
+  });
+  it('POSTs just the email address to /api/auth/resend-confirmation', async () => {
+    const result = firstValueFrom(service.resendConfirmation('ada@example.com'));
+
+    const request = http.expectOne(`${BASE_URL}/api/auth/resend-confirmation`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ email: 'ada@example.com' });
+    request.flush(null, { status: 202, statusText: 'Accepted' });
+
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  /**
+   * The endpoint answers 202 for an unknown address, an already-confirmed one
+   * and a just-sent one alike, so there is no outcome worth reporting. A
+   * transport failure is the only thing left that could distinguish one caller's
+   * click from another's, and it is swallowed here rather than in each host so
+   * the promise "this never fails" is kept in one place (ADR 0015).
+   */
+  it('resolves even when the request itself fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const result = firstValueFrom(service.resendConfirmation('ada@example.com'));
+
+    http
+      .expectOne(`${BASE_URL}/api/auth/resend-confirmation`)
+      .flush('Nope', { status: 500, statusText: 'Internal Server Error' });
+
+    await expect(result).resolves.toBeUndefined();
+
+    warn.mockRestore();
   });
 });

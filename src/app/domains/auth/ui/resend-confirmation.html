@@ -1,0 +1,27 @@
+<div class="flex flex-col items-start">
+  <!-- The one action, quiet while in flight and through the cooldown -->
+  <button
+    type="button"
+    matButton
+    [disabled]="quiet()"
+    (click)="resend()"
+  >
+    @if (sending()) {
+      Sending…
+    } @else if (remaining() > 0) {
+      Resend in {{ remaining() }}s
+    } @else {
+      Resend confirmation email
+    }
+  </button>
+
+  <!-- The same line whatever came back (ADR 0015) -->
+  @if (asked()) {
+    <p
+      class="mt-2 text-sm text-neutral-500"
+      role="status"
+    >
+      {{ reassurance }}
+    </p>
+  }
+</div>

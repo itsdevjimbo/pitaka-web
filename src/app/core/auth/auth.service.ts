@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { catchError, map, Observable, throwError } from 'rxjs';
+import { catchError, map, Observable, of, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL, handlesOwn401 } from '@/app/core/api';
 
 /** A person's own identity, as the shell needs it (ADR 0003: never an "account"). */
@@ -102,6 +102,29 @@ export class AuthService {
               : error
           )
         )
+      );
+  }
+
+  /**
+   * Ask for a fresh confirmation link. Always resolves: the endpoint answers
+   * `202` for an unknown address, an already-confirmed one and a just-sent one
+   * alike (ADR 0015 — the server is the enumeration boundary), so there is no
+   * outcome to report, and a transport failure is swallowed here so no caller is
+   * tempted to say something a success would not have said.
+   *
+   * Flagged `handlesOwn401` for the same reason sign-in is: this is a guest
+   * request, so a 401 on it is not a session that lapsed.
+   */
+  resendConfirmation(email: string): Observable<void> {
+    return this.http
+      .post<void>(
+        `${this.baseUrl}/api/auth/resend-confirmation`,
+        { email },
+        { context: handlesOwn401() }
+      )
+      .pipe(
+        map(() => undefined),
+        catchError(() => of(undefined))
       );
   }
 
