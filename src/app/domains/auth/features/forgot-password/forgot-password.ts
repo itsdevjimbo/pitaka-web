@@ -65,7 +65,7 @@ export default class AuthForgotPassword {
    * clears it: a line about the address the person has since changed would read
    * as an answer about the new one.
    */
-  protected asked = linkedSignal<{ email: string }, boolean>({
+  protected hasAsked = linkedSignal<{ email: string }, boolean>({
     source: this.forgotPasswordFormModel,
     computation: () => false,
   });
@@ -79,10 +79,13 @@ export default class AuthForgotPassword {
       action: async () => {
         this.submitting.set(true);
 
+        // The address as it stood when the ask went out. Editing the field
+        // mid-flight clears `hasAsked`, and the line must not come back over an
+        // address this request was never about.
+        const askedFor = this.forgotPasswordFormModel().email;
+
         try {
-          await firstValueFrom(
-            this.auth.forgotPassword(this.forgotPasswordFormModel().email)
-          );
+          await firstValueFrom(this.auth.forgotPassword(askedFor));
         } catch (error) {
           // `AuthService.forgotPassword` swallows its own failures, so nothing
           // should reach here. The guard stays anyway: an unhandled rejection
@@ -95,7 +98,10 @@ export default class AuthForgotPassword {
           this.submitting.set(false);
         }
 
-        this.asked.set(true);
+        if (this.forgotPasswordFormModel().email === askedFor) {
+          this.hasAsked.set(true);
+        }
+
         return undefined;
       },
     });

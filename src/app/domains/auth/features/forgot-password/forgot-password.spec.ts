@@ -10,7 +10,7 @@ import AuthForgotPassword, { RESET_LINK_REASSURANCE } from './forgot-password';
 type ForgotPasswordInternals = {
   forgotPasswordFormModel: WritableSignal<{ email: string }>;
   forgotPasswordForm: { email: FieldTree<string> };
-  asked: () => boolean;
+  hasAsked: () => boolean;
   askForLink(event: Event): void;
 };
 
@@ -71,7 +71,7 @@ describe('AuthForgotPassword', () => {
 
     await submitAndSettle(fixture, cmp);
 
-    expect(cmp.asked()).toBe(true);
+    expect(cmp.hasAsked()).toBe(true);
     expect(text(fixture)).toContain(RESET_LINK_REASSURANCE);
     // The form is still there: re-submitting it is this screen's resend, and
     // the address the person typed has not gone anywhere.
@@ -106,12 +106,12 @@ describe('AuthForgotPassword', () => {
     const { fixture, cmp } = setup();
 
     await submitAndSettle(fixture, cmp);
-    expect(cmp.asked()).toBe(true);
+    expect(cmp.hasAsked()).toBe(true);
 
     cmp.forgotPasswordFormModel.set({ email: 'ada@example.org' });
     fixture.detectChanges();
 
-    expect(cmp.asked()).toBe(false);
+    expect(cmp.hasAsked()).toBe(false);
     expect(text(fixture)).not.toContain(RESET_LINK_REASSURANCE);
   });
 
@@ -122,6 +122,6 @@ describe('AuthForgotPassword', () => {
     await submitAndSettle(fixture, cmp);
 
     expect(forgotPassword).not.toHaveBeenCalled();
-    expect(cmp.asked()).toBe(false);
+    expect(cmp.hasAsked()).toBe(false);
   });
 });
