@@ -42,10 +42,11 @@ describe('ResendConfirmation', () => {
     fixture.detectChanges();
   }
 
-  // Only the countdown's own timer is faked. Angular's zoneless scheduler runs
-  // on `setTimeout`, and faking that too leaves `whenStable()` waiting forever.
+  // The countdown's own timer and the clock it counts against. `setTimeout` is
+  // deliberately left real: Angular's zoneless scheduler runs on it, and faking
+  // it too leaves `whenStable()` waiting forever.
   beforeEach(() =>
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
   );
   afterEach(() => vi.useRealTimers());
 
@@ -110,6 +111,22 @@ describe('ResendConfirmation', () => {
     expect(button(fixture).disabled).toBe(false);
     await click(fixture);
     expect(resend).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * A backgrounded tab throttles `setInterval` to well over a second. Counting
+   * down by a second per tick would stretch the stated thirty into minutes, so
+   * the deadline decides and the ticks only repaint.
+   */
+  it('ends the cooldown on the clock, not on the tick count', async () => {
+    const fixture = setup();
+
+    await click(fixture);
+    vi.setSystemTime(Date.now() + RESEND_COOLDOWN_SECONDS * 1_000);
+    vi.advanceTimersByTime(1_000);
+    fixture.detectChanges();
+
+    expect(button(fixture).disabled).toBe(false);
   });
 
   it('sends nothing for a click made during the cooldown', async () => {

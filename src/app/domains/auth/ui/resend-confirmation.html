@@ -16,9 +16,9 @@
   </button>
 
   <!-- The same line whatever came back (ADR 0015) -->
-  @if (asked()) {
+  @if (hasAsked()) {
     <p
-      class="mt-2 text-sm text-neutral-500"
+      class="mt-2 text-sm text-neutral-500 dark:text-neutral-400"
       role="status"
     >
       {{ reassurance }}
