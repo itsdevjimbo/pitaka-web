@@ -31,6 +31,14 @@ const UNNAMED_ACCOUNT = 'another account';
 /** No account names — the default when a caller has none to resolve against. */
 const NO_ACCOUNT_NAMES: ReadonlyMap<number, string> = new Map();
 
+/** An Account reduced to what a row shows for it: an id to link to, a name. */
+type NamedAccount = { id: number; name: string };
+
+/** Whether a Transaction is a Transfer — the check the two builders share. */
+function isTransfer(transaction: Transaction): boolean {
+  return transaction.direction === 'transfer';
+}
+
 /**
  * How a Transaction row is being read — the decision that fixes what its sign
  * means and which Account, if any, it names. One row component renders either;
@@ -51,35 +59,28 @@ const NO_ACCOUNT_NAMES: ReadonlyMap<number, string> = new Map();
  * (ADR 0010). `account` names this row's own Account, always; `transferTo`
  * names the far end of a Transfer, and is `null` on an income or an expense.
  */
-export type Reading =
-  | {
-      kind: 'account';
-      incoming: boolean;
-      recordedAgainst: { id: number; name: string } | null;
-    }
-  | {
-      kind: 'ledger';
-      account: { id: number; name: string };
-      transferTo: { id: number; name: string } | null;
-    };
+export type TransactionRowReading =
+  | { kind: 'account'; incoming: boolean; recordedAgainst: NamedAccount | null }
+  | { kind: 'ledger'; account: NamedAccount; transferTo: NamedAccount | null };
 
 /**
  * A {@link Transaction} with the three fields the row template needs on top of
  * the domain shape: `categoryName` for the meta line, `headline` for the main
  * line — its note if it has one, otherwise what it is (a Transfer, or its
- * Category) — and a discriminated {@link Reading} that carries the sign and the
- * Account names, resolved for whichever of the two ways the row is being read.
+ * Category) — and a discriminated {@link TransactionRowReading} that carries the
+ * sign and the Account names, resolved for whichever of the two ways the row is
+ * being read.
  */
 export type TransactionRowModel = Transaction & {
   categoryName: string;
   headline: string;
-  reading: Reading;
+  reading: TransactionRowReading;
 };
 
 /**
  * One Transaction as a row: the direction carried by an icon and a colour as
  * much as a word, the date in the person's own timezone (ADR 0007), the
- * Category, the amount signed for whichever {@link Reading} the row carries, its
+ * Category, the amount signed for whichever {@link TransactionRowReading} the row carries, its
  * Tags, and a "Generated" badge when a Schedule created it.
  *
  * The Transactions domain owns this row. A screen that shows it resolves the
@@ -244,7 +245,7 @@ function baseRow(
 
   const headline =
     transaction.description ||
-    (transaction.direction === 'transfer'
+    (isTransfer(transaction)
       ? TRANSACTION_DIRECTIONS.transfer.label
       : categoryName);
 
@@ -255,7 +256,7 @@ function baseRow(
 function nameAccount(
   id: number,
   accountNames: ReadonlyMap<number, string>
-): { id: number; name: string } {
+): NamedAccount {
   return { id, name: accountNames.get(id) ?? UNNAMED_ACCOUNT };
 }
 
@@ -275,7 +276,7 @@ export function toAccountRow(
   accountNames: ReadonlyMap<number, string> = NO_ACCOUNT_NAMES
 ): TransactionRowModel {
   const landedHere =
-    transaction.direction === 'transfer' &&
+    isTransfer(transaction) &&
     transaction.transferToAccountId === viewedAccountId;
 
   const incoming = transaction.direction === 'income' || landedHere;
@@ -308,8 +309,7 @@ export function toLedgerRow(
   accountNames: ReadonlyMap<number, string>
 ): TransactionRowModel {
   const transferTo =
-    transaction.direction === 'transfer' &&
-    transaction.transferToAccountId !== null
+    isTransfer(transaction) && transaction.transferToAccountId !== null
       ? nameAccount(transaction.transferToAccountId, accountNames)
       : null;
 

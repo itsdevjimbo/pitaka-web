@@ -89,7 +89,7 @@
       @case ('minus') {
         {{ -row().amount | peso }}
       }
-      @default {
+      @case ('none') {
         {{ row().amount | peso }}
       }
     }
