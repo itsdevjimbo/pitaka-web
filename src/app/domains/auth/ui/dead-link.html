@@ -24,6 +24,10 @@
   </div>
 
   @if (emailForm().valid()) {
-    <auth-resend-confirmation [email]="emailFormModel().email" />
+    @if (kind() === 'reset-password') {
+      <auth-request-reset-link [email]="emailFormModel().email" />
+    } @else {
+      <auth-resend-confirmation [email]="emailFormModel().email" />
+    }
   }
 </div>

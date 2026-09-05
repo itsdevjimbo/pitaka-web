@@ -1,4 +1,8 @@
-export { AuthService, EmailNotConfirmedError } from './auth.service';
+export {
+  AuthService,
+  EmailNotConfirmedError,
+  ResetLinkRejectedError,
+} from './auth.service';
 export type {
   Credentials,
   Profile,

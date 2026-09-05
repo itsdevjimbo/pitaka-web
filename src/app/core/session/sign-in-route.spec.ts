@@ -58,6 +58,12 @@ describe('reasonQueryParams', () => {
       reason: 'email-confirmed',
     });
   });
+
+  it('mints the password-reset marker', () => {
+    expect(reasonQueryParams('password-reset')).toEqual({
+      reason: 'password-reset',
+    });
+  });
 });
 
 describe('reasonMessage', () => {
@@ -73,6 +79,12 @@ describe('reasonMessage', () => {
   it('gives the email-confirmed wording for its exact marker', () => {
     expect(reasonMessage('email-confirmed')).toBe(
       'Your email is confirmed. Sign in to continue.'
+    );
+  });
+
+  it('gives the password-reset wording for its exact marker', () => {
+    expect(reasonMessage('password-reset')).toBe(
+      'Your password was changed. Sign in with your new password.'
     );
   });
 

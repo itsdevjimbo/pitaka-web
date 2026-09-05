@@ -38,6 +38,14 @@ const routes: Routes = [
         loadComponent: () =>
           import('./features/confirm-email/confirm-email'),
       },
+      {
+        // Resetting is an operation on a Profile reached by link, not a guest
+        // action a live session makes meaningless — `guestGuard` here would
+        // silently destroy the token the person came to spend (ADR 0015).
+        path: 'reset-password',
+        loadComponent: () =>
+          import('./features/reset-password/reset-password'),
+      },
     ],
   },
 ];
