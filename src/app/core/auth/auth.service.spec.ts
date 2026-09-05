@@ -12,7 +12,7 @@ import {
   HANDLES_OWN_401,
 } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
-import { AuthService } from './auth.service';
+import { AuthService, EmailNotConfirmedError } from './auth.service';
 
 /**
  * The HTTP adapter boundary — the primary seam (see the spec's Testing
@@ -85,6 +85,50 @@ describe('AuthService', () => {
     );
 
     warn.mockRestore();
+  });
+
+  /**
+   * `PreSignInCheck` answers 403 before the password is ever checked (issue
+   * #68), so this must fire whatever password was typed and must not carry any
+   * suggestion the password was right.
+   */
+  it('turns a 403 unconfirmed-email login failure into an EmailNotConfirmedError naming the address', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const result = firstValueFrom(
+      service.login({ email: 'ada@example.com', password: 'wrong-too' })
+    );
+
+    http.expectOne(`${BASE_URL}/api/auth/login`).flush(
+      { title: 'Forbidden', status: 403, detail: 'Email not confirmed.' },
+      { status: 403, statusText: 'Forbidden' }
+    );
+
+    const error = await result.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EmailNotConfirmedError);
+    expect((error as EmailNotConfirmedError).email).toBe('ada@example.com');
+    // Never the server's own detail, and never a claim about the password.
+    expect((error as EmailNotConfirmedError).message).not.toMatch(/password/i);
+
+    warn.mockRestore();
+  });
+
+  it('turns a 423 locked-out login failure into our own wording, with no invented countdown', async () => {
+    const result = firstValueFrom(
+      service.login({ email: 'ada@example.com', password: 'wrong' })
+    );
+
+    http
+      .expectOne(`${BASE_URL}/api/auth/login`)
+      .flush(null, { status: 423, statusText: 'Locked' });
+
+    const error = await result.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(423);
+    expect((error as ApiError).message).toBe(
+      'Too many failed attempts. Please wait a few minutes and try again.'
+    );
+    expect((error as ApiError).message).not.toMatch(/\d+\s*(minute|second)/i);
   });
 
   it('marks its four guest-or-boot requests as handling their own 401', () => {
