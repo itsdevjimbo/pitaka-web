@@ -22,6 +22,11 @@ const routes: Routes = [
           import('./accounts/features/account-detail/account-detail'),
       },
       {
+        path: 'transactions',
+        loadComponent: () =>
+          import('./transactions/features/transactions-list/transactions-list'),
+      },
+      {
         path: 'budgets',
         loadComponent: () =>
           import('./budgets/features/budget-list/budget-list'),

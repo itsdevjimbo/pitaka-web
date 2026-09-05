@@ -1,0 +1,102 @@
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
+  <!-- Heading -->
+  <header class="flex flex-col gap-y-1">
+    <h1 class="text-2xl font-bold tracking-tight">Transactions</h1>
+    <p class="text-neutral-500 dark:text-neutral-400">
+      Everything you’ve recorded, across every account, newest first.
+    </p>
+  </header>
+
+  @if (loading()) {
+    <!-- Slow load: show that it is working -->
+    <div
+      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+      role="status"
+    >
+      <mat-icon
+        class="size-6 animate-spin"
+        svgIcon="loader-circle"
+      />
+      <span>Loading transactions…</span>
+    </div>
+  } @else if (errorMessage(); as message) {
+    <!-- Failed load: explain, and offer a retry that re-runs from the top -->
+    <div
+      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
+      role="alert"
+    >
+      <mat-icon
+        class="size-8 text-neutral-400"
+        svgIcon="circle-alert"
+      />
+      <p class="max-w-sm text-neutral-600 dark:text-neutral-300">
+        {{ message }}
+      </p>
+      <button
+        matButton="filled"
+        (click)="load()"
+      >
+        <mat-icon svgIcon="refresh-cw" />
+        Try again
+      </button>
+    </div>
+  } @else if (isEmpty()) {
+    <!-- Nothing recorded: distinct from the failed-load state -->
+    <div
+      class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+    >
+      <mat-icon
+        class="size-10 text-neutral-400"
+        svgIcon="receipt"
+      />
+      <p class="text-lg font-semibold">No transactions yet</p>
+      <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
+        Once you record income, an expense, or a transfer against an account, it
+        shows up here.
+      </p>
+    </div>
+  } @else {
+    <!-- How much of the whole is on screen, so a partial list is never mistaken
+         for the whole answer -->
+    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+      Showing {{ shownCount() }} of {{ totalCount() }}
+    </p>
+
+    <ul class="flex flex-col gap-y-2">
+      @for (row of rows(); track row.id) {
+        <li
+          transaction-row
+          [row]="row"
+          (refile)="openRefileDialog(row)"
+          (removed)="onRemoved()"
+        ></li>
+      }
+    </ul>
+
+    @if (hasMore()) {
+      <div class="flex flex-col items-center gap-y-3">
+        @if (loadMoreError(); as message) {
+          <p
+            class="max-w-sm text-center text-sm text-neutral-600 dark:text-neutral-300"
+            role="alert"
+          >
+            {{ message }}
+          </p>
+        }
+        <button
+          matButton="outlined"
+          [disabled]="loadingMore()"
+          (click)="loadMore()"
+        >
+          @if (loadingMore()) {
+            Loading…
+          } @else if (loadMoreError()) {
+            Try again
+          } @else {
+            Load more
+          }
+        </button>
+      </div>
+    }
+  }
+</div>

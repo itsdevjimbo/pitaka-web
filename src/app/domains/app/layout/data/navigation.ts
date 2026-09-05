@@ -26,6 +26,13 @@ export const NAVIGATION: NavigationItem[] = [
         activeOptions: { exact: false },
       },
       {
+        id: 'transactions',
+        label: 'Transactions',
+        route: '/app/transactions',
+        icon: 'receipt-text',
+        activeOptions: { exact: false },
+      },
+      {
         id: 'budgets',
         label: 'Budgets',
         route: '/app/budgets',
