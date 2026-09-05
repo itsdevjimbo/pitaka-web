@@ -6,6 +6,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { routes } from '@/app/app.routes';
 import { API_BASE_URL } from '@/app/core/api';
+import { AuthService } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import { AccountsService } from '@/app/domains/app/accounts';
@@ -20,7 +21,10 @@ import { TEST_API_BASE_URL } from '@/testing/api-base-url';
  * `guestGuard`.
  */
 describe('the auth area routes', () => {
-  function setup(isAuthenticated = false) {
+  function setup(
+    isAuthenticated = false,
+    confirmEmail: AuthService['confirmEmail'] = () => of(undefined)
+  ) {
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
@@ -33,6 +37,9 @@ describe('the auth area routes', () => {
           useValue: { isAuthenticated: () => isAuthenticated },
         },
         { provide: AccountsService, useValue: { list: () => of([]) } },
+        // confirm-email fires this on init; stubbed here so it never depends
+        // on a real HTTP round trip nobody in these tests flushes.
+        { provide: AuthService, useValue: { confirmEmail } },
       ],
     });
     // Where the guard sends a signed-in visitor is the app shell, whose chrome
@@ -78,5 +85,24 @@ describe('the auth area routes', () => {
     await harness.navigateByUrl('/auth/forgot-password');
 
     expect(TestBed.inject(Router).url.startsWith('/app')).toBe(true);
+  });
+
+  /**
+   * The only honest proof of the guard exemption (#69). Unlike
+   * forgot-password, a signed-in visitor here is not bounced off before the
+   * screen runs — if `guestGuard` were ever swept back onto this route, it
+   * would redirect before `confirmEmail` was ever called, silently destroying
+   * the token the person came to spend. Asserting the call happened despite
+   * the live session is what would catch that regression; the final `/app`
+   * landing looks identical either way; and is not by itself proof of anything.
+   */
+  it('spends the confirm for a signed-in visitor rather than bouncing them off the guard', async () => {
+    const confirmEmail = vi.fn(() => of(undefined));
+    setup(true, confirmEmail);
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/auth/confirm-email?userId=7&token=a-token');
+
+    expect(confirmEmail).toHaveBeenCalledWith(7, 'a-token');
   });
 });

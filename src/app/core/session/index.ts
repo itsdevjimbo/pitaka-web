@@ -4,8 +4,11 @@ export { guestGuard } from './guest.guard';
 export { provideSession } from './provider';
 export {
   APP_HOME_ROUTE,
-  isSessionLapse,
+  reasonMessage,
+  reasonQueryParams,
   safeReturnUrl,
-  SESSION_LAPSE_PARAM,
+  SIGN_IN_REASON_PARAM,
+  SIGN_IN_ROUTE,
 } from './sign-in-route';
+export type { SignInReason } from './sign-in-route';
 export { Session } from './session';

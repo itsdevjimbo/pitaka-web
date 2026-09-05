@@ -1,0 +1,33 @@
+<div class="flex flex-auto">
+  <div
+    class="flex flex-auto items-center justify-center bg-white p-4 sm:p-12 dark:bg-neutral-950"
+  >
+    <div class="flex w-full max-w-80 flex-col items-center sm:min-w-80">
+      <!-- Logo -->
+      <img
+        class="w-12"
+        src="/images/logo/logo.svg"
+        alt="Pitaka logo"
+      />
+
+      @if (dead()) {
+        <div class="mt-8 w-full">
+          <auth-dead-link />
+        </div>
+      } @else {
+        <!-- Spinner: no click-through means nothing for the person to press, so
+             this is the only proof the confirm is under way. -->
+        <div
+          class="mt-8 flex flex-col items-center gap-y-3 text-neutral-500 dark:text-neutral-400"
+          role="status"
+        >
+          <mat-icon
+            class="size-6 animate-spin"
+            svgIcon="loader-circle"
+          />
+          <span>Confirming your email…</span>
+        </div>
+      }
+    </div>
+  </div>
+</div>
