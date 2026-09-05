@@ -564,4 +564,242 @@ describe('TransactionsService', () => {
       expect((error as ApiError).message.length).toBeGreaterThan(0);
     });
   });
+
+  describe('search', () => {
+    /** The envelope `GET /api/transactions` sends, with sane defaults. */
+    function envelope(over: Partial<Record<string, unknown>> = {}) {
+      return {
+        data: [],
+        page: 1,
+        pageSize: 50,
+        totalCount: 0,
+        ...over,
+      };
+    }
+
+    it('GETs the un-scoped endpoint with only page for empty criteria', async () => {
+      const result = firstValueFrom(service.search({}, 1));
+
+      const request = http.expectOne(
+        (req) => req.url === `${BASE_URL}/api/transactions`
+      );
+      expect(request.request.method).toBe('GET');
+      expect(request.request.params.keys().sort()).toEqual(['page']);
+      expect(request.request.params.get('page')).toBe('1');
+
+      request.flush(envelope());
+      await result;
+    });
+
+    it('emits no parameter at all for an axis criteria leaves unset', async () => {
+      const result = firstValueFrom(service.search({ accountId: 3 }, 2));
+
+      const request = http.expectOne(
+        (req) => req.url === `${BASE_URL}/api/transactions`
+      );
+      expect(request.request.params.keys().sort()).toEqual([
+        'accountId',
+        'page',
+      ]);
+      expect(request.request.params.get('accountId')).toBe('3');
+      expect(request.request.params.get('page')).toBe('2');
+
+      request.flush(envelope());
+      await result;
+    });
+
+    it('serialises every axis when all three are set', async () => {
+      const result = firstValueFrom(
+        service.search(
+          { direction: 'expense', accountId: 3, categoryId: 4 },
+          1
+        )
+      );
+
+      const request = http.expectOne(
+        (req) => req.url === `${BASE_URL}/api/transactions`
+      );
+      expect(request.request.params.keys().sort()).toEqual([
+        'accountId',
+        'categoryId',
+        'page',
+        'type',
+      ]);
+      expect(request.request.params.get('accountId')).toBe('3');
+      expect(request.request.params.get('categoryId')).toBe('4');
+      expect(request.request.params.get('type')).toBe('Expense');
+
+      request.flush(envelope());
+      await result;
+    });
+
+    it("sends direction through the API's TransactionType casing for each value", async () => {
+      for (const [direction, wireType] of [
+        ['income', 'Income'],
+        ['expense', 'Expense'],
+        ['transfer', 'Transfer'],
+      ] as const) {
+        const result = firstValueFrom(service.search({ direction }, 1));
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        expect(request.request.params.get('type')).toBe(wireType);
+
+        request.flush(envelope());
+        await result;
+      }
+    });
+
+    it('unwraps the envelope into rows and totalCount', async () => {
+      const result = firstValueFrom(service.search({}, 1));
+
+      http
+        .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
+        .flush(
+          envelope({
+            data: [resource({ id: 10 }), resource({ id: 11 })],
+            totalCount: 37,
+          })
+        );
+
+      const { transactions, totalCount } = await result;
+      expect(transactions.map((t) => t.id)).toEqual([10, 11]);
+      expect(totalCount).toBe(37);
+    });
+
+    it('maps a Transfer with both Account ids intact', async () => {
+      const result = firstValueFrom(service.search({}, 1));
+
+      http
+        .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
+        .flush(
+          envelope({
+            data: [
+              resource({
+                id: 1,
+                type: 'Transfer',
+                categoryId: null,
+                accountId: 3,
+                transferToAccountId: 9,
+              }),
+            ],
+            totalCount: 1,
+          })
+        );
+
+      const [tx] = (await result).transactions;
+      expect(tx.direction).toBe('transfer');
+      expect(tx.accountId).toBe(3);
+      expect(tx.transferToAccountId).toBe(9);
+    });
+
+    it('narrowing by accountId still matches a Transfer arriving once', async () => {
+      const result = firstValueFrom(service.search({ accountId: 9 }, 1));
+
+      http
+        .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
+        .flush(
+          envelope({
+            data: [
+              resource({
+                id: 1,
+                type: 'Transfer',
+                categoryId: null,
+                accountId: 3,
+                transferToAccountId: 9,
+              }),
+            ],
+            totalCount: 1,
+          })
+        );
+
+      expect((await result).transactions).toHaveLength(1);
+    });
+
+    it('yields an empty list and a truthful totalCount for a page beyond the end', async () => {
+      const result = firstValueFrom(service.search({}, 5));
+
+      http
+        .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
+        .flush(envelope({ data: [], totalCount: 3 }));
+
+      const { transactions, totalCount } = await result;
+      expect(transactions).toEqual([]);
+      expect(totalCount).toBe(3);
+    });
+
+    it('yields an empty list, not an error, for a Profile with no Transactions', async () => {
+      const result = firstValueFrom(service.search({}, 1));
+
+      http
+        .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
+        .flush(envelope({ data: [], totalCount: 0 }));
+
+      await expect(result).resolves.toEqual({
+        transactions: [],
+        totalCount: 0,
+      });
+    });
+
+    it('surfaces a server failure as a normalised ApiError', async () => {
+      const result = firstValueFrom(service.search({}, 1));
+
+      http
+        .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
+        .flush(null, { status: 500, statusText: 'Server Error' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(500);
+      expect((error as ApiError).message.length).toBeGreaterThan(0);
+    });
+
+    describe('reading transactionDate off the wire', () => {
+      const pinTimezone = withPinnedTimezone();
+      beforeEach(() => pinTimezone('Asia/Manila')); // fixed, DST-free +08:00
+
+      it('reads a person-recorded naive timestamp as UTC, converting to local time', async () => {
+        const result = firstValueFrom(service.search({}, 1));
+
+        http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`).flush(
+          envelope({
+            data: [
+              resource({
+                recurringTransactionId: null,
+                transactionDate: '2026-08-29T05:00:00',
+              }),
+            ],
+            totalCount: 1,
+          })
+        );
+
+        const [tx] = (await result).transactions;
+        expect(tx.date.getHours()).toBe(13);
+        expect(tx.date.getDate()).toBe(29);
+      });
+
+      it('reads a generated naive timestamp as a local wall-clock day', async () => {
+        const result = firstValueFrom(service.search({}, 1));
+
+        http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`).flush(
+          envelope({
+            data: [
+              resource({
+                recurringTransactionId: 88,
+                transactionDate: '2026-08-29T00:00:00',
+              }),
+            ],
+            totalCount: 1,
+          })
+        );
+
+        const [tx] = (await result).transactions;
+        expect(tx.date.getFullYear()).toBe(2026);
+        expect(tx.date.getMonth()).toBe(7); // August
+        expect(tx.date.getDate()).toBe(29);
+        expect(tx.date.getHours()).toBe(0);
+      });
+    });
+  });
 });

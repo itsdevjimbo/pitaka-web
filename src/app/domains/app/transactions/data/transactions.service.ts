@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { API_BASE_URL } from '@/app/core/api';
@@ -8,7 +8,9 @@ import {
   NewTransaction,
   RefileTransaction,
   Transaction,
+  TransactionCriteria,
   TransactionDirection,
+  TransactionSearchResult,
 } from './transaction';
 
 /**
@@ -32,6 +34,19 @@ type TransactionResource = {
   transferToAccountId: number | null;
   description: string | null;
   tags: { id: number; name: string }[];
+};
+
+/**
+ * Wire shape of `GET /api/transactions`'s envelope. `page` and `pageSize` echo
+ * what the request resolved to (the server defaults an absent `page`/`pageSize`
+ * to 1/50) and are not needed above this adapter — the caller already knows the
+ * page it asked for. Only `data` and `totalCount` cross the seam.
+ */
+type TransactionPageResource = {
+  data: TransactionResource[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
 };
 
 /**
@@ -59,6 +74,59 @@ export class TransactionsService {
         `${this.baseUrl}/api/accounts/${accountId}/transactions`
       )
       .pipe(map((resources) => resources.map(toTransaction)));
+  }
+
+  /**
+   * Every Transaction across every Account the person owns, narrowed by
+   * `criteria` and one page deep — `GET /api/transactions`, un-scoped to any
+   * single Account (#37). An absent axis on `criteria` emits no query parameter
+   * at all rather than an empty one, so an unfiltered search reads the same
+   * request whether it arrives as `{}` or with every axis explicitly cleared.
+   *
+   * `page` is passed separately and is never part of `criteria` — it names a
+   * position in a result set, not something the person filtered by, so a
+   * caller resetting to page 1 on a filter change never has to remember to
+   * strip a stale page out of the criteria object too.
+   *
+   * A Transfer arrives once: the un-scoped list filters on the Profile alone,
+   * unlike `GET /api/accounts/:id/transactions`, which yields a Transfer to
+   * both its Accounts. Narrowing by `accountId` still matches a Transfer on
+   * either end, so it is not lost when the search is narrowed to one Account.
+   *
+   * A cold `Observable` with no caching, matching {@link list}. `totalCount`
+   * is returned untouched — it is what lets a page report how much it is not
+   * showing, and, paired with empty criteria, is how a Profile with no
+   * Transactions is told apart from a search that matched nothing without an
+   * extra request.
+   *
+   * Failures arrive already normalised to `ApiError` by the interceptor.
+   */
+  search(
+    criteria: TransactionCriteria,
+    page: number
+  ): Observable<TransactionSearchResult> {
+    let params = new HttpParams().set('page', page);
+
+    if (criteria.accountId !== undefined) {
+      params = params.set('accountId', criteria.accountId);
+    }
+    if (criteria.categoryId !== undefined) {
+      params = params.set('categoryId', criteria.categoryId);
+    }
+    if (criteria.direction !== undefined) {
+      params = params.set('type', API_TYPE[criteria.direction]);
+    }
+
+    return this.http
+      .get<TransactionPageResource>(`${this.baseUrl}/api/transactions`, {
+        params,
+      })
+      .pipe(
+        map((envelope) => ({
+          transactions: envelope.data.map(toTransaction),
+          totalCount: envelope.totalCount,
+        }))
+      );
   }
 
   /**
