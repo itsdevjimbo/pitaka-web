@@ -140,49 +140,6 @@ describe('Session', () => {
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
   });
 
-  it('stores the token and Profile on a successful registration', async () => {
-    const session = configure();
-
-    const pending = session.register({
-      name: 'Ada',
-      email: 'ada@example.com',
-      password: 'secret12',
-    });
-    const request = http.expectOne(`${BASE_URL}/api/auth/register`);
-    expect(request.request.body).toEqual({
-      name: 'Ada',
-      email: 'ada@example.com',
-      password: 'secret12',
-    });
-    request.flush(
-      { token: 'fresh-token', user: { id: 7, name: 'Ada', email: 'ada@example.com' } },
-      { status: 201, statusText: 'Created' }
-    );
-    await pending;
-
-    expect(storage.getItem(TOKEN_KEY)).toBe('fresh-token');
-    expect(session.isAuthenticated()).toBe(true);
-    expect(session.profile()).toEqual({ id: 7, name: 'Ada', email: 'ada@example.com' });
-  });
-
-  it('rejects and stays unauthenticated when the email is already registered', async () => {
-    const session = configure();
-
-    const pending = session.register({
-      name: 'Ada',
-      email: 'taken@example.com',
-      password: 'secret12',
-    });
-    http.expectOne(`${BASE_URL}/api/auth/register`).flush(
-      { detail: 'A user with this email already exists.', status: 409 },
-      { status: 409, statusText: 'Conflict' }
-    );
-
-    await expect(pending).rejects.toMatchObject({ status: 409 });
-    expect(session.isAuthenticated()).toBe(false);
-    expect(storage.getItem(TOKEN_KEY)).toBeNull();
-  });
-
   it('on expiry clears the token and returns to sign-in preserving the return URL and the lapse marker', async () => {
     const session = await verifiedSession();
     expect(session.isAuthenticated()).toBe(true);

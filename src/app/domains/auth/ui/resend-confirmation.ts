@@ -35,9 +35,10 @@ export const RESEND_REASSURANCE =
  * so the request, the line and the timer all live here rather than being driven
  * three times over from the screens that render it.
  *
- * Nothing renders it yet. Its three hosts arrive separately — the check-your-inbox
- * state after registering, sign-in's unconfirmed error, and the dead-link state —
- * which is why the control is built and proved at its own seam first.
+ * Its three hosts arrive separately — the check-your-inbox state after
+ * registering, sign-in's unconfirmed error, and the dead-link state — which is
+ * why the control was built and proved at its own seam first. Sign-up (#67) is
+ * the first to render it; sign-in's 403 and the dead-link state still don't.
  */
 @Component({
   selector: 'auth-resend-confirmation',

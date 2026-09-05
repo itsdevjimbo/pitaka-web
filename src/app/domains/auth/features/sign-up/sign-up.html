@@ -10,131 +10,158 @@
         alt="Pitaka logo"
       />
 
-      <!-- Title -->
-      <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">
-        Sign up
-      </div>
-      <div class="mt-0.5 flex items-baseline font-medium">
-        <div class="text-neutral-500">Already have an account?</div>
-        <a
-          class="ml-1 underline"
-          routerLink="/auth/sign-in"
-        >
-          Sign in
-        </a>
-      </div>
+      @if (registeredEmail(); as email) {
+        <!-- Check-your-inbox state. No navigation, no route: the address
+             stays here for the resend control, never the URL or history. -->
+        <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">
+          Check your inbox
+        </div>
+        <p class="mt-4 font-medium text-neutral-500">
+          We sent a confirmation link to <span class="text-neutral-900 dark:text-neutral-100">{{ email }}</span>. The
+          link is short-lived, so confirm soon.
+        </p>
 
-      <!-- Sign up form -->
-      <form
-        class="mt-8"
-        (submit)="signUp($event)"
-      >
-        <!-- Error message -->
-        @if (errorMessage(); as message) {
-          <div
-            class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
-            role="alert"
+        <auth-resend-confirmation
+          class="mt-6"
+          [email]="email"
+        />
+
+        <div class="mt-8 flex items-baseline justify-center font-medium">
+          <div class="text-neutral-500">Already confirmed?</div>
+          <a
+            class="ml-1 underline"
+            routerLink="/auth/sign-in"
           >
-            {{ message }}
-          </div>
-        }
-
-        <div class="flex flex-col gap-y-4">
-          <!-- Name field -->
-          <mat-form-field class="w-full">
-            <mat-label>Name</mat-label>
-            <input
-              id="name"
-              matInput
-              [formField]="signUpForm.name"
-            />
-            <mat-error>
-              @if (signUpForm.name().touched() && signUpForm.name().invalid()) {
-                @for (error of signUpForm.name().errors(); track error) {
-                  {{ error.message }}
-                }
-              }
-            </mat-error>
-          </mat-form-field>
-
-          <!-- Email field -->
-          <mat-form-field class="w-full">
-            <mat-label>Email address</mat-label>
-            <input
-              id="email"
-              matInput
-              [formField]="signUpForm.email"
-            />
-            <mat-error>
-              @if (
-                signUpForm.email().touched() && signUpForm.email().invalid()
-              ) {
-                @for (error of signUpForm.email().errors(); track error) {
-                  {{ error.message }}
-                }
-              }
-            </mat-error>
-          </mat-form-field>
-
-          <!-- Password field -->
-          <mat-form-field
-            appearance="fill"
-            class="w-full"
+            Sign in
+          </a>
+        </div>
+      } @else {
+        <!-- Title -->
+        <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">
+          Sign up
+        </div>
+        <div class="mt-0.5 flex items-baseline font-medium">
+          <div class="text-neutral-500">Already have an account?</div>
+          <a
+            class="ml-1 underline"
+            routerLink="/auth/sign-in"
           >
-            <mat-label>Password</mat-label>
-            <input
-              id="password"
-              matInput
-              type="password"
-              [formField]="signUpForm.password"
-              #passwordField
-            />
-            <button
-              matIconButton
-              type="button"
-              (click)="
-                passwordField.type === 'password'
-                  ? (passwordField.type = 'text')
-                  : (passwordField.type = 'password')
-              "
-              matSuffix
-            >
-              @if (passwordField.type === 'password') {
-                <mat-icon
-                  class="size-5"
-                  svgIcon="eye"
-                ></mat-icon>
-              }
-              @if (passwordField.type === 'text') {
-                <mat-icon
-                  class="size-5"
-                  svgIcon="eye-off"
-                ></mat-icon>
-              }
-            </button>
-            <mat-error>
-              @if (
-                signUpForm.password().touched() &&
-                signUpForm.password().invalid()
-              ) {
-                @for (error of signUpForm.password().errors(); track error) {
-                  {{ error.message }}
-                }
-              }
-            </mat-error>
-          </mat-form-field>
+            Sign in
+          </a>
         </div>
 
-        <!-- Submit button -->
-        <button
-          type="submit"
-          matButton="filled"
-          class="mt-6 w-full"
-          [disabled]="signUpForm().invalid() || submitting()"
+        <!-- Sign up form -->
+        <form
+          class="mt-8"
+          (submit)="signUp($event)"
         >
-          {{ submitting() ? 'Creating your profile…' : 'Create my profile' }}
-        </button>
-      </form>
+          <!-- Error message -->
+          @if (errorMessage(); as message) {
+            <div
+              class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+              role="alert"
+            >
+              {{ message }}
+            </div>
+          }
+
+          <div class="flex flex-col gap-y-4">
+            <!-- Name field -->
+            <mat-form-field class="w-full">
+              <mat-label>Name</mat-label>
+              <input
+                id="name"
+                matInput
+                [formField]="signUpForm.name"
+              />
+              <mat-error>
+                @if (signUpForm.name().touched() && signUpForm.name().invalid()) {
+                  @for (error of signUpForm.name().errors(); track error) {
+                    {{ error.message }}
+                  }
+                }
+              </mat-error>
+            </mat-form-field>
+
+            <!-- Email field -->
+            <mat-form-field class="w-full">
+              <mat-label>Email address</mat-label>
+              <input
+                id="email"
+                matInput
+                [formField]="signUpForm.email"
+              />
+              <mat-error>
+                @if (
+                  signUpForm.email().touched() && signUpForm.email().invalid()
+                ) {
+                  @for (error of signUpForm.email().errors(); track error) {
+                    {{ error.message }}
+                  }
+                }
+              </mat-error>
+            </mat-form-field>
+
+            <!-- Password field -->
+            <mat-form-field
+              appearance="fill"
+              class="w-full"
+            >
+              <mat-label>Password</mat-label>
+              <input
+                id="password"
+                matInput
+                type="password"
+                [formField]="signUpForm.password"
+                #passwordField
+              />
+              <button
+                matIconButton
+                type="button"
+                (click)="
+                  passwordField.type === 'password'
+                    ? (passwordField.type = 'text')
+                    : (passwordField.type = 'password')
+                "
+                matSuffix
+              >
+                @if (passwordField.type === 'password') {
+                  <mat-icon
+                    class="size-5"
+                    svgIcon="eye"
+                  ></mat-icon>
+                }
+                @if (passwordField.type === 'text') {
+                  <mat-icon
+                    class="size-5"
+                    svgIcon="eye-off"
+                  ></mat-icon>
+                }
+              </button>
+              <mat-error>
+                @if (
+                  signUpForm.password().touched() &&
+                  signUpForm.password().invalid()
+                ) {
+                  @for (error of signUpForm.password().errors(); track error) {
+                    {{ error.message }}
+                  }
+                }
+              </mat-error>
+            </mat-form-field>
+          </div>
+
+          <!-- Submit button -->
+          <button
+            type="submit"
+            matButton="filled"
+            class="mt-6 w-full"
+            [disabled]="signUpForm().invalid() || submitting()"
+          >
+            {{ submitting() ? 'Creating your profile…' : 'Create my profile' }}
+          </button>
+        </form>
+      }
     </div>
   </div>
 </div>

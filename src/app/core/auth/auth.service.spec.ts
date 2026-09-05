@@ -140,7 +140,7 @@ describe('AuthService', () => {
     );
   });
 
-  it('POSTs registration to /api/auth/register and renames the identity to `profile`', async () => {
+  it('POSTs registration to /api/auth/register and unwraps the Profile — no token (ADR 0015)', async () => {
     const result = firstValueFrom(
       service.register({
         name: 'Ada',
@@ -157,16 +157,14 @@ describe('AuthService', () => {
       password: 'secret12',
     });
     request.flush(
-      {
-        token: 'a.b.c',
-        user: { id: 7, name: 'Ada', email: 'ada@example.com' },
-      },
+      { user: { id: 7, name: 'Ada', email: 'ada@example.com' } },
       { status: 201, statusText: 'Created' }
     );
 
     await expect(result).resolves.toEqual({
-      token: 'a.b.c',
-      profile: { id: 7, name: 'Ada', email: 'ada@example.com' },
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
     });
   });
 
