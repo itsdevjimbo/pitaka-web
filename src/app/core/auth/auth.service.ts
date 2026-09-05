@@ -136,6 +136,35 @@ export class AuthService {
   }
 
   /**
+   * Ask for a password-reset link. Always resolves, for the same reason
+   * `resendConfirmation` does: the endpoint answers `202` whether or not that
+   * address has a Profile (ADR 0015 — the server is the enumeration boundary),
+   * so there is no outcome to report, and a transport failure is swallowed here
+   * rather than in the screen, where a caller could otherwise be tempted to say
+   * something a success would not have said. Swallowed for the person, not for
+   * us: the failure is logged at this seam, the last to see it.
+   *
+   * Flagged `handlesOwn401` because this is a guest request and the session
+   * interceptor sits outside this `catchError`; without the flag a 401 here
+   * would tear down a live session before the swallow ever ran.
+   */
+  forgotPassword(email: string): Observable<void> {
+    return this.http
+      .post<void>(
+        `${this.baseUrl}/api/auth/forgot-password`,
+        { email },
+        { context: handlesOwn401() }
+      )
+      .pipe(
+        map(() => undefined),
+        catchError((error: unknown) => {
+          console.warn('[api] forgot-password failed, swallowed', error);
+          return of(undefined);
+        })
+      );
+  }
+
+  /**
    * Verify the current token against the server and read back the live Profile.
    * The API returns 401 even for a cryptographically valid token whose user row
    * is gone (ADR 0004), so this is a genuine check, not a decode.

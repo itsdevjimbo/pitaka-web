@@ -18,6 +18,14 @@ const routes: Routes = [
         path: 'sign-up',
         loadComponent: () => import('./features/sign-up/sign-up'),
       },
+      {
+        // Asking for a reset link is a guest action — a live session makes it
+        // meaningless — so it sits inside `guestGuard` with sign-in and sign-up,
+        // unlike the two link-landing screens (ADR 0015).
+        path: 'forgot-password',
+        loadComponent: () =>
+          import('./features/forgot-password/forgot-password'),
+      },
     ],
   },
 ];

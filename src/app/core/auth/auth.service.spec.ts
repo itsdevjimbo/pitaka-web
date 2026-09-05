@@ -87,7 +87,7 @@ describe('AuthService', () => {
     warn.mockRestore();
   });
 
-  it('marks its three guest-or-boot requests as handling their own 401', () => {
+  it('marks its four guest-or-boot requests as handling their own 401', () => {
     firstValueFrom(service.login({ email: 'a@b.co', password: 'x' })).catch(
       () => undefined
     );
@@ -104,6 +104,11 @@ describe('AuthService', () => {
     const resend = http.expectOne(`${BASE_URL}/api/auth/resend-confirmation`);
     expect(resend.request.context.get(HANDLES_OWN_401)).toBe(true);
     resend.flush(null, { status: 202, statusText: 'Accepted' });
+
+    firstValueFrom(service.forgotPassword('a@b.co'));
+    const forgot = http.expectOne(`${BASE_URL}/api/auth/forgot-password`);
+    expect(forgot.request.context.get(HANDLES_OWN_401)).toBe(true);
+    forgot.flush(null, { status: 202, statusText: 'Accepted' });
   });
 
   it('normalises a ValidationProblemDetails response into the same error type, camelCasing keys', async () => {
@@ -258,13 +263,44 @@ describe('AuthService', () => {
    * click from another's, and it is swallowed here rather than in each host so
    * the promise "this never fails" is kept in one place (ADR 0015).
    */
-  it('resolves even when the request itself fails', async () => {
+  it('resolves a resend even when the request itself fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const result = firstValueFrom(service.resendConfirmation('ada@example.com'));
 
     http
       .expectOne(`${BASE_URL}/api/auth/resend-confirmation`)
+      .flush('Nope', { status: 500, statusText: 'Internal Server Error' });
+
+    await expect(result).resolves.toBeUndefined();
+
+    warn.mockRestore();
+  });
+
+  it('POSTs just the email address to /api/auth/forgot-password', async () => {
+    const result = firstValueFrom(service.forgotPassword('ada@example.com'));
+
+    const request = http.expectOne(`${BASE_URL}/api/auth/forgot-password`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ email: 'ada@example.com' });
+    request.flush(null, { status: 202, statusText: 'Accepted' });
+
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  /**
+   * The same bargain resend strikes: the endpoint answers 202 whether or not
+   * that address has a Profile, so the only thing left that could tell one
+   * caller's submit from another's is a transport failure — swallowed here so
+   * no screen can accidentally turn an outage into an answer (ADR 0015).
+   */
+  it('resolves a forgot-password ask even when the request itself fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const result = firstValueFrom(service.forgotPassword('ada@example.com'));
+
+    http
+      .expectOne(`${BASE_URL}/api/auth/forgot-password`)
       .flush('Nope', { status: 500, statusText: 'Internal Server Error' });
 
     await expect(result).resolves.toBeUndefined();
