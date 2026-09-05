@@ -150,6 +150,31 @@ export type RefileTransaction = {
 };
 
 /**
+ * The three axes a search over every Transaction can narrow by (#37), each
+ * independently optional. An absent axis (`undefined`) means unfiltered, not
+ * "match nothing" — so empty criteria (`{}`) is the un-narrowed list. Not five:
+ * a date range and note search are blocked on API work and join later, one
+ * field per landed axis (see the parent ticket, #35).
+ */
+export type TransactionCriteria = {
+  direction?: TransactionDirection;
+  accountId?: number;
+  categoryId?: number;
+};
+
+/**
+ * One page of a criteria-narrowed search: the rows for that page, in the API's
+ * order, and the total the criteria matched across every page — not just this
+ * one. `totalCount` is what lets a screen say how much a page is not showing,
+ * and, paired with empty criteria, tells a Profile with nothing recorded apart
+ * from a search that matched nothing.
+ */
+export type TransactionSearchResult = {
+  transactions: Transaction[];
+  totalCount: number;
+};
+
+/**
  * Which of the three kinds a Transaction reads as. A view concept, not a rename
  * of the API's `TransactionType` (ADR 0003) — the glossary has no single word
  * for "income vs expense vs transfer", and the spec asks a row to show "the
