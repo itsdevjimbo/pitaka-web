@@ -71,7 +71,7 @@ export default class AuthConfirmEmail implements OnInit {
     try {
       await firstValueFrom(this.auth.confirmEmail(userId, token));
     } catch (error) {
-      console.warn('[confirm-email] confirmation failed', error);
+      console.error('[confirm-email] confirmation failed', error);
       this.dead.set(true);
       return;
     }

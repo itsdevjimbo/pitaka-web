@@ -105,7 +105,7 @@ describe('AuthConfirmEmail', () => {
   });
 
   it('lands on the dead-link state when the API rejects the confirm', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture } = setup(
       { userId: '7', token: 'stale-token' },
       { confirmEmail: () => throwError(() => new Error('gone')) }
@@ -117,7 +117,7 @@ describe('AuthConfirmEmail', () => {
 
     expect(text(fixture)).toContain('This link is no longer valid');
 
-    warn.mockRestore();
+    error.mockRestore();
   });
 
   it('lands on the dead-link state for a missing token, without calling the API', async () => {
