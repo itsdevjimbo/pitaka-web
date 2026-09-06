@@ -2,7 +2,13 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
-import { Budget, BudgetWithSpend, NewBudget, Period } from './budget';
+import {
+  AdjustBudget,
+  Budget,
+  BudgetWithSpend,
+  NewBudget,
+  Period,
+} from './budget';
 import { toCalendarDate, toDateOnly } from './budget-calendar';
 
 /**
@@ -54,8 +60,8 @@ const API_PERIOD: Record<Period, BudgetResource['period']> = {
 
 /**
  * The hand-written resource service over the API's Budgets endpoints (ADR
- * 0002). It reads the list and creates one; editing and removing are later
- * tickets. Failures arrive already normalised to `ApiError` by the interceptor.
+ * 0002). It reads the list, creates one, adjusts one, and removes one.
+ * Failures arrive already normalised to `ApiError` by the interceptor.
  *
  * Deliberately **cold** — no `shareReplay`, no store — the way `AccountsService`
  * is and unlike `CategoriesService`: the list carries a balance-class Spent
@@ -104,6 +110,53 @@ export class BudgetsService {
         map(toBudget),
         catchError((error: unknown) => throwError(() => asNameConflict(error)))
       );
+  }
+
+  /**
+   * Adjust a Budget. `PUT /api/budgets/{id}` takes the same `BudgetRequest` as
+   * {@link create} and is a **full replacement, not a patch** — every field is
+   * written from what it receives — so the whole mutable set goes on the wire
+   * every time, `endDate` included, carried through from what the caller was
+   * handed. Omitting a key would null the field it names.
+   *
+   * Changing `period` or `startDate` moves the Cycle, so the Spent figure the
+   * next list read returns is against a different window — correct, and the
+   * re-read after this write (ADR 0006) is what surfaces it.
+   *
+   * The name is still unique. `PUT` answers a taken name with the same bare 409
+   * + ProblemDetails `detail` as `POST`, and it means exactly one thing here
+   * too, so it is refiled as a `name` field error at this seam — the same
+   * {@link asNameConflict} move. `Budget` carries no `Version` (unlike an
+   * Account), so there is no concurrency 409 to model: editing is
+   * last-write-wins.
+   */
+  adjust(id: number, budget: AdjustBudget): Observable<Budget> {
+    return this.http
+      .put<BudgetResource>(`${this.baseUrl}/api/budgets/${id}`, {
+        name: budget.name,
+        amountLimit: budget.amountLimit,
+        period: API_PERIOD[budget.period],
+        startDate: toDateOnly(budget.startDate),
+        endDate: budget.endDate === null ? null : toDateOnly(budget.endDate),
+        categoryId: budget.categoryId,
+      })
+      .pipe(
+        map(toBudget),
+        catchError((error: unknown) => throwError(() => asNameConflict(error)))
+      );
+  }
+
+  /**
+   * Remove a Budget. `DELETE /api/budgets/{id}` → `204`. This is **not** the
+   * Accounts shape: an Account retires without being erased, a Budget is
+   * hard-deleted with nothing to restore it. The API refuses this for no reason
+   * — there is no history or allocation guard as there is on an Account — so
+   * there is no block state to word; a failure is a plain normalised `ApiError`.
+   */
+  remove(id: number): Observable<void> {
+    return this.http
+      .delete<void>(`${this.baseUrl}/api/budgets/${id}`)
+      .pipe(map(() => undefined));
   }
 }
 

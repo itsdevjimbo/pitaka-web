@@ -77,6 +77,35 @@ export type NewBudget = {
 };
 
 /**
+ * What the person supplies to adjust an existing Budget. `PUT /api/budgets/{id}`
+ * takes the same `BudgetRequest` as create and writes **every field from what it
+ * receives — a full replacement, not a patch** (the hazard `RefileTransaction`
+ * documents for a Transaction: an omitted key silently nulls the field it
+ * names). So the mutable set travels whole every time: the
+ * form offers the same five fields create does, and carries the Budget's current
+ * `endDate` through untouched so correcting the ceiling cannot silently clear
+ * the end. `description` is the one field that cannot round-trip — the adapter
+ * drops it on the way in ({@link Budget} has no `description`) so the client
+ * never holds it to send back — and a Budget written through this app has always
+ * had it absent, so the `PUT` nulls it and nothing above notices.
+ */
+export type AdjustBudget = {
+  name: string;
+  amountLimit: number;
+  period: Period;
+  startDate: Date;
+
+  /**
+   * The Budget's current end, passed straight through from what the list read
+   * returned. Not offered for editing (#46) — it rides along only so the
+   * full-replacement `PUT` does not wipe it.
+   */
+  endDate: Date | null;
+
+  categoryId: number | null;
+};
+
+/**
  * How often a Budget renews (see `CONTEXT.md`). `Period` is the API's own word
  * and is not translated (ADR 0003); the members are lowered to match — the way
  * `CategoryKind` lowers `CategoryType` — so the API's `BudgetPeriod` enum

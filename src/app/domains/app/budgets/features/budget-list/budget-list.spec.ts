@@ -86,6 +86,8 @@ describe('BudgetList', () => {
     list: BudgetsService['list'],
     overrides: {
       create?: BudgetsService['create'];
+      adjust?: BudgetsService['adjust'];
+      remove?: BudgetsService['remove'];
       names?: CategoriesService['names'];
     } = {}
   ) {
@@ -99,7 +101,12 @@ describe('BudgetList', () => {
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         {
           provide: BudgetsService,
-          useValue: { list, create: overrides.create ?? (() => of(GROCERIES)) },
+          useValue: {
+            list,
+            create: overrides.create ?? (() => of(GROCERIES)),
+            adjust: overrides.adjust ?? (() => of(GROCERIES)),
+            remove: overrides.remove ?? (() => of(undefined)),
+          },
         },
         {
           provide: CategoriesService,
@@ -461,6 +468,200 @@ describe('BudgetList', () => {
 
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('Something went wrong creating your budget');
+    });
+  });
+
+  /** Open the row's actions menu and click one of its items. */
+  async function openRowAction(
+    fixture: ComponentFixture<BudgetList>,
+    item: string
+  ) {
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      'button[aria-label="Budget actions"]'
+    );
+    if (!trigger) {
+      throw new Error('No row actions menu');
+    }
+    trigger.click();
+    await settle(fixture);
+
+    const menuItem = Array.from(overlay().querySelectorAll('button')).find(
+      (element) => (element.textContent ?? '').trim() === item
+    );
+    if (!menuItem) {
+      throw new Error(`No menu item "${item}"`);
+    }
+    menuItem.click();
+    await settle(fixture);
+  }
+
+  describe('adjust, in a dialog', () => {
+    it('opens the adjust form prefilled from the row, without reflowing the list', async () => {
+      const { fixture, text, dialog, dialogText } = setup(() => of([GROCERIES]));
+      const before = text();
+
+      await openRowAction(fixture, 'Adjust');
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Adjust budget');
+      expect(
+        overlay().querySelector<HTMLInputElement>('#budget-name')!.value
+      ).toBe('Groceries');
+      expect(text()).toContain(before);
+    });
+
+    it('dismisses on Cancel without calling the service', async () => {
+      const adjust = vi.fn();
+      const { fixture, dialog } = setup(() => of([GROCERIES]), {
+        adjust: adjust as unknown as BudgetsService['adjust'],
+      });
+
+      await openRowAction(fixture, 'Adjust');
+      overlayButton('Cancel').click();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(adjust).not.toHaveBeenCalled();
+    });
+
+    it('on a successful adjust, closes the dialog then re-reads so the row lands with its new Cycle figures (ADR 0006)', async () => {
+      const adjustedBare: Budget = {
+        id: 1,
+        name: 'Groceries',
+        amountLimit: 30000,
+        period: 'monthly',
+        startDate: new Date(2026, 0, 1),
+        endDate: null,
+        categoryId: 10,
+      };
+      const adjustedRow: BudgetWithSpend = {
+        ...adjustedBare,
+        amountSpent: 12400,
+        cycleStart: new Date(2026, 7, 1),
+        cycleEnd: new Date(2026, 7, 31),
+      };
+      let attempt = 0;
+      const list = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1 ? of([GROCERIES]) : of([adjustedRow]);
+      });
+      const adjust = vi.fn(() => of(adjustedBare));
+      const { fixture, text, dialog } = setup(
+        list as unknown as BudgetsService['list'],
+        { adjust: adjust as unknown as BudgetsService['adjust'] }
+      );
+
+      await openRowAction(fixture, 'Adjust');
+      typeInto('#budget-amount', '30000');
+      overlayButton('Save changes').click();
+      await settle(fixture);
+
+      expect(adjust).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ amountLimit: 30000 })
+      );
+      expect(dialog()).toBeNull();
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).toContain(`${formatPeso(30000)}`);
+    });
+
+    it('on a failed adjust, keeps the dialog open with the reason shown', async () => {
+      const adjust = vi.fn(() => throwError(() => new Error('offline')));
+      const { fixture, dialog, dialogText } = setup(() => of([GROCERIES]), {
+        adjust: adjust as unknown as BudgetsService['adjust'],
+      });
+
+      await openRowAction(fixture, 'Adjust');
+      typeInto('#budget-amount', '30000');
+      overlayButton('Save changes').click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain(
+        'Something went wrong adjusting your budget'
+      );
+    });
+  });
+
+  describe('remove, behind a confirm', () => {
+    it('asks before removing and does not call the service until confirmed', async () => {
+      const remove = vi.fn(() => of(undefined));
+      const { fixture, text } = setup(() => of([GROCERIES]), {
+        remove: remove as unknown as BudgetsService['remove'],
+      });
+
+      await openRowAction(fixture, 'Remove');
+
+      expect(text()).toContain('gone for good');
+      expect(remove).not.toHaveBeenCalled();
+    });
+
+    it('says the Budget is gone for good, not archived', async () => {
+      const { fixture, text } = setup(() => of([GROCERIES]));
+
+      await openRowAction(fixture, 'Remove');
+
+      expect(text().toLowerCase()).toContain("aren’t archived".toLowerCase());
+    });
+
+    it('backs out on Cancel without calling the service', async () => {
+      const remove = vi.fn(() => of(undefined));
+      const { fixture, text } = setup(() => of([GROCERIES]), {
+        remove: remove as unknown as BudgetsService['remove'],
+      });
+
+      await openRowAction(fixture, 'Remove');
+      clickButton(fixture, 'Cancel');
+      await settle(fixture);
+
+      expect(text()).not.toContain('gone for good');
+      expect(remove).not.toHaveBeenCalled();
+    });
+
+    it('removes on confirm, then re-reads the list (ADR 0006)', async () => {
+      const remove = vi.fn(() => of(undefined));
+      let attempt = 0;
+      const list = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1 ? of([GROCERIES, HOLIDAYS]) : of([HOLIDAYS]);
+      });
+      const { fixture, text } = setup(
+        list as unknown as BudgetsService['list'],
+        { remove: remove as unknown as BudgetsService['remove'] }
+      );
+
+      await openRowAction(fixture, 'Remove');
+      clickButton(fixture, 'Remove');
+      await settle(fixture);
+
+      expect(remove).toHaveBeenCalledWith(1);
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).not.toContain('Groceries');
+      expect(text()).toContain('Holidays');
+    });
+
+    it('pins the row a notice with a retry when the removal fails', async () => {
+      let attempt = 0;
+      const remove = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1
+          ? throwError(() => new ApiError('The server did not accept that.', 500))
+          : of(undefined);
+      });
+      const { fixture, text } = setup(() => of([GROCERIES]), {
+        remove: remove as unknown as BudgetsService['remove'],
+      });
+
+      await openRowAction(fixture, 'Remove');
+      clickButton(fixture, 'Remove');
+      await settle(fixture);
+
+      expect(text()).toContain('The server did not accept that.');
+
+      clickButton(fixture, 'Try again');
+      await settle(fixture);
+
+      expect(remove).toHaveBeenCalledTimes(2);
     });
   });
 });
