@@ -1,5 +1,6 @@
 import { Component, computed, input, model } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
@@ -36,20 +37,28 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
 
 /**
  * The bar that turns the Transactions list into an answer: single-select
- * controls for direction, Account and Category, freely combinable, with AND
- * across the axes enforced by the server (#37). It owns no list state and issues
- * no reads — it is a controlled view over {@link TransactionCriteria}: the
- * current criteria come in, an edited copy goes back out through the two-way
- * `criteria`, and the page decides what a change means (a fresh read, a reset to
- * page 1). That split is what lets #41 move the source of truth to the URL
- * without touching this component, and #64/#65 add their axis as one more
- * control and one more criteria field rather than a rebuild.
+ * controls for direction, Account and Category, a `mat-date-range-input` for a
+ * date range (#65), all freely combinable, with AND across the axes enforced by
+ * the server (#37). It owns no list state and issues no reads — it is a
+ * controlled view over {@link TransactionCriteria}: the current criteria come
+ * in, an edited copy goes back out through the two-way `criteria`, and the page
+ * decides what a change means (a fresh read, a reset to page 1). That split is
+ * what lets #41 move the source of truth to the URL without touching this
+ * component, and #64 adds its axis as one more control and one more criteria
+ * field rather than a rebuild.
  *
  * An axis with no selection emits **no criteria key at all**, not a key set to
  * `undefined`, so empty criteria are literally `{}` and the adapter sees no
- * parameter for that axis. Which filters are active is legible from the controls
- * themselves — each shows its chosen value — and summarised as a count beside a
- * one-press **Clear filters**.
+ * parameter for that axis. The date range's two ends are independently optional
+ * and each drops its key the same way when cleared. Which filters are active is
+ * legible from the controls themselves — each shows its chosen value — and
+ * summarised as a count beside a one-press **Clear filters** (the date range
+ * counts once, however many ends are set).
+ *
+ * The date-range ends are held as the person picked them — inclusive calendar
+ * days — and the adapter turns `to` into the API's exclusive bound and drops an
+ * inverted range before the wire (`date-range-bounds.ts`, #65). This component
+ * does no date arithmetic and no wire shaping.
  *
  * Phone-width collapsing is #42's; this renders the controls inline.
  */
@@ -61,6 +70,7 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
     MatSelectModule,
     MatButtonModule,
     MatIconModule,
+    MatDatepickerModule,
   ],
   host: {
     class: 'block',
@@ -97,6 +107,16 @@ export class TransactionsFilterBar {
 
   protected setCategory(value: number | null): void {
     this.patch('categoryId', value);
+  }
+
+  /** The start of the date range — an inclusive calendar day, or unset. */
+  protected setDateFrom(value: Date | null): void {
+    this.patch('from', value);
+  }
+
+  /** The end of the date range — an inclusive calendar day, or unset. */
+  protected setDateTo(value: Date | null): void {
+    this.patch('to', value);
   }
 
   /** Restore the full list in one action — every axis unset. */

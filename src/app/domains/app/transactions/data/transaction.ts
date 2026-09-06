@@ -150,24 +150,37 @@ export type RefileTransaction = {
 };
 
 /**
- * The three axes a search over every Transaction can narrow by (#37), each
+ * The axes a search over every Transaction can narrow by (#37), each
  * independently optional. An absent axis (`undefined`) means unfiltered, not
- * "match nothing" — so empty criteria (`{}`) is the un-narrowed list. Not five:
- * a date range and note search are blocked on API work and join later, one
- * field per landed axis (see the parent ticket, #35).
+ * "match nothing" — so empty criteria (`{}`) is the un-narrowed list. #64's note
+ * search is still blocked on API work and joins later as one more field (see the
+ * parent ticket, #35).
  */
 export type TransactionCriteria = {
   direction?: TransactionDirection;
   accountId?: number;
   categoryId?: number;
+
+  /**
+   * The date range's **inclusive** calendar-day bounds (#65), each independently
+   * optional, held as `Date`s at local midnight — what the range picker yields.
+   * Both ends are inclusive to the person: a Transaction dated anywhere on the
+   * `to` day is in range whatever time it carries. The adapter turns `to` into
+   * the API's exclusive bound (`endDay + 1`), stamps both ends with one shared
+   * UTC offset, and drops an inverted range whole before the wire —
+   * `date-range-bounds.ts` owns that conversion (the API's ADR 0005, #41).
+   */
+  from?: Date;
+  to?: Date;
 };
 
 /**
- * The keys of {@link TransactionCriteria}, as one list every consumer iterates
- * instead of re-spelling `direction/accountId/categoryId` — the filter bar to
- * count active axes, the page to tell "narrowed" from "the whole list". When
- * #64's note search or #65's date range lands, its key is added here and the
- * axis count follows without either component being rebuilt (#40).
+ * The single-value axes of {@link TransactionCriteria} — one list to iterate
+ * instead of re-spelling `direction/accountId/categoryId`. The date range is a
+ * further axis but rides on two keys (`from`/`to`) and is counted once, so it is
+ * handled directly in {@link activeCriteriaCount} rather than listed here. When
+ * #64's note search lands its single key is added here and the axis count
+ * follows without either the filter bar or the page being rebuilt (#40).
  */
 export const CRITERIA_AXES = [
   'direction',
@@ -175,9 +188,17 @@ export const CRITERIA_AXES = [
   'categoryId',
 ] as const satisfies readonly (keyof TransactionCriteria)[];
 
-/** How many axes `criteria` narrows by — zero is the unfiltered list. */
+/**
+ * How many axes `criteria` narrows by — zero is the unfiltered list. A date
+ * range counts as one axis whether one end is set or both.
+ */
 export function activeCriteriaCount(criteria: TransactionCriteria): number {
-  return CRITERIA_AXES.filter((axis) => criteria[axis] !== undefined).length;
+  const singleValue = CRITERIA_AXES.filter(
+    (axis) => criteria[axis] !== undefined
+  ).length;
+  const dateRange =
+    criteria.from !== undefined || criteria.to !== undefined ? 1 : 0;
+  return singleValue + dateRange;
 }
 
 /**

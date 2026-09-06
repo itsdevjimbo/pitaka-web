@@ -11,11 +11,26 @@
  * moment is reflected rather than assumed.
  */
 export function toOffsetTimestamp(moment: Date): string {
-  const pad = (value: number): string => String(value).padStart(2, '0');
-
   // `getTimezoneOffset` counts minutes *behind* UTC — positive when west, the
   // opposite sign of an ISO offset — so flip it: `+` now means east of UTC.
-  const offsetMinutes = -moment.getTimezoneOffset();
+  return formatWithOffset(moment, -moment.getTimezoneOffset());
+}
+
+/**
+ * Format `moment`'s local wall-clock as an ISO 8601 string carrying
+ * `offsetMinutes` (minutes *east* of UTC, the ISO sign) as its zone designator,
+ * regardless of the offset `moment` itself sits in.
+ *
+ * {@link toOffsetTimestamp} passes the moment's own offset. The read-path
+ * date-range builder passes **one shared offset for both bounds** instead
+ * (`date-range-bounds.ts`, #65): the transactions filter requires `from` and
+ * `to` to carry the same designator, so a range that happens to straddle a DST
+ * transition must still go out in a single zone rather than one end at `-05:00`
+ * and the other at `-04:00`.
+ */
+export function formatWithOffset(moment: Date, offsetMinutes: number): string {
+  const pad = (value: number): string => String(value).padStart(2, '0');
+
   const sign = offsetMinutes < 0 ? '-' : '+';
   const magnitude = Math.abs(offsetMinutes);
 

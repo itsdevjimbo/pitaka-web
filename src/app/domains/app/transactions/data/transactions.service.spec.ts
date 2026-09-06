@@ -651,6 +651,115 @@ describe('TransactionsService', () => {
       }
     });
 
+    describe('the date range (#65)', () => {
+      // The bounds carry the process timezone's offset — pin it to a fixed,
+      // DST-free *negative* zone so the sent timestamps are exact and a
+      // `toISOString()` regression would show (it never does east of UTC).
+      const pinTimezone = withPinnedTimezone();
+      beforeEach(() => pinTimezone('America/Panama')); // fixed −05:00, no DST
+
+      it('sends the inclusive calendar days as offset-bearing bounds, with to exclusive', async () => {
+        const result = firstValueFrom(
+          service.search(
+            { from: new Date(2026, 8, 1), to: new Date(2026, 8, 30) },
+            1
+          )
+        );
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        expect(request.request.params.get('from')).toBe(
+          '2026-09-01T00:00:00-05:00'
+        );
+        // The inclusive 30 September goes out as 1 October — `to` is exclusive.
+        expect(request.request.params.get('to')).toBe(
+          '2026-10-01T00:00:00-05:00'
+        );
+
+        request.flush(envelope());
+        await result;
+      });
+
+      it('carries a ±HH:MM offset, never a Z — a toISOString() refactor must fail loudly', async () => {
+        const result = firstValueFrom(
+          service.search({ from: new Date(2026, 8, 1) }, 1)
+        );
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        const from = request.request.params.get('from')!;
+        expect(from).not.toContain('Z');
+        expect(from).toMatch(/[+-]\d{2}:\d{2}$/);
+
+        request.flush(envelope());
+        await result;
+      });
+
+      it('keeps each end independently optional', async () => {
+        const result = firstValueFrom(
+          service.search({ to: new Date(2026, 8, 30) }, 1)
+        );
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        expect(request.request.params.keys().sort()).toEqual(['page', 'to']);
+        expect(request.request.params.get('to')).toBe(
+          '2026-10-01T00:00:00-05:00'
+        );
+
+        request.flush(envelope());
+        await result;
+      });
+
+      it('drops both ends when the range is inverted, so no 400 reaches the screen', async () => {
+        const result = firstValueFrom(
+          service.search(
+            { from: new Date(2026, 8, 30), to: new Date(2026, 8, 1) },
+            1
+          )
+        );
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        expect(request.request.params.keys().sort()).toEqual(['page']);
+
+        request.flush(envelope());
+        await result;
+      });
+
+      it('combines with the other axes', async () => {
+        const result = firstValueFrom(
+          service.search(
+            {
+              direction: 'expense',
+              accountId: 3,
+              from: new Date(2026, 8, 1),
+              to: new Date(2026, 8, 30),
+            },
+            1
+          )
+        );
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        expect(request.request.params.keys().sort()).toEqual([
+          'accountId',
+          'from',
+          'page',
+          'to',
+          'type',
+        ]);
+
+        request.flush(envelope());
+        await result;
+      });
+    });
+
     it('unwraps the envelope into rows and totalCount', async () => {
       const result = firstValueFrom(service.search({}, 1));
 

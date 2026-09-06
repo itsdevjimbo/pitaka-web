@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { API_BASE_URL } from '@/app/core/api';
+import { toRequestDateBounds } from './date-range-bounds';
 import { toOffsetTimestamp } from './offset-timestamp';
 import { parseTransactionDate } from './parse-transaction-date';
 import {
@@ -88,6 +89,13 @@ export class TransactionsService {
    * caller resetting to page 1 on a filter change never has to remember to
    * strip a stale page out of the criteria object too.
    *
+   * The `from`/`to` date range is the one axis the caller hands over in the
+   * person's terms — inclusive calendar days — and the adapter translates: `to`
+   * goes out as the API's exclusive bound, both ends carry one shared UTC
+   * offset (never a bare date, never `toISOString()`), and an inverted range is
+   * dropped whole rather than sent as a guaranteed 400 (`date-range-bounds.ts`,
+   * #65, the API's ADR 0005).
+   *
    * A Transfer arrives once: the un-scoped list filters on the Profile alone,
    * unlike `GET /api/accounts/:id/transactions`, which yields a Transfer to
    * both its Accounts. Narrowing by `accountId` still matches a Transfer on
@@ -115,6 +123,21 @@ export class TransactionsService {
     }
     if (criteria.direction !== undefined) {
       params = params.set('type', API_TYPE[criteria.direction]);
+    }
+
+    // The date range crosses the wire as offset-bearing timestamps, not
+    // `YYYY-MM-DD`: `to` becomes the API's exclusive bound, both ends carry one
+    // shared UTC offset, and an inverted range collapses to nothing here rather
+    // than reaching the API as a 400 (`date-range-bounds.ts`, #65).
+    const dateBounds = toRequestDateBounds(
+      criteria.from ?? null,
+      criteria.to ?? null
+    );
+    if (dateBounds.from !== undefined) {
+      params = params.set('from', dateBounds.from);
+    }
+    if (dateBounds.to !== undefined) {
+      params = params.set('to', dateBounds.to);
     }
 
     return this.http
