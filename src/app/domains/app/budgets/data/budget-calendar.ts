@@ -1,3 +1,4 @@
+import { sumPesos } from '@/app/core/money';
 import { Period } from './budget';
 
 /**
@@ -97,4 +98,49 @@ export function budgetPhase(
 /** Strip the time of day, keeping the local calendar day. */
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/** What is left of a Budget's ceiling once the Cycle's Spent figure is taken off. */
+export type BudgetRemaining = {
+  /**
+   * The ceiling minus what the Cycle has spent. Negative when the Budget is
+   * overspent — never clamped to zero, so the row can say how far over (ADR
+   * 0006: a balance-class figure the person acts on; a Spent figure that
+   * disagreed with its ceiling would be worse than none).
+   */
+  left: number;
+
+  /** `true` once the Cycle's spending has passed the ceiling. */
+  overspent: boolean;
+
+  /**
+   * How far past the ceiling the Cycle has spent, as a positive figure — `0`
+   * unless `overspent`. The row shows this rather than negating `left` itself,
+   * so the overspent edge stays in one place.
+   */
+  overspentBy: number;
+};
+
+/**
+ * Read a Budget's Spent figure against its ceiling: what is left (negative when
+ * overspent), whether it is overspent, and by how much. A few subtractions
+ * today, but they live here beside the rest of the slice's arithmetic rather
+ * than in the template, so the overspent edge has one home and a test (the
+ * ticket's steer once this grows past a line or two).
+ *
+ * `left` is summed through {@link sumPesos}, not a bare `-`: this is a
+ * balance-class figure the person acts on (ADR 0006), and it must not land on
+ * `-199.99999999999998` for a ceiling and Spent that both have two decimals.
+ */
+export function budgetRemaining(budget: {
+  amountLimit: number;
+  amountSpent: number;
+}): BudgetRemaining {
+  const left = sumPesos([budget.amountLimit, -budget.amountSpent]);
+
+  return {
+    left,
+    overspent: left < 0,
+    overspentBy: left < 0 ? -left : 0,
+  };
 }

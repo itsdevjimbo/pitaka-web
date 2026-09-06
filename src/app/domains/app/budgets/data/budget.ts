@@ -7,10 +7,9 @@
  * 0011), and `description` dropped because nothing above the adapter reads it
  * (the same move `toAccount` makes for an Account's owner id).
  *
- * `GET /api/budgets` also carries `amountSpent`, `cycleStart` and `cycleEnd` —
- * the Spent figure and the server-computed Cycle window (ADR 0012). This slice
- * renders none of them and the service is cold (ADR 0006), so they stay out of
- * the type until the ticket that shows progress needs them.
+ * `GET /api/budgets` also carries the Spent figure and the server-computed
+ * Cycle window (ADR 0012); those ride on {@link BudgetWithSpend}, not here,
+ * because `POST /api/budgets` returns the bare Budget without them.
  */
 export type Budget = {
   id: number;
@@ -36,6 +35,31 @@ export type Budget = {
 
   /** The Category the Budget watches, or `null` for a Budget over all spending. */
   categoryId: number | null;
+};
+
+/**
+ * A Budget as `GET /api/budgets` sends it: the config above plus the figures
+ * that make it readable as progress. The server resolves both — the client
+ * never re-derives the Cycle (ADR 0012) — and the list is read fresh every time
+ * rather than cached, the way a balance is (ADR 0006).
+ */
+export type BudgetWithSpend = Budget & {
+  /**
+   * What the current Cycle has spent against the ceiling: expenses inside the
+   * Cycle that match the Budget's Category (see `CONTEXT.md`, *Spent*). Zero for
+   * a Budget that has not started; the finished Budget's is its final Cycle's
+   * total.
+   */
+  amountSpent: number;
+
+  /**
+   * The first and last day of the Cycle `amountSpent` covers — the exact window
+   * the server summed over, so the figure and its label cannot disagree (ADR
+   * 0012). Calendar days, parsed at local midnight like {@link Budget.startDate}
+   * (ADR 0011).
+   */
+  cycleStart: Date;
+  cycleEnd: Date;
 };
 
 /**
