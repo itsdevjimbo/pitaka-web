@@ -9,6 +9,11 @@
  * time the person entered; this keeps their local wall-clock and appends the
  * offset that was in force *on that date*, so a DST change on either side of the
  * moment is reflected rather than assumed.
+ *
+ * The read path's date-range filter reuses this for the same reason — a bound
+ * sent as `Z` names the right moment and the wrong wall-clock day, and the API
+ * reads a generated transaction's bare day against the wall-clock (ADR 0011,
+ * `date-range-bounds.ts`, #65).
  */
 export function toOffsetTimestamp(moment: Date): string {
   const pad = (value: number): string => String(value).padStart(2, '0');

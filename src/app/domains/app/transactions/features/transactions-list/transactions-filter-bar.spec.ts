@@ -1,6 +1,9 @@
 import { ModelSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import {
+  MATERIAL_ANIMATIONS,
+  provideNativeDateAdapter,
+} from '@angular/material/core';
 import { provideIcons } from '@/app/core/icons';
 import { withOverlayContainer } from '@/testing/overlay';
 import { TransactionCriteria } from '../../data/transaction';
@@ -17,6 +20,8 @@ type FilterBarInternals = {
   setDirection(value: string | null): void;
   setAccount(value: number | null): void;
   setCategory(value: number | null): void;
+  setDateFrom(value: Date | null): void;
+  setDateTo(value: Date | null): void;
   clear(): void;
 };
 
@@ -38,6 +43,7 @@ describe('TransactionsFilterBar', () => {
       imports: [TransactionsFilterBar],
       providers: [
         provideIcons(),
+        provideNativeDateAdapter(),
         {
           provide: MATERIAL_ANIMATIONS,
           useValue: { animationsDisabled: true },
@@ -140,11 +146,78 @@ describe('TransactionsFilterBar', () => {
     expect('accountId' in last).toBe(false);
   });
 
+  describe('the date range (#65)', () => {
+    it('folds a picked start and end into the criteria as the chosen calendar days', () => {
+      const { cmp, emitted } = setup();
+
+      cmp.setDateFrom(new Date(2026, 8, 1));
+      cmp.setDateTo(new Date(2026, 8, 30));
+
+      expect(emitted.at(-1)).toEqual({
+        from: new Date(2026, 8, 1),
+        to: new Date(2026, 8, 30),
+      });
+    });
+
+    it('keeps each end independently optional', () => {
+      const { cmp, emitted } = setup();
+
+      cmp.setDateFrom(new Date(2026, 8, 1));
+
+      expect(emitted.at(-1)).toEqual({ from: new Date(2026, 8, 1) });
+      expect('to' in emitted.at(-1)!).toBe(false);
+    });
+
+    it('drops an end key entirely when it is cleared, never emitting undefined', () => {
+      const { cmp, emitted } = setup({
+        from: new Date(2026, 8, 1),
+        to: new Date(2026, 8, 30),
+      });
+
+      cmp.setDateFrom(null);
+
+      const last = emitted.at(-1)!;
+      expect(last).toEqual({ to: new Date(2026, 8, 30) });
+      expect('from' in last).toBe(false);
+    });
+
+    it('combines with the single-value axes', () => {
+      const { cmp, emitted } = setup({ direction: 'expense', accountId: 3 });
+
+      cmp.setDateFrom(new Date(2026, 8, 1));
+      cmp.setDateTo(new Date(2026, 8, 30));
+
+      expect(emitted.at(-1)).toEqual({
+        direction: 'expense',
+        accountId: 3,
+        from: new Date(2026, 8, 1),
+        to: new Date(2026, 8, 30),
+      });
+    });
+
+    it('counts as a single active filter however many ends are set', () => {
+      const { fixture, cmp } = setup();
+
+      fixture.componentRef.setInput('criteria', { from: new Date(2026, 8, 1) });
+      fixture.detectChanges();
+      expect(cmp.activeCount()).toBe(1);
+
+      fixture.componentRef.setInput('criteria', {
+        from: new Date(2026, 8, 1),
+        to: new Date(2026, 8, 30),
+      });
+      fixture.detectChanges();
+      expect(cmp.activeCount()).toBe(1);
+    });
+  });
+
   it('clears every axis in one action', () => {
     const { cmp, emitted } = setup({
       direction: 'income',
       accountId: 9,
       categoryId: 2,
+      from: new Date(2026, 8, 1),
+      to: new Date(2026, 8, 30),
     });
 
     cmp.clear();
@@ -166,9 +239,12 @@ describe('TransactionsFilterBar', () => {
     fixture.componentRef.setInput('criteria', {
       direction: 'expense',
       categoryId: 1,
+      from: new Date(2026, 8, 1),
+      to: new Date(2026, 8, 30),
     });
     fixture.detectChanges();
-    expect(text()).toContain('2 filters active');
+    // Two single-value axes plus the date range, counted once — three, not four.
+    expect(text()).toContain('3 filters active');
   });
 
   it('reflects incoming criteria in the controls without re-emitting', () => {
