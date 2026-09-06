@@ -91,10 +91,10 @@ export class TransactionsService {
    *
    * The `from`/`to` date range is the one axis the caller hands over in the
    * person's terms — inclusive calendar days — and the adapter translates: `to`
-   * goes out as the API's exclusive bound, both ends carry one shared UTC
-   * offset (never a bare date, never `toISOString()`), and an inverted range is
-   * dropped whole rather than sent as a guaranteed 400 (`date-range-bounds.ts`,
-   * #65, the API's ADR 0005).
+   * goes out as the API's exclusive bound, each end as an offset-bearing
+   * timestamp (never a bare date, never `toISOString()` — ADR 0011), and an
+   * inverted range is dropped whole rather than sent as a guaranteed 400
+   * (`date-range-bounds.ts`, #65).
    *
    * A Transfer arrives once: the un-scoped list filters on the Profile alone,
    * unlike `GET /api/accounts/:id/transactions`, which yields a Transfer to
@@ -126,9 +126,9 @@ export class TransactionsService {
     }
 
     // The date range crosses the wire as offset-bearing timestamps, not
-    // `YYYY-MM-DD`: `to` becomes the API's exclusive bound, both ends carry one
-    // shared UTC offset, and an inverted range collapses to nothing here rather
-    // than reaching the API as a 400 (`date-range-bounds.ts`, #65).
+    // `YYYY-MM-DD`: `to` becomes the API's exclusive bound, and an inverted
+    // range collapses to nothing here rather than reaching the API as a 400
+    // (`date-range-bounds.ts`, #65).
     const dateBounds = toRequestDateBounds(
       criteria.from ?? null,
       criteria.to ?? null

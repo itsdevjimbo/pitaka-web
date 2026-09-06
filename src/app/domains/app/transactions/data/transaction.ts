@@ -166,9 +166,10 @@ export type TransactionCriteria = {
    * optional, held as `Date`s at local midnight — what the range picker yields.
    * Both ends are inclusive to the person: a Transaction dated anywhere on the
    * `to` day is in range whatever time it carries. The adapter turns `to` into
-   * the API's exclusive bound (`endDay + 1`), stamps both ends with one shared
-   * UTC offset, and drops an inverted range whole before the wire —
-   * `date-range-bounds.ts` owns that conversion (the API's ADR 0005, #41).
+   * the API's exclusive bound (`endDay + 1`), sends each end as an
+   * offset-bearing timestamp (never a bare date, never `toISOString()` — ADR
+   * 0011), and drops an inverted range whole before the wire (#41).
+   * `date-range-bounds.ts` owns that conversion.
    */
   from?: Date;
   to?: Date;
