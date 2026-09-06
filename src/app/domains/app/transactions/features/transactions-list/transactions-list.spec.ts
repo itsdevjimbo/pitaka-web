@@ -3,8 +3,14 @@ import {
   MATERIAL_ANIMATIONS,
   provideNativeDateAdapter,
 } from '@angular/material/core';
-import { provideRouter } from '@angular/router';
-import { of, Subject, throwError } from 'rxjs';
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  ParamMap,
+  provideRouter,
+  Router,
+} from '@angular/router';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
@@ -23,6 +29,25 @@ type TransactionsListInternals = {
   openRefileDialog(transaction: Transaction): void;
   applyCriteria(criteria: Record<string, unknown>): void;
 };
+
+/**
+ * A stand-in for the query string: `navigate` on the spied Router pushes the
+ * new parameters straight into the `ActivatedRoute` stub, so the round-trip a
+ * filter change makes — write the URL, react to the route — runs synchronously
+ * in a unit test the way it does in the app (#41).
+ */
+function fakeUrl(initial: Record<string, string> = {}) {
+  const params$ = new BehaviorSubject<ParamMap>(convertToParamMap(initial));
+  return {
+    params$,
+    activatedRoute: {
+      snapshot: { queryParamMap: convertToParamMap(initial) },
+      queryParamMap: params$.asObservable(),
+    },
+    navigate: (queryParams: Record<string, string>) =>
+      params$.next(convertToParamMap(queryParams)),
+  };
+}
 
 const CATEGORY_LIST: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense' },
@@ -72,6 +97,7 @@ describe('TransactionsList', () => {
       accounts?: AccountsService['list'];
       refile?: TransactionsService['refile'];
       remove?: TransactionsService['remove'];
+      queryParams?: Record<string, string>;
     } = {}
   ) {
     const search =
@@ -80,6 +106,7 @@ describe('TransactionsList', () => {
     const accounts = over.accounts ?? (() => of(ACCOUNTS as unknown as never));
     const refile = over.refile ?? (() => of({} as Transaction));
     const remove = over.remove ?? (() => of(undefined));
+    const url = fakeUrl(over.queryParams ?? {});
 
     TestBed.configureTestingModule({
       imports: [TransactionsList],
@@ -101,14 +128,26 @@ describe('TransactionsList', () => {
           useValue: { list: categoryList },
         },
         { provide: AccountsService, useValue: { list: accounts } },
+        { provide: ActivatedRoute, useValue: url.activatedRoute },
       ],
     });
+
+    // The bar navigates through the Router; route it back into the fake URL so
+    // the component reacts synchronously, the way the app does.
+    const navigate = vi
+      .spyOn(TestBed.inject(Router), 'navigate')
+      .mockImplementation((_commands, extras) => {
+        url.navigate((extras?.queryParams ?? {}) as Record<string, string>);
+        return Promise.resolve(true);
+      });
 
     const fixture = TestBed.createComponent(TransactionsList);
     fixture.detectChanges();
 
     return {
       fixture,
+      navigate,
+      setUrl: (params: Record<string, string>) => url.navigate(params),
       cmp: fixture.componentInstance as unknown as TransactionsListInternals,
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
       links: () =>
@@ -1058,6 +1097,158 @@ describe('TransactionsList', () => {
 
       expect(text()).not.toContain('Filter server fell over.');
       expect(text()).toContain('Filtered');
+    });
+  });
+
+  describe('the URL is the source of truth (#41)', () => {
+    it('hydrates the criteria from the query string and reads the list already narrowed on entry', () => {
+      const search = vi.fn(() =>
+        of(page({ transactions: [tx({ description: 'Narrowed' })], totalCount: 1 }))
+      );
+      setup({
+        search: search as unknown as TransactionsService['search'],
+        queryParams: { account: '3', direction: 'expense', note: 'coffee' },
+      });
+
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(search).toHaveBeenCalledWith(
+        { direction: 'expense', accountId: 3, description: 'coffee' },
+        1
+      );
+    });
+
+    it('reads a hand-edited junk parameter as unfiltered — it widens rather than breaks', () => {
+      const search = vi.fn(() =>
+        of(page({ transactions: [tx({ description: 'Everything' })], totalCount: 1 }))
+      );
+      const { fixture, text } = setup({
+        search: search as unknown as TransactionsService['search'],
+        queryParams: {
+          direction: 'banana',
+          account: 'abc',
+          category: '-1',
+          from: 'not-a-date',
+          to: '2026-02-30',
+          note: '   ',
+        },
+      });
+
+      expect(search).toHaveBeenCalledWith({}, 1);
+      expect(text()).toContain('Everything');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')
+      ).toBeNull();
+    });
+
+    it('drops both ends of an inverted date range carried in the URL', () => {
+      const search = vi.fn(() =>
+        of(page({ transactions: [tx()], totalCount: 1 }))
+      );
+      setup({
+        search: search as unknown as TransactionsService['search'],
+        queryParams: { from: '2026-07-31', to: '2026-07-01' },
+      });
+
+      expect(search).toHaveBeenCalledWith({}, 1);
+    });
+
+    it('writes a changed filter to the query string without pushing a history entry, and never carries page', () => {
+      const { cmp, navigate } = setup();
+
+      cmp.applyCriteria({ direction: 'income', accountId: 9 });
+
+      expect(navigate).toHaveBeenLastCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: { direction: 'income', account: '9' },
+          replaceUrl: true,
+        })
+      );
+      const [, extras] = navigate.mock.calls.at(-1)!;
+      expect(extras?.queryParams).not.toHaveProperty('page');
+    });
+
+    it('serialises the person’s criteria, not the wire’s: a bare inclusive calendar day', () => {
+      const { cmp, navigate } = setup();
+
+      cmp.applyCriteria({
+        from: new Date(2026, 6, 1),
+        to: new Date(2026, 6, 31),
+      } as unknown as Record<string, unknown>);
+
+      const [, extras] = navigate.mock.calls.at(-1)!;
+      expect(extras?.queryParams).toEqual({ from: '2026-07-01', to: '2026-07-31' });
+    });
+
+    it('re-narrows the list when the query string changes underneath it (back button, pasted link)', async () => {
+      const search = vi.fn((criteria: Record<string, unknown>) =>
+        of(
+          page({
+            transactions: [
+              tx({
+                description: Object.keys(criteria).length ? 'Narrowed' : 'Whole',
+              }),
+            ],
+            totalCount: 1,
+          })
+        )
+      );
+      const { fixture, setUrl, text } = setup({
+        search: search as unknown as TransactionsService['search'],
+      });
+
+      expect(text()).toContain('Whole');
+
+      setUrl({ category: '1' });
+      await settle(fixture);
+
+      expect(search).toHaveBeenLastCalledWith({ categoryId: 1 }, 1);
+      expect(text()).toContain('Narrowed');
+    });
+
+    it('does not re-read when a navigation only drops a parameter the parser already ignored', () => {
+      const search = vi.fn(() =>
+        of(page({ transactions: [tx()], totalCount: 1 }))
+      );
+      const { setUrl } = setup({
+        search: search as unknown as TransactionsService['search'],
+        queryParams: { account: '3' },
+      });
+
+      expect(search).toHaveBeenCalledTimes(1);
+
+      // Same readable criteria, plus a junk value the parser drops.
+      setUrl({ account: '3', direction: 'banana' });
+
+      expect(search).toHaveBeenCalledTimes(1);
+    });
+
+    it('empties the query parameters when filters are cleared', async () => {
+      const search = vi.fn((criteria: Record<string, unknown>) =>
+        Object.keys(criteria).length === 0
+          ? of(
+              page({
+                transactions: [tx({ description: 'Everything' })],
+                totalCount: 1,
+              })
+            )
+          : of(page({ transactions: [], totalCount: 0 }))
+      );
+      const { fixture, cmp, button, navigate } = setup({
+        search: search as unknown as TransactionsService['search'],
+      });
+
+      cmp.applyCriteria({ direction: 'income' });
+      await settle(fixture);
+
+      button('Clear filters')!.click();
+      await settle(fixture);
+
+      expect(navigate).toHaveBeenLastCalledWith(
+        [],
+        expect.objectContaining({ queryParams: {}, replaceUrl: true })
+      );
+      expect(search).toHaveBeenLastCalledWith({}, 1);
     });
   });
 });
