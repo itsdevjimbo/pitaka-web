@@ -5,11 +5,10 @@
  *
  * The hand-written type keeps an id, a name, and — since a form that records a
  * Transaction offers only Categories of the chosen direction (ADR 0010) — the
- * income/expense `kind`. The API also attaches `isDefault` and `parentId`;
- * nothing above the adapter reads those, so it drops them the way `toAccount`
- * drops an Account's owner id. Nesting is discarded on purpose: the API rejects
- * a direct self-reference but not a deeper cycle, and a tree renderer over that
- * can loop.
+ * income/expense `kind`. The API also attaches `isDefault` and `isActive`;
+ * nothing above the adapter reads those yet, so it drops them the way
+ * `toAccount` drops an Account's owner id. Nesting is gone: the API dropped
+ * `parentId`, so there is no tree to model.
  */
 export type Category = {
   id: number;
