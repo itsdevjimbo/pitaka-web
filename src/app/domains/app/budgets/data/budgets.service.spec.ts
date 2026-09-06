@@ -300,4 +300,151 @@ describe('BudgetsService', () => {
       expect((error as ApiError).fieldErrors).toEqual({});
     });
   });
+
+  describe('adjust', () => {
+    /** What the adjust form hands over — the five offered fields plus endDate. */
+    function adjustment(over: Partial<Record<string, unknown>> = {}) {
+      return {
+        name: 'Groceries',
+        amountLimit: 25000,
+        period: 'weekly' as const,
+        startDate: new Date(2026, 8, 1),
+        endDate: null,
+        categoryId: 4,
+        ...over,
+      };
+    }
+
+    it('PUTs /api/budgets/:id with the whole set — a full replacement, Period raised, dates as YYYY-MM-DD', async () => {
+      const result = firstValueFrom(service.adjust(10, adjustment()));
+
+      const request = http.expectOne(`${BASE_URL}/api/budgets/10`);
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual({
+        name: 'Groceries',
+        amountLimit: 25000,
+        period: 'Weekly',
+        startDate: '2026-09-01',
+        endDate: null,
+        categoryId: 4,
+      });
+
+      request.flush(resource({ id: 10, period: 'Weekly' }));
+      await result;
+    });
+
+    it('carries a non-null endDate through as its own YYYY-MM-DD, not nulled', async () => {
+      const result = firstValueFrom(
+        service.adjust(10, adjustment({ endDate: new Date(2026, 11, 31) }))
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/budgets/10`);
+      expect(request.request.body.endDate).toBe('2026-12-31');
+
+      request.flush(resource({ id: 10, endDate: '2026-12-31' }));
+      await result;
+    });
+
+    it('assembles the dates from local getters, not toISOString', async () => {
+      // 23:30 local on 31 Aug is already 1 Sep in UTC; the calendar day picked
+      // is 31 Aug and that is what must go on the wire.
+      const result = firstValueFrom(
+        service.adjust(
+          10,
+          adjustment({ startDate: new Date(2026, 7, 31, 23, 30) })
+        )
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/budgets/10`);
+      expect(request.request.body.startDate).toBe('2026-08-31');
+
+      request.flush(resource({ id: 10 }));
+      await result;
+    });
+
+    it('sends categoryId null for a Budget moved to watch all spending', async () => {
+      const result = firstValueFrom(
+        service.adjust(10, adjustment({ categoryId: null }))
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/budgets/10`);
+      expect(request.request.body.categoryId).toBeNull();
+
+      request.flush(resource({ id: 10, categoryId: null }));
+      await result;
+    });
+
+    it('maps the replaced row back to the domain shape, no Spent figure riding along', async () => {
+      const result = firstValueFrom(service.adjust(10, adjustment()));
+
+      http
+        .expectOne(`${BASE_URL}/api/budgets/10`)
+        .flush(
+          resource({ id: 10, period: 'Weekly', startDate: '2026-09-01' })
+        );
+
+      const adjusted = await result;
+      expect(adjusted).toMatchObject({
+        id: 10,
+        period: 'weekly',
+        startDate: new Date(2026, 8, 1),
+      });
+      expect(adjusted).not.toHaveProperty('amountSpent');
+      expect(adjusted).not.toHaveProperty('cycleStart');
+    });
+
+    it('refiles the duplicate-name 409 as a name field error', async () => {
+      const result = firstValueFrom(service.adjust(10, adjustment()));
+
+      http.expectOne(`${BASE_URL}/api/budgets/10`).flush(
+        { detail: 'A budget with this name already exists.' },
+        { status: 409, statusText: 'Conflict' }
+      );
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(409);
+      expect((error as ApiError).fieldErrors['name']).toEqual([
+        'A budget with this name already exists.',
+      ]);
+    });
+
+    it('leaves a non-409 failure untouched — no field map invented', async () => {
+      const result = firstValueFrom(service.adjust(10, adjustment()));
+
+      http
+        .expectOne(`${BASE_URL}/api/budgets/10`)
+        .flush(null, { status: 400, statusText: 'Bad Request' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(400);
+      expect((error as ApiError).fieldErrors).toEqual({});
+    });
+  });
+
+  describe('remove', () => {
+    it('DELETEs /api/budgets/:id and completes on 204', async () => {
+      const result = firstValueFrom(service.remove(10));
+
+      const request = http.expectOne(`${BASE_URL}/api/budgets/10`);
+      expect(request.request.method).toBe('DELETE');
+      request.flush(null, { status: 204, statusText: 'No Content' });
+
+      await expect(result).resolves.toBeUndefined();
+    });
+
+    it('surfaces a server failure as a normalised ApiError, with no block state', async () => {
+      const result = firstValueFrom(service.remove(10));
+
+      http
+        .expectOne(`${BASE_URL}/api/budgets/10`)
+        .flush(null, { status: 500, statusText: 'Server Error' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(500);
+      expect((error as ApiError).fieldErrors).toEqual({});
+    });
+  });
 });

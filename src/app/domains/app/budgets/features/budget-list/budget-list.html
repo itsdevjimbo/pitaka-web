@@ -89,11 +89,47 @@
             <li
               class="flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
             >
-              <div class="flex items-center justify-between gap-x-3">
-                <span class="truncate font-medium">{{ row.budget.name }}</span>
+              <div class="flex items-center gap-x-3">
+                <span class="min-w-0 flex-auto truncate font-medium">{{
+                  row.budget.name
+                }}</span>
                 <span class="shrink-0 font-semibold tabular-nums">
                   {{ row.budget.amountLimit | peso }}
                 </span>
+
+                @if (busyId() === row.budget.id) {
+                  <mat-icon
+                    class="size-5 shrink-0 animate-spin text-neutral-400"
+                    svgIcon="loader-circle"
+                    role="status"
+                    aria-label="Working…"
+                  />
+                } @else {
+                  <button
+                    matIconButton
+                    class="-mr-2 shrink-0"
+                    aria-label="Budget actions"
+                    [matMenuTriggerFor]="rowMenu"
+                  >
+                    <mat-icon svgIcon="ellipsis-vertical" />
+                  </button>
+                  <mat-menu #rowMenu>
+                    <button
+                      mat-menu-item
+                      (click)="openAdjustDialog(row.budget)"
+                    >
+                      <mat-icon svgIcon="pencil" />
+                      <span>Adjust</span>
+                    </button>
+                    <button
+                      mat-menu-item
+                      (click)="askDelete(row.budget)"
+                    >
+                      <mat-icon svgIcon="trash-2" />
+                      <span>Delete</span>
+                    </button>
+                  </mat-menu>
+                }
               </div>
               <div
                 class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500 dark:text-neutral-400"
@@ -144,6 +180,54 @@
                     {{ row.budget.cycleEnd | date: 'd MMM y' }}
                   </span>
                 </div>
+              }
+
+              @if (confirmingDeleteId() === row.budget.id) {
+                <div
+                  class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
+                  role="alertdialog"
+                  aria-label="Confirm delete"
+                >
+                  <p class="text-sm text-neutral-700 dark:text-neutral-200">
+                    Delete <span class="font-semibold">{{ row.budget.name }}</span
+                    >? It’s gone for good — budgets aren’t archived.
+                  </p>
+                  <div class="flex gap-x-2">
+                    <button
+                      matButton
+                      type="button"
+                      (click)="cancelDelete()"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      matButton="filled"
+                      type="button"
+                      (click)="confirmDelete(row.budget)"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @if (notice(); as n) {
+                @if (n.id === row.budget.id) {
+                  <app-row-notice [message]="n.message">
+                    <div
+                      row-notice-actions
+                      class="flex gap-x-2"
+                    >
+                      <button
+                        matButton
+                        type="button"
+                        (click)="n.retry()"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  </app-row-notice>
+                }
               }
             </li>
           }
