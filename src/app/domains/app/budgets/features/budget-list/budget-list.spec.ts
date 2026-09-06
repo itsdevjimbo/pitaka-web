@@ -577,18 +577,20 @@ describe('BudgetList', () => {
       await settle(fixture);
 
       expect(dialog()).not.toBeNull();
-      expect(dialogText()).toContain('Something went wrong updating your budget');
+      expect(dialogText()).toContain(
+        'Something went wrong adjusting your budget'
+      );
     });
   });
 
-  describe('delete, behind a confirm', () => {
-    it('asks before deleting and does not call the service until confirmed', async () => {
+  describe('remove, behind a confirm', () => {
+    it('asks before removing and does not call the service until confirmed', async () => {
       const remove = vi.fn(() => of(undefined));
       const { fixture, text } = setup(() => of([GROCERIES]), {
         remove: remove as unknown as BudgetsService['remove'],
       });
 
-      await openRowAction(fixture, 'Delete');
+      await openRowAction(fixture, 'Remove');
 
       expect(text()).toContain('gone for good');
       expect(remove).not.toHaveBeenCalled();
@@ -597,7 +599,7 @@ describe('BudgetList', () => {
     it('says the Budget is gone for good, not archived', async () => {
       const { fixture, text } = setup(() => of([GROCERIES]));
 
-      await openRowAction(fixture, 'Delete');
+      await openRowAction(fixture, 'Remove');
 
       expect(text().toLowerCase()).toContain("aren’t archived".toLowerCase());
     });
@@ -608,7 +610,7 @@ describe('BudgetList', () => {
         remove: remove as unknown as BudgetsService['remove'],
       });
 
-      await openRowAction(fixture, 'Delete');
+      await openRowAction(fixture, 'Remove');
       clickButton(fixture, 'Cancel');
       await settle(fixture);
 
@@ -616,7 +618,7 @@ describe('BudgetList', () => {
       expect(remove).not.toHaveBeenCalled();
     });
 
-    it('deletes on confirm, then re-reads the list (ADR 0006)', async () => {
+    it('removes on confirm, then re-reads the list (ADR 0006)', async () => {
       const remove = vi.fn(() => of(undefined));
       let attempt = 0;
       const list = vi.fn(() => {
@@ -628,8 +630,8 @@ describe('BudgetList', () => {
         { remove: remove as unknown as BudgetsService['remove'] }
       );
 
-      await openRowAction(fixture, 'Delete');
-      clickButton(fixture, 'Delete');
+      await openRowAction(fixture, 'Remove');
+      clickButton(fixture, 'Remove');
       await settle(fixture);
 
       expect(remove).toHaveBeenCalledWith(1);
@@ -638,7 +640,7 @@ describe('BudgetList', () => {
       expect(text()).toContain('Holidays');
     });
 
-    it('pins the row a notice with a retry when the delete fails', async () => {
+    it('pins the row a notice with a retry when the removal fails', async () => {
       let attempt = 0;
       const remove = vi.fn(() => {
         attempt += 1;
@@ -650,8 +652,8 @@ describe('BudgetList', () => {
         remove: remove as unknown as BudgetsService['remove'],
       });
 
-      await openRowAction(fixture, 'Delete');
-      clickButton(fixture, 'Delete');
+      await openRowAction(fixture, 'Remove');
+      clickButton(fixture, 'Remove');
       await settle(fixture);
 
       expect(text()).toContain('The server did not accept that.');

@@ -8,10 +8,10 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { forkJoin, Observable } from 'rxjs';
+import { forkJoin } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
@@ -30,7 +30,7 @@ import { NewBudgetDialog } from '../../ui/new-budget-dialog';
 const LOAD_FAILED =
   'Something went wrong loading your budgets. Please try again.';
 
-/** The person-facing line for a delete that failed with nothing to say about why. */
+/** The person-facing line for a removal that failed with nothing to say about why. */
 const ACTION_FAILED = 'Something went wrong. Please try again.';
 
 /** What a Budget with no Category — one that watches every expense — reads as. */
@@ -69,10 +69,11 @@ type BudgetGroup = {
 };
 
 /**
- * The state behind one row's {@link RowNotice} after a delete failed: `id` picks
- * the row it belongs to, `retry` re-runs the delete that failed. A Budget delete
- * is never refused for a reason the API can name (no history or allocation guard
- * as on an Account), so there is nothing to word beyond "try again".
+ * The state behind one row's {@link RowNotice} after a removal failed: `id`
+ * picks the row it belongs to, `retry` re-runs the removal that failed. A Budget
+ * removal is never refused for a reason the API can name (no history or
+ * allocation guard as on an Account), so there is nothing to word beyond
+ * "try again".
  */
 type RowNoticeState = {
   id: number;
@@ -99,8 +100,8 @@ type RowNoticeState = {
  * re-reads the list so the new Budget lands with its server-resolved Cycle
  * figures (ADR 0006 for the re-read after a write).
  *
- * Each row can be **adjusted** or **deleted** from its menu. Adjust opens a
- * prefilled form in a dialog; deletion is behind a confirm — a Budget is
+ * Each row can be **adjusted** or **removed** from its menu. Adjust opens a
+ * prefilled form in a dialog; removal is behind a confirm — a Budget is
  * hard-deleted with nothing to restore it, and the confirm says so. Both writes
  * are followed by a fresh read of the list (ADR 0006): an adjustment can move
  * the Cycle, so the row's figures only make sense once re-read.
@@ -135,13 +136,13 @@ export default class BudgetList {
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
 
-  /** The id of the Budget whose delete is awaiting confirmation, or `null`. */
-  protected readonly confirmingDeleteId = signal<number | null>(null);
+  /** The id of the Budget whose removal is awaiting confirmation, or `null`. */
+  protected readonly confirmingRemoveId = signal<number | null>(null);
 
-  /** The id of the Budget with a delete request in flight, or `null`. */
+  /** The id of the Budget with a removal request in flight, or `null`. */
   protected readonly busyId = signal<number | null>(null);
 
-  /** A per-row message left by a failed delete. */
+  /** A per-row message left by a failed removal. */
   protected readonly notice = signal<RowNoticeState | null>(null);
 
   protected readonly periods = PERIODS;
@@ -222,107 +223,94 @@ export default class BudgetList {
   /**
    * Open the *New budget* dialog. It closes with the created Budget on a
    * successful save, or with nothing on Cancel, the close control, or Escape.
+   * The create response is the bare Budget with no Cycle figures behind it, and
+   * this screen renders every row against its Cycle — so rather than splice a
+   * figureless row in, re-read straight away and let the new Budget land with
+   * its server-resolved Spent figure and window (ADR 0006; ADR 0012).
    */
   protected openNewBudgetDialog(): void {
-    this.dialog
-      .open<NewBudgetDialog, undefined, Budget>(NewBudgetDialog)
-      .afterClosed()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((created) => {
-        if (created) {
-          this.onCreated();
-        }
-      });
-  }
-
-  /**
-   * A Budget was created. The create response is the bare Budget with no Cycle
-   * figures behind it, and this screen renders every row against its Cycle — so
-   * rather than splice a figureless row in, re-read the list straight away and
-   * let the new Budget land with its server-resolved Spent figure and window
-   * (ADR 0006: reconcile a write with a fresh read; ADR 0012: the client never
-   * invents a Cycle).
-   */
-  private onCreated(): void {
-    this.reconcile();
+    this.afterDialog(
+      this.dialog.open<NewBudgetDialog, undefined, Budget>(NewBudgetDialog),
+      () => this.reconcile()
+    );
   }
 
   /**
    * Open the *Adjust budget* dialog for one row, seeded with its Budget. It
    * closes with the adjusted Budget on a successful save, or with nothing
-   * otherwise. Opening it clears any pending delete confirm or row notice so the
-   * row is not showing two things at once.
+   * otherwise. Opening it clears any pending remove confirm or row notice so the
+   * row is not showing two things at once. An adjustment can have moved the
+   * Cycle, so on success the list is re-read (ADR 0006; ADR 0012).
    */
   protected openAdjustDialog(budget: Budget): void {
     this.notice.set(null);
-    this.confirmingDeleteId.set(null);
+    this.confirmingRemoveId.set(null);
 
-    this.dialog
-      .open<AdjustBudgetDialog, Budget, Budget>(AdjustBudgetDialog, {
+    this.afterDialog(
+      this.dialog.open<AdjustBudgetDialog, Budget, Budget>(AdjustBudgetDialog, {
         data: budget,
-      })
+      }),
+      () => this.reconcile()
+    );
+  }
+
+  /**
+   * Run `handle` once a dialog closes with a saved Budget, and do nothing when
+   * it closes with none (Cancel, the close control, Escape). Torn down with the
+   * component. The move `AccountList.onDialogResult` makes.
+   */
+  private afterDialog(
+    ref: MatDialogRef<unknown, Budget>,
+    handle: () => void
+  ): void {
+    ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((adjusted) => {
-        if (adjusted) {
-          this.onAdjusted();
+      .subscribe((result) => {
+        if (result) {
+          handle();
         }
       });
   }
 
-  /**
-   * A Budget was adjusted. The write response is the bare Budget, and an
-   * adjustment can have moved the Cycle — so re-read the list and let the row
-   * land with its server-resolved Spent figure and window against the new Cycle
-   * (ADR 0006; ADR 0012).
-   */
-  private onAdjusted(): void {
-    this.reconcile();
-  }
-
-  /** Ask before hard-deleting a Budget — there is nothing to restore it. */
-  protected askDelete(budget: Budget): void {
+  /** Ask before removing a Budget — it is hard-deleted, with nothing to restore it. */
+  protected askRemove(budget: Budget): void {
     this.notice.set(null);
-    this.confirmingDeleteId.set(budget.id);
+    this.confirmingRemoveId.set(budget.id);
   }
 
-  protected cancelDelete(): void {
-    this.confirmingDeleteId.set(null);
-  }
-
-  /** The person confirmed the delete. Mark the row busy, remove, then re-read. */
-  protected confirmDelete(budget: Budget): void {
-    this.confirmingDeleteId.set(null);
-    this.runRowWrite(budget.id, this.service.remove(budget.id), (error) => ({
-      id: budget.id,
-      message: messageFor(error),
-      retry: () => this.confirmDelete(budget),
-    }));
+  protected cancelRemove(): void {
+    this.confirmingRemoveId.set(null);
   }
 
   /**
-   * Mark the row busy, run the write, then re-read the list on success (ADR
-   * 0006) or pin the row a notice on failure. The same shape `AccountList`
-   * uses for its row-level writes, minus the cases a Budget delete cannot hit.
+   * The person confirmed the removal: mark the row busy, `DELETE` it, then
+   * re-read the list on success (ADR 0006) or pin the row a notice with a retry
+   * on failure. A Budget removal is never refused for a reason the API can name,
+   * so the only way forward a failure offers is "try again".
    */
-  private runRowWrite(
-    id: number,
-    write$: Observable<unknown>,
-    noticeFor: (error: unknown) => RowNoticeState
-  ): void {
+  protected confirmRemove(budget: Budget): void {
+    this.confirmingRemoveId.set(null);
     this.notice.set(null);
-    this.busyId.set(id);
+    this.busyId.set(budget.id);
 
-    write$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
-        this.busyId.set(null);
-        this.reconcile();
-      },
-      error: (error: unknown) => {
-        this.busyId.set(null);
-        this.notice.set(noticeFor(error));
-      },
-    });
+    this.service
+      .remove(budget.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.busyId.set(null);
+          this.reconcile();
+        },
+        error: (error: unknown) => {
+          this.busyId.set(null);
+          this.notice.set({
+            id: budget.id,
+            message: messageFor(error),
+            retry: () => this.confirmRemove(budget),
+          });
+        },
+      });
   }
 
   /**
@@ -342,7 +330,7 @@ export default class BudgetList {
   }
 }
 
-/** The person-facing line for a failed delete: the server's words, or a plain one. */
+/** The person-facing line for a failed removal: the server's words, or a plain one. */
 function messageFor(error: unknown): string {
   return error instanceof ApiError ? error.message : ACTION_FAILED;
 }

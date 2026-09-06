@@ -39,7 +39,7 @@ type AdjustBudgetInternals = {
 };
 
 const COULD_NOT_ADJUST =
-  'Something went wrong updating your budget. Please try again.';
+  'Something went wrong adjusting your budget. Please try again.';
 
 const CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense' },

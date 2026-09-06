@@ -123,10 +123,10 @@
                     </button>
                     <button
                       mat-menu-item
-                      (click)="askDelete(row.budget)"
+                      (click)="askRemove(row.budget)"
                     >
                       <mat-icon svgIcon="trash-2" />
-                      <span>Delete</span>
+                      <span>Remove</span>
                     </button>
                   </mat-menu>
                 }
@@ -182,30 +182,30 @@
                 </div>
               }
 
-              @if (confirmingDeleteId() === row.budget.id) {
+              @if (confirmingRemoveId() === row.budget.id) {
                 <div
                   class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
                   role="alertdialog"
-                  aria-label="Confirm delete"
+                  aria-label="Confirm remove"
                 >
                   <p class="text-sm text-neutral-700 dark:text-neutral-200">
-                    Delete <span class="font-semibold">{{ row.budget.name }}</span
+                    Remove <span class="font-semibold">{{ row.budget.name }}</span
                     >? It’s gone for good — budgets aren’t archived.
                   </p>
                   <div class="flex gap-x-2">
                     <button
                       matButton
                       type="button"
-                      (click)="cancelDelete()"
+                      (click)="cancelRemove()"
                     >
                       Cancel
                     </button>
                     <button
                       matButton="filled"
                       type="button"
-                      (click)="confirmDelete(row.budget)"
+                      (click)="confirmRemove(row.budget)"
                     >
-                      Delete
+                      Remove
                     </button>
                   </div>
                 </div>

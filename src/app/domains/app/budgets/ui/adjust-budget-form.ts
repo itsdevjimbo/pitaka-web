@@ -38,7 +38,7 @@ import { BudgetsService } from '../data/budgets.service';
 
 /** The banner line for an adjust that failed before it could be attributed. */
 const COULD_NOT_ADJUST =
-  'Something went wrong updating your budget. Please try again.';
+  'Something went wrong adjusting your budget. Please try again.';
 
 /** The value the Category picker uses for a Budget that watches all spending. */
 const ALL_SPENDING = null;
