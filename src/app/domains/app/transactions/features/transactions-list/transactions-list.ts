@@ -9,6 +9,7 @@ import { AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import { Category } from '@/app/domains/app/categories/category';
 import {
+  activeCriteriaCount,
   Transaction,
   TransactionCriteria,
   TransactionSearchResult,
@@ -217,18 +218,20 @@ export default class TransactionsList {
   protected readonly shownCount = computed(() => this.rows()?.length ?? 0);
 
   /** Whether any axis is narrowed — the discriminant between the two empty states. */
-  protected readonly hasActiveCriteria = computed(() => {
-    const criteria = this.criteria();
-    return (
-      criteria.direction !== undefined ||
-      criteria.accountId !== undefined ||
-      criteria.categoryId !== undefined
-    );
-  });
+  protected readonly hasActiveCriteria = computed(
+    () => activeCriteriaCount(this.criteria()) > 0
+  );
 
-  /** True once a load has succeeded and nothing came back. */
+  /**
+   * A settled load that came back empty — but only when nothing is in flight.
+   * While a filter change is running, `criteria` has already moved to the new
+   * value and `rows`/`totalCount` still hold the old result, so an unguarded
+   * read here would briefly mis-fire — clearing filters from the matched-nothing
+   * state would flash the "nothing recorded" screen and unmount the filter bar.
+   * The busy affordance covers that gap instead.
+   */
   private readonly isEmpty = computed(
-    () => this.rows() !== null && this.totalCount() === 0
+    () => !this.filtering() && this.rows() !== null && this.totalCount() === 0
   );
 
   /**
@@ -277,15 +280,11 @@ export default class TransactionsList {
    * good list with the whole-page error state.
    */
   protected load(): void {
-    this.reset.next();
+    this.resetToFirstPage();
     this.errorMessage.set(null);
     this.refreshError.set(null);
     this.filterError.set(null);
-    this.loadMoreError.set(null);
-    this.loadingMore.set(false);
     this.filtering.set(false);
-    this.reachedEnd.set(false);
-    this.lastPage.set(1);
 
     const refreshing = this.rows() !== null;
     this.loading.set(!refreshing);
@@ -320,11 +319,8 @@ export default class TransactionsList {
    */
   protected applyCriteria(criteria: TransactionCriteria): void {
     this.criteria.set(criteria);
-    this.reset.next();
-    this.loadMoreError.set(null);
-    this.loadingMore.set(false);
-    this.reachedEnd.set(false);
-    this.lastPage.set(1);
+    this.resetToFirstPage();
+    this.refreshError.set(null);
     this.filterError.set(null);
     this.filtering.set(true);
 
@@ -350,6 +346,20 @@ export default class TransactionsList {
   /** Clear every filter and restore the full list in one action. */
   protected clearFilters(): void {
     this.applyCriteria({});
+  }
+
+  /**
+   * Drop back to a single page 1: cancel any in-flight *Load more* against the
+   * {@link reset} signal, clear its error and busy flag, and forget both the
+   * appended-page count and the "server ran dry" latch. Shared by `load()` and
+   * {@link applyCriteria} — the two entry points that restart the list.
+   */
+  private resetToFirstPage(): void {
+    this.reset.next();
+    this.loadMoreError.set(null);
+    this.loadingMore.set(false);
+    this.reachedEnd.set(false);
+    this.lastPage.set(1);
   }
 
   /**

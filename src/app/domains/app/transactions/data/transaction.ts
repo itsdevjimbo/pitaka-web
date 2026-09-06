@@ -163,6 +163,24 @@ export type TransactionCriteria = {
 };
 
 /**
+ * The keys of {@link TransactionCriteria}, as one list every consumer iterates
+ * instead of re-spelling `direction/accountId/categoryId` — the filter bar to
+ * count active axes, the page to tell "narrowed" from "the whole list". When
+ * #64's note search or #65's date range lands, its key is added here and the
+ * axis count follows without either component being rebuilt (#40).
+ */
+export const CRITERIA_AXES = [
+  'direction',
+  'accountId',
+  'categoryId',
+] as const satisfies readonly (keyof TransactionCriteria)[];
+
+/** How many axes `criteria` narrows by — zero is the unfiltered list. */
+export function activeCriteriaCount(criteria: TransactionCriteria): number {
+  return CRITERIA_AXES.filter((axis) => criteria[axis] !== undefined).length;
+}
+
+/**
  * One page of a criteria-narrowed search: the rows for that page, in the API's
  * order, and the total the criteria matched across every page — not just this
  * one. `totalCount` is what lets a screen say how much a page is not showing,

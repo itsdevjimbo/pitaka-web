@@ -4,6 +4,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import {
+  activeCriteriaCount,
   TransactionCriteria,
   TransactionDirection,
   TRANSACTION_DIRECTIONS,
@@ -32,13 +33,6 @@ export type FilterCategoryOption = {
 const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
   (value) => ({ value, label: TRANSACTION_DIRECTIONS[value].label })
 );
-
-/** The keys of {@link TransactionCriteria}, for counting and stripping axes. */
-const CRITERIA_KEYS: readonly (keyof TransactionCriteria)[] = [
-  'direction',
-  'accountId',
-  'categoryId',
-];
 
 /**
  * The bar that turns the Transactions list into an answer: single-select
@@ -89,10 +83,9 @@ export class TransactionsFilterBar {
   protected readonly directionOptions = DIRECTION_OPTIONS;
 
   /** How many axes are narrowed — shown beside Clear filters, and gates it. */
-  protected readonly activeCount = computed(() => {
-    const criteria = this.criteria();
-    return CRITERIA_KEYS.filter((key) => criteria[key] !== undefined).length;
-  });
+  protected readonly activeCount = computed(() =>
+    activeCriteriaCount(this.criteria())
+  );
 
   protected setDirection(value: TransactionDirection | null): void {
     this.patch('direction', value);
@@ -117,15 +110,15 @@ export class TransactionsFilterBar {
    * keeps `{}` the honest shape of no filters and the adapter free of an empty
    * parameter.
    */
-  private patch(
-    key: keyof TransactionCriteria,
-    value: TransactionDirection | number | null
+  private patch<K extends keyof TransactionCriteria>(
+    key: K,
+    value: TransactionCriteria[K] | null
   ): void {
     const next = { ...this.criteria() };
     if (value === null) {
       delete next[key];
     } else {
-      next[key] = value as never;
+      next[key] = value;
     }
     this.criteria.set(next);
   }

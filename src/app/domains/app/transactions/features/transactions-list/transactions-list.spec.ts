@@ -757,6 +757,93 @@ describe('TransactionsList', () => {
       expect(options).toContain('Old wallet · Retired');
     });
 
+    it('is wired end to end: choosing an option in the rendered bar issues the narrowed read', async () => {
+      const search = vi.fn((criteria: Record<string, unknown>, p: number) =>
+        of(
+          page({
+            transactions: [
+              tx({
+                id: p,
+                description: Object.keys(criteria).length
+                  ? 'Narrowed'
+                  : 'Whole history',
+              }),
+            ],
+            totalCount: Object.keys(criteria).length ? 1 : 4,
+          })
+        )
+      );
+      const { fixture, text } = setup({
+        search: search as unknown as TransactionsService['search'],
+      });
+
+      expect(text()).toContain('Whole history');
+
+      // Open the real Direction select inside the rendered child and pick Expense.
+      const trigger = (
+        fixture.nativeElement as HTMLElement
+      ).querySelector<HTMLElement>(
+        'transactions-filter-bar mat-select[aria-label="Filter by direction"]'
+      );
+      trigger!.click();
+      await settle(fixture);
+      Array.from(overlay().querySelectorAll<HTMLElement>('mat-option'))
+        .find((o) => (o.textContent ?? '').trim() === 'Expense')!
+        .click();
+      await settle(fixture);
+
+      expect(search).toHaveBeenLastCalledWith({ direction: 'expense' }, 1);
+      expect(text()).toContain('Narrowed');
+      expect(text()).not.toContain('Whole history');
+    });
+
+    it('does not flash the "nothing recorded" screen while Clear filters is in flight', async () => {
+      const pendingClear = new Subject<TransactionSearchResult>();
+      let emptyCriteriaReads = 0;
+      const search = vi.fn((criteria: Record<string, unknown>) => {
+        if (Object.keys(criteria).length === 0) {
+          emptyCriteriaReads += 1;
+          // The first unfiltered read (entry) lands; the second (Clear filters) hangs.
+          return emptyCriteriaReads === 1
+            ? of(
+                page({
+                  transactions: [tx({ description: 'Everything' })],
+                  totalCount: 3,
+                })
+              )
+            : pendingClear.asObservable();
+        }
+        return of(page({ transactions: [], totalCount: 0 }));
+      });
+      const { fixture, cmp, text, button } = setup({
+        search: search as unknown as TransactionsService['search'],
+      });
+
+      cmp.applyCriteria({ direction: 'income' });
+      await settle(fixture);
+      expect(text()).toContain('No transactions match these filters');
+
+      button('Clear filters')!.click();
+      fixture.detectChanges();
+
+      // Criteria are back to {} but the read has not answered — the empty-history
+      // wording must not appear and the filter bar must stay mounted.
+      expect(text()).not.toContain('No transactions yet');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          'transactions-filter-bar'
+        )
+      ).not.toBeNull();
+      expect(text()).toContain('Updating…');
+
+      pendingClear.next(
+        page({ transactions: [tx({ description: 'Back' })], totalCount: 1 })
+      );
+      pendingClear.complete();
+      await settle(fixture);
+      expect(text()).toContain('Back');
+    });
+
     it('re-reads page 1 with the chosen criteria and keeps the old rows on screen until it lands', async () => {
       const pending = new Subject<TransactionSearchResult>();
       const search = vi.fn((criteria: unknown, p: number) =>
