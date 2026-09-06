@@ -45,11 +45,15 @@ _Avoid_: Recurring transaction, auto transaction, scheduled transaction
 ### Lifecycle
 
 **Retire**:
-Taking an Account out of use while keeping everything it recorded. A retired Account still shows its balance and history, records nothing new, and can be brought back.
+Taking an Account or a Category out of use while keeping everything it recorded. A retired Account still shows its balance and history, records nothing new, and can be Reactivated. A retired Category still labels the Transactions already filed under it and is no longer offered when filing a new one. A Category supplied by Pitaka cannot be retired.
 _Avoid_: Archive, close, deactivate, disable
 
+**Reactivate**:
+Bringing a retired Account or Category back into use. The inverse of Retire, and the only word for it.
+_Avoid_: Restore, unretire, reopen, enable
+
 **Delete**:
-Erasing an Account entirely. Refused while it still holds Transaction history or money owed to a Goal — retiring is the way out.
+Erasing an Account or a Category entirely. Refused for an Account while it still holds Transaction history or money owed to a Goal, and for a Category while anything at all is filed under or narrowed to it — retiring is the way out of both.
 _Avoid_: Remove, destroy, close
 
 **Refile**:
@@ -93,7 +97,7 @@ _Avoid_: Deposit, saving, goal transaction, allocation
 ### Classification
 
 **Category**:
-A label classifying a Transaction as a kind of income or expense. Categories may nest, and some are supplied by Pitaka rather than created by the person.
+A label classifying a Transaction as a kind of income or expense. Whether it is a kind of income or a kind of expense is settled when it is created and never changes afterward. Categories do not nest. Some are supplied by Pitaka rather than created by the person; those are read-only — they cannot be renamed, retired, or deleted.
 _Avoid_: Type, group, bucket, classification
 
 **Tag**:
