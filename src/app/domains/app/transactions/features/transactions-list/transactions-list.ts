@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { forkJoin, Observable, Subject, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AccountsService } from '@/app/domains/app/accounts';
@@ -14,6 +15,11 @@ import {
   TransactionCriteria,
   TransactionSearchResult,
 } from '../../data/transaction';
+import {
+  criteriaFromQueryParams,
+  criteriaToQueryParams,
+  sameCriteria,
+} from '../../data/transaction-criteria-params';
 import { TransactionsService } from '../../data/transactions.service';
 import {
   RefileTransactionDialog,
@@ -105,12 +111,20 @@ function toAccountOptions(
  *
  * **Filtering** is server-side (#37 owns the criteria-to-parameter translation).
  * The {@link TransactionsFilterBar} is a controlled view over
- * {@link TransactionCriteria}: this page holds the criteria and, on any change,
- * issues a fresh page-1 read of *only* the transactions — the Categories and
- * Accounts no filter touches are not re-fetched. The rows already on screen stay
- * put under a busy affordance and swap when the response lands, so a dropdown
- * touch never blanks the page. #41 will move the source of truth to the URL
- * without this page's read logic changing.
+ * {@link TransactionCriteria}, and **the URL is the source of truth** for it
+ * (#41): the criteria are serialised to readable query parameters
+ * (`transaction-criteria-params.ts`), so a narrowed view survives a refresh,
+ * bookmarks, and travels in a link. A change in the bar writes the parameters
+ * with `replaceUrl` — one history entry for a whole filtering session, so Back
+ * leaves the page rather than stepping through every control that was touched —
+ * and the route change, not the bar, drives a fresh page-1 read of *only* the
+ * transactions (the Categories and Accounts no filter touches are not
+ * re-fetched). The rows already on screen stay put under a busy affordance and
+ * swap when the response lands, so a dropdown touch never blanks the page.
+ * Arriving at a URL that already carries filters renders the list narrowed on
+ * entry; the parse is total, so a hand-edited parameter widens the list rather
+ * than breaking it. `page` is deliberately not carried — it is a position in a
+ * result set, not something the person filtered by.
  *
  * `totalCount` is shown against what is on screen so a partial list is never
  * mistaken for the whole answer — the endpoint caps a page at 50. **Load more**
@@ -151,6 +165,8 @@ export default class TransactionsList {
   private accounts = inject(AccountsService);
   private destroyRef = inject(DestroyRef);
   private dialog = inject(MatDialog);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
 
   // State
   protected readonly rows = signal<readonly TransactionRowModel[] | null>(null);
@@ -161,11 +177,15 @@ export default class TransactionsList {
   protected readonly loadMoreError = signal<string | null>(null);
 
   /**
-   * The active filter criteria — this page's own state and the single source of
-   * truth the filter bar reads from and writes back to. Empty on first entry;
-   * #41 will hydrate it from the route instead.
+   * The active filter criteria, hydrated from the query string on entry and
+   * kept in step with it thereafter (#41). The route is the source of truth:
+   * the filter bar reads this into its controls, but a change there is written
+   * to the URL and flows back here through the route subscription rather than
+   * being set directly.
    */
-  protected readonly criteria = signal<TransactionCriteria>({});
+  protected readonly criteria = signal<TransactionCriteria>(
+    criteriaFromQueryParams(this.route.snapshot.queryParamMap)
+  );
 
   /** True while a filter-change read is in flight — the busy affordance over the kept rows. */
   protected readonly filtering = signal(false);
@@ -262,6 +282,18 @@ export default class TransactionsList {
 
   constructor() {
     this.destroyRef.onDestroy(() => this.reset.complete());
+
+    // The URL is the source of truth for the criteria (#41). Every emission of
+    // the query string — the one replayed on subscribe, and every later change
+    // from a filter edited in the bar, the back button, or a pasted link —
+    // flows through {@link onUrlCriteriaChange}, which no-ops when the parsed
+    // value already matches what is on screen. So the replay is harmless (it
+    // matches the `criteria` seeded from the snapshot above) without a fragile
+    // `skip(1)`, and `load()` below owns the one read on entry.
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => this.onUrlCriteriaChange(params));
+
     this.load();
   }
 
@@ -310,15 +342,53 @@ export default class TransactionsList {
   }
 
   /**
-   * A filter changed: adopt the new criteria and read page 1 of the
-   * transactions again — and only the transactions. The rows on screen stay put
-   * under a busy affordance and swap when the response lands, so a dropdown
-   * touch never blanks the page; the Categories and Accounts no filter changes
-   * are not re-fetched. Any appended pages are dropped and an in-flight *Load
-   * more* is cancelled. A failure keeps the rows and pins an inline retry.
+   * A filter changed in the bar: write the new criteria to the query string
+   * (#41) and let the route change drive the re-read. Nothing is set here
+   * directly — {@link onUrlCriteriaChange} adopts the parsed value once the URL
+   * has moved. `replaceUrl` keeps one history entry for the whole filtering
+   * session, so Back leaves the page rather than stepping backwards through
+   * every control that was touched. `page` is never written: it is a position
+   * in a result set, not something the person filtered by, and a caller
+   * resetting to page 1 on a filter change has nothing to strip.
    */
   protected applyCriteria(criteria: TransactionCriteria): void {
-    this.criteria.set(criteria);
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: criteriaToQueryParams(criteria),
+      replaceUrl: true,
+    });
+  }
+
+  /** Clear every filter and restore the full list in one action. */
+  protected clearFilters(): void {
+    this.applyCriteria({});
+  }
+
+  /**
+   * A new query string landed: parse it — totally, so a hand-edited junk value
+   * widens rather than breaks — and, when it names criteria the list is not
+   * already showing, adopt them and re-read page 1. The guard keeps a no-op
+   * navigation (a parameter the parser dropped, a replayed value) from firing a
+   * redundant read.
+   */
+  private onUrlCriteriaChange(params: ParamMap): void {
+    const next = criteriaFromQueryParams(params);
+    if (sameCriteria(next, this.criteria())) {
+      return;
+    }
+    this.criteria.set(next);
+    this.readCriteria(next);
+  }
+
+  /**
+   * Read page 1 of the transactions under `criteria` — and only the
+   * transactions. The rows on screen stay put under a busy affordance and swap
+   * when the response lands, so a dropdown touch never blanks the page; the
+   * Categories and Accounts no filter changes are not re-fetched. Any appended
+   * pages are dropped and an in-flight *Load more* is cancelled. A failure keeps
+   * the rows and pins an inline retry.
+   */
+  private readCriteria(criteria: TransactionCriteria): void {
     this.resetToFirstPage();
     this.refreshError.set(null);
     this.filterError.set(null);
@@ -343,16 +413,20 @@ export default class TransactionsList {
       });
   }
 
-  /** Clear every filter and restore the full list in one action. */
-  protected clearFilters(): void {
-    this.applyCriteria({});
+  /**
+   * Retry a filter-change read that failed. The URL already carries the current
+   * criteria, so this re-runs the read directly rather than navigating to the
+   * same parameters (which would not re-emit).
+   */
+  protected retryFilter(): void {
+    this.readCriteria(this.criteria());
   }
 
   /**
    * Drop back to a single page 1: cancel any in-flight *Load more* against the
    * {@link reset} signal, clear its error and busy flag, and forget both the
    * appended-page count and the "server ran dry" latch. Shared by `load()` and
-   * {@link applyCriteria} — the two entry points that restart the list.
+   * {@link readCriteria} — the two entry points that restart the list.
    */
   private resetToFirstPage(): void {
     this.reset.next();
