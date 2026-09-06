@@ -40,8 +40,9 @@
         Try again
       </button>
     </div>
-  } @else if (isEmpty()) {
-    <!-- Nothing recorded: distinct from the failed-load state -->
+  } @else if (noneRecorded()) {
+    <!-- Nothing recorded at all: no filter bar — three controls over an empty
+         set is furniture — and distinct from the failed-load state -->
     <div
       class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
     >
@@ -56,67 +57,131 @@
       </p>
     </div>
   } @else {
-    @if (refreshError(); as message) {
-      <!-- The refile/remove re-read failed: the list is one edit stale but still
-           here, and this retries it without wiping the screen -->
+    <!-- The filters that turn the list into an answer -->
+    <transactions-filter-bar
+      [accounts]="accountOptions()"
+      [categories]="categoryOptions()"
+      [criteria]="criteria()"
+      (criteriaChange)="applyCriteria($event)"
+    />
+
+    @if (matchedNothing()) {
+      <!-- Filters matched nothing: says that — not the empty-history message —
+           and offers the way out -->
       <div
-        class="flex flex-col items-center gap-y-3 rounded-xl border border-neutral-200 px-6 py-4 text-center dark:border-neutral-800"
-        role="alert"
+        class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
       >
-        <p class="max-w-sm text-sm text-neutral-600 dark:text-neutral-300">
-          {{ message }}
+        <mat-icon
+          class="size-10 text-neutral-400"
+          svgIcon="search-x"
+        />
+        <p class="text-lg font-semibold">No transactions match these filters</p>
+        <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
+          Try widening or clearing them to see more of your history.
         </p>
         <button
-          matButton="outlined"
-          (click)="load()"
+          matButton="filled"
+          (click)="clearFilters()"
         >
-          <mat-icon svgIcon="refresh-cw" />
-          Try again
+          <mat-icon svgIcon="x" />
+          Clear filters
         </button>
       </div>
-    }
-
-    <!-- How much of the whole is on screen, so a partial list is never mistaken
-         for the whole answer -->
-    <p class="text-sm text-neutral-500 dark:text-neutral-400">
-      Showing {{ shownCount() }} of {{ totalCount() }}
-    </p>
-
-    <ul class="flex flex-col gap-y-2">
-      @for (row of rows(); track row.id) {
-        <li
-          transaction-row
-          [row]="row"
-          (refile)="openRefileDialog(row)"
-          (removed)="onRemoved()"
-        ></li>
-      }
-    </ul>
-
-    @if (hasMore()) {
-      <div class="flex flex-col items-center gap-y-3">
-        @if (loadMoreError(); as message) {
-          <p
-            class="max-w-sm text-center text-sm text-neutral-600 dark:text-neutral-300"
-            role="alert"
-          >
+    } @else {
+      @if (refreshError(); as message) {
+        <!-- The refile/remove re-read failed: the list is one edit stale but
+             still here, and this retries it without wiping the screen -->
+        <div
+          class="flex flex-col items-center gap-y-3 rounded-xl border border-neutral-200 px-6 py-4 text-center dark:border-neutral-800"
+          role="alert"
+        >
+          <p class="max-w-sm text-sm text-neutral-600 dark:text-neutral-300">
             {{ message }}
           </p>
-        }
-        <button
-          matButton="outlined"
-          [disabled]="loadingMore()"
-          (click)="loadMore()"
-        >
-          @if (loadingMore()) {
-            Loading…
-          } @else if (loadMoreError()) {
+          <button
+            matButton="outlined"
+            (click)="load()"
+          >
+            <mat-icon svgIcon="refresh-cw" />
             Try again
-          } @else {
-            Load more
+          </button>
+        </div>
+      }
+
+      @if (filterError(); as message) {
+        <!-- A filter-change read failed: the previous rows are still on screen,
+             and this retries the current filters without blanking them -->
+        <div
+          class="flex flex-col items-center gap-y-3 rounded-xl border border-neutral-200 px-6 py-4 text-center dark:border-neutral-800"
+          role="alert"
+        >
+          <p class="max-w-sm text-sm text-neutral-600 dark:text-neutral-300">
+            {{ message }}
+          </p>
+          <button
+            matButton="outlined"
+            (click)="applyCriteria(criteria())"
+          >
+            <mat-icon svgIcon="refresh-cw" />
+            Try again
+          </button>
+        </div>
+      }
+
+      <!-- How much of the whole is on screen, so a partial list is never
+           mistaken for the whole answer; while a filter change is in flight the
+           rows below stay put under this busy note -->
+      <p
+        class="flex items-center gap-x-2 text-sm text-neutral-500 dark:text-neutral-400"
+        [attr.aria-busy]="filtering() ? 'true' : null"
+      >
+        @if (filtering()) {
+          <mat-icon
+            class="size-4 animate-spin"
+            svgIcon="loader-circle"
+          />
+          <span>Updating…</span>
+        } @else {
+          Showing {{ shownCount() }} of {{ totalCount() }}
+        }
+      </p>
+
+      <ul class="flex flex-col gap-y-2">
+        @for (row of rows(); track row.id) {
+          <li
+            transaction-row
+            [row]="row"
+            (refile)="openRefileDialog(row)"
+            (removed)="onRemoved()"
+          ></li>
+        }
+      </ul>
+
+      @if (hasMore()) {
+        <div class="flex flex-col items-center gap-y-3">
+          @if (loadMoreError(); as message) {
+            <p
+              class="max-w-sm text-center text-sm text-neutral-600 dark:text-neutral-300"
+              role="alert"
+            >
+              {{ message }}
+            </p>
           }
-        </button>
-      </div>
+          <button
+            matButton="outlined"
+            [disabled]="loadingMore()"
+            (click)="loadMore()"
+          >
+            @if (loadingMore()) {
+              Loading…
+            } @else if (loadMoreError()) {
+              Try again
+            } @else {
+              Load more
+            }
+          </button>
+        </div>
+      }
     }
   }
 </div>

@@ -1,0 +1,82 @@
+<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+  <!-- Direction -->
+  <mat-form-field
+    class="w-full sm:w-44"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Direction</mat-label>
+    <mat-select
+      aria-label="Filter by direction"
+      [value]="criteria().direction ?? null"
+      (selectionChange)="setDirection($event.value)"
+    >
+      <mat-option [value]="null">Any direction</mat-option>
+      @for (option of directionOptions; track option.value) {
+        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <!-- Account: retired ones offered too, marked -->
+  <mat-form-field
+    class="w-full sm:w-56"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Account</mat-label>
+    <mat-select
+      aria-label="Filter by account"
+      [value]="criteria().accountId ?? null"
+      (selectionChange)="setAccount($event.value)"
+    >
+      <mat-option [value]="null">Any account</mat-option>
+      @for (option of accounts(); track option.id) {
+        <mat-option [value]="option.id">
+          {{ option.name }}
+          @if (option.retired) {
+            <span class="text-neutral-500 dark:text-neutral-400">
+              · Retired</span
+            >
+          }
+        </mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <!-- Category: the person's Categories, flat -->
+  <mat-form-field
+    class="w-full sm:w-56"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Category</mat-label>
+    <mat-select
+      aria-label="Filter by category"
+      [value]="criteria().categoryId ?? null"
+      (selectionChange)="setCategory($event.value)"
+    >
+      <mat-option [value]="null">Any category</mat-option>
+      @for (option of categories(); track option.id) {
+        <mat-option [value]="option.id">{{ option.name }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  @if (activeCount() > 0) {
+    <div class="flex items-center gap-x-3">
+      <button
+        matButton
+        type="button"
+        (click)="clear()"
+      >
+        <mat-icon svgIcon="x" />
+        Clear filters
+      </button>
+      <span
+        class="text-sm text-neutral-500 dark:text-neutral-400"
+        aria-live="polite"
+      >
+        {{ activeCount() }} {{ activeCount() === 1 ? 'filter' : 'filters' }}
+        active
+      </span>
+    </div>
+  }
+</div>
