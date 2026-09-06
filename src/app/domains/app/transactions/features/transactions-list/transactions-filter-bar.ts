@@ -2,9 +2,11 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   inject,
   input,
   model,
+  signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
@@ -14,6 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { debounceTime, map, Subject } from 'rxjs';
+import { Media } from '@/app/core/media';
 import {
   activeCriteriaCount,
   TransactionCriteria,
@@ -54,6 +57,15 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
 );
 
 /**
+ * Below this width the bar's controls fold behind a disclosure (#42); at it and
+ * up they render inline. `640px` is the phone/desktop boundary this codebase
+ * already draws — Tailwind's `sm` breakpoint, and the width the Material
+ * overrides in `styles/components/material.css` switch at — named once here so
+ * the JS collapse tracks the CSS layout.
+ */
+const PHONE_QUERY = '(max-width: 640px)';
+
+/**
  * The bar that turns the Transactions list into an answer: a free-text field
  * for the note (#64), single-select controls for direction, Account and
  * Category, a `mat-date-range-input` for a date range (#65), all freely
@@ -85,7 +97,15 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
  * inverted range before the wire (`date-range-bounds.ts`, #65). This component
  * does no date arithmetic and no wire shaping.
  *
- * Phone-width collapsing is #42's; this renders the controls inline.
+ * **At phone width** ({@link PHONE_QUERY}) every control but the note search
+ * folds behind a disclosure (#42): the search stays out in the open — it is the
+ * one control reached for without deciding anything first (#35) — and the
+ * toggle beside it carries the active-filter count, so a narrowed list is never
+ * mistaken for the whole picture while the controls are hidden. Opening or
+ * closing the disclosure is pure view state ({@link TransactionsFilterBar.isOpen});
+ * it never touches the criteria. From the small breakpoint up the disclosure is
+ * gone and the controls render inline; growing the viewport back past the
+ * breakpoint drops straight to that inline layout, disclosure state and all.
  */
 @Component({
   selector: 'transactions-filter-bar',
@@ -104,6 +124,7 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
 })
 export class TransactionsFilterBar {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly media = inject(Media);
 
   /** Every Account the person owns, retired ones included and marked. */
   readonly accounts = input<readonly FilterAccountOption[]>([]);
@@ -125,6 +146,29 @@ export class TransactionsFilterBar {
     activeCriteriaCount(this.criteria())
   );
 
+  /** True below {@link PHONE_QUERY} — the width at which the controls collapse. */
+  protected readonly isPhone = this.media.match(PHONE_QUERY);
+
+  /**
+   * Whether the phone-width disclosure is open. Pure view state — toggling it
+   * shows or hides the controls but never edits `criteria`. Reset whenever the
+   * viewport grows past the breakpoint (see the constructor), so shrinking back
+   * lands on a shut disclosure rather than a stale open one. Ignored from the
+   * small breakpoint up, where the controls always show.
+   */
+  protected readonly isOpen = signal(false);
+
+  /**
+   * Whether the controls (everything but the note search) are shown: always from
+   * the small breakpoint up, only while the disclosure is open below it. The
+   * controls stay mounted either way — the template hides them with `hidden`
+   * rather than removing them — so the disclosure's `aria-controls` always
+   * resolves and a mid-edit `mat-select` keeps its state across a toggle.
+   */
+  protected readonly showControls = computed(
+    () => !this.isPhone() || this.isOpen()
+  );
+
   /**
    * Every raw keystroke in the note field. Debounced and trimmed before it
    * reaches the criteria, so a burst of typing is one edit and a value that
@@ -133,6 +177,15 @@ export class TransactionsFilterBar {
   private readonly noteInput = new Subject<string>();
 
   constructor() {
+    // The disclosure is a phone-width affordance; once the controls render
+    // inline there is nothing to keep open, and leaving it open would surprise
+    // a viewport that later shrinks back.
+    effect(() => {
+      if (!this.isPhone()) {
+        this.isOpen.set(false);
+      }
+    });
+
     this.noteInput
       .pipe(
         debounceTime(NOTE_DEBOUNCE_MS),
@@ -153,6 +206,11 @@ export class TransactionsFilterBar {
   /** A keystroke in the note field — folded into the criteria once typing settles. */
   protected onNoteInput(value: string): void {
     this.noteInput.next(value);
+  }
+
+  /** Open or shut the phone-width disclosure. Leaves the active filters alone. */
+  protected toggleOpen(): void {
+    this.isOpen.update((open) => !open);
   }
 
   protected setDirection(value: TransactionDirection | null): void {

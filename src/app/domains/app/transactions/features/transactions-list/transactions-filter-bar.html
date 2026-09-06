@@ -1,136 +1,177 @@
-<div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-  <!-- Note: free-text search over the note only, debounced. Leads the bar and
-       stays visible at every width (#35, #64). Empty or all-whitespace drops
-       the axis. -->
-  <mat-form-field
-    class="w-full sm:w-64"
-    subscriptSizing="dynamic"
-  >
-    <mat-label>Note</mat-label>
-    <input
-      #noteField
-      matInput
-      type="search"
-      aria-label="Filter by note"
-      placeholder="Search notes"
-      [value]="criteria().description ?? ''"
-      (input)="onNoteInput(noteField.value)"
-    />
-  </mat-form-field>
-
-  <!-- Direction -->
-  <mat-form-field
-    class="w-full sm:w-44"
-    subscriptSizing="dynamic"
-  >
-    <mat-label>Direction</mat-label>
-    <mat-select
-      aria-label="Filter by direction"
-      [value]="criteria().direction ?? null"
-      (selectionChange)="setDirection($event.value)"
+<div class="flex flex-col gap-3">
+  <!-- Top row: the note search stays visible at every width (#35, #64), and at
+       phone width a disclosure toggle sits beside it while everything else
+       collapses (#42). Empty or all-whitespace drops the note axis. -->
+  <div class="flex items-end gap-2">
+    <mat-form-field
+      class="flex-auto sm:w-64 sm:flex-none"
+      subscriptSizing="dynamic"
     >
-      <mat-option [value]="null">Any direction</mat-option>
-      @for (option of directionOptions; track option.value) {
-        <mat-option [value]="option.value">{{ option.label }}</mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
-
-  <!-- Account: retired ones offered too, marked -->
-  <mat-form-field
-    class="w-full sm:w-56"
-    subscriptSizing="dynamic"
-  >
-    <mat-label>Account</mat-label>
-    <mat-select
-      aria-label="Filter by account"
-      [value]="criteria().accountId ?? null"
-      (selectionChange)="setAccount($event.value)"
-    >
-      <mat-option [value]="null">Any account</mat-option>
-      @for (option of accounts(); track option.id) {
-        <mat-option [value]="option.id">
-          {{ option.name }}
-          @if (option.retired) {
-            <span class="text-neutral-500 dark:text-neutral-400">
-              · Retired</span
-            >
-          }
-        </mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
-
-  <!-- Category: the person's Categories, flat -->
-  <mat-form-field
-    class="w-full sm:w-56"
-    subscriptSizing="dynamic"
-  >
-    <mat-label>Category</mat-label>
-    <mat-select
-      aria-label="Filter by category"
-      [value]="criteria().categoryId ?? null"
-      (selectionChange)="setCategory($event.value)"
-    >
-      <mat-option [value]="null">Any category</mat-option>
-      @for (option of categories(); track option.id) {
-        <mat-option [value]="option.id">{{ option.name }}</mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
-
-  <!-- Date range: inclusive calendar days, each end independently optional.
-       The adapter makes `to` exclusive and drops an inverted range (#65). -->
-  <mat-form-field
-    class="w-full sm:w-72"
-    subscriptSizing="dynamic"
-  >
-    <mat-label>Date range</mat-label>
-    <mat-date-range-input [rangePicker]="rangePicker">
+      <mat-label>Note</mat-label>
       <input
-        matStartDate
-        aria-label="Filter from date"
-        placeholder="Start date"
-        [value]="criteria().from ?? null"
-        (dateChange)="setDateFrom($event.value)"
+        #noteField
+        matInput
+        type="search"
+        aria-label="Filter by note"
+        placeholder="Search notes"
+        [value]="criteria().description ?? ''"
+        (input)="onNoteInput(noteField.value)"
       />
-      <input
-        matEndDate
-        aria-label="Filter to date"
-        placeholder="End date"
-        [value]="criteria().to ?? null"
-        (dateChange)="setDateTo($event.value)"
-      />
-    </mat-date-range-input>
-    <mat-datepicker-toggle
-      matIconSuffix
-      [for]="rangePicker"
-    >
-      <mat-icon
-        matDatepickerToggleIcon
-        svgIcon="calendar-range"
-      />
-    </mat-datepicker-toggle>
-    <mat-date-range-picker #rangePicker />
-  </mat-form-field>
+    </mat-form-field>
 
-  @if (activeCount() > 0) {
-    <div class="flex items-center gap-x-3">
+    @if (isPhone()) {
+      <!-- Carries the active-filter count while the controls are hidden, so a
+           narrowed list is never mistaken for the whole picture. -->
       <button
-        matButton
+        matIconButton
         type="button"
-        (click)="clear()"
+        class="shrink-0"
+        aria-controls="transactions-filter-controls"
+        [attr.aria-expanded]="isOpen()"
+        [attr.aria-label]="
+          activeCount() > 0
+            ? 'Filters, ' + activeCount() + ' active'
+            : 'Filters'
+        "
+        (click)="toggleOpen()"
       >
-        <mat-icon svgIcon="x" />
-        Clear filters
+        <mat-icon svgIcon="list-filter" />
+        @if (activeCount() > 0) {
+          <span
+            class="ml-1 rounded-full bg-neutral-200 px-1.5 text-xs font-semibold text-neutral-700 dark:bg-neutral-700 dark:text-neutral-100"
+          >
+            {{ activeCount() }}
+          </span>
+        }
       </button>
-      <span
-        class="text-sm text-neutral-500 dark:text-neutral-400"
-        aria-live="polite"
+    }
+  </div>
+
+  <!-- Every other control. Inline from the small breakpoint up; behind the
+       disclosure below it. Kept mounted and toggled with `hidden` rather than
+       removed, so the toggle's aria-controls always resolves and a half-set
+       control keeps its state across a collapse. Toggling never touches the
+       criteria. -->
+  <div
+    id="transactions-filter-controls"
+    class="flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+    [class.flex]="showControls()"
+    [class.hidden]="!showControls()"
+  >
+    <!-- Direction -->
+    <mat-form-field
+      class="w-full sm:w-44"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Direction</mat-label>
+      <mat-select
+        aria-label="Filter by direction"
+        [value]="criteria().direction ?? null"
+        (selectionChange)="setDirection($event.value)"
       >
-        {{ activeCount() }} {{ activeCount() === 1 ? 'filter' : 'filters' }}
-        active
-      </span>
-    </div>
-  }
+        <mat-option [value]="null">Any direction</mat-option>
+        @for (option of directionOptions; track option.value) {
+          <mat-option [value]="option.value">{{ option.label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Account: retired ones offered too, marked -->
+    <mat-form-field
+      class="w-full sm:w-56"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Account</mat-label>
+      <mat-select
+        aria-label="Filter by account"
+        [value]="criteria().accountId ?? null"
+        (selectionChange)="setAccount($event.value)"
+      >
+        <mat-option [value]="null">Any account</mat-option>
+        @for (option of accounts(); track option.id) {
+          <mat-option [value]="option.id">
+            {{ option.name }}
+            @if (option.retired) {
+              <span class="text-neutral-500 dark:text-neutral-400">
+                · Retired</span
+              >
+            }
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Category: the person's Categories, flat -->
+    <mat-form-field
+      class="w-full sm:w-56"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Category</mat-label>
+      <mat-select
+        aria-label="Filter by category"
+        [value]="criteria().categoryId ?? null"
+        (selectionChange)="setCategory($event.value)"
+      >
+        <mat-option [value]="null">Any category</mat-option>
+        @for (option of categories(); track option.id) {
+          <mat-option [value]="option.id">{{ option.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <!-- Date range: inclusive calendar days, each end independently optional.
+         The adapter makes `to` exclusive and drops an inverted range (#65). -->
+    <mat-form-field
+      class="w-full sm:w-72"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Date range</mat-label>
+      <mat-date-range-input [rangePicker]="rangePicker">
+        <input
+          matStartDate
+          aria-label="Filter from date"
+          placeholder="Start date"
+          [value]="criteria().from ?? null"
+          (dateChange)="setDateFrom($event.value)"
+        />
+        <input
+          matEndDate
+          aria-label="Filter to date"
+          placeholder="End date"
+          [value]="criteria().to ?? null"
+          (dateChange)="setDateTo($event.value)"
+        />
+      </mat-date-range-input>
+      <mat-datepicker-toggle
+        matIconSuffix
+        [for]="rangePicker"
+      >
+        <mat-icon
+          matDatepickerToggleIcon
+          svgIcon="calendar-range"
+        />
+      </mat-datepicker-toggle>
+      <mat-date-range-picker #rangePicker />
+    </mat-form-field>
+
+    @if (activeCount() > 0) {
+      <div class="flex items-center gap-x-3">
+        <button
+          matButton
+          type="button"
+          (click)="clear()"
+        >
+          <mat-icon svgIcon="x" />
+          Clear filters
+        </button>
+        <span
+          class="text-sm text-neutral-500 dark:text-neutral-400"
+          aria-live="polite"
+        >
+          {{ activeCount() }} {{ activeCount() === 1 ? 'filter' : 'filters' }}
+          active
+        </span>
+      </div>
+    }
+  </div>
 </div>

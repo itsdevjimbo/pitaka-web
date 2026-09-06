@@ -18,6 +18,7 @@ import { formatPeso } from '@/app/core/money';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import { Category } from '@/app/domains/app/categories/category';
+import { provideFakeMedia } from '@/testing/media';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Transaction, TransactionSearchResult } from '../../data/transaction';
 import { TransactionsService } from '../../data/transactions.service';
@@ -115,6 +116,7 @@ describe('TransactionsList', () => {
         provideRouter([]),
         provideNativeDateAdapter(),
         provideDialogDefaults(),
+        provideFakeMedia(),
         {
           provide: MATERIAL_ANIMATIONS,
           useValue: { animationsDisabled: true },

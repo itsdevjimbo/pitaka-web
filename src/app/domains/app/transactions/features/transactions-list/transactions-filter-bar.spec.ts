@@ -5,6 +5,8 @@ import {
   provideNativeDateAdapter,
 } from '@angular/material/core';
 import { provideIcons } from '@/app/core/icons';
+import { Media } from '@/app/core/media';
+import { FakeMedia, provideFakeMedia } from '@/testing/media';
 import { withOverlayContainer } from '@/testing/overlay';
 import { TransactionCriteria } from '../../data/transaction';
 import {
@@ -40,18 +42,24 @@ const CATEGORIES: FilterCategoryOption[] = [
 describe('TransactionsFilterBar', () => {
   const overlay = withOverlayContainer();
 
-  function setup(criteria: TransactionCriteria = {}) {
+  function setup(
+    criteria: TransactionCriteria = {},
+    { phone = false }: { phone?: boolean } = {}
+  ) {
     TestBed.configureTestingModule({
       imports: [TransactionsFilterBar],
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
+        provideFakeMedia(phone),
         {
           provide: MATERIAL_ANIMATIONS,
           useValue: { animationsDisabled: true },
         },
       ],
     });
+
+    const media = TestBed.inject(Media) as unknown as FakeMedia;
 
     const fixture = TestBed.createComponent(TransactionsFilterBar);
     fixture.componentRef.setInput('accounts', ACCOUNTS);
@@ -63,11 +71,13 @@ describe('TransactionsFilterBar', () => {
     const emitted: TransactionCriteria[] = [];
     cmp.criteria.subscribe((next) => emitted.push(next));
 
+    const host = fixture.nativeElement as HTMLElement;
+    const qs = <T extends Element>(selector: string) =>
+      host.querySelector<T>(selector);
+
     /** Open one select by its aria-label and read the option labels from the overlay. */
     async function optionsOf(ariaLabel: string) {
-      const trigger = (
-        fixture.nativeElement as HTMLElement
-      ).querySelector<HTMLElement>(`mat-select[aria-label="${ariaLabel}"]`);
+      const trigger = qs<HTMLElement>(`mat-select[aria-label="${ariaLabel}"]`);
       trigger!.click();
       fixture.detectChanges();
       await fixture.whenStable();
@@ -76,12 +86,31 @@ describe('TransactionsFilterBar', () => {
       );
     }
 
+    /** The phone-width disclosure toggle — the button that owns the controls panel. */
+    const disclosure = () =>
+      qs<HTMLButtonElement>(
+        'button[aria-controls="transactions-filter-controls"]'
+      );
+
+    /** The controls panel — kept mounted at every width, `hidden` when collapsed. */
+    const controlsPanel = () => qs('#transactions-filter-controls');
+
     return {
       fixture,
       cmp,
       emitted,
+      media,
       optionsOf,
-      text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
+      disclosure,
+      controlsPanel,
+      /** Whether the controls (everything but the note search) are on show. */
+      showsControls: () => {
+        const panel = controlsPanel();
+        return !!panel && !panel.classList.contains('hidden');
+      },
+      /** Whether the note search field is in the DOM. */
+      showsNote: () => !!qs('input[aria-label="Filter by note"]'),
+      text: () => host.textContent ?? '',
     };
   }
 
@@ -348,5 +377,104 @@ describe('TransactionsFilterBar', () => {
 
     // Binding a value in is not an edit — nothing goes back out.
     expect(emitted).toEqual([]);
+  });
+
+  describe('at phone width (#42)', () => {
+    it('renders every control inline, with no disclosure, from the small breakpoint up', () => {
+      const { disclosure, showsControls } = setup();
+
+      expect(disclosure()).toBeNull();
+      expect(showsControls()).toBe(true);
+    });
+
+    it('collapses the controls behind a shut disclosure below the small breakpoint', () => {
+      const { disclosure, showsControls } = setup({}, { phone: true });
+
+      expect(disclosure()).not.toBeNull();
+      expect(disclosure()!.getAttribute('aria-expanded')).toBe('false');
+      expect(showsControls()).toBe(false);
+    });
+
+    it('keeps the note search visible at phone width, disclosure open or shut', () => {
+      const { fixture, disclosure, showsNote } = setup({}, { phone: true });
+      expect(showsNote()).toBe(true);
+
+      disclosure()!.click();
+      fixture.detectChanges();
+      expect(showsNote()).toBe(true);
+    });
+
+    it('reveals the controls when opened and hides them again when shut', () => {
+      const { fixture, disclosure, showsControls } = setup({}, { phone: true });
+
+      disclosure()!.click();
+      fixture.detectChanges();
+      expect(disclosure()!.getAttribute('aria-expanded')).toBe('true');
+      expect(showsControls()).toBe(true);
+
+      disclosure()!.click();
+      fixture.detectChanges();
+      expect(disclosure()!.getAttribute('aria-expanded')).toBe('false');
+      expect(showsControls()).toBe(false);
+    });
+
+    it('keeps the controls panel mounted while collapsed, so aria-controls resolves', () => {
+      const { disclosure, controlsPanel, showsControls } = setup(
+        {},
+        { phone: true }
+      );
+
+      // Hidden, but present and addressable by the toggle's aria-controls.
+      expect(showsControls()).toBe(false);
+      expect(controlsPanel()).not.toBeNull();
+      expect(disclosure()!.getAttribute('aria-controls')).toBe(
+        controlsPanel()!.id
+      );
+    });
+
+    it('shows the active-filter count on the disclosure while the controls are hidden', () => {
+      const { disclosure, showsControls } = setup(
+        { direction: 'expense', accountId: 3 },
+        { phone: true }
+      );
+
+      expect(showsControls()).toBe(false);
+      expect(disclosure()!.textContent).toContain('2');
+    });
+
+    it('leaves the active filters untouched when the disclosure is opened and shut', () => {
+      const { fixture, disclosure, emitted } = setup(
+        { direction: 'expense' },
+        { phone: true }
+      );
+
+      disclosure()!.click();
+      fixture.detectChanges();
+      disclosure()!.click();
+      fixture.detectChanges();
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('drops back to the inline layout, disclosure and all, when the viewport grows past the breakpoint', () => {
+      const { fixture, media, disclosure, showsControls } = setup(
+        {},
+        { phone: true }
+      );
+      disclosure()!.click();
+      fixture.detectChanges();
+      expect(showsControls()).toBe(true);
+
+      media.matches.set(false);
+      fixture.detectChanges();
+      expect(disclosure()).toBeNull();
+      expect(showsControls()).toBe(true);
+
+      // Shrinking back lands on a shut disclosure, not the stale open one.
+      media.matches.set(true);
+      fixture.detectChanges();
+      expect(disclosure()!.getAttribute('aria-expanded')).toBe('false');
+      expect(showsControls()).toBe(false);
+    });
   });
 });
