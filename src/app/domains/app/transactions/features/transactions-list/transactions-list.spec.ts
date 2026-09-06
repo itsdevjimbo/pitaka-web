@@ -341,6 +341,68 @@ describe('TransactionsList', () => {
       expect(text()).toContain('Second');
       expect(text()).not.toContain('Server fell over.');
     });
+
+    it('drops an in-flight page when the list is reset under it', async () => {
+      const pendingSecond = new Subject<TransactionSearchResult>();
+      const search = vi.fn((_criteria: unknown, p: number) =>
+        p === 2
+          ? pendingSecond.asObservable()
+          : of(
+              page({
+                transactions: [tx({ id: 1, description: 'First' })],
+                totalCount: 2,
+              })
+            )
+      );
+      const { fixture, cmp, button, text } = setup({
+        search: search as unknown as TransactionsService['search'],
+      });
+
+      // Load more is in flight — its page 2 has not answered yet.
+      button('Load more')!.click();
+      fixture.detectChanges();
+
+      // A removal resets the list to a fresh page 1 while page 2 is still pending.
+      cmp.onRemoved();
+      await settle(fixture);
+      expect(text()).toContain('First');
+
+      // The stale page 2 finally answers — it must not be stitched on.
+      pendingSecond.next(
+        page({
+          transactions: [tx({ id: 2, description: 'Stale' })],
+          totalCount: 2,
+        })
+      );
+      pendingSecond.complete();
+      await settle(fixture);
+
+      expect(text()).not.toContain('Stale');
+      expect(text()).toContain('Showing 1 of 2');
+    });
+
+    it('drops the control when a later page comes back empty', () => {
+      const search = vi.fn((_criteria: unknown, p: number) =>
+        p === 1
+          ? of(
+              page({
+                transactions: [tx({ id: 1, description: 'First' })],
+                totalCount: 5,
+              })
+            )
+          : of(page({ transactions: [], totalCount: 5 }))
+      );
+      const { fixture, button, text } = setup({
+        search: search as unknown as TransactionsService['search'],
+      });
+
+      // `totalCount` still claims more, but the next page has no rows.
+      button('Load more')!.click();
+      fixture.detectChanges();
+
+      expect(text()).toContain('Showing 1 of 5');
+      expect(button('Load more')).toBeUndefined();
+    });
   });
 
   it('explains a failed load and retries the whole read from the top when asked', () => {
@@ -439,6 +501,77 @@ describe('TransactionsList', () => {
     expect(text()).not.toContain('Third');
     expect(text()).toContain('Second');
     expect(text()).toContain('Showing 1 of 1');
+  });
+
+  it('keeps the stale list and offers an inline retry when the post-removal re-read fails', async () => {
+    let attempt = 0;
+    const search = vi.fn(() => {
+      attempt += 1;
+      if (attempt === 1) {
+        return of(
+          page({
+            transactions: [
+              tx({ id: 1, description: 'First' }),
+              tx({ id: 2, description: 'Second' }),
+            ],
+            totalCount: 2,
+          })
+        );
+      }
+      return attempt === 2
+        ? throwError(() => new ApiError('Server fell over.', 500))
+        : of(
+            page({
+              transactions: [tx({ id: 2, description: 'Second' })],
+              totalCount: 1,
+            })
+          );
+    });
+    const { fixture, cmp, text, button } = setup({
+      search: search as unknown as TransactionsService['search'],
+    });
+
+    // The removal re-read fails: the rows stay on screen — not the full-page
+    // error state — with the failure explained inline.
+    cmp.onRemoved();
+    await settle(fixture);
+
+    expect(text()).toContain('First');
+    expect(text()).toContain('Second');
+    expect(text()).toContain('Server fell over.');
+    expect(text()).not.toContain('Loading transactions…');
+
+    // The inline retry re-runs the whole read from the top and recovers.
+    button('Try again')!.click();
+    await settle(fixture);
+
+    expect(search).toHaveBeenCalledTimes(3);
+    expect(search).toHaveBeenLastCalledWith({}, 1);
+    expect(text()).not.toContain('Server fell over.');
+    expect(text()).not.toContain('First');
+    expect(text()).toContain('Second');
+    expect(text()).toContain('Showing 1 of 1');
+  });
+
+  it('falls back to a plain refresh message when a non-ApiError re-read fails', async () => {
+    let attempt = 0;
+    const search = vi.fn(() => {
+      attempt += 1;
+      return attempt === 1
+        ? of(page({ transactions: [tx({ description: 'First' })], totalCount: 1 }))
+        : throwError(() => new Error('boom'));
+    });
+    const { fixture, cmp, text } = setup({
+      search: search as unknown as TransactionsService['search'],
+    });
+
+    cmp.onRemoved();
+    await settle(fixture);
+
+    expect(text()).toContain('First');
+    expect(text()).toContain(
+      'Something went wrong refreshing your transactions. Please try again.'
+    );
   });
 
   describe('refile, from the row menu', () => {

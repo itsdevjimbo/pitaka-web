@@ -56,6 +56,26 @@
       </p>
     </div>
   } @else {
+    @if (refreshError(); as message) {
+      <!-- The refile/remove re-read failed: the list is one edit stale but still
+           here, and this retries it without wiping the screen -->
+      <div
+        class="flex flex-col items-center gap-y-3 rounded-xl border border-neutral-200 px-6 py-4 text-center dark:border-neutral-800"
+        role="alert"
+      >
+        <p class="max-w-sm text-sm text-neutral-600 dark:text-neutral-300">
+          {{ message }}
+        </p>
+        <button
+          matButton="outlined"
+          (click)="load()"
+        >
+          <mat-icon svgIcon="refresh-cw" />
+          Try again
+        </button>
+      </div>
+    }
+
     <!-- How much of the whole is on screen, so a partial list is never mistaken
          for the whole answer -->
     <p class="text-sm text-neutral-500 dark:text-neutral-400">

@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { forkJoin, Observable } from 'rxjs';
+import { forkJoin, Observable, Subject, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
@@ -24,6 +24,9 @@ const LOAD_FAILED =
 
 const LOAD_MORE_FAILED =
   'Something went wrong loading more transactions. Please try again.';
+
+const REFRESH_FAILED =
+  'Something went wrong refreshing your transactions. Please try again.';
 
 /** Category id → name and Account id → name, resolved once for a whole page of rows. */
 type NameMaps = {
@@ -68,7 +71,9 @@ type FirstPageRead = {
  * from this page too. Either one re-runs the whole read from the top — the same
  * fresh read as first entry (ADR 0006) — which resets the list to its first
  * page; a paged list has no cheap in-place patch and this screen holds no
- * balance to reconcile.
+ * balance to reconcile. That re-read keeps the shown rows visible while it runs,
+ * and on failure keeps them and offers an inline retry rather than dropping to
+ * the whole-page error state.
  */
 @Component({
   selector: 'transactions-list',
@@ -94,8 +99,30 @@ export default class TransactionsList {
   protected readonly loadingMore = signal(false);
   protected readonly loadMoreError = signal<string | null>(null);
 
+  /**
+   * Set when the re-read after a refile or remove fails. Unlike a failed first
+   * load it does not take over the screen: the already-shown rows stay put — now
+   * one refile or removal stale — and an inline retry re-runs the read. Cleared
+   * whenever `load()` starts over.
+   */
+  protected readonly refreshError = signal<string | null>(null);
+
   /** The page last appended by *Load more* — where the next one carries on from. */
   private readonly lastPage = signal(1);
+
+  /**
+   * Fires when `load()` restarts the list from page 1. Any in-flight *Load
+   * more* is torn down against it, so a late page can't be stitched under the
+   * freshly reset list.
+   */
+  private readonly reset = new Subject<void>();
+
+  /**
+   * True once a page has come back with no rows while `totalCount` still claimed
+   * more — a server answer that would otherwise leave *Load more* on screen
+   * appending nothing on every press. Cleared when `load()` starts over.
+   */
+  private readonly reachedEnd = signal(false);
 
   /** The name maps from the last read, reused to build appended *Load more* rows. */
   private names: NameMaps = {
@@ -118,24 +145,41 @@ export default class TransactionsList {
   /** Whether a page of rows is still unshown — gates the *Load more* control. */
   protected readonly hasMore = computed(() => {
     const rows = this.rows();
-    return rows !== null && rows.length < this.totalCount();
+    return (
+      rows !== null && !this.reachedEnd() && rows.length < this.totalCount()
+    );
   });
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.reset.complete());
     this.load();
   }
 
   /**
    * First entry, the failed-load retry, and the re-read after a row is refiled
    * or removed: read the first page of Transactions, the Category names and the
-   * Accounts together, behind the full-page loading and error states. Any extra
-   * pages that Load more had appended are dropped — the list resets to page one.
+   * Accounts together. Any extra pages that Load more had appended are dropped —
+   * the list resets to page one — and an in-flight *Load more* is cancelled so
+   * its response can't land on the reset list.
+   *
+   * With no list on screen yet — first entry, or a retry from the failed-load
+   * state — the read sits behind the full-page loading and error states. With a
+   * list already shown, the re-read after a refile or remove keeps those rows
+   * in place: a failure leaves them (now one edit stale) and pins an inline
+   * retry, the same contract as a failed *Load more*, rather than replacing a
+   * good list with the whole-page error state.
    */
   protected load(): void {
-    this.loading.set(true);
+    this.reset.next();
     this.errorMessage.set(null);
+    this.refreshError.set(null);
     this.loadMoreError.set(null);
+    this.loadingMore.set(false);
+    this.reachedEnd.set(false);
     this.lastPage.set(1);
+
+    const refreshing = this.rows() !== null;
+    this.loading.set(!refreshing);
 
     this.read()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -145,9 +189,13 @@ export default class TransactionsList {
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          this.errorMessage.set(
-            error instanceof ApiError ? error.message : LOAD_FAILED
-          );
+          const message =
+            error instanceof ApiError
+              ? error.message
+              : refreshing
+                ? REFRESH_FAILED
+                : LOAD_FAILED;
+          (refreshing ? this.refreshError : this.errorMessage).set(message);
           this.loading.set(false);
         },
       });
@@ -169,7 +217,7 @@ export default class TransactionsList {
 
     this.transactions
       .search({}, this.lastPage() + 1)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.reset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
           this.rows.update((rows) => [
@@ -178,6 +226,9 @@ export default class TransactionsList {
           ]);
           this.totalCount.set(result.totalCount);
           this.lastPage.update((page) => page + 1);
+          if (result.transactions.length === 0) {
+            this.reachedEnd.set(true);
+          }
           this.loadingMore.set(false);
         },
         error: (error: unknown) => {
@@ -242,6 +293,9 @@ export default class TransactionsList {
     };
     this.totalCount.set(result.firstPage.totalCount);
     this.rows.set(this.toRows(result.firstPage.transactions));
+    if (result.firstPage.transactions.length === 0) {
+      this.reachedEnd.set(true);
+    }
   }
 
   /** Build the spanning row model for each Transaction from the kept name maps. */
