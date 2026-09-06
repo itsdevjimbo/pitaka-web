@@ -10,6 +10,7 @@ import { TransactionCriteria } from '../../data/transaction';
 import {
   FilterAccountOption,
   FilterCategoryOption,
+  NOTE_DEBOUNCE_MS,
   TransactionsFilterBar,
 } from './transactions-filter-bar';
 
@@ -17,6 +18,7 @@ import {
 type FilterBarInternals = {
   criteria: ModelSignal<TransactionCriteria>;
   activeCount: () => number;
+  onNoteInput(value: string): void;
   setDirection(value: string | null): void;
   setAccount(value: number | null): void;
   setCategory(value: number | null): void;
@@ -146,6 +148,98 @@ describe('TransactionsFilterBar', () => {
     expect('accountId' in last).toBe(false);
   });
 
+  describe('the note search (#64)', () => {
+    // `debounceTime` schedules on `setInterval` and measures elapsed time with
+    // `Date.now()`; fake both so the debounce is under the test's control, while
+    // zoneless stability (on `setTimeout`) is left alone.
+    beforeEach(() =>
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    );
+    afterEach(() => vi.useRealTimers());
+
+    it('folds a settled note into the criteria, once for a burst of keystrokes', () => {
+      const { cmp, emitted } = setup();
+
+      cmp.onNoteInput('c');
+      cmp.onNoteInput('co');
+      cmp.onNoteInput('coffee');
+      expect(emitted).toEqual([]);
+
+      vi.advanceTimersByTime(NOTE_DEBOUNCE_MS);
+
+      expect(emitted).toEqual([{ description: 'coffee' }]);
+    });
+
+    it('trims the note on the way out', () => {
+      const { cmp, emitted } = setup();
+
+      cmp.onNoteInput('  flat white  ');
+      vi.advanceTimersByTime(NOTE_DEBOUNCE_MS);
+
+      expect(emitted.at(-1)).toEqual({ description: 'flat white' });
+    });
+
+    it('drops the key when the field is cleared or only whitespace', () => {
+      const { cmp, emitted } = setup({ description: 'coffee', accountId: 3 });
+
+      cmp.onNoteInput('   ');
+      vi.advanceTimersByTime(NOTE_DEBOUNCE_MS);
+
+      const last = emitted.at(-1)!;
+      expect(last).toEqual({ accountId: 3 });
+      expect('description' in last).toBe(false);
+    });
+
+    it('combines the note with the single-value axes', () => {
+      const { cmp, emitted } = setup({ direction: 'expense' });
+
+      cmp.onNoteInput('rent');
+      vi.advanceTimersByTime(NOTE_DEBOUNCE_MS);
+
+      expect(emitted.at(-1)).toEqual({ direction: 'expense', description: 'rent' });
+    });
+
+    it('re-narrows on the same term after Clear filters has wiped it', () => {
+      const { cmp, emitted } = setup();
+
+      cmp.onNoteInput('coffee');
+      vi.advanceTimersByTime(NOTE_DEBOUNCE_MS);
+      expect(emitted.at(-1)).toEqual({ description: 'coffee' });
+
+      cmp.clear();
+      expect(emitted.at(-1)).toEqual({});
+
+      cmp.onNoteInput('coffee');
+      vi.advanceTimersByTime(NOTE_DEBOUNCE_MS);
+      expect(emitted.at(-1)).toEqual({ description: 'coffee' });
+    });
+
+    it('counts as one active filter, alongside the others', () => {
+      const { fixture, cmp } = setup();
+
+      fixture.componentRef.setInput('criteria', { description: 'coffee' });
+      fixture.detectChanges();
+      expect(cmp.activeCount()).toBe(1);
+
+      fixture.componentRef.setInput('criteria', {
+        description: 'coffee',
+        direction: 'expense',
+      });
+      fixture.detectChanges();
+      expect(cmp.activeCount()).toBe(2);
+    });
+
+    it('reflects an incoming note in the field without re-emitting', () => {
+      const { fixture, emitted } = setup({ description: 'coffee' });
+
+      const input = (
+        fixture.nativeElement as HTMLElement
+      ).querySelector<HTMLInputElement>('input[aria-label="Filter by note"]');
+      expect(input!.value).toBe('coffee');
+      expect(emitted).toEqual([]);
+    });
+  });
+
   describe('the date range (#65)', () => {
     it('folds a picked start and end into the criteria as the chosen calendar days', () => {
       const { cmp, emitted } = setup();
@@ -216,6 +310,7 @@ describe('TransactionsFilterBar', () => {
       direction: 'income',
       accountId: 9,
       categoryId: 2,
+      description: 'coffee',
       from: new Date(2026, 8, 1),
       to: new Date(2026, 8, 30),
     });
@@ -239,12 +334,13 @@ describe('TransactionsFilterBar', () => {
     fixture.componentRef.setInput('criteria', {
       direction: 'expense',
       categoryId: 1,
+      description: 'coffee',
       from: new Date(2026, 8, 1),
       to: new Date(2026, 8, 30),
     });
     fixture.detectChanges();
-    // Two single-value axes plus the date range, counted once — three, not four.
-    expect(text()).toContain('3 filters active');
+    // Three single-value axes plus the date range, counted once — four, not five.
+    expect(text()).toContain('4 filters active');
   });
 
   it('reflects incoming criteria in the controls without re-emitting', () => {

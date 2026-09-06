@@ -1,4 +1,23 @@
 <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+  <!-- Note: free-text search over the note only, debounced. Leads the bar and
+       stays visible at every width (#35, #64). Empty or all-whitespace drops
+       the axis. -->
+  <mat-form-field
+    class="w-full sm:w-64"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Note</mat-label>
+    <input
+      #noteField
+      matInput
+      type="search"
+      aria-label="Filter by note"
+      placeholder="Search notes"
+      [value]="criteria().description ?? ''"
+      (input)="onNoteInput(noteField.value)"
+    />
+  </mat-form-field>
+
   <!-- Direction -->
   <mat-form-field
     class="w-full sm:w-44"

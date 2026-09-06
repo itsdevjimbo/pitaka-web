@@ -1,15 +1,33 @@
-import { Component, computed, input, model } from '@angular/core';
+import {
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  input,
+  model,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { debounceTime, map, Subject } from 'rxjs';
 import {
   activeCriteriaCount,
   TransactionCriteria,
   TransactionDirection,
   TRANSACTION_DIRECTIONS,
 } from '../../data/transaction';
+
+/**
+ * How long the note field waits for typing to settle before it folds a value
+ * into the criteria (#64). Long enough that a word typed at speed emits once,
+ * short enough that the list still feels like it reacts to the search rather
+ * than lagging it.
+ */
+export const NOTE_DEBOUNCE_MS = 300;
 
 /**
  * One Account the filter bar offers as an option. A retired Account is offered
@@ -36,16 +54,15 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
 );
 
 /**
- * The bar that turns the Transactions list into an answer: single-select
- * controls for direction, Account and Category, a `mat-date-range-input` for a
- * date range (#65), all freely combinable, with AND across the axes enforced by
- * the server (#37). It owns no list state and issues no reads — it is a
- * controlled view over {@link TransactionCriteria}: the current criteria come
- * in, an edited copy goes back out through the two-way `criteria`, and the page
- * decides what a change means (a fresh read, a reset to page 1). That split is
- * what lets #41 move the source of truth to the URL without touching this
- * component, and #64 adds its axis as one more control and one more criteria
- * field rather than a rebuild.
+ * The bar that turns the Transactions list into an answer: a free-text field
+ * for the note (#64), single-select controls for direction, Account and
+ * Category, a `mat-date-range-input` for a date range (#65), all freely
+ * combinable, with AND across the axes enforced by the server (#37). It owns no
+ * list state and issues no reads — it is a controlled view over
+ * {@link TransactionCriteria}: the current criteria come in, an edited copy goes
+ * back out through the two-way `criteria`, and the page decides what a change
+ * means (a fresh read, a reset to page 1). That split is what lets #41 move the
+ * source of truth to the URL without touching this component.
  *
  * An axis with no selection emits **no criteria key at all**, not a key set to
  * `undefined`, so empty criteria are literally `{}` and the adapter sees no
@@ -54,6 +71,14 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
  * legible from the controls themselves — each shows its chosen value — and
  * summarised as a count beside a one-press **Clear filters** (the date range
  * counts once, however many ends are set).
+ *
+ * The note field leads the bar — it is the control reached for without deciding
+ * anything first (#35) — and is **debounced** by {@link NOTE_DEBOUNCE_MS}, so a
+ * word typed at speed folds one value into the criteria rather than one per
+ * keystroke. Its value is trimmed on the way out and an all-whitespace or empty
+ * field drops the `description` key entirely, the same "absent means unfiltered"
+ * contract as every other axis. The match itself is the API's — case-insensitive
+ * substring over the note alone (pitaka#73) — and is not reproduced here.
  *
  * The date-range ends are held as the person picked them — inclusive calendar
  * days — and the adapter turns `to` into the API's exclusive bound and drops an
@@ -67,6 +92,7 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
   templateUrl: './transactions-filter-bar.html',
   imports: [
     MatFormFieldModule,
+    MatInputModule,
     MatSelectModule,
     MatButtonModule,
     MatIconModule,
@@ -77,6 +103,8 @@ const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
   },
 })
 export class TransactionsFilterBar {
+  private readonly destroyRef = inject(DestroyRef);
+
   /** Every Account the person owns, retired ones included and marked. */
   readonly accounts = input<readonly FilterAccountOption[]>([]);
 
@@ -96,6 +124,36 @@ export class TransactionsFilterBar {
   protected readonly activeCount = computed(() =>
     activeCriteriaCount(this.criteria())
   );
+
+  /**
+   * Every raw keystroke in the note field. Debounced and trimmed before it
+   * reaches the criteria, so a burst of typing is one edit and a value that
+   * trims to nothing drops the axis.
+   */
+  private readonly noteInput = new Subject<string>();
+
+  constructor() {
+    this.noteInput
+      .pipe(
+        debounceTime(NOTE_DEBOUNCE_MS),
+        map((raw) => raw.trim()),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe((note) => {
+        // De-dupe against the criteria itself, not the last keystroke: after
+        // Clear filters wipes the field, retyping the same term must still
+        // re-narrow the list.
+        const next = note === '' ? undefined : note;
+        if (next !== this.criteria().description) {
+          this.patch('description', next ?? null);
+        }
+      });
+  }
+
+  /** A keystroke in the note field — folded into the criteria once typing settles. */
+  protected onNoteInput(value: string): void {
+    this.noteInput.next(value);
+  }
 
   protected setDirection(value: TransactionDirection | null): void {
     this.patch('direction', value);

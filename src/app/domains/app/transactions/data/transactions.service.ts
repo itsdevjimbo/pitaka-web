@@ -96,6 +96,11 @@ export class TransactionsService {
    * inverted range is dropped whole rather than sent as a guaranteed 400
    * (`date-range-bounds.ts`, #65).
    *
+   * `description` (#64) goes out verbatim as the `description` parameter — the
+   * caller has already trimmed it and only hands over a non-empty value. The
+   * API matches it case-insensitively as a substring of the note alone; this
+   * adapter does no matching and no re-shaping.
+   *
    * A Transfer arrives once: the un-scoped list filters on the Profile alone,
    * unlike `GET /api/accounts/:id/transactions`, which yields a Transfer to
    * both its Accounts. Narrowing by `accountId` still matches a Transfer on
@@ -123,6 +128,9 @@ export class TransactionsService {
     }
     if (criteria.direction !== undefined) {
       params = params.set('type', API_TYPE[criteria.direction]);
+    }
+    if (criteria.description !== undefined) {
+      params = params.set('description', criteria.description);
     }
 
     // The date range crosses the wire as offset-bearing timestamps, not

@@ -797,6 +797,55 @@ describe('TransactionsList', () => {
       expect(text()).not.toContain('Whole history');
     });
 
+    it('is wired end to end: typing in the note field issues the debounced narrowed read (#64)', async () => {
+      // `debounceTime` runs on `setInterval` and measures with `Date.now()`;
+      // fake both so the note debounce is under the test's control and zoneless
+      // stability (on `setTimeout`) is untouched.
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        const search = vi.fn((criteria: Record<string, unknown>, p: number) =>
+          of(
+            page({
+              transactions: [
+                tx({
+                  id: p,
+                  description: criteria['description']
+                    ? 'Narrowed'
+                    : 'Whole history',
+                }),
+              ],
+              totalCount: criteria['description'] ? 1 : 4,
+            })
+          )
+        );
+        const { fixture, text } = setup({
+          search: search as unknown as TransactionsService['search'],
+        });
+
+        expect(text()).toContain('Whole history');
+
+        const noteInput = (
+          fixture.nativeElement as HTMLElement
+        ).querySelector<HTMLInputElement>(
+          'transactions-filter-bar input[aria-label="Filter by note"]'
+        );
+        noteInput!.value = 'coffee';
+        noteInput!.dispatchEvent(new Event('input'));
+
+        // Nothing goes out until the debounce settles.
+        expect(search).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(500);
+        await settle(fixture);
+
+        expect(search).toHaveBeenLastCalledWith({ description: 'coffee' }, 1);
+        expect(text()).toContain('Narrowed');
+        expect(text()).not.toContain('Whole history');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('does not flash the "nothing recorded" screen while Clear filters is in flight', async () => {
       const pendingClear = new Subject<TransactionSearchResult>();
       let emptyCriteriaReads = 0;

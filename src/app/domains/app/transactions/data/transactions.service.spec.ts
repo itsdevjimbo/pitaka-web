@@ -651,6 +651,61 @@ describe('TransactionsService', () => {
       }
     });
 
+    describe('the note search (#64)', () => {
+      it('sends the note as the description parameter, verbatim', async () => {
+        const result = firstValueFrom(
+          service.search({ description: 'flat white' }, 1)
+        );
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        expect(request.request.params.keys().sort()).toEqual([
+          'description',
+          'page',
+        ]);
+        expect(request.request.params.get('description')).toBe('flat white');
+
+        request.flush(envelope());
+        await result;
+      });
+
+      it('emits no description parameter when the axis is unset', async () => {
+        const result = firstValueFrom(service.search({ accountId: 3 }, 1));
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        expect(request.request.params.has('description')).toBe(false);
+
+        request.flush(envelope());
+        await result;
+      });
+
+      it('combines with the other axes', async () => {
+        const result = firstValueFrom(
+          service.search(
+            { direction: 'expense', accountId: 3, description: 'coffee' },
+            1
+          )
+        );
+
+        const request = http.expectOne(
+          (req) => req.url === `${BASE_URL}/api/transactions`
+        );
+        expect(request.request.params.keys().sort()).toEqual([
+          'accountId',
+          'description',
+          'page',
+          'type',
+        ]);
+        expect(request.request.params.get('description')).toBe('coffee');
+
+        request.flush(envelope());
+        await result;
+      });
+    });
+
     describe('the date range (#65)', () => {
       // The bounds carry the process timezone's offset — pin it to a fixed,
       // DST-free *negative* zone so the sent timestamps are exact and a
