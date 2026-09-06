@@ -14,7 +14,7 @@ type CategoryResource = {
   name: string;
   type: 'Income' | 'Expense';
   isDefault: boolean;
-  parentId: number | null;
+  isActive: boolean;
 };
 
 /**
@@ -80,7 +80,7 @@ const KIND: Record<CategoryResource['type'], Category['kind']> = {
   Expense: 'expense',
 };
 
-/** Keep id, name, and `kind`; drop what nothing above the adapter reads (`isDefault`, `parentId`). */
+/** Keep id, name, and `kind`; drop what nothing above the adapter reads yet (`isDefault`, `isActive`). */
 function toCategory(resource: CategoryResource): Category {
   return { id: resource.id, name: resource.name, kind: KIND[resource.type] };
 }

@@ -11,7 +11,7 @@ import { CategoriesService } from './categories.service';
 
 /** One Category row shaped the way `GET /api/categories` sends it. */
 function resource(id: number, name: string, type: 'Income' | 'Expense' = 'Expense') {
-  return { id, name, type, isDefault: true, parentId: null };
+  return { id, name, type, isDefault: true, isActive: true };
 }
 
 /**
