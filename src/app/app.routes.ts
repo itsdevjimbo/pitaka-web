@@ -22,6 +22,14 @@ export const routes: Route[] = [
     loadChildren: () => import('./domains/app/routes'),
   },
 
+  // PROTOTYPE — #95, throwaway. Unguarded so the variants can be opened
+  // without a session. Delete with the `prototype/categories-list` branch.
+  {
+    path: 'prototype/categories',
+    loadComponent: () =>
+      import('./domains/app/categories/prototype/categories-prototype'),
+  },
+
   // Fallback
   {
     path: '**',

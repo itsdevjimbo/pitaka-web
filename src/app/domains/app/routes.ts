@@ -26,6 +26,13 @@ const routes: Routes = [
         loadComponent: () =>
           import('./transactions/features/transactions-list/transactions-list'),
       },
+      // PROTOTYPE — #95, throwaway. Delete with the `prototype/categories-list`
+      // branch; never merge to main.
+      {
+        path: 'categories-prototype',
+        loadComponent: () =>
+          import('./categories/prototype/categories-prototype'),
+      },
       {
         path: 'budgets',
         loadComponent: () =>
