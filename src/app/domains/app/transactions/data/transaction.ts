@@ -152,14 +152,22 @@ export type RefileTransaction = {
 /**
  * The axes a search over every Transaction can narrow by (#37), each
  * independently optional. An absent axis (`undefined`) means unfiltered, not
- * "match nothing" — so empty criteria (`{}`) is the un-narrowed list. #64's note
- * search is still blocked on API work and joins later as one more field (see the
- * parent ticket, #35).
+ * "match nothing" — so empty criteria (`{}`) is the un-narrowed list.
  */
 export type TransactionCriteria = {
   direction?: TransactionDirection;
   accountId?: number;
   categoryId?: number;
+
+  /**
+   * A free-text search over a Transaction's note (#64), the fifth axis. Held as
+   * the person typed it, trimmed and non-empty: the filter bar drops the key
+   * when the field is blank or whitespace-only, so an absent key is the
+   * unfiltered list. The match is the API's — case-insensitive substring over
+   * the note alone, never a Category or Account name (pitaka#73) — and the
+   * adapter passes it straight through as the `description` parameter.
+   */
+  description?: string;
 
   /**
    * The date range's **inclusive** calendar-day bounds (#65), each independently
@@ -179,14 +187,15 @@ export type TransactionCriteria = {
  * The single-value axes of {@link TransactionCriteria} — one list to iterate
  * instead of re-spelling `direction/accountId/categoryId`. The date range is a
  * further axis but rides on two keys (`from`/`to`) and is counted once, so it is
- * handled directly in {@link activeCriteriaCount} rather than listed here. When
- * #64's note search lands its single key is added here and the axis count
- * follows without either the filter bar or the page being rebuilt (#40).
+ * handled directly in {@link activeCriteriaCount} rather than listed here. #64's
+ * note search rides a single key (`description`) and joins the list, so the axis
+ * count follows without either the filter bar or the page being rebuilt (#40).
  */
 export const CRITERIA_AXES = [
   'direction',
   'accountId',
   'categoryId',
+  'description',
 ] as const satisfies readonly (keyof TransactionCriteria)[];
 
 /**
