@@ -87,6 +87,9 @@ describe('BudgetsService', () => {
         startDate: new Date(2026, 7, 1),
         endDate: new Date(2026, 11, 31),
         categoryId: 4,
+        amountSpent: 5000,
+        cycleStart: new Date(2026, 7, 1),
+        cycleEnd: new Date(2026, 7, 31),
       });
     });
 
@@ -145,15 +148,30 @@ describe('BudgetsService', () => {
       expect((await result)[0].categoryId).toBeNull();
     });
 
-    it('drops the Spent figure and Cycle window this slice does not render', async () => {
+    it('maps the Spent figure and keeps the raw amount through', async () => {
       const result = firstValueFrom(service.list());
 
-      http.expectOne(`${BASE_URL}/api/budgets`).flush([resource()]);
+      http
+        .expectOne(`${BASE_URL}/api/budgets`)
+        .flush([resource({ amountSpent: 12400 })]);
 
       const [budget] = await result;
-      expect(budget).not.toHaveProperty('amountSpent');
-      expect(budget).not.toHaveProperty('cycleStart');
+      expect(budget.amountSpent).toBe(12400);
       expect(budget).not.toHaveProperty('description');
+    });
+
+    it('parses the Cycle window as calendar days, not the UTC-midnight day before', async () => {
+      const result = firstValueFrom(service.list());
+
+      http
+        .expectOne(`${BASE_URL}/api/budgets`)
+        .flush([resource({ cycleStart: '2026-08-01', cycleEnd: '2026-08-31' })]);
+
+      const [budget] = await result;
+      expect(budget.cycleStart).toEqual(new Date(2026, 7, 1));
+      expect(budget.cycleEnd).toEqual(new Date(2026, 7, 31));
+      // August, not July — the bug ADR 0011 exists to prevent.
+      expect(budget.cycleStart.getMonth()).toBe(7);
     });
 
     it('yields an empty list, not an error, when the person has no Budgets', async () => {
@@ -242,11 +260,15 @@ describe('BudgetsService', () => {
           resource({ id: 99, period: 'Monthly', startDate: '2026-08-01' })
         );
 
-      await expect(result).resolves.toMatchObject({
+      const created = await result;
+      expect(created).toMatchObject({
         id: 99,
         period: 'monthly',
         startDate: new Date(2026, 7, 1),
       });
+      // The write endpoint returns the bare Budget — no Spent figure rides back.
+      expect(created).not.toHaveProperty('amountSpent');
+      expect(created).not.toHaveProperty('cycleStart');
     });
 
     it('refiles the duplicate-name 409 as a name field error', async () => {

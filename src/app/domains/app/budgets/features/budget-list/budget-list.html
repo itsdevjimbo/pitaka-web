@@ -87,7 +87,7 @@
         <ul class="flex flex-col gap-y-2">
           @for (row of group.rows; track row.budget.id) {
             <li
-              class="flex flex-col gap-y-1 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
+              class="flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
             >
               <div class="flex items-center justify-between gap-x-3">
                 <span class="truncate font-medium">{{ row.budget.name }}</span>
@@ -102,8 +102,49 @@
                 <span aria-hidden="true">·</span>
                 <span>{{ row.categoryLabel }}</span>
                 <span aria-hidden="true">·</span>
-                <span>Starts {{ row.budget.startDate | date: 'mediumDate' }}</span>
+                <span>Starts {{ row.budget.startDate | date: 'd MMM y' }}</span>
               </div>
+
+              @if (group.phase !== 'not-started') {
+                <!--
+                  Spent against the ceiling, and what is left of it — or, when
+                  overspent, how far past, stated plainly with the ADR 0008
+                  money token (and readable without the colour). A finished
+                  Budget is the same shape framed as history: its final Cycle's
+                  total, and "under" rather than "left" because nothing more can
+                  be spent against it. A not-yet-started Budget shows none of
+                  this — its "Starts …" above stands in for a "₱0 spent" that
+                  would read as restraint.
+                -->
+                <div class="flex flex-col gap-y-1">
+                  <div
+                    class="flex flex-wrap items-baseline justify-between gap-x-2 text-sm"
+                  >
+                    <span
+                      class="tabular-nums text-neutral-600 dark:text-neutral-300"
+                    >
+                      {{ row.budget.amountSpent | peso }} of
+                      {{ row.budget.amountLimit | peso }}
+                    </span>
+                    @if (row.remaining.overspent) {
+                      <span class="font-medium text-expense">
+                        {{ row.remaining.overspentBy | peso }} over
+                      </span>
+                    } @else {
+                      <span class="text-neutral-500 dark:text-neutral-400">
+                        {{ row.remaining.left | peso }}
+                        {{ group.phase === 'finished' ? 'under' : 'left' }}
+                      </span>
+                    }
+                  </div>
+
+                  <span class="text-sm text-neutral-500 dark:text-neutral-400">
+                    {{ group.phase === 'finished' ? 'Final cycle' : 'This cycle' }}:
+                    {{ row.budget.cycleStart | date: 'd MMM' }} –
+                    {{ row.budget.cycleEnd | date: 'd MMM y' }}
+                  </span>
+                </div>
+              }
             </li>
           }
         </ul>

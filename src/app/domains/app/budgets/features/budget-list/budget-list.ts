@@ -14,8 +14,13 @@ import { forkJoin } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
-import { Budget, PERIODS } from '../../data/budget';
-import { budgetPhase, BudgetPhase } from '../../data/budget-calendar';
+import { Budget, BudgetWithSpend, PERIODS } from '../../data/budget';
+import {
+  budgetPhase,
+  BudgetPhase,
+  budgetRemaining,
+  BudgetRemaining,
+} from '../../data/budget-calendar';
 import { BudgetsService } from '../../data/budgets.service';
 import { NewBudgetDialog } from '../../ui/new-budget-dialog';
 
@@ -39,10 +44,15 @@ const PHASE_ORDER: readonly { phase: BudgetPhase; label: string }[] = [
   { phase: 'finished', label: 'Finished' },
 ];
 
-/** One Budget prepared for a row: the domain record plus its resolved Category. */
+/**
+ * One Budget prepared for a row: the domain record, its resolved Category, and
+ * what is left of its ceiling this Cycle (`remaining`). `remaining` is derived
+ * off `budget`, so it stays consistent through a re-read.
+ */
 type BudgetRow = {
-  budget: Budget;
+  budget: BudgetWithSpend;
   categoryLabel: string;
+  remaining: BudgetRemaining;
 };
 
 /** One heading and the Budgets beneath it, sorted by name. */
@@ -55,15 +65,21 @@ type BudgetGroup = {
 /**
  * The Budgets screen: every Budget the person has, in three groups the client
  * orders — Live, then Not yet started, then Finished — and by name within each.
- * A row shows the Budget's own facts: its name, ceiling, Period, Category name
- * (or "All spending"), and start date. **No Cycle window and no progress bar** —
- * the Cycle belongs to the server (ADR 0012) and the Spent figure arrives with a
- * later ticket; deriving either here would be arithmetic about to be deleted.
+ *
+ * Every row states the Budget's own facts — name, ceiling, Period, Category,
+ * start date. On top of that a **live** row shows it against its ceiling: the
+ * Spent figure, what is left (or how far over, plainly and never clamped), and
+ * the Cycle window the server summed over — spelled out, because a figure with
+ * no window is unreadable (ADR 0012). A **finished** row is the same block
+ * framed as history: its final Cycle's total, and "under" rather than "left". A
+ * **not-yet-started** row shows no spend block at all — its start date stands in
+ * for a "₱0 spent" that would read as restraint. Every figure comes from a fresh
+ * list read (ADR 0006), never from a cache or the create response.
  *
  * A Profile with no Budgets is told what a Budget is for. A failed load says so
  * and offers a retry. *New budget* opens the create dialog; a successful create
- * shows the Budget straight away, then re-reads the list so it lands in the
- * server's data (ADR 0006 for the re-read after a write).
+ * re-reads the list so the new Budget lands with its server-resolved Cycle
+ * figures (ADR 0006 for the re-read after a write).
  */
 @Component({
   selector: 'budget-list',
@@ -81,7 +97,7 @@ export default class BudgetList {
   private dialog = inject(MatDialog);
 
   // State
-  protected readonly budgets = signal<readonly Budget[] | null>(null);
+  protected readonly budgets = signal<readonly BudgetWithSpend[] | null>(null);
   protected readonly categoryNames = signal<ReadonlyMap<number, string>>(
     new Map()
   );
@@ -113,6 +129,7 @@ export default class BudgetList {
           budget.categoryId === null
             ? ALL_SPENDING_LABEL
             : (names.get(budget.categoryId) ?? UNKNOWN_CATEGORY_LABEL),
+        remaining: budgetRemaining(budget),
       })
     );
 
@@ -173,18 +190,20 @@ export default class BudgetList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((created) => {
         if (created) {
-          this.onCreated(created);
+          this.onCreated();
         }
       });
   }
 
   /**
-   * A Budget was created. Show it at once — from the create response — then
-   * re-read the list so it lands in the server's data and picks up anything
-   * changed elsewhere (ADR 0006: reconcile a write with a fresh read).
+   * A Budget was created. The create response is the bare Budget with no Cycle
+   * figures behind it, and this screen renders every row against its Cycle — so
+   * rather than splice a figureless row in, re-read the list straight away and
+   * let the new Budget land with its server-resolved Spent figure and window
+   * (ADR 0006: reconcile a write with a fresh read; ADR 0012: the client never
+   * invents a Cycle).
    */
-  private onCreated(budget: Budget): void {
-    this.budgets.update((list) => [...(list ?? []), budget]);
+  private onCreated(): void {
     this.reconcile();
   }
 

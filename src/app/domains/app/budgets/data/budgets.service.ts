@@ -2,15 +2,14 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
-import { Budget, NewBudget, Period } from './budget';
+import { Budget, BudgetWithSpend, NewBudget, Period } from './budget';
 import { toCalendarDate, toDateOnly } from './budget-calendar';
 
 /**
- * Wire shape of one Budget. `GET /api/budgets` returns a collection of these and
- * `POST /api/budgets` returns one. The API also attaches `amountSpent`,
- * `cycleStart` and `cycleEnd` on the GET (ADR 0012) and a `description`;
- * nothing above the adapter reads any of them in this slice, so `toBudget`
- * drops them — the same move `toAccount` makes for an Account's owner id.
+ * Wire shape of one Budget as the write endpoints send it. `POST /api/budgets`
+ * returns one of these. The API also attaches a `description` nothing above the
+ * adapter reads, so `toBudget` drops it — the same move `toAccount` makes for an
+ * Account's owner id.
  */
 type BudgetResource = {
   id: number;
@@ -21,6 +20,18 @@ type BudgetResource = {
   endDate: string | null;
   categoryId: number | null;
   description: string | null;
+};
+
+/**
+ * What `GET /api/budgets` adds to each row: the Spent figure and the Cycle
+ * window the server summed over (ADR 0012). Only the list carries these — a
+ * created Budget comes back as a bare {@link BudgetResource} — so the two
+ * shapes, and the two mappers, stay apart.
+ */
+type BudgetWithSpendResource = BudgetResource & {
+  amountSpent: number;
+  cycleStart: string;
+  cycleEnd: string;
 };
 
 /** The API's `BudgetPeriod` enum, lowered to a {@link Period}. */
@@ -47,9 +58,8 @@ const API_PERIOD: Record<Period, BudgetResource['period']> = {
  * tickets. Failures arrive already normalised to `ApiError` by the interceptor.
  *
  * Deliberately **cold** — no `shareReplay`, no store — the way `AccountsService`
- * is and unlike `CategoriesService`: the endpoint gains a balance-class Spent
- * figure in the next ticket, and a balance is never served from a cache (ADR
- * 0006).
+ * is and unlike `CategoriesService`: the list carries a balance-class Spent
+ * figure (ADR 0012) and a balance is never served from a cache (ADR 0006).
  */
 @Injectable({ providedIn: 'root' })
 export class BudgetsService {
@@ -62,10 +72,10 @@ export class BudgetsService {
    * order — there is no `OrderBy` — so the list screen groups and sorts them;
    * this method only lifts the wire rows to the domain shape.
    */
-  list(): Observable<Budget[]> {
+  list(): Observable<BudgetWithSpend[]> {
     return this.http
-      .get<BudgetResource[]>(`${this.baseUrl}/api/budgets`)
-      .pipe(map((resources) => resources.map(toBudget)));
+      .get<BudgetWithSpendResource[]>(`${this.baseUrl}/api/budgets`)
+      .pipe(map((resources) => resources.map(toBudgetWithSpend)));
   }
 
   /**
@@ -108,9 +118,9 @@ function asNameConflict(error: unknown): unknown {
 }
 
 /**
- * Lift the wire row to the domain shape. The two `DateOnly` strings become
- * calendar `Date`s at local midnight (ADR 0011); `period` is lowered; the Spent
- * figure, Cycle window and `description` are dropped.
+ * Lift a write-endpoint row to the domain shape. The two `DateOnly` strings
+ * become calendar `Date`s at local midnight (ADR 0011); `period` is lowered;
+ * `description` is dropped.
  */
 function toBudget(resource: BudgetResource): Budget {
   return {
@@ -122,5 +132,19 @@ function toBudget(resource: BudgetResource): Budget {
     endDate:
       resource.endDate === null ? null : toCalendarDate(resource.endDate),
     categoryId: resource.categoryId,
+  };
+}
+
+/**
+ * Lift a `GET /api/budgets` row: the {@link toBudget} shape plus the Spent
+ * figure and the Cycle window, the window's two `DateOnly` strings parsed as
+ * calendar days the same way the Budget's own dates are (ADR 0011).
+ */
+function toBudgetWithSpend(resource: BudgetWithSpendResource): BudgetWithSpend {
+  return {
+    ...toBudget(resource),
+    amountSpent: resource.amountSpent,
+    cycleStart: toCalendarDate(resource.cycleStart),
+    cycleEnd: toCalendarDate(resource.cycleEnd),
   };
 }

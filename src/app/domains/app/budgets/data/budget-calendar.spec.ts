@@ -1,6 +1,7 @@
 import { withPinnedTimezone } from '@/testing/timezone';
 import {
   budgetPhase,
+  budgetRemaining,
   startOfCurrentPeriod,
   toCalendarDate,
   toDateOnly,
@@ -184,6 +185,51 @@ describe('budget-calendar', () => {
           lateInDay
         )
       ).toBe('live');
+    });
+  });
+
+  describe('budgetRemaining', () => {
+    it('reports what is left when spending is under the ceiling', () => {
+      const remaining = budgetRemaining({ amountLimit: 20000, amountSpent: 12400 });
+
+      expect(remaining.left).toBe(7600);
+      expect(remaining.overspent).toBe(false);
+      expect(remaining.overspentBy).toBe(0);
+    });
+
+    it('is not overspent when spending lands exactly on the ceiling', () => {
+      const remaining = budgetRemaining({ amountLimit: 20000, amountSpent: 20000 });
+
+      expect(remaining.left).toBe(0);
+      expect(remaining.overspent).toBe(false);
+      expect(remaining.overspentBy).toBe(0);
+    });
+
+    it('lets remaining go negative rather than clamping it, and says by how much', () => {
+      const remaining = budgetRemaining({ amountLimit: 3000, amountSpent: 3200 });
+
+      expect(remaining.left).toBe(-200);
+      expect(remaining.overspent).toBe(true);
+      expect(remaining.overspentBy).toBe(200);
+    });
+
+    it('reads zero spent as the whole ceiling remaining', () => {
+      const remaining = budgetRemaining({ amountLimit: 50000, amountSpent: 0 });
+
+      expect(remaining.left).toBe(50000);
+      expect(remaining.overspent).toBe(false);
+      expect(remaining.overspentBy).toBe(0);
+    });
+
+    it('keeps remaining cent-exact where a bare subtraction would drift', () => {
+      // 20000.10 - 12400.20 is 7599.899999999999 with IEEE 754; a balance-class
+      // figure (ADR 0006) must not be shown that.
+      const remaining = budgetRemaining({
+        amountLimit: 20000.1,
+        amountSpent: 12400.2,
+      });
+
+      expect(remaining.left).toBe(7599.9);
     });
   });
 });

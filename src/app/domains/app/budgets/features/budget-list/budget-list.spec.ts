@@ -11,12 +11,12 @@ import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { CategoriesService } from '@/app/domains/app/categories/categories.service';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
-import { Budget } from '../../data/budget';
+import { Budget, BudgetWithSpend } from '../../data/budget';
 import { BudgetsService } from '../../data/budgets.service';
 import BudgetList from './budget-list';
 
-/** A live monthly Budget on Groceries. */
-const GROCERIES: Budget = {
+/** A live monthly Budget on Groceries, a little over half spent. */
+const GROCERIES: BudgetWithSpend = {
   id: 1,
   name: 'Groceries',
   amountLimit: 20000,
@@ -24,10 +24,16 @@ const GROCERIES: Budget = {
   startDate: new Date(2026, 0, 1),
   endDate: null,
   categoryId: 10,
+  amountSpent: 12400,
+  cycleStart: new Date(2026, 7, 1),
+  cycleEnd: new Date(2026, 7, 31),
 };
 
-/** A live weekly Budget over all spending — sorts after "Groceries" by name. */
-const TRANSPORT: Budget = {
+/**
+ * A live weekly Budget over all spending, spent past its ceiling — sorts after
+ * "Groceries" by name.
+ */
+const TRANSPORT: BudgetWithSpend = {
   id: 2,
   name: 'Transport',
   amountLimit: 3000,
@@ -35,10 +41,13 @@ const TRANSPORT: Budget = {
   startDate: new Date(2026, 5, 1),
   endDate: null,
   categoryId: null,
+  amountSpent: 3200,
+  cycleStart: new Date(2026, 7, 24),
+  cycleEnd: new Date(2026, 7, 30),
 };
 
-/** Starts next month — not yet started as of the pinned "today". */
-const HOLIDAYS: Budget = {
+/** Starts in December — not yet started as of the "today" in context. */
+const HOLIDAYS: BudgetWithSpend = {
   id: 3,
   name: 'Holidays',
   amountLimit: 50000,
@@ -46,10 +55,13 @@ const HOLIDAYS: Budget = {
   startDate: new Date(2026, 11, 1),
   endDate: null,
   categoryId: 10,
+  amountSpent: 0,
+  cycleStart: new Date(2026, 11, 1),
+  cycleEnd: new Date(2026, 11, 31),
 };
 
-/** Ended in the past — finished. */
-const SUMMER: Budget = {
+/** Ended in the past — finished — and its final Cycle came in under. */
+const SUMMER: BudgetWithSpend = {
   id: 4,
   name: 'Summer trip',
   amountLimit: 40000,
@@ -57,6 +69,9 @@ const SUMMER: Budget = {
   startDate: new Date(2026, 3, 1),
   endDate: new Date(2026, 6, 31),
   categoryId: 10,
+  amountSpent: 38000,
+  cycleStart: new Date(2026, 6, 1),
+  cycleEnd: new Date(2026, 6, 31),
 };
 
 const CATEGORY_NAMES: ReadonlyMap<number, string> = new Map([[10, 'Food']]);
@@ -164,7 +179,7 @@ describe('BudgetList', () => {
   }
 
   it('shows that it is working while the load is in flight, then the list', async () => {
-    const pending = new Subject<Budget[]>();
+    const pending = new Subject<BudgetWithSpend[]>();
     const { fixture, text } = setup(() => pending.asObservable());
 
     expect(text()).toContain('Loading your budgets…');
@@ -216,6 +231,7 @@ describe('BudgetList', () => {
     expect(body).toContain(formatPeso(20000));
     expect(body).toContain('Monthly');
     expect(body).toContain('Food');
+    expect(body).toContain('Starts');
     expect(body).toContain('2026');
   });
 
@@ -225,17 +241,65 @@ describe('BudgetList', () => {
     expect(text()).toContain('All spending');
   });
 
-  it('does not render a Cycle window or a progress bar', () => {
-    const { fixture, text } = setup(() => of([GROCERIES]));
+  it('shows a live Budget spent against its ceiling, and what is left', () => {
+    const { text } = setup(() => of([GROCERIES]));
 
-    expect(text().toLowerCase()).not.toContain('cycle');
-    expect(text()).not.toContain('Spent');
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('progress')
-    ).toBeNull();
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[role="progressbar"]')
-    ).toBeNull();
+    const body = text();
+    expect(body).toContain(`${formatPeso(12400)} of ${formatPeso(20000)}`);
+    expect(body).toContain(`${formatPeso(7600)} left`);
+  });
+
+  it('spells out the Cycle the Spent figure covers', () => {
+    const { text } = setup(() => of([GROCERIES]));
+
+    // cycleStart 1 Aug 2026, cycleEnd 31 Aug 2026.
+    expect(text()).toContain('1 Aug');
+    expect(text()).toContain('31 Aug 2026');
+  });
+
+  it('shows an overspent Budget by how much it is over — not clamped, and not "left"', () => {
+    const { text } = setup(() => of([TRANSPORT]));
+
+    const body = text();
+    // amountSpent 3200 against a 3000 ceiling.
+    expect(body).toContain(`${formatPeso(200)} over`);
+    expect(body).not.toContain('left');
+  });
+
+  it('marks the overspend with the semantic expense token, but it reads without colour', () => {
+    const { fixture } = setup(() => of([TRANSPORT]));
+
+    const over = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('span')
+    ).find((el) => (el.textContent ?? '').includes('over'));
+    expect(over).toBeTruthy();
+    // Colour is carried by the token, and the word "over" carries it too.
+    expect(over!.className).toContain('text-expense');
+    expect(over!.textContent).toContain('over');
+  });
+
+  it('tells a not-yet-started Budget when it starts, not "₱0 spent"', () => {
+    const { text } = setup(() => of([HOLIDAYS]));
+
+    const body = text();
+    expect(body).toContain('Starts');
+    expect(body).not.toContain(formatPeso(0));
+    expect(body).not.toContain('left');
+    // No spend block at all until it is live — not even the Cycle window.
+    expect(body.toLowerCase()).not.toContain('cycle');
+  });
+
+  it('renders a finished Budget as history — final Cycle total, and "under" not "left"', () => {
+    const { text } = setup(() => of([SUMMER]));
+
+    const body = text();
+    expect(body).toContain('Final cycle');
+    expect(body).toContain(`${formatPeso(38000)} of ${formatPeso(40000)}`);
+    // Framed as history: nothing more can be spent against it, so "under" the
+    // ceiling rather than "left" to spend — but the figure is still there, so
+    // the person does not have to subtract.
+    expect(body).toContain(`${formatPeso(2000)} under`);
+    expect(body).not.toContain(`${formatPeso(2000)} left`);
   });
 
   it('tells a Profile with no Budgets what a Budget is for', () => {
@@ -341,9 +405,10 @@ describe('BudgetList', () => {
       expect(dialog()).toBeNull();
     });
 
-    it('on a successful create, closes the dialog, shows the Budget, then re-reads (ADR 0006)', async () => {
+    it('on a successful create, closes the dialog, then re-reads so the Budget lands with its Cycle figures (ADR 0006)', async () => {
       let attempt = 0;
-      const created: Budget = {
+      // The write endpoint hands back the bare Budget…
+      const createdBare: Budget = {
         id: 9,
         name: 'Dining out',
         amountLimit: 8000,
@@ -352,11 +417,18 @@ describe('BudgetList', () => {
         endDate: null,
         categoryId: null,
       };
+      // …and only the re-read carries the Spent figure and Cycle window.
+      const createdRow: BudgetWithSpend = {
+        ...createdBare,
+        amountSpent: 0,
+        cycleStart: new Date(2026, 7, 1),
+        cycleEnd: new Date(2026, 7, 31),
+      };
       const list = vi.fn(() => {
         attempt += 1;
-        return attempt === 1 ? of([GROCERIES]) : of([GROCERIES, created]);
+        return attempt === 1 ? of([GROCERIES]) : of([GROCERIES, createdRow]);
       });
-      const create = vi.fn(() => of(created));
+      const create = vi.fn(() => of(createdBare));
       const { fixture, text, dialog } = setup(
         list as unknown as BudgetsService['list'],
         { create: create as unknown as BudgetsService['create'] }
