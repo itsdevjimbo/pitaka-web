@@ -541,7 +541,7 @@ describe('AccountDetail', () => {
       isActive: false,
     };
     const EXPENSE_CATEGORIES: Category[] = [
-      { id: 1, name: 'Groceries', kind: 'expense' },
+      { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
     ];
 
     async function openRecordDialog(
@@ -684,9 +684,9 @@ describe('AccountDetail', () => {
 
   describe('refile, in a dialog', () => {
     const CATEGORIES: Category[] = [
-      { id: 1, name: 'Groceries', kind: 'expense' },
-      { id: 2, name: 'Salary', kind: 'income' },
-      { id: 3, name: 'Rent', kind: 'expense' },
+      { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
+      { id: 2, name: 'Salary', kind: 'income', isActive: true },
+      { id: 3, name: 'Rent', kind: 'expense', isActive: true },
     ];
 
     /** A filed, noted, tagged expense — the row the menu's Refile acts on. */

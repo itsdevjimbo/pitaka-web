@@ -47,9 +47,9 @@ const COULD_NOT_RECORD =
   'Something went wrong recording this transaction. Please try again.';
 
 const CATEGORIES: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense' },
-  { id: 2, name: 'Salary', kind: 'income' },
-  { id: 3, name: 'Rent', kind: 'expense' },
+  { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
+  { id: 2, name: 'Salary', kind: 'income', isActive: true },
+  { id: 3, name: 'Rent', kind: 'expense', isActive: true },
 ];
 
 const RECORDED: Transaction = {

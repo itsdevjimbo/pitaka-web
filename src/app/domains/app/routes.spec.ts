@@ -59,7 +59,7 @@ describe('the app area routes', () => {
         },
         {
           provide: CategoriesService,
-          useValue: { list: () => of([]) },
+          useValue: { list: () => of([]), all: () => of([]), names: () => of(new Map()) },
         },
       ],
     });

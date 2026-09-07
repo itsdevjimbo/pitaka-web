@@ -42,9 +42,9 @@ const COULD_NOT_ADJUST =
   'Something went wrong adjusting your budget. Please try again.';
 
 const CATEGORIES: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense' },
-  { id: 2, name: 'Salary', kind: 'income' },
-  { id: 3, name: 'Rent', kind: 'expense' },
+  { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
+  { id: 2, name: 'Salary', kind: 'income', isActive: true },
+  { id: 3, name: 'Rent', kind: 'expense', isActive: true },
 ];
 
 /** The Budget under the form: a live monthly Groceries Budget on Category 1. */
