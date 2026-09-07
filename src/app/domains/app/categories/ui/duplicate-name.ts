@@ -3,8 +3,8 @@ import { ApiError } from '@/app/core/api';
 import { BoundServerError } from '@/app/core/forms';
 
 /**
- * The one wording for a duplicate Category name, shared by the inline add field
- * and the rename dialog. It names the cross-kind rule on purpose (#107): the
+ * The one wording for a duplicate Category name, shared by the add dialog and
+ * the rename dialog. It names the cross-kind rule on purpose (#107): the
  * API's uniqueness check spans both kinds and ignores Pitaka-supplied names, so
  * a generic "that name is taken" sends a person hunting through the Expense pane
  * for a name that is really sitting in Income.
@@ -14,7 +14,7 @@ export function duplicateCategoryNameMessage(name: string): string {
 }
 
 /**
- * The add field and the rename form re-file the same failure the same way: the
+ * The add form and the rename form re-file the same failure the same way: the
  * only `409` these endpoints raise is a duplicate name, worded across kinds and
  * bound under the name control. This is that shared branch — it returns the
  * binding to hand back from a `submit()` action, or `null` when the error is

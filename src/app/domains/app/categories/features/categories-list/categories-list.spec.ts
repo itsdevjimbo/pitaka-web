@@ -235,35 +235,78 @@ describe('CategoriesList', () => {
     expect(text()).toContain('Groceries');
   });
 
-  it('creates through the add field with the pane’s kind, then re-reads', async () => {
-    const created = cat({ id: 20, name: 'Holidays' });
-    let attempt = 0;
-    const readAll = vi.fn(() => {
-      attempt += 1;
-      return attempt === 1 ? of(EVERYTHING) : of([...EVERYTHING, created]);
+  describe('create, in a dialog', () => {
+    it('opens a dialog whose title states the pane’s kind, with no kind control', async () => {
+      const { fixture, pane, overlayText } = setup(() => of(EVERYTHING));
+
+      pane('Expense').button('Add expense category')!.click();
+      await settle(fixture);
+
+      expect(overlayText()).toContain('New expense category');
+      expect(overlayText()).not.toContain('Kind');
+      expect(
+        overlay().querySelector<HTMLInputElement>('#add-category-name')!.value
+      ).toBe('');
     });
-    const create = vi.fn(() => of(created));
-    const { fixture, pane } = setup(
-      readAll as unknown as CategoriesService['readAll'],
-      { create: create as unknown as CategoriesService['create'] }
-    );
 
-    const input = pane('Expense').el.querySelector<HTMLInputElement>(
-      '#add-expense-category'
-    )!;
-    input.value = 'Holidays';
-    input.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    pane('Expense')
-      .el.querySelector<HTMLButtonElement>(
-        'button[aria-label="Add expense category"]'
-      )!
-      .click();
-    await settle(fixture);
+    it('creates with the pane’s kind, then re-reads', async () => {
+      const created = cat({ id: 20, name: 'Holidays' });
+      let attempt = 0;
+      const readAll = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1 ? of(EVERYTHING) : of([...EVERYTHING, created]);
+      });
+      const create = vi.fn(() => of(created));
+      const { fixture, pane } = setup(
+        readAll as unknown as CategoriesService['readAll'],
+        { create: create as unknown as CategoriesService['create'] }
+      );
 
-    expect(create).toHaveBeenCalledWith({ name: 'Holidays', kind: 'expense' });
-    expect(readAll).toHaveBeenCalledTimes(2);
-    expect(pane('Expense').text()).toContain('Holidays');
+      pane('Expense').button('Add expense category')!.click();
+      await settle(fixture);
+      const input = overlay().querySelector<HTMLInputElement>(
+        '#add-category-name'
+      )!;
+      input.value = 'Holidays';
+      input.dispatchEvent(new Event('input'));
+      await settle(fixture);
+      overlayButton('Add category').click();
+      await settle(fixture);
+
+      expect(create).toHaveBeenCalledWith({ name: 'Holidays', kind: 'expense' });
+      expect(readAll).toHaveBeenCalledTimes(2);
+      expect(pane('Expense').text()).toContain('Holidays');
+    });
+
+    it('shows a duplicate name its cross-kind message and keeps the dialog open', async () => {
+      const create = vi.fn(() =>
+        throwError(
+          () =>
+            new ApiError('A category with this name already exists.', 409, {
+              name: ['A category with this name already exists.'],
+            })
+        )
+      );
+      const { fixture, pane, overlayText } = setup(() => of(EVERYTHING), {
+        create: create as unknown as CategoriesService['create'],
+      });
+
+      pane('Income').button('Add income category')!.click();
+      await settle(fixture);
+      const input = overlay().querySelector<HTMLInputElement>(
+        '#add-category-name'
+      )!;
+      input.value = 'Groceries';
+      input.dispatchEvent(new Event('input'));
+      await settle(fixture);
+      overlayButton('Add category').click();
+      await settle(fixture);
+
+      expect(overlay().querySelector('[role="dialog"]')).not.toBeNull();
+      expect(overlayText()).toContain(
+        'You already have a category called “Groceries”'
+      );
+    });
   });
 
   it('retires directly with no confirmation and acknowledges the move inline', async () => {

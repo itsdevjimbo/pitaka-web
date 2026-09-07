@@ -20,7 +20,7 @@ const REFRESH_FAILED =
  * side on desktop and stack on phone — the split is a permanent structural fact
  * (a Category's kind is settled at creation), made spatial so 27 expense rows
  * cannot bury Income below the fold. Each {@link CategoryPane} owns its own
- * count, search, Active/Retired/All switch, inline add field and rows.
+ * count, search, Active/Retired/All switch, Add button and rows.
  *
  * The screen reads **cold** — `readAll()`, whole-set and cache-bypassing — and
  * invalidates the shared Categories cache through every write without ever

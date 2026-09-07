@@ -12,11 +12,16 @@
     </span>
   </header>
 
-  <!-- Create: the pane is a kind, so no dialog and no kind question -->
-  <categories-add-category-field
-    [kind]="kind()"
-    (created)="onCreated()"
-  />
+  <!-- Create: a dialog, seeded with this pane's kind -->
+  <button
+    matButton="filled"
+    type="button"
+    class="self-start"
+    (click)="openAdd()"
+  >
+    <mat-icon svgIcon="plus" />
+    Add {{ heading().toLowerCase() }} category
+  </button>
 
   <!-- Search -->
   <div class="relative">

@@ -18,7 +18,7 @@ import { RowNotice } from '@/app/core/notices';
 import { CategoriesService } from '../data/categories.service';
 import { Category, CategoryKind } from '../data/category';
 import { CategoryInUseError } from '../data/category-errors';
-import { AddCategoryField } from './add-category-field';
+import { AddCategoryDialog } from './add-category-dialog';
 import { RenameCategoryDialog } from './rename-category-dialog';
 
 /** Which slice of the pane's kind is on screen. Retired is never hidden as an option. */
@@ -64,8 +64,8 @@ type MovedAck = {
 
 /**
  * One side of the Categories screen — Expense or Income — with everything that
- * side owns: a count, a text search, an Active/Retired/All switch, the inline
- * add field pinned at the top, and the rows.
+ * side owns: a count, a text search, an Active/Retired/All switch, an *Add*
+ * button that opens the {@link AddCategoryDialog} for this kind, and the rows.
  *
  * Rows are a name, badges, and a per-row action menu — nothing more. Ordering is
  * this client's, not the wire's: alphabetical by name with retired sunk to the
@@ -92,7 +92,6 @@ type MovedAck = {
     MatIconModule,
     MatMenuModule,
     RowNotice,
-    AddCategoryField,
   ],
 })
 export class CategoryPane {
@@ -241,10 +240,27 @@ export class CategoryPane {
     this.confirmingDeleteId.set(null);
   }
 
-  /** A new Category was created in the add field: re-read so it lands in order. */
-  protected onCreated(): void {
+  /**
+   * Open the *New category* dialog for this pane, handed its kind. A successful
+   * create re-reads the list so the row lands in order; Cancel, the close
+   * control and Escape do nothing.
+   */
+  protected openAdd(): void {
+    this.notice.set(null);
+    this.confirmingDeleteId.set(null);
     this.moved.set(null);
-    this.changed.emit();
+
+    this.dialog
+      .open<AddCategoryDialog, CategoryKind, Category>(AddCategoryDialog, {
+        data: this.kind(),
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((created) => {
+        if (created) {
+          this.changed.emit();
+        }
+      });
   }
 
   /**
