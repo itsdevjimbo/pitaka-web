@@ -57,9 +57,14 @@ describe('CategoriesList', () => {
 
   /** The pane section element whose heading is `Expense` or `Income`. */
   function paneFor(fixture: ComponentFixture<CategoriesList>, heading: string) {
+    const headingText = (h2: Element | null) =>
+      Array.from(h2?.childNodes ?? [])
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent?.trim())
+        .join('');
     const section = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('section')
-    ).find((el) => el.querySelector('h2')?.textContent?.trim() === heading);
+    ).find((el) => headingText(el.querySelector('h2')) === heading);
     if (!section) {
       throw new Error(`No pane headed "${heading}"`);
     }
@@ -73,6 +78,10 @@ describe('CategoriesList', () => {
       actionsFor: (name: string) =>
         section.querySelector<HTMLButtonElement>(
           `button[aria-label="Actions for ${name}"]`
+        ),
+      addButton: () =>
+        section.querySelector<HTMLButtonElement>(
+          `button[aria-label^="Add "][aria-label$=" category"]`
         ),
       switchTo: (label: 'Active' | 'Retired' | 'All') => {
         const b = Array.from(section.querySelectorAll('button')).find(
@@ -130,13 +139,17 @@ describe('CategoriesList', () => {
     expect(pane('Expense').text()).toContain('Rent');
     expect(pane('Expense').text()).not.toContain('Motoring');
     expect(
-      pane('Expense').el.querySelector('header span')?.textContent?.trim()
+      pane('Expense')
+        .el.querySelector('header span')
+        ?.textContent?.replace(/\D/g, '')
     ).toBe('3');
 
     expect(pane('Income').text()).toContain('Salary');
     expect(pane('Income').text()).toContain('Gifts');
     expect(
-      pane('Income').el.querySelector('header span')?.textContent?.trim()
+      pane('Income')
+        .el.querySelector('header span')
+        ?.textContent?.replace(/\D/g, '')
     ).toBe('2');
   });
 
@@ -239,7 +252,7 @@ describe('CategoriesList', () => {
     it('opens a dialog whose title states the pane’s kind, with no kind control', async () => {
       const { fixture, pane, overlayText } = setup(() => of(EVERYTHING));
 
-      pane('Expense').button('Add expense category')!.click();
+      pane('Expense').addButton()!.click();
       await settle(fixture);
 
       expect(overlayText()).toContain('New expense category');
@@ -262,7 +275,7 @@ describe('CategoriesList', () => {
         { create: create as unknown as CategoriesService['create'] }
       );
 
-      pane('Expense').button('Add expense category')!.click();
+      pane('Expense').addButton()!.click();
       await settle(fixture);
       const input = overlay().querySelector<HTMLInputElement>(
         '#add-category-name'
@@ -291,7 +304,7 @@ describe('CategoriesList', () => {
         create: create as unknown as CategoriesService['create'],
       });
 
-      pane('Income').button('Add income category')!.click();
+      pane('Income').addButton()!.click();
       await settle(fixture);
       const input = overlay().querySelector<HTMLInputElement>(
         '#add-category-name'

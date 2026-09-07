@@ -17,6 +17,7 @@
     type="button"
     class="self-start"
     (click)="openAdd()"
+    [attr.aria-label]="'Add ' + heading().toLowerCase() + ' category'"
     [matTooltip]="'Add ' + heading().toLowerCase() + ' category'"
   >
     <mat-icon svgIcon="plus" />
