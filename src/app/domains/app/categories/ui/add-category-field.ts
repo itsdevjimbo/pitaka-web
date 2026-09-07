@@ -1,4 +1,11 @@
-import { Component, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import {
   form,
   FormField,
@@ -36,9 +43,12 @@ const COULD_NOT_ADD =
  * required failure, or — folded onto the field rather than lost — anything the
  * server could not attribute. There is no banner and no snackbar: the
  * duplicate-name message only reads right next to the field being judged. A
- * successful create emits the row and clears the field; a failed one keeps what
- * was typed. `submit()` refuses re-entry and the button is disabled in flight,
- * so an impatient double-press sends one request.
+ * successful create emits the row, clears the field, resets its touched/dirty
+ * state so the emptied `required` field does not flash "Enter a name", and drops
+ * focus so the pane is at rest rather than inviting the next name; a failed one
+ * keeps what was typed and the cursor where it was. `submit()` refuses re-entry
+ * and the button is disabled in flight, so an impatient double-press sends one
+ * request.
  */
 @Component({
   selector: 'categories-add-category-field',
@@ -54,6 +64,7 @@ const COULD_NOT_ADD =
 export class AddCategoryField {
   // Dependencies
   private service = inject(CategoriesService);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   // Inputs
   readonly kind = input.required<CategoryKind>();
@@ -89,6 +100,13 @@ export class AddCategoryField {
           );
           this.created.emit(created);
           this.model.set({ name: '' });
+          // Clear the value's touched/dirty trail so the now-empty `required`
+          // field does not immediately show "Enter a name".
+          this.addForm().reset();
+          // Let the pane rest: drop focus off whichever control here submitted —
+          // the field on an Enter, the add button on a click — rather than
+          // holding the cursor for the next name.
+          this.blurWithin();
           return undefined;
         } catch (error) {
           this.addForm().markAsTouched();
@@ -126,5 +144,16 @@ export class AddCategoryField {
         }
       },
     });
+  }
+
+  /** Blur the focused element if it belongs to this field — a no-op otherwise. */
+  private blurWithin(): void {
+    const focused = document.activeElement;
+    if (
+      focused instanceof HTMLElement &&
+      this.host.nativeElement.contains(focused)
+    ) {
+      focused.blur();
+    }
   }
 }

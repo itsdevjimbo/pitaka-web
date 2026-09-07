@@ -59,6 +59,16 @@ describe('AddCategoryField', () => {
       .map((error) => error.message);
   }
 
+  function nameInputEl(fixture: { nativeElement: HTMLElement }) {
+    return fixture.nativeElement.querySelector('input') as HTMLInputElement;
+  }
+
+  function addButtonEl(fixture: { nativeElement: HTMLElement }) {
+    return fixture.nativeElement.querySelector(
+      'button[type="submit"]'
+    ) as HTMLButtonElement;
+  }
+
   it('creates with the pane’s kind, sends the trimmed name, emits the row, and clears the field', async () => {
     const create = vi.fn((_category) => of(CREATED));
     const { fixture, cmp } = setup(
@@ -74,6 +84,63 @@ describe('AddCategoryField', () => {
     expect(create).toHaveBeenCalledWith({ name: 'Holidays', kind: 'income' });
     expect(emitted).toEqual([CREATED]);
     expect(cmp.model().name).toBe('');
+  });
+
+  it('returns the field to untouched and pristine after a create, so no “Enter a name” flashes on the now-empty field', async () => {
+    const { fixture, cmp } = setup(() => of(CREATED));
+
+    cmp.model.set({ name: 'Holidays' });
+    cmp.addForm.name().markAsDirty();
+    cmp.addForm.name().markAsTouched();
+    await submitAndSettle(fixture, cmp);
+
+    expect(cmp.model().name).toBe('');
+    expect(cmp.addForm.name().touched()).toBe(false);
+    expect(cmp.addForm.name().dirty()).toBe(false);
+    // The emptied `required` field is invalid again, but untouched — so the
+    // rendered error stays silent rather than flashing on the fresh field.
+    expect(
+      fixture.nativeElement.querySelector('mat-error')?.textContent?.trim() ?? ''
+    ).toBe('');
+  });
+
+  it('drops focus from the name field once an Enter-submitted create lands', async () => {
+    const { fixture, cmp } = setup(() => of(CREATED));
+    const input = nameInputEl(fixture);
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    cmp.model.set({ name: 'Holidays' });
+    await submitAndSettle(fixture, cmp);
+
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it('drops focus from the add button once a clicked create lands', async () => {
+    const { fixture, cmp } = setup(() => of(CREATED));
+    const button = addButtonEl(fixture);
+    cmp.model.set({ name: 'Holidays' });
+    fixture.detectChanges();
+    button.focus();
+    expect(document.activeElement).toBe(button);
+
+    await submitAndSettle(fixture, cmp);
+
+    expect(document.activeElement).not.toBe(button);
+  });
+
+  it('leaves the typed text and the focus alone when the create fails', async () => {
+    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
+    const input = nameInputEl(fixture);
+    const blur = vi.spyOn(input, 'blur');
+    input.focus();
+
+    cmp.model.set({ name: 'Brokerage' });
+    await submitAndSettle(fixture, cmp);
+
+    expect(cmp.model().name).toBe('Brokerage');
+    expect(blur).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(input);
   });
 
   it('blocks a submission with no name and never calls the service', async () => {
