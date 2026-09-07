@@ -1,0 +1,79 @@
+<div class="mx-auto flex w-full max-w-4xl flex-col gap-y-6 p-4 sm:p-8">
+  <!-- Heading -->
+  <header class="flex flex-col gap-y-1">
+    <h1 class="text-2xl font-bold tracking-tight">Categories</h1>
+    <p class="text-neutral-500 dark:text-neutral-400">
+      The labels you file income and expenses under.
+    </p>
+  </header>
+
+  @if (loading()) {
+    <!-- Slow load: show that it is working -->
+    <div
+      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+      role="status"
+    >
+      <mat-icon
+        class="size-6 animate-spin"
+        svgIcon="loader-circle"
+      />
+      <span>Loading your categories…</span>
+    </div>
+  } @else if (errorMessage(); as message) {
+    <!-- Failed load: one explanation, one retry, panes withheld -->
+    <div
+      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
+      role="alert"
+    >
+      <mat-icon
+        class="size-8 text-neutral-400"
+        svgIcon="circle-alert"
+      />
+      <p class="max-w-sm text-neutral-600 dark:text-neutral-300">
+        {{ message }}
+      </p>
+      <button
+        matButton="filled"
+        (click)="load()"
+      >
+        <mat-icon svgIcon="refresh-cw" />
+        Try again
+      </button>
+    </div>
+  } @else {
+    @if (refreshError(); as message) {
+      <!-- The re-read after a write failed: rows stay, this refreshes them -->
+      <div
+        class="flex flex-col items-center gap-y-3 rounded-xl border border-neutral-200 px-6 py-4 text-center dark:border-neutral-800"
+        role="alert"
+      >
+        <p class="max-w-sm text-sm text-neutral-600 dark:text-neutral-300">
+          {{ message }}
+        </p>
+        <button
+          matButton="outlined"
+          (click)="reload()"
+        >
+          <mat-icon svgIcon="refresh-cw" />
+          Try again
+        </button>
+      </div>
+    }
+
+    <!-- Two panes: side by side on desktop, stacked on phone -->
+    <div class="grid gap-4 sm:grid-cols-2 sm:items-start">
+      <categories-category-pane
+        kind="expense"
+        [categories]="expenseCategories()"
+        [refreshFailed]="refreshError() !== null"
+        (changed)="reload()"
+      />
+      <categories-category-pane
+        kind="income"
+        [categories]="incomeCategories()"
+        [refreshFailed]="refreshError() !== null"
+        (changed)="reload()"
+      />
+    </div>
+  }
+</div>

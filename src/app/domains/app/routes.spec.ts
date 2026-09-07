@@ -8,7 +8,7 @@ import { routes } from '@/app/app.routes';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import { AccountsService } from './accounts';
-import { CategoriesService } from './categories/categories.service';
+import { CategoriesService } from './categories';
 import { AppLayout } from './layout/layout';
 import { TransactionsService } from './transactions';
 
@@ -74,5 +74,30 @@ describe('the app area routes', () => {
     expect(
       (harness.routeNativeElement as HTMLElement).textContent
     ).toContain('No transactions yet');
+  });
+
+  it('resolves /app/categories to the Categories screen, lazily loaded', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideIcons(),
+        { provide: Session, useValue: { isAuthenticated: () => true } },
+        { provide: AccountsService, useValue: { list: () => of([]) } },
+        { provide: CategoriesService, useValue: { readAll: () => of([]) } },
+      ],
+    });
+    TestBed.overrideComponent(AppLayout, {
+      set: { template: '<router-outlet />', imports: [RouterOutlet] },
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/categories');
+
+    expect(TestBed.inject(Router).url).toBe('/app/categories');
+    expect(
+      (harness.routeNativeElement as HTMLElement).textContent
+    ).toContain('Expense');
   });
 });

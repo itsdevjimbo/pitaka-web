@@ -31,6 +31,11 @@ const routes: Routes = [
         loadComponent: () =>
           import('./budgets/features/budget-list/budget-list'),
       },
+      {
+        path: 'categories',
+        loadComponent: () =>
+          import('./categories/features/categories-list/categories-list'),
+      },
     ],
   },
 ];

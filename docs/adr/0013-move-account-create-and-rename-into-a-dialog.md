@@ -66,3 +66,38 @@ configures close behaviour itself.
 - `withOverlayContainer()` joins `withPinnedTimezone()` and `TEST_API_BASE_URL`
   as a spec-support seam: it reaches the overlay container the dialog renders
   into and tears it down after each test.
+
+## Amendment (2026-09-08): Category create is a dialog too
+
+Issue #107 shipped the Categories screen with **create as an inline field**
+pinned to the top of each pane, and argued explicitly against a dialog: a pane
+*is* a kind, so there is no income-or-expense question to ask, and — unlike an
+Account, which needs a type and a starting balance — nothing else to fill in
+either. A one-field dialog looked like ceremony.
+
+That is now reversed. Adding a Category opens `AddCategoryDialog`: the same
+`DialogShell`-plus-form shape this ADR fixed, opened from an *Add* control on
+the pane. The kind stays implicit — the dialog is handed the pane's kind and
+states it in the title ("New expense category"), exactly as the rename dialog
+does — so no kind control appears. `AddCategoryForm` sits beside
+`RenameCategoryForm` as a near-mirror.
+
+Why the reversal:
+
+- **The original argument proved the wrong thing.** "No kind question to ask"
+  does not imply "no dialog": the dialog omits the kind question too. What was
+  left was a one-field create that happened to render in the pane instead of
+  over it — and rename, its pair, was already a dialog. Splitting the pair
+  across two shapes cost more than the dialog it saved.
+- **The inline field carried bespoke weight** the dialog form does not: focus
+  and blur choreography after a create, a touched/dirty reset so the emptied
+  `required` field would not flash "Enter a name", and an unattributable error
+  folded onto the name control because the pane had no room for a banner. The
+  dialog form closes on success and shows a banner like every other form in the
+  app.
+
+Everything else this ADR settles is unchanged and now covers Category create:
+`provideDialogDefaults()`, the `DialogShell` chrome and Escape, nothing
+destructive inside the dialog, a re-read after the successful write (#107,
+ADR 0017 — the screen re-reads cold rather than reconciling a returned figure),
+and `withOverlayContainer()` in the specs.

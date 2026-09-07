@@ -15,7 +15,7 @@ import { forkJoin } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
-import { CategoriesService } from '@/app/domains/app/categories/categories.service';
+import { CategoriesService } from '@/app/domains/app/categories';
 import { Budget, BudgetWithSpend, PERIODS } from '../../data/budget';
 import {
   budgetPhase,

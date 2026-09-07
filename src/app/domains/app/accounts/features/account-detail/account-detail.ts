@@ -15,7 +15,7 @@ import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
-import { CategoriesService } from '@/app/domains/app/categories/categories.service';
+import { CategoriesService } from '@/app/domains/app/categories';
 import {
   RecordTransactionDialog,
   RecordTransactionDialogData,
