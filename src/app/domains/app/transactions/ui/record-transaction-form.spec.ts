@@ -45,11 +45,21 @@ type RecordFormInternals = {
 const COULD_NOT_RECORD =
   'Something went wrong recording this transaction. Please try again.';
 
+/** What `list()` returns — active only, the filing rule (#108). */
 const CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
+
+/** A since-retired expense Category — in the whole set `all()` would carry, never in `list()`. */
+const DINING_RETIRED: Category = {
+  id: 7,
+  name: 'Dining out',
+  kind: 'expense',
+  isActive: false,
+  isDefault: false,
+};
 
 const RECORDED: Transaction = {
   id: 99,
@@ -82,18 +92,21 @@ const AT_1405 = new Date(2000, 0, 1, 14, 5);
 const COMBINED = new Date(2026, 7, 29, 14, 5, 0, 0);
 
 describe('RecordTransactionForm', () => {
+  const allCategories = vi.fn(() => of([...CATEGORIES, DINING_RETIRED]));
+
   function setup(
     record: TransactionsService['record'],
     list: CategoriesService['list'] = () => of(CATEGORIES),
     destinations: TransferDestinationAccount[] = DESTINATIONS
   ) {
+    allCategories.mockClear();
     TestBed.configureTestingModule({
       imports: [RecordTransactionForm],
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
         { provide: TransactionsService, useValue: { record } },
-        { provide: CategoriesService, useValue: { list } },
+        { provide: CategoriesService, useValue: { list, all: allCategories } },
       ],
     });
 
@@ -141,6 +154,17 @@ describe('RecordTransactionForm', () => {
     await fixture.whenStable();
 
     expect(cmp.categoryOptions().map((c) => c.id)).toEqual([2]);
+  });
+
+  it('offers no retired Category — the picker is the active-only list(), never a whole-set read (#108)', () => {
+    const list = vi.fn(() => of(CATEGORIES));
+    const { cmp } = setup(vi.fn(), list);
+
+    // The retired Dining out (id 7) sits only in what `all()` would return.
+    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
+    expect(cmp.categoryOptions().map((c) => c.id)).not.toContain(7);
+    expect(list).toHaveBeenCalled();
+    expect(allCategories).not.toHaveBeenCalled();
   });
 
   it('drops a Category left over from the previous direction', async () => {

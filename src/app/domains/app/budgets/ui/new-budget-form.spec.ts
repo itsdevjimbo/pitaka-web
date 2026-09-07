@@ -43,11 +43,21 @@ type NewBudgetInternals = {
 const COULD_NOT_CREATE =
   'Something went wrong creating your budget. Please try again.';
 
+/** What `list()` returns — active only, the filing rule (#108). */
 const CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
+
+/** A since-retired expense Category — in the whole set `all()` would carry, never in `list()`. */
+const DINING_RETIRED: Category = {
+  id: 7,
+  name: 'Dining out',
+  kind: 'expense',
+  isActive: false,
+  isDefault: false,
+};
 
 const CREATED: Budget = {
   id: 12,
@@ -65,17 +75,20 @@ describe('NewBudgetForm', () => {
   const pinTimezone = withPinnedTimezone();
   beforeEach(() => pinTimezone('America/New_York'));
 
+  const allCategories = vi.fn(() => of([...CATEGORIES, DINING_RETIRED]));
+
   function setup(
     create: BudgetsService['create'],
     list: CategoriesService['list'] = () => of(CATEGORIES)
   ) {
+    allCategories.mockClear();
     TestBed.configureTestingModule({
       imports: [NewBudgetForm],
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
         { provide: BudgetsService, useValue: { create } },
-        { provide: CategoriesService, useValue: { list } },
+        { provide: CategoriesService, useValue: { list, all: allCategories } },
       ],
     });
 
@@ -234,6 +247,17 @@ describe('NewBudgetForm', () => {
     const { cmp } = setup(vi.fn());
 
     expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
+  });
+
+  it('offers no retired Category — the picker is the active-only list(), never a whole-set read (#108)', () => {
+    const list = vi.fn(() => of(CATEGORIES));
+    const { cmp } = setup(vi.fn(), list);
+
+    // The retired Dining out (id 7) sits only in what `all()` would return.
+    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
+    expect(cmp.categoryOptions().map((c) => c.id)).not.toContain(7);
+    expect(list).toHaveBeenCalled();
+    expect(allCategories).not.toHaveBeenCalled();
   });
 
   it('fills the start date from the Period once one is chosen, and re-fills when it changes', async () => {

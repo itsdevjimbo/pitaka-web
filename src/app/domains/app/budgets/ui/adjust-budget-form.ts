@@ -24,7 +24,11 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import { CategoriesService, Category } from '@/app/domains/app/categories';
+import {
+  CategoriesService,
+  Category,
+  keepSavedFilingCategory,
+} from '@/app/domains/app/categories';
 import {
   AdjustBudget,
   Budget,
@@ -110,24 +114,40 @@ export class AdjustBudgetForm {
   protected readonly periodOptions = PERIOD_OPTIONS;
   protected readonly allSpending = ALL_SPENDING;
 
-  /** Every Category from the shared cache; narrowed to expenses for the picker. */
+  /**
+   * The **active** Categories from the shared cache, narrowed to expenses for
+   * the picker. This is a filing picker: it offers active Categories only
+   * (#108).
+   */
   private readonly categories = signal<readonly Category[]>([]);
 
   /**
-   * Expense Categories for the picker — a Budget on an income Category reads
-   * zero (ADR 0012) — plus the Budget's current Category if it somehow is not
-   * among them, so a prefilled value is never silently dropped to blank.
+   * The **whole set**, retired included, resolved through `all()` (#106). Used
+   * only to recognise the Budget's *saved* Category when it has since been
+   * retired — the category picker keeps that one selectable so a save cannot
+   * silently drop the narrowing to "All spending" (#108). Retiredness is read
+   * from here, never inferred from the active list (ADR 0017).
+   */
+  private readonly allCategories = signal<readonly Category[]>([]);
+
+  /**
+   * Active expense Categories for the picker — a Budget on an income Category
+   * reads zero (ADR 0012) — plus, at the tail, the Budget's saved Category when
+   * the active list would drop it (since-retired, or the odd non-expense one),
+   * and only while the selection still points at it, so a prefilled value is
+   * never silently dropped to blank on save (#108). A since-retired one is
+   * badged `Retired` off its `isActive` flag in the template.
    */
   protected readonly categoryOptions = computed(() => {
     const expenses = this.categories().filter(
       (category) => category.kind === 'expense'
     );
-    const currentId = this.budget().categoryId;
-    if (currentId === null || expenses.some((c) => c.id === currentId)) {
-      return expenses;
-    }
-    const current = this.categories().find((c) => c.id === currentId);
-    return current ? [...expenses, current] : expenses;
+    return keepSavedFilingCategory(
+      expenses,
+      this.allCategories(),
+      this.budget().categoryId,
+      this.model().categoryId
+    );
   });
 
   protected readonly model = linkedSignal<AdjustBudgetModel>(() => {
@@ -174,6 +194,10 @@ export class AdjustBudgetForm {
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((categories) => this.categories.set(categories));
+    this.categoriesService
+      .all()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((categories) => this.allCategories.set(categories));
   }
 
   save(event: Event): void {

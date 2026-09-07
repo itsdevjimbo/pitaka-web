@@ -126,10 +126,11 @@ export class RecordTransactionForm {
   protected readonly directionOptions = DIRECTION_OPTIONS;
 
   /**
-   * Every Category, each with its `kind`; filtered per direction for the picker.
-   * From the shared reference cache, which the detail screen has already
-   * resolved for the row list before this form can open, so `list()` replays a
-   * settled value rather than making its own request.
+   * The **active** Categories, each with its `kind`; filtered per direction for
+   * the picker. Recording is filing, so it offers active Categories only
+   * (#108). From the shared reference cache, which the detail screen has
+   * already resolved for the row list before this form can open, so `list()`
+   * replays a settled value rather than making its own request.
    */
   private readonly categories = signal<readonly Category[]>([]);
 

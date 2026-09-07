@@ -110,13 +110,22 @@
     against this budget may read differently afterwards.
   </p>
 
-  <!-- Category: "All spending" first; expense Categories only -->
+  <!-- Category: "All spending" first; active expense Categories only, plus the
+       saved one badged `Retired` at the tail if it has since been retired, so
+       a save cannot silently drop the narrowing (#108). -->
   <mat-form-field class="w-full">
     <mat-label>Category</mat-label>
     <mat-select [formField]="budgetForm.categoryId">
       <mat-option [value]="allSpending">All spending</mat-option>
       @for (option of categoryOptions(); track option.id) {
-        <mat-option [value]="option.id">{{ option.name }}</mat-option>
+        <mat-option [value]="option.id">
+          {{ option.name }}
+          @if (!option.isActive) {
+            <span class="text-neutral-500 dark:text-neutral-400">
+              · Retired</span
+            >
+          }
+        </mat-option>
       }
     </mat-select>
     <mat-hint>Leave as “All spending” to watch every expense.</mat-hint>
