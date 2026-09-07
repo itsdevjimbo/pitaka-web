@@ -2,26 +2,26 @@
   class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800"
 >
   <!-- Heading and the switch-scoped count -->
-  <header class="flex items-baseline justify-between gap-x-3">
-    <h2 class="text-lg font-semibold tracking-tight">{{ heading() }}</h2>
-    <span
-      class="text-sm text-neutral-500 tabular-nums dark:text-neutral-400"
-      [attr.aria-label]="count() + ' ' + filter() + ' ' + heading().toLowerCase() + ' categories'"
-    >
-      {{ count() }}
-    </span>
-  </header>
+  <header class="flex items-center justify-between gap-x-3">
+    <h2 class="text-lg font-semibold tracking-tight">{{ heading() }}
+      <span
+        class="text-sm text-neutral-500 tabular-nums dark:text-neutral-400 ml-1.5"
+        [attr.aria-label]="count() + ' ' + filter() + ' ' + heading().toLowerCase() + ' categories'"
+      >
+        ({{ count() }})
+      </span>
+    </h2>
 
-  <!-- Create: a dialog, seeded with this pane's kind -->
   <button
-    matButton="filled"
+    matIconButton
     type="button"
     class="self-start"
     (click)="openAdd()"
+    [matTooltip]="'Add ' + heading().toLowerCase() + ' category'"
   >
     <mat-icon svgIcon="plus" />
-    Add {{ heading().toLowerCase() }} category
   </button>
+  </header>
 
   <!-- Search -->
   <div class="relative">

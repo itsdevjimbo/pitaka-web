@@ -12,6 +12,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { Observable } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { RowNotice } from '@/app/core/notices';
@@ -91,6 +92,7 @@ type MovedAck = {
     MatButtonModule,
     MatIconModule,
     MatMenuModule,
+    MatTooltipModule,
     RowNotice,
   ],
 })
