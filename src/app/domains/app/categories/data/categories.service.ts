@@ -16,8 +16,8 @@ import { CategoryInUseError } from './category-errors';
  * Wire shape of one Category from the API (`e8b8c6e`). `GET /api/categories`
  * returns a collection of these — the person's own Categories plus the ones
  * Pitaka supplies, active and retired mixed together — and `POST`, `PUT /{id}`
- * and `PATCH /{id}/status` each return one. `isDefault` is dropped at the
- * adapter; `id`, `name`, `type` and `isActive` are lifted into {@link Category}.
+ * and `PATCH /{id}/status` each return one. `id`, `name`, `type`, `isActive` and
+ * `isDefault` are lifted into {@link Category}.
  */
 type CategoryResource = {
   id: number;
@@ -227,13 +227,14 @@ const API_TYPE: Record<CategoryKind, CategoryResource['type']> = {
   expense: 'Expense',
 };
 
-/** Keep id, name, `kind` and `isActive`; drop `isDefault`, which nothing above the adapter reads yet. */
+/** Keep id, name, `kind`, `isActive` and `isDefault`; the API sends nothing else the app reads. */
 function toCategory(resource: CategoryResource): Category {
   return {
     id: resource.id,
     name: resource.name,
     kind: KIND[resource.type],
     isActive: resource.isActive,
+    isDefault: resource.isDefault,
   };
 }
 

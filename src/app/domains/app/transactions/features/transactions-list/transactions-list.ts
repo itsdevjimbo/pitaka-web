@@ -7,8 +7,7 @@ import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { forkJoin, Observable, Subject, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AccountsService } from '@/app/domains/app/accounts';
-import { CategoriesService } from '@/app/domains/app/categories/categories.service';
-import { Category } from '@/app/domains/app/categories/category';
+import { CategoriesService, Category } from '@/app/domains/app/categories';
 import {
   activeCriteriaCount,
   Transaction,

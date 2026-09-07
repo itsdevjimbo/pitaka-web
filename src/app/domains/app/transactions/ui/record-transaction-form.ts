@@ -20,8 +20,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTimepickerModule } from '@angular/material/timepicker';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import { CategoriesService } from '@/app/domains/app/categories/categories.service';
-import { Category } from '@/app/domains/app/categories/category';
+import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { combineDateTime } from '../data/combine-date-time';
 import {
   NewTransaction,

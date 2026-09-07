@@ -16,8 +16,7 @@ import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
-import { CategoriesService } from '@/app/domains/app/categories/categories.service';
-import { Category } from '@/app/domains/app/categories/category';
+import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { provideFakeMedia } from '@/testing/media';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Transaction, TransactionSearchResult } from '../../data/transaction';
@@ -51,8 +50,8 @@ function fakeUrl(initial: Record<string, string> = {}) {
 }
 
 const CATEGORY_LIST: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
-  { id: 2, name: 'Salary', kind: 'income', isActive: true },
+  { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+  { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
 ];
 
 const ACCOUNTS = [
@@ -651,8 +650,8 @@ describe('TransactionsList', () => {
 
   describe('refile, from the row menu', () => {
     const CATEGORIES: Category[] = [
-      { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
-      { id: 2, name: 'Salary', kind: 'income', isActive: true },
+      { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+      { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
     ];
 
     function filed(over: Partial<Transaction> = {}): Transaction {

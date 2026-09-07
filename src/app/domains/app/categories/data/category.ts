@@ -5,20 +5,26 @@
  *
  * The hand-written type keeps an id, a name, the income/expense `kind` — since a
  * form that records a Transaction offers only Categories of the chosen direction
- * (ADR 0010) — and `isActive`. That last one is lifted rather than dropped
- * because *Retired* has to be rendered from the wire: a badge on a management
- * row, a `Retired` marker on a filter option. Inferring retiredness from a
- * Category being absent from `list()` was rejected — it silently becomes wrong
- * the first time `list()` narrows for some other reason (ADR 0017).
+ * (ADR 0010) — `isActive`, and `isDefault`. `isActive` is lifted rather than
+ * dropped because *Retired* has to be rendered from the wire: a badge on a
+ * management row, a `Retired` marker on a filter option. Inferring retiredness
+ * from a Category being absent from `list()` was rejected — it silently becomes
+ * wrong the first time `list()` narrows for some other reason (ADR 0017).
  *
- * The API also attaches `isDefault`, which nothing above the adapter reads yet,
- * so it is dropped the way `toAccount` drops an Account's owner id.
+ * `isDefault` is `true` for a Category Pitaka supplies rather than one the person
+ * created. The Categories screen reads it to badge a supplied row and withhold
+ * its action menu — the API Forbids `PUT`, `PATCH` and `DELETE` on those rows
+ * (#107), so the menu would only ever raise a 403. It was dropped until a screen
+ * needed it; the screen that manages the collection is that screen.
  */
 export type Category = {
   id: number;
   name: string;
   kind: CategoryKind;
   isActive: boolean;
+
+  /** `true` when Pitaka supplies the Category; such a row is read-only. */
+  isDefault: boolean;
 };
 
 /**
@@ -39,3 +45,10 @@ export type NewCategory = {
   name: string;
   kind: CategoryKind;
 };
+
+/**
+ * The longest a Category name may be. Mirrors the API's `[MaxLength(255)]` on
+ * both `CreateCategoryRequest.Name` and `UpdateCategoryRequest.Name`, so the
+ * add field and the rename form share one figure.
+ */
+export const CATEGORY_NAME_MAX = 255;

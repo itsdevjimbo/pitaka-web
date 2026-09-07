@@ -24,7 +24,7 @@ function resource(
     id,
     name,
     type: over.type ?? 'Expense',
-    isDefault: over.isDefault ?? true,
+    isDefault: over.isDefault ?? false,
     isActive: over.isActive ?? true,
   };
 }
@@ -95,8 +95,8 @@ describe('CategoriesService', () => {
         ]);
 
       await expect(result).resolves.toEqual([
-        { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
-        { id: 2, name: 'Salary', kind: 'income', isActive: true },
+        { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+        { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
       ]);
     });
 
@@ -111,8 +111,24 @@ describe('CategoriesService', () => {
         ]);
 
       await expect(result).resolves.toEqual([
-        { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
-        { id: 3, name: 'Motoring', kind: 'expense', isActive: false },
+        { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+        { id: 3, name: 'Motoring', kind: 'expense', isActive: false, isDefault: false },
+      ]);
+    });
+
+    it('lifts isDefault through the adapter, so a supplied Category reads as one', async () => {
+      const result = firstValueFrom(service.all());
+
+      http
+        .expectOne(CATEGORIES_URL)
+        .flush([
+          resource(1, 'Groceries', { isDefault: true }),
+          resource(2, 'Holidays', { isDefault: false }),
+        ]);
+
+      await expect(result).resolves.toEqual([
+        { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: true },
+        { id: 2, name: 'Holidays', kind: 'expense', isActive: true, isDefault: false },
       ]);
     });
 
@@ -126,7 +142,7 @@ describe('CategoriesService', () => {
       http.expectNone(CATEGORIES_URL);
       expect(names.get(1)).toBe('Groceries');
       expect(list).toEqual([
-        { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
+        { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
       ]);
     });
 
@@ -142,8 +158,8 @@ describe('CategoriesService', () => {
       ]);
 
       await expect(cold).resolves.toEqual([
-        { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
-        { id: 3, name: 'Motoring', kind: 'expense', isActive: false },
+        { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+        { id: 3, name: 'Motoring', kind: 'expense', isActive: false, isDefault: false },
       ]);
     });
 
@@ -215,6 +231,7 @@ describe('CategoriesService', () => {
         name: 'Holidays',
         kind: 'expense',
         isActive: true,
+        isDefault: false,
       });
     });
 
@@ -273,6 +290,7 @@ describe('CategoriesService', () => {
         name: 'Vacations',
         kind: 'expense',
         isActive: true,
+        isDefault: false,
       });
     });
 
@@ -308,6 +326,7 @@ describe('CategoriesService', () => {
         name: 'Holidays',
         kind: 'expense',
         isActive: false,
+        isDefault: false,
       });
     });
 

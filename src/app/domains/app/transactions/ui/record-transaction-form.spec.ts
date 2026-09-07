@@ -5,8 +5,7 @@ import { provideNativeDateAdapter } from '@angular/material/core';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
-import { CategoriesService } from '@/app/domains/app/categories/categories.service';
-import { Category } from '@/app/domains/app/categories/category';
+import { CategoriesService, Category } from '@/app/domains/app/categories';
 import {
   Transaction,
   TransactionDirection,
@@ -47,9 +46,9 @@ const COULD_NOT_RECORD =
   'Something went wrong recording this transaction. Please try again.';
 
 const CATEGORIES: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
-  { id: 2, name: 'Salary', kind: 'income', isActive: true },
-  { id: 3, name: 'Rent', kind: 'expense', isActive: true },
+  { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+  { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
+  { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
 
 const RECORDED: Transaction = {

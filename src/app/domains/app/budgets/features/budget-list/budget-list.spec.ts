@@ -9,7 +9,7 @@ import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
-import { CategoriesService } from '@/app/domains/app/categories/categories.service';
+import { CategoriesService } from '@/app/domains/app/categories';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Budget, BudgetWithSpend } from '../../data/budget';
 import { BudgetsService } from '../../data/budgets.service';
@@ -113,7 +113,7 @@ describe('BudgetList', () => {
           useValue: {
             names: overrides.names ?? (() => of(CATEGORY_NAMES)),
             // The create dialog's form reads this for its expense-Category picker.
-            list: () => of([{ id: 10, name: 'Food', kind: 'expense', isActive: true }]),
+            list: () => of([{ id: 10, name: 'Food', kind: 'expense', isActive: true, isDefault: false }]),
           },
         },
       ],

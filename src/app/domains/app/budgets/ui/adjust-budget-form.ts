@@ -24,8 +24,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import { CategoriesService } from '@/app/domains/app/categories/categories.service';
-import { Category } from '@/app/domains/app/categories/category';
+import { CategoriesService, Category } from '@/app/domains/app/categories';
 import {
   AdjustBudget,
   Budget,

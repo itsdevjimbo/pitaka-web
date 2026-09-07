@@ -44,18 +44,21 @@ picks *is* the filtering rule, so no call site is trusted to remember it.
   will not enforce this — it accepts a retired Category as a new reference on a
   Transaction, Budget, or Schedule with no error (#98) — so client-side
   filtering is the *only* guard.
-- **`all()`** — cached, **whole set**, carrying `kind` and `isActive`. For the
-  places that must show a retired Category *marked* rather than hidden: the
-  Transactions filter, which governs finding rather than filing (ADR 0016), and
-  a form editing a record whose saved Category has since been retired. `names()`
-  has no `isActive` and `list()` has already dropped the row, so neither can
-  serve these.
+- **`all()`** — cached, **whole set**, carrying `kind`, `isActive` and
+  `isDefault`. For the places that must show a retired Category *marked* rather
+  than hidden: the Transactions filter, which governs finding rather than filing
+  (ADR 0016), and a form editing a record whose saved Category has since been
+  retired. `names()` has no `isActive` and `list()` has already dropped the row,
+  so neither can serve these.
 - **`readAll()`** — **cold** and whole-set, for the Categories screen itself.
   That screen manages the collection, so it re-reads on entry and after every
   write; it invalidates the cache but never reads through it.
 
 The adapter therefore keeps `isActive` rather than dropping it, so *Retired* is
-rendered from the wire and not inferred from an absence.
+rendered from the wire and not inferred from an absence. It also keeps
+`isDefault` (added with the Categories screen, #107): a Pitaka-supplied row is
+badged and its action menu withheld, because the API Forbids every write on it
+and a menu would only ever raise a 403.
 
 ## Consequences
 
