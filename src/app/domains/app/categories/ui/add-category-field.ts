@@ -100,13 +100,8 @@ export class AddCategoryField {
           );
           this.created.emit(created);
           this.model.set({ name: '' });
-          // Clear the value's touched/dirty trail so the now-empty `required`
-          // field does not immediately show "Enter a name".
-          this.addForm().reset();
-          // Let the pane rest: drop focus off whichever control here submitted —
-          // the field on an Enter, the add button on a click — rather than
-          // holding the cursor for the next name.
           this.blurWithin();
+          this.addForm().reset();
           return undefined;
         } catch (error) {
           this.addForm().markAsTouched();

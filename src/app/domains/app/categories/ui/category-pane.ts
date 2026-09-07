@@ -107,6 +107,14 @@ export class CategoryPane {
   /** This kind's whole set — active and retired, supplied and the person's own — in wire order. */
   readonly categories = input.required<readonly Category[]>();
 
+  /**
+   * Set by the screen when the re-read after a write failed: the rows on screen
+   * are now one write stale. It suppresses this pane's "moved" acknowledgement,
+   * whose row is still sitting in view because the re-read that would have
+   * removed it never landed.
+   */
+  readonly refreshFailed = input(false);
+
   // Outputs
 
   /** Fired after any successful write so the screen re-reads (#107). */
@@ -132,6 +140,15 @@ export class CategoryPane {
    * to be seen.
    */
   protected readonly moved = signal<MovedAck | null>(null);
+
+  /**
+   * The "Groceries retired" line as shown: withheld while the re-read that backs
+   * it failed, because the moved row is then still in this view and the screen's
+   * stale-list notice should stand alone rather than be contradicted.
+   */
+  protected readonly movedAck = computed(() =>
+    this.refreshFailed() ? null : this.moved()
+  );
 
   /** "Expense" / "Income" — the pane's heading. */
   protected readonly heading = computed(() =>
@@ -186,13 +203,27 @@ export class CategoryPane {
     () => this.hasSearch() && this.visible().length === 0
   );
 
-  /** Sitting on Retired with nothing retired — the normal case; a distinct, honest message. */
-  protected readonly nothingRetired = computed(
-    () =>
-      !this.hasSearch() &&
-      this.filter() === 'retired' &&
-      this.switched().length === 0
-  );
+  /**
+   * The pane's honest zero state when the emptiness is *not* a search miss: a
+   * line specific to the switch view, never one generic message. `null` when
+   * there are rows. Empty-Retired is the normal case (supplied Categories cannot
+   * be retired); an empty Active view is only reachable with no supplied rows,
+   * but a bare pane reads as a bug, so it gets a line too.
+   */
+  protected readonly emptyMessage = computed<string | null>(() => {
+    if (this.hasSearch() || this.visible().length > 0) {
+      return null;
+    }
+    const kind = this.heading().toLowerCase();
+    switch (this.filter()) {
+      case 'retired':
+        return 'Nothing retired yet.';
+      case 'active':
+        return `No active ${kind} categories.`;
+      default:
+        return `No ${kind} categories yet.`;
+    }
+  });
 
   protected onSearch(value: string): void {
     this.search.set(value);

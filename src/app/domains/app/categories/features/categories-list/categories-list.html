@@ -65,11 +65,13 @@
       <categories-category-pane
         kind="expense"
         [categories]="expenseCategories()"
+        [refreshFailed]="refreshError() !== null"
         (changed)="reload()"
       />
       <categories-category-pane
         kind="income"
         [categories]="incomeCategories()"
+        [refreshFailed]="refreshError() !== null"
         (changed)="reload()"
       />
     </div>

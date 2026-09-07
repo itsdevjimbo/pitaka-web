@@ -318,6 +318,9 @@ describe('CategoriesList', () => {
 
     expect(text()).toContain('Your change was saved');
     expect(text()).toContain('Rent');
+    // The row is still in the Active list (the re-read that would have removed it
+    // failed), so the "moved to Retired" line must not contradict the stale notice.
+    expect(pane('Expense').text()).not.toContain('find it under Retired');
   });
 
   it('asks on the row before deleting and does not call the service until confirmed', async () => {
@@ -468,6 +471,19 @@ describe('CategoriesList', () => {
     expect(text()).not.toContain('No categories yet');
     expect(pane('Expense').el).not.toBeNull();
     expect(pane('Income').el).not.toBeNull();
+  });
+
+  it('gives an empty Active view an honest line rather than a bare pane', () => {
+    // Every Expense Category of this person's is retired; Income is untouched.
+    const { pane } = setup(() =>
+      of([{ ...GROCERIES, isActive: false }, MOTORING, SALARY, GIFTS])
+    );
+
+    expect(pane('Expense').text()).toContain('No active expense categories');
+    expect(pane('Expense').text()).not.toContain('No categories match');
+    expect(pane('Expense').el.querySelector('li')).toBeNull();
+    // The other pane still lists its rows.
+    expect(pane('Income').text()).toContain('Salary');
   });
 
   it('opens with each pane on Active and an empty search — no filter is carried across entries', () => {
