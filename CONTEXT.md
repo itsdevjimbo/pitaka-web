@@ -45,7 +45,7 @@ _Avoid_: Recurring transaction, auto transaction, scheduled transaction
 ### Lifecycle
 
 **Retire**:
-Taking an Account or a Category out of use while keeping everything it recorded. A retired Account still shows its balance and history, records nothing new, and can be Reactivated. A retired Category still labels the Transactions already filed under it and is no longer offered when filing a new one. A Category supplied by Pitaka cannot be retired.
+Taking an Account or a Category out of use while keeping everything it recorded. A retired Account still shows its balance and history, records nothing new, and can be Reactivated. A retired Category still labels the Transactions already filed under it and is no longer offered when filing a new one, though a record already filed under it keeps showing it. It is still offered when searching: filing and finding are different acts, and history filed under a retired Category has to stay reachable. Retiring a Category does not stop a Schedule: one that already files under it goes on creating Transactions there until the Schedule itself is changed. A Category supplied by Pitaka cannot be retired.
 _Avoid_: Archive, close, deactivate, disable
 
 **Reactivate**:
