@@ -51,8 +51,8 @@ function fakeUrl(initial: Record<string, string> = {}) {
 }
 
 const CATEGORY_LIST: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense' },
-  { id: 2, name: 'Salary', kind: 'income' },
+  { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
+  { id: 2, name: 'Salary', kind: 'income', isActive: true },
 ];
 
 const ACCOUNTS = [
@@ -94,7 +94,7 @@ describe('TransactionsList', () => {
   function setup(
     over: {
       search?: TransactionsService['search'];
-      categoryList?: CategoriesService['list'];
+      categoryRead?: CategoriesService['all'];
       accounts?: AccountsService['list'];
       refile?: TransactionsService['refile'];
       remove?: TransactionsService['remove'];
@@ -103,7 +103,7 @@ describe('TransactionsList', () => {
   ) {
     const search =
       over.search ?? (() => of(page({ transactions: [tx()], totalCount: 1 })));
-    const categoryList = over.categoryList ?? (() => of(CATEGORY_LIST));
+    const categoryRead = over.categoryRead ?? (() => of(CATEGORY_LIST));
     const accounts = over.accounts ?? (() => of(ACCOUNTS as unknown as never));
     const refile = over.refile ?? (() => of({} as Transaction));
     const remove = over.remove ?? (() => of(undefined));
@@ -127,7 +127,9 @@ describe('TransactionsList', () => {
         },
         {
           provide: CategoriesService,
-          useValue: { list: categoryList },
+          // `all()` feeds the list's own filter bar; `list()` feeds the refile
+          // dialog opened from a row. The stub answers both from one fixture.
+          useValue: { all: categoryRead, list: categoryRead },
         },
         { provide: AccountsService, useValue: { list: accounts } },
         { provide: ActivatedRoute, useValue: url.activatedRoute },
@@ -200,17 +202,17 @@ describe('TransactionsList', () => {
   });
 
   it('reads transactions, Categories, and Accounts behind one loading state', () => {
-    const categoryList = vi.fn(() => of(CATEGORY_LIST));
+    const categoryRead = vi.fn(() => of(CATEGORY_LIST));
     const accounts = vi.fn(() => of(ACCOUNTS as unknown as never));
     const pending = new Subject<TransactionSearchResult>();
     const { fixture, text } = setup({
       search: () => pending.asObservable(),
-      categoryList: categoryList as unknown as CategoriesService['list'],
+      categoryRead: categoryRead as unknown as CategoriesService['all'],
       accounts: accounts as unknown as AccountsService['list'],
     });
 
     // All three are asked for, and nothing renders until every one is in.
-    expect(categoryList).toHaveBeenCalledTimes(1);
+    expect(categoryRead).toHaveBeenCalledTimes(1);
     expect(accounts).toHaveBeenCalledTimes(1);
     expect(text()).toContain('Loading transactions…');
 
@@ -649,8 +651,8 @@ describe('TransactionsList', () => {
 
   describe('refile, from the row menu', () => {
     const CATEGORIES: Category[] = [
-      { id: 1, name: 'Groceries', kind: 'expense' },
-      { id: 2, name: 'Salary', kind: 'income' },
+      { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
+      { id: 2, name: 'Salary', kind: 'income', isActive: true },
     ];
 
     function filed(over: Partial<Transaction> = {}): Transaction {
@@ -679,7 +681,7 @@ describe('TransactionsList', () => {
     it('opens the shared dialog seeded with the row, leaving the list legible behind it', async () => {
       const { fixture, text, dialog, dialogText } = setup({
         search: () => of(page({ transactions: [filed()], totalCount: 1 })),
-        categoryList: () => of(CATEGORIES),
+        categoryRead: () => of(CATEGORIES),
       });
       const before = text();
 
@@ -703,7 +705,7 @@ describe('TransactionsList', () => {
       const { fixture } = setup({
         search: search as unknown as TransactionsService['search'],
         refile: refile as unknown as TransactionsService['refile'],
-        categoryList: () => of(CATEGORIES),
+        categoryRead: () => of(CATEGORIES),
       });
 
       await openRefileFromRowMenu(fixture);
@@ -725,7 +727,7 @@ describe('TransactionsList', () => {
       const { fixture, dialog } = setup({
         search: search as unknown as TransactionsService['search'],
         refile: refile as unknown as TransactionsService['refile'],
-        categoryList: () => of(CATEGORIES),
+        categoryRead: () => of(CATEGORIES),
       });
 
       await openRefileFromRowMenu(fixture);
@@ -1046,20 +1048,20 @@ describe('TransactionsList', () => {
     });
 
     it('does not re-fetch Categories and Accounts on a filter change', async () => {
-      const categoryList = vi.fn(() => of(CATEGORY_LIST));
+      const categoryRead = vi.fn(() => of(CATEGORY_LIST));
       const accounts = vi.fn(() => of(ACCOUNTS as unknown as never));
       const { fixture, cmp } = setup({
-        categoryList: categoryList as unknown as CategoriesService['list'],
+        categoryRead: categoryRead as unknown as CategoriesService['all'],
         accounts: accounts as unknown as AccountsService['list'],
       });
 
-      expect(categoryList).toHaveBeenCalledTimes(1);
+      expect(categoryRead).toHaveBeenCalledTimes(1);
       expect(accounts).toHaveBeenCalledTimes(1);
 
       cmp.applyCriteria({ direction: 'expense' });
       await settle(fixture);
 
-      expect(categoryList).toHaveBeenCalledTimes(1);
+      expect(categoryRead).toHaveBeenCalledTimes(1);
       expect(accounts).toHaveBeenCalledTimes(1);
     });
 

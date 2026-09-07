@@ -510,10 +510,16 @@ export default class TransactionsList {
    * The Categories, every Account, and page 1 of the un-scoped search under the
    * current criteria — in one read, re-run on every entry like the resources
    * beside it (ADR 0006). The Category cache dedupes its own request.
+   *
+   * `all()`, not `list()`: this bar governs *finding*, not filing, so a retired
+   * Category has to stay offered — a Transaction filed under one keeps it
+   * forever and must stay reachable (ADR 0017). `list()` narrowed to
+   * active-only for the write pickers, and reading through it here would drop
+   * those rows from both the option list and the id-to-name map below.
    */
   private read(): Observable<FirstPageRead> {
     return forkJoin({
-      categories: this.categories.list(),
+      categories: this.categories.all(),
       accounts: this.accounts.list(),
       firstPage: this.transactions.search(this.criteria(), 1),
     });

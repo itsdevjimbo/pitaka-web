@@ -40,9 +40,9 @@ const COULD_NOT_REFILE =
   'Something went wrong refiling this transaction. Please try again.';
 
 const CATEGORIES: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense' },
-  { id: 2, name: 'Salary', kind: 'income' },
-  { id: 3, name: 'Rent', kind: 'expense' },
+  { id: 1, name: 'Groceries', kind: 'expense', isActive: true },
+  { id: 2, name: 'Salary', kind: 'income', isActive: true },
+  { id: 3, name: 'Rent', kind: 'expense', isActive: true },
 ];
 
 /** The Transaction the row swapped from — an expense, filed, noted, and tagged. */

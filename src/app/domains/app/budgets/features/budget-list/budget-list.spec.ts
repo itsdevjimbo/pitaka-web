@@ -113,7 +113,7 @@ describe('BudgetList', () => {
           useValue: {
             names: overrides.names ?? (() => of(CATEGORY_NAMES)),
             // The create dialog's form reads this for its expense-Category picker.
-            list: () => of([{ id: 10, name: 'Food', kind: 'expense' }]),
+            list: () => of([{ id: 10, name: 'Food', kind: 'expense', isActive: true }]),
           },
         },
       ],
