@@ -68,13 +68,20 @@ type FirstPageRead = {
   firstPage: TransactionSearchResult;
 };
 
-/** Categories sorted for a picker: by name, case-insensitively. */
+/** Categories sorted for a picker: active first, then retired, each group by name. */
 function toCategoryOptions(
   categories: readonly Category[]
 ): FilterCategoryOption[] {
   return categories
-    .map((category) => ({ id: category.id, name: category.name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .map((category) => ({
+      id: category.id,
+      name: category.name,
+      retired: !category.isActive,
+    }))
+    .sort(
+      (a, b) =>
+        Number(a.retired) - Number(b.retired) || a.name.localeCompare(b.name)
+    );
 }
 
 /** Accounts sorted for a picker: active first, then retired, each group by name. */
@@ -197,7 +204,7 @@ export default class TransactionsList {
     []
   );
 
-  /** The Category options the filter bar offers — flat, from the shared cache. */
+  /** The Category options the filter bar offers — flat, retired ones included and marked. */
   protected readonly categoryOptions = signal<readonly FilterCategoryOption[]>(
     []
   );

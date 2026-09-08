@@ -45,10 +45,18 @@ export type FilterAccountOption = {
   retired: boolean;
 };
 
-/** One Category the bar offers, flat — nesting is discarded everywhere (ADR 0010, #40). */
+/**
+ * One Category the filter bar offers as an option, flat — nesting is discarded
+ * everywhere (ADR 0010, #40). A retired Category is offered here, exactly as a
+ * retired Account is (#109): this bar governs *finding*, not filing, and a
+ * Transaction filed under a since-retired Category keeps it forever, so hiding
+ * the option would strand those rows behind a hand-edited query string.
+ * `retired` marks it so a person understands why it has no recent activity.
+ */
 export type FilterCategoryOption = {
   id: number;
   name: string;
+  retired: boolean;
 };
 
 /** The directions the bar offers, in reading order, labelled from the canonical record. */
@@ -129,7 +137,7 @@ export class TransactionsFilterBar {
   /** Every Account the person owns, retired ones included and marked. */
   readonly accounts = input<readonly FilterAccountOption[]>([]);
 
-  /** The person's Categories, flat, from the shared reference cache. */
+  /** Every Category the person has, flat, retired ones included and marked. */
   readonly categories = input<readonly FilterCategoryOption[]>([]);
 
   /**

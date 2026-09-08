@@ -35,8 +35,9 @@ const ACCOUNTS: FilterAccountOption[] = [
 ];
 
 const CATEGORIES: FilterCategoryOption[] = [
-  { id: 1, name: 'Groceries' },
-  { id: 2, name: 'Salary' },
+  { id: 1, name: 'Groceries', retired: false },
+  { id: 2, name: 'Salary', retired: false },
+  { id: 7, name: 'Old subscriptions', retired: true },
 ];
 
 describe('TransactionsFilterBar', () => {
@@ -124,14 +125,24 @@ describe('TransactionsFilterBar', () => {
     ]);
   });
 
-  it('offers a flat Category option per Category', async () => {
+  it('offers a Category option per Category, retired ones marked', async () => {
     const { optionsOf } = setup();
 
     expect(await optionsOf('Filter by category')).toEqual([
       'Any category',
       'Groceries',
       'Salary',
+      'Old subscriptions · Retired',
     ]);
+  });
+
+  it('leaves the Category control blank when the criteria name an id no option carries', async () => {
+    const { fixture } = setup({ categoryId: 999 });
+
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector(
+      'mat-select[aria-label="Filter by category"] .mat-mdc-select-value'
+    );
+    expect((trigger?.textContent ?? '').trim()).toBe('');
   });
 
   it('offers every direction plus an "Any" reset', async () => {
