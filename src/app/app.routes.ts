@@ -22,6 +22,15 @@ export const routes: Route[] = [
     loadChildren: () => import('./domains/app/routes'),
   },
 
+  // PROTOTYPE — throwaway route for wayfinder #117, deliberately outside
+  // `authGuard` so the variants can be judged without a session. Dies with the
+  // `prototype/tag-entry-control` branch.
+  {
+    path: 'tag-entry-prototype',
+    loadComponent: () =>
+      import('./domains/app/transactions/prototype/tag-entry-prototype'),
+  },
+
   // Fallback
   {
     path: '**',
