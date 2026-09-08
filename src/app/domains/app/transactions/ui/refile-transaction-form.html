@@ -83,14 +83,23 @@
   </div>
 
   @if (!isTransfer()) {
-    <!-- Category: only those of this Transaction's direction (ADR 0010), plus
-         the option to leave it uncategorised -->
+    <!-- Category: active ones of this Transaction's direction (ADR 0010), plus
+         the option to leave it uncategorised. The saved Category rides along
+         badged `Retired` at the tail if it has since been retired, so a save
+         cannot silently drop the filing (#108). -->
     <mat-form-field class="w-full">
       <mat-label>Category</mat-label>
       <mat-select [formField]="refileForm.categoryId">
         <mat-option [value]="null">Uncategorised</mat-option>
         @for (option of categoryOptions(); track option.id) {
-          <mat-option [value]="option.id">{{ option.name }}</mat-option>
+          <mat-option [value]="option.id">
+            {{ option.name }}
+            @if (!option.isActive) {
+              <span class="text-neutral-500 dark:text-neutral-400">
+                · Retired</span
+              >
+            }
+          </mat-option>
         }
       </mat-select>
       <mat-error>

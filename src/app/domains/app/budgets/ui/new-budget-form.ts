@@ -110,7 +110,11 @@ export class NewBudgetForm {
   protected readonly periodOptions = PERIOD_OPTIONS;
   protected readonly allSpending = ALL_SPENDING;
 
-  /** Every Category from the shared cache; narrowed to expenses for the picker. */
+  /**
+   * The **active** Categories from the shared cache, narrowed to expenses for
+   * the picker. A new Budget is filed fresh, so it offers active Categories
+   * only (#108).
+   */
   private readonly categories = signal<readonly Category[]>([]);
 
   /** Only expense Categories — a Budget on an income Category reads zero (ADR 0012). */

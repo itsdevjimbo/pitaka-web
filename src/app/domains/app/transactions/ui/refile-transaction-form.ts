@@ -19,7 +19,11 @@ import { MatTimepickerModule } from '@angular/material/timepicker';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { PesoPipe } from '@/app/core/money';
-import { CategoriesService, Category } from '@/app/domains/app/categories';
+import {
+  CategoriesService,
+  Category,
+  keepSavedFilingCategory,
+} from '@/app/domains/app/categories';
 import { combineDateTime } from '../data/combine-date-time';
 import {
   RefileTransaction,
@@ -109,21 +113,45 @@ export class RefileTransactionForm {
   protected readonly directions = TRANSACTION_DIRECTIONS;
 
   /**
-   * Every Category with its `kind`, from the shared reference cache the detail
-   * screen has already resolved for the row list — so this replays a settled
-   * value rather than making its own request.
+   * The **active** Categories, each with its `kind`, from the shared reference
+   * cache the detail screen has already resolved for the row list — so this
+   * replays a settled value rather than making its own request. This is a
+   * filing picker: refiling is still filing, so it offers active Categories
+   * only (#108).
    */
   private readonly categories = signal<readonly Category[]>([]);
+
+  /**
+   * The **whole set**, retired included, resolved through `all()` (#106). Used
+   * only to recognise this Transaction's *saved* Category when it has since
+   * been retired — the category picker keeps that one selectable so a save
+   * cannot silently rewrite the filing to blank (#108). Retiredness is read
+   * from here, never inferred from being absent from the active list (ADR 0017).
+   */
+  private readonly allCategories = signal<readonly Category[]>([]);
 
   /** True while the Transaction being corrected is a Transfer — no Category field, none sent. */
   protected readonly isTransfer = computed(
     () => this.transaction().direction === 'transfer'
   );
 
-  /** Only the Categories matching this Transaction's direction (ADR 0010). */
+  /**
+   * The Categories the picker offers: active ones of this Transaction's
+   * direction (ADR 0010), plus — badged `Retired`, at the tail — the
+   * Transaction's saved Category when it has since been retired, and only while
+   * the selection still points at it (#108).
+   */
   protected readonly categoryOptions = computed(() => {
     const direction = this.transaction().direction;
-    return this.categories().filter((category) => category.kind === direction);
+    const active = this.categories().filter(
+      (category) => category.kind === direction
+    );
+    return keepSavedFilingCategory(
+      active,
+      this.allCategories(),
+      this.transaction().categoryId,
+      this.model().categoryId
+    );
   });
 
   /**
@@ -163,6 +191,10 @@ export class RefileTransactionForm {
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((categories) => this.categories.set(categories));
+    this.categoriesService
+      .all()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((categories) => this.allCategories.set(categories));
   }
 
   save(event: Event): void {

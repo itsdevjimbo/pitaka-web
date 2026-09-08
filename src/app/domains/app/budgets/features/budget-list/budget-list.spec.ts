@@ -112,8 +112,17 @@ describe('BudgetList', () => {
           provide: CategoriesService,
           useValue: {
             names: overrides.names ?? (() => of(CATEGORY_NAMES)),
-            // The create dialog's form reads this for its expense-Category picker.
-            list: () => of([{ id: 10, name: 'Food', kind: 'expense', isActive: true, isDefault: false }]),
+            // The create/adjust dialog forms read this for their expense-Category
+            // picker (active only), and `all()` to keep an adjusted Budget's
+            // since-retired saved Category selectable (#108).
+            list: () =>
+              of([
+                { id: 10, name: 'Food', kind: 'expense', isActive: true, isDefault: false },
+              ]),
+            all: () =>
+              of([
+                { id: 10, name: 'Food', kind: 'expense', isActive: true, isDefault: false },
+              ]),
           },
         },
       ],

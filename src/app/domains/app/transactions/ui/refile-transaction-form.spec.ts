@@ -38,11 +38,24 @@ type RefileFormInternals = {
 const COULD_NOT_REFILE =
   'Something went wrong refiling this transaction. Please try again.';
 
+/** What `list()` returns — active only, the filing rule (#108). */
 const CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
+
+/** A since-retired expense Category — offered by `all()`, never by `list()`. */
+const DINING_RETIRED: Category = {
+  id: 7,
+  name: 'Dining out',
+  kind: 'expense',
+  isActive: false,
+  isDefault: false,
+};
+
+/** What `all()` returns — the whole set, retired included (#106). */
+const ALL_CATEGORIES: Category[] = [...CATEGORIES, DINING_RETIRED];
 
 /** The Transaction the row swapped from — an expense, filed, noted, and tagged. */
 function existing(over: Partial<Transaction> = {}): Transaction {
@@ -82,7 +95,8 @@ describe('RefileTransactionForm', () => {
   function setup(
     refile: TransactionsService['refile'],
     transaction: Transaction = existing(),
-    list: CategoriesService['list'] = () => of(CATEGORIES)
+    list: CategoriesService['list'] = () => of(CATEGORIES),
+    all: CategoriesService['all'] = () => of(ALL_CATEGORIES)
   ) {
     TestBed.configureTestingModule({
       imports: [RefileTransactionForm],
@@ -90,7 +104,7 @@ describe('RefileTransactionForm', () => {
         provideIcons(),
         provideNativeDateAdapter(),
         { provide: TransactionsService, useValue: { refile } },
-        { provide: CategoriesService, useValue: { list } },
+        { provide: CategoriesService, useValue: { list, all } },
       ],
     });
 
@@ -169,6 +183,28 @@ describe('RefileTransactionForm', () => {
       existing({ direction: 'income', categoryId: 2 })
     );
     expect(cmp.categoryOptions().map((c) => c.id)).toEqual([2]);
+  });
+
+  it('does not offer a retired Category — refiling is still filing (#108)', () => {
+    const { cmp } = setup(vi.fn(), existing({ direction: 'expense' }));
+
+    expect(cmp.categoryOptions().map((c) => c.id)).not.toContain(7);
+  });
+
+  it('offers this Transaction’s since-retired saved Category, marked retired, at the tail (#108)', () => {
+    const { cmp } = setup(vi.fn(), existing({ categoryId: 7 }));
+
+    const options = cmp.categoryOptions();
+    expect(options.map((c) => c.id)).toEqual([1, 3, 7]);
+    expect(options.at(-1)).toMatchObject({ id: 7, isActive: false });
+  });
+
+  it('drops the since-retired saved Category once the selection moves off it (#108)', () => {
+    const { cmp } = setup(vi.fn(), existing({ categoryId: 7 }));
+
+    cmp.model.update((m) => ({ ...m, categoryId: 1 }));
+
+    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
   });
 
   it('sends the whole mutable set when only the Category changes, so the note and Tags survive', async () => {

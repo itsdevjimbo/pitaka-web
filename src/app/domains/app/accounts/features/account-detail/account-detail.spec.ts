@@ -78,6 +78,10 @@ describe('AccountDetail', () => {
     const refile = over.refile ?? (() => of({} as Transaction));
     const remove = over.remove ?? (() => of(undefined));
     const categoryList = over.categoryList ?? (() => of([]));
+    // Both the record and refile dialog forms read `list()` for the active
+    // picker and `all()` to keep a since-retired saved Category selectable
+    // (#108); these tests exercise neither retirement path, so one source serves.
+    const categoryAll = categoryList;
 
     TestBed.configureTestingModule({
       imports: [AccountDetail],
@@ -92,7 +96,10 @@ describe('AccountDetail', () => {
           provide: TransactionsService,
           useValue: { list, record, refile, remove },
         },
-        { provide: CategoriesService, useValue: { names, list: categoryList } },
+        {
+          provide: CategoriesService,
+          useValue: { names, list: categoryList, all: categoryAll },
+        },
       ],
     });
 

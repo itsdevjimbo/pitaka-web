@@ -40,11 +40,24 @@ type AdjustBudgetInternals = {
 const COULD_NOT_ADJUST =
   'Something went wrong adjusting your budget. Please try again.';
 
+/** What `list()` returns — active only, the filing rule (#108). */
 const CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
+
+/** A since-retired expense Category — offered by `all()`, never by `list()`. */
+const HOLIDAYS_RETIRED: Category = {
+  id: 9,
+  name: 'Holidays',
+  kind: 'expense',
+  isActive: false,
+  isDefault: false,
+};
+
+/** What `all()` returns — the whole set, retired included (#106). */
+const ALL_CATEGORIES: Category[] = [...CATEGORIES, HOLIDAYS_RETIRED];
 
 /** The Budget under the form: a live monthly Groceries Budget on Category 1. */
 const BUDGET: Budget = {
@@ -68,7 +81,8 @@ describe('AdjustBudgetForm', () => {
   function setup(
     adjust: BudgetsService['adjust'],
     budget: Budget = BUDGET,
-    list: CategoriesService['list'] = () => of(CATEGORIES)
+    list: CategoriesService['list'] = () => of(CATEGORIES),
+    all: CategoriesService['all'] = () => of(ALL_CATEGORIES)
   ) {
     TestBed.configureTestingModule({
       imports: [AdjustBudgetForm],
@@ -76,7 +90,7 @@ describe('AdjustBudgetForm', () => {
         provideIcons(),
         provideNativeDateAdapter(),
         { provide: BudgetsService, useValue: { adjust } },
-        { provide: CategoriesService, useValue: { list } },
+        { provide: CategoriesService, useValue: { list, all } },
       ],
     });
 
@@ -245,6 +259,39 @@ describe('AdjustBudgetForm', () => {
     const { cmp } = setup(vi.fn(), onIncome);
 
     expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3, 2]);
+  });
+
+  it('drops that non-expense saved Category too once the selection moves off it — the re-add is pinned to the saved value (#108)', () => {
+    const onIncome: Budget = { ...BUDGET, categoryId: 2 };
+    const { cmp } = setup(vi.fn(), onIncome);
+
+    cmp.model.update((m) => ({ ...m, categoryId: 3 }));
+
+    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
+  });
+
+  it('offers the Budget’s since-retired saved Category, marked retired, at the tail (#108)', () => {
+    const onRetired: Budget = { ...BUDGET, categoryId: 9 };
+    const { cmp } = setup(vi.fn(), onRetired);
+
+    const options = cmp.categoryOptions();
+    expect(options.map((c) => c.id)).toEqual([1, 3, 9]);
+    expect(options.at(-1)).toMatchObject({ id: 9, isActive: false });
+  });
+
+  it('drops the since-retired saved Category once the selection moves off it (#108)', () => {
+    const onRetired: Budget = { ...BUDGET, categoryId: 9 };
+    const { cmp } = setup(vi.fn(), onRetired);
+
+    cmp.model.update((m) => ({ ...m, categoryId: 3 }));
+
+    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
+  });
+
+  it('does not offer a retired Category the Budget was never filed under (#108)', () => {
+    const { cmp } = setup(vi.fn());
+
+    expect(cmp.categoryOptions().map((c) => c.id)).not.toContain(9);
   });
 
   it('binds a duplicate-name conflict onto the name control and leaves the banner empty', async () => {
