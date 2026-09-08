@@ -101,7 +101,7 @@
       </mat-select>
     </mat-form-field>
 
-    <!-- Category: the person's Categories, flat -->
+    <!-- Category: flat, retired ones offered too, marked -->
     <mat-form-field
       class="w-full sm:w-56"
       subscriptSizing="dynamic"
@@ -114,7 +114,14 @@
       >
         <mat-option [value]="null">Any category</mat-option>
         @for (option of categories(); track option.id) {
-          <mat-option [value]="option.id">{{ option.name }}</mat-option>
+          <mat-option [value]="option.id">
+            {{ option.name }}
+            @if (option.retired) {
+              <span class="text-neutral-500 dark:text-neutral-400">
+                · Retired</span
+              >
+            }
+          </mat-option>
         }
       </mat-select>
     </mat-form-field>

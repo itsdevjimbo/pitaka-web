@@ -799,6 +799,35 @@ describe('TransactionsList', () => {
       expect(options).toContain('Old wallet · Retired');
     });
 
+    it('offers every Category in the Category filter, retired ones marked and sorted last', async () => {
+      const { fixture } = setup({
+        categoryRead: () =>
+          of([
+            { id: 1, name: 'Zoo trips', kind: 'expense', isActive: true, isDefault: false },
+            { id: 4, name: 'Old gym', kind: 'expense', isActive: false, isDefault: false },
+            { id: 2, name: 'Allowance', kind: 'income', isActive: true, isDefault: false },
+          ] as Category[]),
+      });
+
+      const trigger = (
+        fixture.nativeElement as HTMLElement
+      ).querySelector<HTMLElement>(
+        'mat-select[aria-label="Filter by category"]'
+      );
+      trigger!.click();
+      await settle(fixture);
+
+      const options = Array.from(overlay().querySelectorAll('mat-option')).map(
+        (o) => (o.textContent ?? '').replace(/\s+/g, ' ').trim()
+      );
+      expect(options).toEqual([
+        'Any category',
+        'Allowance',
+        'Zoo trips',
+        'Old gym · Retired',
+      ]);
+    });
+
     it('is wired end to end: choosing an option in the rendered bar issues the narrowed read', async () => {
       const search = vi.fn((criteria: Record<string, unknown>, p: number) =>
         of(
