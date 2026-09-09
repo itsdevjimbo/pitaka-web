@@ -101,5 +101,5 @@ A label classifying a Transaction as a kind of income or expense. Whether it is 
 _Avoid_: Type, group, bucket, classification
 
 **Tag**:
-A free-form label the person attaches to Transactions to cut across Categories. A Transaction may carry many.
+A free-form label the person attaches to Transactions to cut across Categories. A Transaction may carry many. A name can only be used once — the person cannot have two Tags with the same name. Unlike a Category, a Tag cannot be retired; the only removal is to delete it, which takes it off every Transaction carrying it.
 _Avoid_: Label, keyword, marker
