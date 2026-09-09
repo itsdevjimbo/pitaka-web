@@ -36,6 +36,10 @@ const routes: Routes = [
         loadComponent: () =>
           import('./categories/features/categories-list/categories-list'),
       },
+      {
+        path: 'tags',
+        loadComponent: () => import('./tags/features/tags-list/tags-list'),
+      },
     ],
   },
 ];
