@@ -51,8 +51,8 @@ describe('Session', () => {
 
     const pending = session.verifyBoot();
     http
-      .expectOne(`${BASE_URL}/api/auth/me`)
-      .flush({ id: 7, name: 'Ada', email: 'ada@example.com' });
+      .expectOne(`${BASE_URL}/api/profile`)
+      .flush({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null });
     await pending;
 
     return session;
@@ -67,7 +67,7 @@ describe('Session', () => {
 
     expect(session.isAuthenticated()).toBe(false);
     expect(session.profile()).toBeNull();
-    http.expectNone(`${BASE_URL}/api/auth/me`);
+    http.expectNone(`${BASE_URL}/api/profile`);
   });
 
   it('admits a stored token to the shell once the server confirms it', async () => {
@@ -75,12 +75,12 @@ describe('Session', () => {
 
     const pending = session.verifyBoot();
     http
-      .expectOne(`${BASE_URL}/api/auth/me`)
-      .flush({ id: 7, name: 'Ada', email: 'ada@example.com' });
+      .expectOne(`${BASE_URL}/api/profile`)
+      .flush({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null });
     await pending;
 
     expect(session.isAuthenticated()).toBe(true);
-    expect(session.profile()).toEqual({ id: 7, name: 'Ada', email: 'ada@example.com' });
+    expect(session.profile()).toEqual({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null });
   });
 
   it('clears a stored token whose Profile no longer exists on the server', async () => {
@@ -88,7 +88,7 @@ describe('Session', () => {
 
     const pending = session.verifyBoot();
     http
-      .expectOne(`${BASE_URL}/api/auth/me`)
+      .expectOne(`${BASE_URL}/api/profile`)
       .flush(null, { status: 401, statusText: 'Unauthorized' });
     await pending;
 
@@ -102,7 +102,7 @@ describe('Session', () => {
 
     const pending = session.verifyBoot();
     http
-      .expectOne(`${BASE_URL}/api/auth/me`)
+      .expectOne(`${BASE_URL}/api/profile`)
       .error(new ProgressEvent('error'));
     await pending;
 
@@ -119,12 +119,12 @@ describe('Session', () => {
     const pending = session.signIn({ email: 'ada@example.com', password: 'secret12' });
     const request = http.expectOne(`${BASE_URL}/api/auth/login`);
     expect(request.request.body).toEqual({ email: 'ada@example.com', password: 'secret12' });
-    request.flush({ token: 'fresh-token', user: { id: 7, name: 'Ada', email: 'ada@example.com' } });
+    request.flush({ token: 'fresh-token', user: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null } });
     await pending;
 
     expect(storage.getItem(TOKEN_KEY)).toBe('fresh-token');
     expect(session.isAuthenticated()).toBe(true);
-    expect(session.profile()).toEqual({ id: 7, name: 'Ada', email: 'ada@example.com' });
+    expect(session.profile()).toEqual({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null });
   });
 
   it('rejects and stays unauthenticated when sign-in credentials are wrong', async () => {

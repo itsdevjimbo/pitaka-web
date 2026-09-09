@@ -55,12 +55,12 @@ describe('AuthService', () => {
     });
     request.flush({
       token: 'a.b.c',
-      user: { id: 7, name: 'Ada', email: 'ada@example.com' },
+      user: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null },
     });
 
     await expect(result).resolves.toEqual({
       token: 'a.b.c',
-      profile: { id: 7, name: 'Ada', email: 'ada@example.com' },
+      profile: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null },
     });
   });
 
@@ -141,12 +141,12 @@ describe('AuthService', () => {
     );
     const login = http.expectOne(`${BASE_URL}/api/auth/login`);
     expect(login.request.context.get(HANDLES_OWN_401)).toBe(true);
-    login.flush({ token: 't', user: { id: 1, name: 'A', email: 'a@b.co' } });
+    login.flush({ token: 't', user: { id: 1, name: 'A', email: 'a@b.co', pendingEmail: null } });
 
     firstValueFrom(service.me()).catch(() => undefined);
-    const me = http.expectOne(`${BASE_URL}/api/auth/me`);
+    const me = http.expectOne(`${BASE_URL}/api/profile`);
     expect(me.request.context.get(HANDLES_OWN_401)).toBe(true);
-    me.flush({ id: 1, name: 'A', email: 'a@b.co' });
+    me.flush({ id: 1, name: 'A', email: 'a@b.co', pendingEmail: null });
 
     firstValueFrom(service.resendConfirmation('a@b.co'));
     const resend = http.expectOne(`${BASE_URL}/api/auth/resend-confirmation`);
@@ -205,7 +205,7 @@ describe('AuthService', () => {
       password: 'secret12',
     });
     request.flush(
-      { user: { id: 7, name: 'Ada', email: 'ada@example.com' } },
+      { user: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null } },
       { status: 201, statusText: 'Created' }
     );
 
@@ -213,6 +213,7 @@ describe('AuthService', () => {
       id: 7,
       name: 'Ada',
       email: 'ada@example.com',
+      pendingEmail: null,
     });
   });
 
@@ -278,19 +279,39 @@ describe('AuthService', () => {
     );
   });
 
-  it('GETs the live Profile from /api/auth/me', async () => {
+  it('GETs the live Profile from /api/profile', async () => {
     const result = firstValueFrom(service.me());
 
     http
-      .expectOne(`${BASE_URL}/api/auth/me`)
-      .flush({ id: 7, name: 'Ada', email: 'ada@example.com' });
+      .expectOne(`${BASE_URL}/api/profile`)
+      .flush({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null });
 
     await expect(result).resolves.toEqual({
       id: 7,
       name: 'Ada',
       email: 'ada@example.com',
+      pendingEmail: null,
     });
   });
+
+  it('carries the pending address through when an email change is in flight', async () => {
+    const result = firstValueFrom(service.me());
+
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: 'ada@newmail.com',
+    });
+
+    await expect(result).resolves.toEqual({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: 'ada@newmail.com',
+    });
+  });
+
   it('POSTs just the email address to /api/auth/resend-confirmation', async () => {
     const result = firstValueFrom(service.resendConfirmation('ada@example.com'));
 

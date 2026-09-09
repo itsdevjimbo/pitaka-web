@@ -8,6 +8,13 @@ export type Profile = {
   id: number;
   name: string;
   email: string;
+
+  /**
+   * The address an email change is heading to, or `null` when none is in
+   * flight. The API drops it once the pending window has passed, so an expired
+   * change reads as absent rather than as still live.
+   */
+  pendingEmail: string | null;
 };
 
 export type Credentials = {
@@ -293,7 +300,7 @@ export class AuthService {
    * is gone (ADR 0004), so this is a genuine check, not a decode.
    */
   me(): Observable<Profile> {
-    return this.http.get<Profile>(`${this.baseUrl}/api/auth/me`, {
+    return this.http.get<Profile>(`${this.baseUrl}/api/profile`, {
       context: handlesOwn401(),
     });
   }
