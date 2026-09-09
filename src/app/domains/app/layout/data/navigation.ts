@@ -43,7 +43,7 @@ export const NAVIGATION: NavigationItem[] = [
   },
 
   // Reference data — visited rarely and deliberately, not part of "where does my
-  // money stand". Tags, Schedules and Goals land in this group later (#107).
+  // money stand". Schedules and Goals land in this group later (#107).
   {
     id: 'manage',
     label: 'Manage',
@@ -53,6 +53,13 @@ export const NAVIGATION: NavigationItem[] = [
         label: 'Categories',
         route: '/app/categories',
         icon: 'shapes',
+        activeOptions: { exact: false },
+      },
+      {
+        id: 'tags',
+        label: 'Tags',
+        route: '/app/tags',
+        icon: 'tag',
         activeOptions: { exact: false },
       },
     ],
