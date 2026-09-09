@@ -2,10 +2,12 @@ import { OutputEmitterRef, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FieldTree } from '@angular/forms/signals';
 import { provideNativeDateAdapter } from '@angular/material/core';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
+import { Tag, TagsService } from '@/app/domains/app/tags';
 import {
   Transaction,
   TransactionDirection,
@@ -23,6 +25,11 @@ type Model = {
   transferToAccountId: number | null;
 };
 
+const KNOWN_TAGS: Tag[] = [
+  { id: 9, name: 'treats' },
+  { id: 4, name: 'holiday' },
+];
+
 /** The slice of the component the tests reach into. */
 type RecordFormInternals = {
   model: WritableSignal<Model>;
@@ -36,6 +43,7 @@ type RecordFormInternals = {
   categoryOptions: () => Category[];
   destinationOptions: () => TransferDestinationAccount[];
   errorMessage: () => string | null;
+  tags: WritableSignal<readonly Tag[]>;
   recorded: OutputEmitterRef<Transaction>;
   cancelled: OutputEmitterRef<void>;
   save(event: Event): void;
@@ -105,8 +113,10 @@ describe('RecordTransactionForm', () => {
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: TransactionsService, useValue: { record } },
         { provide: CategoriesService, useValue: { list, all: allCategories } },
+        { provide: TagsService, useValue: { all: () => of(KNOWN_TAGS) } },
       ],
     });
 
@@ -196,9 +206,28 @@ describe('RecordTransactionForm', () => {
       date: COMBINED,
       categoryId: 1,
       transferToAccountId: null,
+      tagIds: [],
     });
     expect(emitted).toEqual([RECORDED]);
     expect(cmp.errorMessage()).toBeNull();
+  });
+
+  it('folds the chosen Tag chips into the payload as tagIds', async () => {
+    const record = vi.fn((_tx) => of(RECORDED));
+    const { fixture, cmp } = setup(
+      record as unknown as TransactionsService['record']
+    );
+
+    fill(cmp, { direction: 'expense', amount: 120.5, categoryId: 1 });
+    cmp.tags.set([
+      { id: 9, name: 'treats' },
+      { id: 4, name: 'holiday' },
+    ]);
+    await submitAndSettle(fixture, cmp);
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ tagIds: [9, 4] })
+    );
   });
 
   it('records an income against the same endpoint, differing only by direction and Category', async () => {
@@ -217,6 +246,7 @@ describe('RecordTransactionForm', () => {
       date: COMBINED,
       categoryId: 2,
       transferToAccountId: null,
+      tagIds: [],
     });
   });
 
@@ -413,6 +443,7 @@ describe('RecordTransactionForm', () => {
         date: COMBINED,
         categoryId: null,
         transferToAccountId: 4,
+        tagIds: [],
       });
     });
 

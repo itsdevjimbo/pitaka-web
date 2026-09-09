@@ -139,6 +139,10 @@
     </mat-form-field>
   }
 
+  <!-- Tags: chips inside the field, autocomplete beneath, Enter creates. Not a
+       form control — nothing about a Tag is validated. -->
+  <tags-tag-field [(selected)]="tags" />
+
   <div class="mt-2 flex items-center justify-end gap-x-3">
     <button
       matButton

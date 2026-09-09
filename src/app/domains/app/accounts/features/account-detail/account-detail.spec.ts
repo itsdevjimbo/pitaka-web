@@ -10,6 +10,7 @@ import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
+import { TagsService } from '@/app/domains/app/tags';
 import {
   Transaction,
   TransactionsService,
@@ -100,6 +101,7 @@ describe('AccountDetail', () => {
           provide: CategoriesService,
           useValue: { names, list: categoryList, all: categoryAll },
         },
+        { provide: TagsService, useValue: { all: () => of([]) } },
       ],
     });
 

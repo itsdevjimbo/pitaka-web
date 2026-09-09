@@ -1,11 +1,15 @@
 import { OutputEmitterRef, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FieldTree } from '@angular/forms/signals';
-import { provideNativeDateAdapter } from '@angular/material/core';
+import {
+  MATERIAL_ANIMATIONS,
+  provideNativeDateAdapter,
+} from '@angular/material/core';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
+import { Tag, TagsService } from '@/app/domains/app/tags';
 import { Transaction } from '../data/transaction';
 import { TransactionsService } from '../data/transactions.service';
 import { RefileTransactionForm } from './refile-transaction-form';
@@ -29,6 +33,7 @@ type RefileFormInternals = {
   categoryOptions: () => Category[];
   isTransfer: () => boolean;
   errorMessage: () => string | null;
+  tags: WritableSignal<readonly Tag[]>;
   refiled: OutputEmitterRef<Transaction>;
   cancelled: OutputEmitterRef<void>;
   save(event: Event): void;
@@ -103,8 +108,10 @@ describe('RefileTransactionForm', () => {
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: TransactionsService, useValue: { refile } },
         { provide: CategoriesService, useValue: { list, all } },
+        { provide: TagsService, useValue: { all: () => of([]) } },
       ],
     });
 
@@ -140,6 +147,29 @@ describe('RefileTransactionForm', () => {
       categoryId: 1,
       description: 'Coffee',
     });
+  });
+
+  it('opens with the record’s Tags as chips, seeded from the Transaction', () => {
+    const { cmp } = setup(vi.fn(), existing({ tags: [{ id: 9, name: 'treats' }] }));
+
+    expect(cmp.tags()).toEqual([{ id: 9, name: 'treats' }]);
+  });
+
+  it('drops a removed Tag’s id from the save — the pass-through could not', async () => {
+    const tx = existing({ tags: [{ id: 9, name: 'treats' }] });
+    const refile = vi.fn(() => of(tx));
+    const { fixture, cmp } = setup(
+      refile as unknown as TransactionsService['refile'],
+      tx
+    );
+
+    cmp.tags.set([]);
+    await submitAndSettle(fixture, cmp);
+
+    expect(refile).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ tagIds: [] })
+    );
   });
 
   it('shows the amount and direction as text, with no field for either', () => {

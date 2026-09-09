@@ -114,6 +114,14 @@ export type NewTransaction = {
 
   /** The Account a Transfer lands in, or `null` when this is not a Transfer. */
   transferToAccountId: number | null;
+
+  /**
+   * The ids of every Tag the Transaction should carry — the full set the person
+   * chose on the form, sent every time (an absent key would attach nothing, not
+   * "leave alone"). Empty when nothing was tagged. Unknown or not-yours ids are
+   * a `400`; duplicates are de-duplicated server-side.
+   */
+  tagIds: readonly number[];
 };
 
 /**

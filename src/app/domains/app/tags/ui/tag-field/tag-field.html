@@ -1,0 +1,55 @@
+<mat-form-field class="w-full">
+  <mat-label>Tags</mat-label>
+
+  <mat-chip-grid
+    #chipGrid
+    aria-label="Tags"
+    [disabled]="loadFailed()"
+  >
+    @for (tag of selected(); track tag.id) {
+      <mat-chip-row
+        (removed)="remove(tag)"
+        [editable]="false"
+      >
+        {{ tag.name }}
+        <button
+          matChipRemove
+          [attr.aria-label]="'Remove ' + tag.name"
+        >
+          <mat-icon svgIcon="x" />
+        </button>
+      </mat-chip-row>
+    }
+
+    <input
+      #tagInput
+      placeholder="Add a tag…"
+      [matChipInputFor]="chipGrid"
+      [matAutocomplete]="auto"
+      [matAutocompleteDisabled]="loadFailed()"
+      [matChipInputAddOnBlur]="false"
+      [disabled]="loadFailed()"
+      (input)="onInput($any($event.target).value)"
+      (matChipInputTokenEnd)="commitTyped($event)"
+      (keydown.backspace)="onBackspace($event, tagInput)"
+    />
+  </mat-chip-grid>
+
+  <mat-autocomplete
+    #auto
+    (optionSelected)="onOptionSelected($event)"
+    (optionActivated)="onOptionActivated($event)"
+    (closed)="onClosed()"
+  >
+    @for (tag of filteredOptions(); track tag.id) {
+      <mat-option [value]="tag">{{ tag.name }}</mat-option>
+    }
+    @if (showCreate()) {
+      <mat-option [value]="CREATE">Create “{{ trimmedQuery() }}”</mat-option>
+    }
+  </mat-autocomplete>
+
+  @if (loadFailed()) {
+    <mat-hint>{{ loadFailedMessage }}</mat-hint>
+  }
+</mat-form-field>

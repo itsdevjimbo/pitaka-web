@@ -21,6 +21,7 @@ import { MatTimepickerModule } from '@angular/material/timepicker';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
+import { Tag, TagField } from '@/app/domains/app/tags';
 import { combineDateTime } from '../data/combine-date-time';
 import {
   NewTransaction,
@@ -94,6 +95,7 @@ type RecordTransactionModel = {
     MatDatepickerModule,
     MatTimepickerModule,
     FormField,
+    TagField,
   ],
 })
 export class RecordTransactionForm {
@@ -142,6 +144,14 @@ export class RecordTransactionForm {
     categoryId: null,
     transferToAccountId: null,
   });
+
+  /**
+   * The Tags chosen on the field. Not a `recordForm` control — nothing about a
+   * Tag is validated — so it rides alongside the model and folds into the
+   * payload as `tagIds` on submit. Starts empty: a record has no Tags until one
+   * is put on it here.
+   */
+  protected readonly tags = signal<readonly Tag[]>([]);
 
   /** True while the chosen direction is Transfer — the form asks for a destination, not a Category. */
   protected readonly isTransfer = computed(
@@ -252,6 +262,7 @@ export class RecordTransactionForm {
               date: combineDateTime(date as Date, time as Date),
               categoryId: isTransfer ? null : categoryId,
               transferToAccountId: isTransfer ? transferToAccountId : null,
+              tagIds: this.tags().map((tag) => tag.id),
             } satisfies NewTransaction)
           );
           this.recorded.emit(recorded);

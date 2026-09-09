@@ -17,6 +17,7 @@ import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
+import { TagsService } from '@/app/domains/app/tags';
 import { provideFakeMedia } from '@/testing/media';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Transaction, TransactionSearchResult } from '../../data/transaction';
@@ -130,6 +131,7 @@ describe('TransactionsList', () => {
           // dialog opened from a row. The stub answers both from one fixture.
           useValue: { all: categoryRead, list: categoryRead },
         },
+        { provide: TagsService, useValue: { all: () => of([]) } },
         { provide: AccountsService, useValue: { list: accounts } },
         { provide: ActivatedRoute, useValue: url.activatedRoute },
       ],

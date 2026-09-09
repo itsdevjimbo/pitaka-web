@@ -124,6 +124,10 @@
     />
   </mat-form-field>
 
+  <!-- Tags: opens with the record's Tags as chips; the payload's tagIds follow
+       the chips, so removing one here drops it from the Transaction. -->
+  <tags-tag-field [(selected)]="tags" />
+
   <!-- Nothing destructive here: removing a Transaction lives on the row's menu,
        not beneath the fields someone was just typing into (ADR 0014). -->
   <div class="mt-2 flex items-center justify-end gap-x-3">
