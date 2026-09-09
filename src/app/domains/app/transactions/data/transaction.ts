@@ -1,3 +1,5 @@
+import type { Tag } from '@/app/domains/app/tags';
+
 /**
  * A single recorded movement of money against an Account (see `CONTEXT.md`):
  * income received, an expense paid, or a Transfer between two Accounts the same
@@ -60,11 +62,12 @@ export type Transaction = {
   tags: readonly Tag[];
 };
 
-/** A free-form label on a Transaction (see `CONTEXT.md`). */
-export type Tag = {
-  id: number;
-  name: string;
-};
+/**
+ * A free-form label on a Transaction (see `CONTEXT.md`). Owned by the Tags
+ * domain (`tags/data/tag.ts` explains the direction); re-exported here so this
+ * domain's existing consumers keep their import path.
+ */
+export type { Tag };
 
 /**
  * The little an Account brings to the Transfer destination picker: an id to send
