@@ -1,8 +1,10 @@
 import { OutputEmitterRef, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FieldTree } from '@angular/forms/signals';
-import { provideNativeDateAdapter } from '@angular/material/core';
-import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import {
+  MATERIAL_ANIMATIONS,
+  provideNativeDateAdapter,
+} from '@angular/material/core';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
@@ -105,7 +107,8 @@ describe('RecordTransactionForm', () => {
   function setup(
     record: TransactionsService['record'],
     list: CategoriesService['list'] = () => of(CATEGORIES),
-    destinations: TransferDestinationAccount[] = DESTINATIONS
+    destinations: TransferDestinationAccount[] = DESTINATIONS,
+    tagsAll: TagsService['all'] = () => of(KNOWN_TAGS)
   ) {
     allCategories.mockClear();
     TestBed.configureTestingModule({
@@ -116,7 +119,7 @@ describe('RecordTransactionForm', () => {
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: TransactionsService, useValue: { record } },
         { provide: CategoriesService, useValue: { list, all: allCategories } },
-        { provide: TagsService, useValue: { all: () => of(KNOWN_TAGS) } },
+        { provide: TagsService, useValue: { all: tagsAll } },
       ],
     });
 
@@ -209,6 +212,24 @@ describe('RecordTransactionForm', () => {
       tagIds: [],
     });
     expect(emitted).toEqual([RECORDED]);
+    expect(cmp.errorMessage()).toBeNull();
+  });
+
+  it('still records when the Tag option set fails to load — the field disables, the form saves', async () => {
+    const record = vi.fn((_tx) => of(RECORDED));
+    const { fixture, cmp } = setup(
+      record as unknown as TransactionsService['record'],
+      undefined,
+      undefined,
+      () => throwError(() => new ApiError('tags down', 500, {}))
+    );
+
+    fill(cmp, { direction: 'expense', amount: 120.5, categoryId: 1 });
+    await submitAndSettle(fixture, cmp);
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ tagIds: [] })
+    );
     expect(cmp.errorMessage()).toBeNull();
   });
 

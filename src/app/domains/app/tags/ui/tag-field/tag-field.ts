@@ -1,8 +1,8 @@
 import {
   Component,
+  computed,
   DestroyRef,
   ElementRef,
-  computed,
   inject,
   model,
   signal,
@@ -27,6 +27,11 @@ const CREATE = Symbol('create-tag');
 
 /** The one line shown when the option set could not be fetched. */
 const LOAD_FAILED = 'Tags couldn’t be loaded.';
+
+/** Case- and whitespace-insensitive name key — one place, so the four call sites cannot drift. */
+function nameKey(name: string): string {
+  return name.trim().toLocaleLowerCase();
+}
 
 /**
  * The Tag entry control on the record and refile transaction forms — the app's
@@ -84,15 +89,21 @@ export class TagField {
   private service = inject(TagsService);
   private destroyRef = inject(DestroyRef);
 
+  // Model
+
   /** The chips on the field — the Tags the Transaction will carry. Two-way. */
   readonly selected = model<readonly Tag[]>([]);
 
+  // Template constants
   protected readonly CREATE = CREATE;
   protected readonly loadFailedMessage = LOAD_FAILED;
 
+  // View
   private readonly input =
     viewChild<ElementRef<HTMLInputElement>>('tagInput');
   private readonly autocompleteTrigger = viewChild(MatAutocompleteTrigger);
+
+  // State
 
   /** The fetched option set — `null` until the first read settles. */
   private readonly fetched = signal<readonly Tag[] | null>(null);
@@ -126,16 +137,17 @@ export class TagField {
     return [...byId.values()];
   });
 
-  /** The options offered: the known set minus the chips, narrowed by the query. */
+  /**
+   * The options offered: the known set minus the chips, narrowed by the query.
+   * Left in the API's order — sorting Tag names is the Tags screen's job (#140),
+   * not this field's.
+   */
   protected readonly filteredOptions = computed(() => {
-    const query = this.trimmedQuery().toLocaleLowerCase();
+    const query = nameKey(this.query());
     const chosen = new Set(this.selected().map((tag) => tag.id));
     return this.known()
       .filter((tag) => !chosen.has(tag.id))
-      .filter((tag) => !query || tag.name.toLocaleLowerCase().includes(query))
-      .sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      );
+      .filter((tag) => !query || tag.name.toLocaleLowerCase().includes(query));
   });
 
   /**
@@ -144,13 +156,11 @@ export class TagField {
    * name. Withheld while the field is disabled.
    */
   protected readonly showCreate = computed(() => {
-    const query = this.trimmedQuery().toLocaleLowerCase();
+    const query = nameKey(this.query());
     if (!query || this.loadFailed() || this.filteredOptions().length > 0) {
       return false;
     }
-    return !this.known().some(
-      (tag) => tag.name.toLocaleLowerCase() === query
-    );
+    return this.byName(query) === undefined;
   });
 
   constructor() {
@@ -165,8 +175,8 @@ export class TagField {
 
   /**
    * Each keystroke re-filters and drops any highlight — Material's key manager
-   * resets its active item on input too. Clearing it here (and on {@link
-   * onClosed}), *not* inside {@link attach}, is what makes the Enter collision
+   * resets its active item on input too. Clearing it here (and on `onClosed`)
+   * rather than inside `attach` is what makes the Enter collision
    * order-independent: whichever of the two keydown handlers runs first, the
    * other still sees the highlight and defers.
    */
@@ -188,8 +198,8 @@ export class TagField {
 
   /**
    * A highlighted option was taken — by click, or by Enter with the panel open.
-   * This is the authority for the highlighted-option-wins case; {@link
-   * commitTyped} steps aside whenever an option is active.
+   * This is the authority for the highlighted-option-wins case; `commitTyped`
+   * steps aside whenever an option is active.
    */
   protected onOptionSelected(event: MatAutocompleteSelectedEvent): void {
     const value = event.option.value as Tag | typeof CREATE;
@@ -202,21 +212,21 @@ export class TagField {
 
   /**
    * Enter (or another separator) in the input. If an option is highlighted,
-   * {@link onOptionSelected} owns this keystroke and we do nothing. Otherwise
-   * the raw text is committed: an exact name match attaches that Tag silently,
-   * anything else creates.
+   * `onOptionSelected` owns this keystroke and we do nothing. Otherwise the raw
+   * text is committed: an exact name match attaches that Tag silently, anything
+   * else creates. The input is not cleared here — `attach` clears it on
+   * success, so a create that fails leaves the typed text in place to retry.
    */
   protected commitTyped(event: MatChipInputEvent): void {
     if (this.activeOption() !== null) {
       return;
     }
     const name = (event.value ?? '').trim();
-    event.chipInput.clear();
-    this.query.set('');
     if (!name) {
+      this.clearInput();
       return;
     }
-    const existing = this.byName(name);
+    const existing = this.byName(nameKey(name));
     if (existing) {
       this.attach(existing);
     } else {
@@ -242,14 +252,15 @@ export class TagField {
   /**
    * Create a Tag and attach the row the `POST` returns. A name that turns out
    * to already exist — either found locally, or a `409` race against a stale
-   * list — attaches the existing Tag silently, with nothing surfaced.
+   * list — attaches the existing Tag silently, with nothing surfaced. A create
+   * that fails any other way adds no chip and leaves the field usable.
    */
   private createAndAttach(rawName: string): void {
     const name = rawName.trim();
     if (!name || this.creating()) {
       return;
     }
-    const existing = this.byName(name);
+    const existing = this.byName(nameKey(name));
     if (existing) {
       this.attach(existing);
       return;
@@ -270,23 +281,25 @@ export class TagField {
           if (error instanceof ApiError && error.status === 409) {
             this.resolveConflict(name);
           }
-          // Anything else: no chip is added and the field stays usable. The
-          // person can try the name again.
         },
       });
   }
 
-  /** A duplicate-name `409`: re-read the set and attach the real row, silently. */
+  /**
+   * A duplicate-name `409`: the row exists after all. Re-read the set **cold**
+   * (`readAll`, not `all` — `TagsService.create` invalidates only on success,
+   * so the shared cache still holds the stale list here) and attach the real
+   * row silently. A failed re-read is swallowed — the gesture is rare and the
+   * form still saves without the chip.
+   */
   private resolveConflict(name: string): void {
+    const key = nameKey(name);
     this.service
-      .all()
+      .readAll()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (tags) => {
-          const match = tags.find(
-            (tag) =>
-              tag.name.toLocaleLowerCase() === name.toLocaleLowerCase()
-          );
+          const match = tags.find((tag) => nameKey(tag.name) === key);
           if (match) {
             this.created.update((rows) => [...rows, match]);
             this.attach(match);
@@ -300,20 +313,25 @@ export class TagField {
     if (!this.selected().some((chip) => chip.id === tag.id)) {
       this.selected.set([...this.selected(), tag]);
     }
+    this.clearInput();
+  }
+
+  /**
+   * Empty the text input and its filter, and close the panel. Closing fires
+   * `(closed)` → `onClosed`, which drops the highlight (not cleared here — see
+   * `onInput`).
+   */
+  private clearInput(): void {
     this.query.set('');
     const el = this.input()?.nativeElement;
     if (el) {
       el.value = '';
     }
-    // Closing the panel fires `(closed)` → `onClosed`, which clears the
-    // highlight. Not cleared here directly — see `onInput`.
     this.autocompleteTrigger()?.closePanel();
   }
 
-  private byName(name: string): Tag | undefined {
-    const needle = name.toLocaleLowerCase();
-    return this.known().find(
-      (tag) => tag.name.toLocaleLowerCase() === needle
-    );
+  /** The known Tag whose name matches `key` (already lower-cased and trimmed). */
+  private byName(key: string): Tag | undefined {
+    return this.known().find((tag) => tag.name.toLocaleLowerCase() === key);
   }
 }
