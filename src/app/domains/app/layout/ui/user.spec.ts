@@ -13,7 +13,7 @@ type UserInternals = {
 };
 
 describe('User', () => {
-  const ada: Profile = { id: 7, name: 'Ada Lovelace', email: 'ada@example.com' };
+  const ada: Profile = { id: 7, name: 'Ada Lovelace', email: 'ada@example.com', pendingEmail: null };
 
   function setup(profile: Profile | null = ada) {
     const signOut = vi.fn();

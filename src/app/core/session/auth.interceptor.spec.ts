@@ -38,9 +38,9 @@ describe('authInterceptor', () => {
   it('attaches the bearer token when the session has one', () => {
     configure('a.b.c');
 
-    client.get(`${BASE_URL}/api/auth/me`).subscribe();
+    client.get(`${BASE_URL}/api/profile`).subscribe();
 
-    const request = http.expectOne(`${BASE_URL}/api/auth/me`);
+    const request = http.expectOne(`${BASE_URL}/api/profile`);
     expect(request.request.headers.get('Authorization')).toBe('Bearer a.b.c');
     request.flush({});
   });
@@ -58,9 +58,9 @@ describe('authInterceptor', () => {
   it('sends no Authorization header when the session is empty', () => {
     configure(null);
 
-    client.get(`${BASE_URL}/api/auth/me`).subscribe();
+    client.get(`${BASE_URL}/api/profile`).subscribe();
 
-    const request = http.expectOne(`${BASE_URL}/api/auth/me`);
+    const request = http.expectOne(`${BASE_URL}/api/profile`);
     expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush({});
   });
@@ -81,10 +81,10 @@ describe('authInterceptor', () => {
     configure('a.b.c');
 
     const result = firstValueFrom(
-      client.get(`${BASE_URL}/api/auth/me`, { context: handlesOwn401() })
+      client.get(`${BASE_URL}/api/profile`, { context: handlesOwn401() })
     );
     http
-      .expectOne(`${BASE_URL}/api/auth/me`)
+      .expectOne(`${BASE_URL}/api/profile`)
       .flush(null, { status: 401, statusText: 'Unauthorized' });
 
     await result.catch(() => undefined);
@@ -113,9 +113,9 @@ describe('authInterceptor', () => {
 
     // Same endpoint as boot verification, but built without the flag: an
     // ordinary caller's 401 there is still a lapse.
-    const result = firstValueFrom(client.get(`${BASE_URL}/api/auth/me`));
+    const result = firstValueFrom(client.get(`${BASE_URL}/api/profile`));
     http
-      .expectOne(`${BASE_URL}/api/auth/me`)
+      .expectOne(`${BASE_URL}/api/profile`)
       .flush(null, { status: 401, statusText: 'Unauthorized' });
 
     await result.catch(() => undefined);

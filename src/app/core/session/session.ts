@@ -65,7 +65,7 @@ export class Session {
    * down, no network — leaves the stored token in place so a refresh once
    * connectivity returns signs the person straight back in.
    *
-   * This method is the sole handler of the 401 on `GET /api/auth/me`: it clears
+   * This method is the sole handler of the 401 on `GET /api/profile`: it clears
    * the token but does not redirect, since it runs before the shell renders and
    * the app initializer / route guards route from the cleared state. The auth
    * interceptor deliberately exempts this request so `expire()` does not also

@@ -56,7 +56,7 @@ describe('AuthSignUp', () => {
     const register = vi
       .fn()
       .mockReturnValue(
-        of<Profile>({ id: 7, name: 'Ada', email: 'ada@example.com' })
+        of<Profile>({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null })
       );
     const { fixture, cmp } = setup(register);
 

@@ -18,7 +18,7 @@ import { Session } from './session';
  *
  * - the sign-in request — a 401 there means "wrong password", not "your session
  *   ended";
- * - boot verification (`GET /api/auth/me`) — its only caller is
+ * - boot verification (`GET /api/profile`) — its only caller is
  *   `Session.verifyBoot`, which owns the 401 for that request (ADR 0004: clear
  *   the stored token, no redirect, because the shell has not rendered and there
  *   is no place to return the person to). Letting `expire()` also fire here
