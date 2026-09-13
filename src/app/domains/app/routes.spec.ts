@@ -5,6 +5,7 @@ import { provideRouter, Router, RouterOutlet } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { routes } from '@/app/app.routes';
+import { Profile } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import { AccountsService } from './accounts';
@@ -18,6 +19,13 @@ import { TransactionsService } from './transactions';
  * of the way to the Accounts list for a signed-in visitor.
  */
 describe('the app area routes', () => {
+  const ada: Profile = {
+    id: 7,
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    pendingEmail: null,
+  };
+
   it('sends a signed-in visitor from /app to the Accounts list', async () => {
     TestBed.configureTestingModule({
       providers: [
@@ -99,5 +107,29 @@ describe('the app area routes', () => {
     expect(
       (harness.routeNativeElement as HTMLElement).textContent
     ).toContain('Expense');
+  });
+
+  it('resolves /app/profile to the live identity dashboard', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        provideIcons(),
+        {
+          provide: Session,
+          useValue: { isAuthenticated: () => true, profile: () => ada },
+        },
+      ],
+    });
+    TestBed.overrideComponent(AppLayout, {
+      set: { template: '<router-outlet />', imports: [RouterOutlet] },
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/profile');
+
+    expect(TestBed.inject(Router).url).toBe('/app/profile');
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain(
+      'Ada Lovelace'
+    );
   });
 });

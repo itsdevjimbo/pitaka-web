@@ -5,6 +5,7 @@ import { Profile } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import { Theming } from '@/app/core/theming';
+import { withOverlayContainer } from '@/testing/overlay';
 import { User } from './user';
 
 /** The slice of the component the tests reach into. */
@@ -14,6 +15,7 @@ type UserInternals = {
 
 describe('User', () => {
   const ada: Profile = { id: 7, name: 'Ada Lovelace', email: 'ada@example.com', pendingEmail: null };
+  const overlay = withOverlayContainer();
 
   function setup(profile: Profile | null = ada) {
     const signOut = vi.fn();
@@ -44,6 +46,21 @@ describe('User', () => {
 
     expect(text()).toContain('Ada Lovelace');
     expect(text()).toContain('ada@example.com');
+  });
+
+  it('offers Profile before Appearance in the signed-in menu', async () => {
+    const { fixture } = setup();
+
+    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    await fixture.whenStable();
+
+    const text = overlay().textContent ?? '';
+    const profileIndex = text.indexOf('Profile');
+    const appearanceIndex = text.indexOf('Appearance');
+
+    expect(profileIndex).toBeGreaterThanOrEqual(0);
+    expect(appearanceIndex).toBeGreaterThanOrEqual(0);
+    expect(profileIndex).toBeLessThan(appearanceIndex);
   });
 
   it('signs out through the session rather than just linking to sign-in', () => {
