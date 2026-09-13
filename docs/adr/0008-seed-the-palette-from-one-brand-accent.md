@@ -36,7 +36,7 @@ per-call-site `dark:` variant.
 
 An Account **balance** has no direction and is left in the default text colour.
 Tinting it green or red would assert an income/expense reading that a running
-total does not carry — a card in debt shows a negative peso figure, not an
+total does not carry — an overdrawn Account shows a negative peso figure, not an
 "expense". Direction colour is for Transactions.
 
 ## Considered options

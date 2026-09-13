@@ -26,7 +26,7 @@ import { AccountsService } from '../data/accounts.service';
 const COULD_NOT_CREATE =
   'Something went wrong creating your account. Please try again.';
 
-/** The five types, as ordered options for the picker. */
+/** The four types, as ordered options for the picker. */
 const TYPE_OPTIONS = (Object.keys(ACCOUNT_TYPES) as AccountType[]).map(
   (value) => ({ value, label: ACCOUNT_TYPES[value].label })
 );
