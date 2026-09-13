@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import {
   Component,
   computed,
@@ -15,7 +14,6 @@ import { MatMenuModule } from '@angular/material/menu';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { PesoPipe } from '@/app/core/money';
 import { AccountsService } from '@/app/domains/app/accounts';
 import {
   Goal,
@@ -24,6 +22,7 @@ import {
   GoalsService,
   withAccountNames,
 } from '../../index';
+import { ContributionHistoryRow } from '../../ui/contribution-history-row';
 import { GoalProgress } from '../../ui/goal-progress';
 
 const LOAD_FAILED =
@@ -34,13 +33,12 @@ const LOAD_FAILED =
   selector: 'goal-detail',
   templateUrl: './goal-detail.html',
   imports: [
-    DatePipe,
     MatButtonModule,
     MatIconModule,
     MatMenuModule,
     RouterLink,
-    PesoPipe,
     GoalProgress,
+    ContributionHistoryRow,
   ],
   host: { class: 'flex flex-auto flex-col' },
 })

@@ -73,23 +73,11 @@
       } @else {
         <ul class="flex flex-col gap-y-2">
           @for (contribution of history(); track contribution.id) {
-            <li class="flex items-start justify-between gap-x-4 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800">
-              <div class="flex min-w-0 flex-col gap-y-1">
-                <span class="font-medium tabular-nums">{{ contribution.amount | peso }}</span>
-                <span class="text-sm text-neutral-600 dark:text-neutral-300">{{ contribution.contributionDate | date: 'd MMM y' }} · {{ contribution.accountName || 'Unknown account' }}</span>
-                @if (contribution.note) {
-                  <span class="text-sm text-neutral-500 dark:text-neutral-400">{{ contribution.note }}</span>
-                }
-              </div>
-              <!-- Edit and delete are deliberately row-owned; their lifecycle lands in #164. -->
-              <button matIconButton aria-label="Contribution actions" [matMenuTriggerFor]="menu">
-                <mat-icon svgIcon="ellipsis-vertical" />
-              </button>
-              <mat-menu #menu>
-                <button mat-menu-item>Edit contribution</button>
-                <button mat-menu-item>Delete contribution</button>
-              </mat-menu>
-            </li>
+            <li
+              goals-contribution-history-row
+              class="flex items-start justify-between gap-x-4 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
+              [contribution]="contribution"
+            ></li>
           }
         </ul>
       }
