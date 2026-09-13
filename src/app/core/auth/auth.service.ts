@@ -304,4 +304,9 @@ export class AuthService {
       context: handlesOwn401(),
     });
   }
+
+  /** Replace the signed-in Profile's name and return the complete new identity. */
+  updateProfile(name: string): Observable<Profile> {
+    return this.http.put<Profile>(`${this.baseUrl}/api/profile`, { name });
+  }
 }
