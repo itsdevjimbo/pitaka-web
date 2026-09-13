@@ -61,6 +61,7 @@ type RecordTransactionModel = {
   time: Date | null;
   categoryId: number | null;
   transferToAccountId: number | null;
+  tags: readonly Tag[];
 };
 
 /**
@@ -143,15 +144,8 @@ export class RecordTransactionForm {
     time: new Date(),
     categoryId: null,
     transferToAccountId: null,
+    tags: [],
   });
-
-  /**
-   * The Tags chosen on the field. Not a `recordForm` control — nothing about a
-   * Tag is validated — so it rides alongside the model and folds into the
-   * payload as `tagIds` on submit. Starts empty: a record has no Tags until one
-   * is put on it here.
-   */
-  protected readonly tags = signal<readonly Tag[]>([]);
 
   /** True while the chosen direction is Transfer — the form asks for a destination, not a Category. */
   protected readonly isTransfer = computed(
@@ -216,9 +210,7 @@ export class RecordTransactionForm {
     // destination left over from a Transfer would ride along on an income. Each
     // picker empties when it no longer applies, so pruning to its options
     // covers the direction switch too.
-    effect(() =>
-      this.pruneStalePick('categoryId', this.categoryOptions())
-    );
+    effect(() => this.pruneStalePick('categoryId', this.categoryOptions()));
     effect(() =>
       this.pruneStalePick('transferToAccountId', this.destinationOptions())
     );
@@ -244,8 +236,15 @@ export class RecordTransactionForm {
         this.errorMessage.set(null);
 
         try {
-          const { direction, amount, date, time, categoryId, transferToAccountId } =
-            this.model();
+          const {
+            direction,
+            amount,
+            date,
+            time,
+            categoryId,
+            transferToAccountId,
+            tags,
+          } = this.model();
           // Derive the mutually exclusive pair straight from `direction`, the
           // field being submitted: the stale-pick pruners reconcile the siblings
           // too, but they run as effects and need not have flushed by the time
@@ -262,7 +261,7 @@ export class RecordTransactionForm {
               date: combineDateTime(date as Date, time as Date),
               categoryId: isTransfer ? null : categoryId,
               transferToAccountId: isTransfer ? transferToAccountId : null,
-              tagIds: this.tags().map((tag) => tag.id),
+              tagIds: tags.map((tag) => tag.id),
             } satisfies NewTransaction)
           );
           this.recorded.emit(recorded);

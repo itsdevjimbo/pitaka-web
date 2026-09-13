@@ -9,6 +9,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormValueControl } from '@angular/forms/signals';
 import {
   MatAutocompleteActivatedEvent,
   MatAutocompleteModule,
@@ -42,7 +43,7 @@ function nameKey(name: string): string {
  * gesture**: you type a name and you get that Tag, and whether it already
  * existed is this control's problem, not the person's.
  *
- * `selected` is the two-way model the form binds — the chips, and the ids it
+ * `value` is the signal-forms model the form binds — the chips, and the ids it
  * sends. Record opens it empty; refile seeds it from the Transaction's own Tags
  * (not from a fetch), so those chips survive even a failed option load.
  *
@@ -84,7 +85,7 @@ function nameKey(name: string): string {
     MatIconModule,
   ],
 })
-export class TagField {
+export class TagField implements FormValueControl<readonly Tag[]> {
   // Dependencies
   private service = inject(TagsService);
   private destroyRef = inject(DestroyRef);
@@ -92,15 +93,14 @@ export class TagField {
   // Model
 
   /** The chips on the field — the Tags the Transaction will carry. Two-way. */
-  readonly selected = model<readonly Tag[]>([]);
+  readonly value = model<readonly Tag[]>([]);
 
   // Template constants
   protected readonly CREATE = CREATE;
   protected readonly loadFailedMessage = LOAD_FAILED;
 
   // View
-  private readonly input =
-    viewChild<ElementRef<HTMLInputElement>>('tagInput');
+  private readonly input = viewChild<ElementRef<HTMLInputElement>>('tagInput');
   private readonly autocompleteTrigger = viewChild(MatAutocompleteTrigger);
 
   // State
@@ -144,7 +144,7 @@ export class TagField {
    */
   protected readonly filteredOptions = computed(() => {
     const query = nameKey(this.query());
-    const chosen = new Set(this.selected().map((tag) => tag.id));
+    const chosen = new Set(this.value().map((tag) => tag.id));
     return this.known()
       .filter((tag) => !chosen.has(tag.id))
       .filter((tag) => !query || tag.name.toLocaleLowerCase().includes(query));
@@ -236,7 +236,7 @@ export class TagField {
 
   /** Backspace on an empty input detaches the last chip (the × does the same). */
   protected onBackspace(event: Event, input: HTMLInputElement): void {
-    const chips = this.selected();
+    const chips = this.value();
     if (input.value !== '' || chips.length === 0) {
       return;
     }
@@ -246,7 +246,7 @@ export class TagField {
   }
 
   protected remove(tag: Tag): void {
-    this.selected.set(this.selected().filter((chip) => chip.id !== tag.id));
+    this.value.set(this.value().filter((chip) => chip.id !== tag.id));
   }
 
   /**
@@ -310,8 +310,8 @@ export class TagField {
   }
 
   private attach(tag: Tag): void {
-    if (!this.selected().some((chip) => chip.id === tag.id)) {
-      this.selected.set([...this.selected(), tag]);
+    if (!this.value().some((chip) => chip.id === tag.id)) {
+      this.value.set([...this.value(), tag]);
     }
     this.clearInput();
   }

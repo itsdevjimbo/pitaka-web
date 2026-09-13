@@ -1,5 +1,6 @@
-import { WritableSignal } from '@angular/core';
+import { Component, signal, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { form, FormField } from '@angular/forms/signals';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -12,9 +13,18 @@ import { TagField } from './tag-field';
 const GROCERIES: Tag = { id: 1, name: 'groceries' };
 const WORK: Tag = { id: 2, name: 'work' };
 
+@Component({
+  template: `<tags-tag-field [formField]="tagForm.tags" />`,
+  imports: [FormField, TagField],
+})
+class TagFieldHost {
+  readonly model = signal<{ tags: readonly Tag[] }>({ tags: [GROCERIES] });
+  readonly tagForm = form(this.model);
+}
+
 /** The slice of the control the tests reach into — its observable state. */
 type Internals = {
-  selected: WritableSignal<readonly Tag[]>;
+  value: WritableSignal<readonly Tag[]>;
   loadFailed: () => boolean;
   query: WritableSignal<string>;
   filteredOptions: () => Tag[];
@@ -51,7 +61,10 @@ describe('TagField', () => {
       imports: [TagField],
       providers: [
         provideIcons(),
-        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        {
+          provide: MATERIAL_ANIMATIONS,
+          useValue: { animationsDisabled: true },
+        },
         { provide: TagsService, useValue: { all, readAll, create } },
       ],
     });
@@ -64,13 +77,39 @@ describe('TagField', () => {
       cmp,
       create,
       host: () => fixture.nativeElement as HTMLElement,
-      input: () => fixture.nativeElement.querySelector('input') as HTMLInputElement,
+      input: () =>
+        fixture.nativeElement.querySelector('input') as HTMLInputElement,
       panelOptions: () =>
         Array.from(overlay().querySelectorAll('mat-option')).map(
           (o) => o.textContent?.trim() ?? ''
         ),
     };
   }
+
+  it('binds its chips to a signal-form field', () => {
+    TestBed.configureTestingModule({
+      imports: [TagFieldHost],
+      providers: [
+        provideIcons(),
+        {
+          provide: MATERIAL_ANIMATIONS,
+          useValue: { animationsDisabled: true },
+        },
+        { provide: TagsService, useValue: { all: () => of([GROCERIES]) } },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(TagFieldHost);
+    fixture.detectChanges();
+
+    const remove = fixture.nativeElement.querySelector(
+      '[matChipRemove]'
+    ) as HTMLButtonElement;
+    remove.click();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.model().tags).toEqual([]);
+  });
 
   /** Type into the real input and let the autocomplete panel open. */
   async function type(
@@ -108,7 +147,7 @@ describe('TagField', () => {
       cmp.onOptionSelected({ option: { value: GROCERIES } });
       cmp.commitTyped(tokenEnd('gro'));
 
-      expect(cmp.selected()).toEqual([GROCERIES]);
+      expect(cmp.value()).toEqual([GROCERIES]);
       expect(create).not.toHaveBeenCalled();
     });
 
@@ -121,7 +160,7 @@ describe('TagField', () => {
       cmp.commitTyped(tokenEnd('gro'));
 
       expect(create).toHaveBeenCalledWith('gro');
-      expect(cmp.selected()).toEqual([created]);
+      expect(cmp.value()).toEqual([created]);
     });
 
     it('does nothing on Enter with an option highlighted but no matching selection event', () => {
@@ -132,7 +171,7 @@ describe('TagField', () => {
       cmp.onOptionActivated({ option: { value: GROCERIES } });
       cmp.commitTyped(tokenEnd('gro'));
 
-      expect(cmp.selected()).toEqual([]);
+      expect(cmp.value()).toEqual([]);
       expect(create).not.toHaveBeenCalled();
     });
 
@@ -153,7 +192,7 @@ describe('TagField', () => {
       fixture.detectChanges();
       await fixture.whenStable();
 
-      expect(cmp.selected()).toEqual([GROCERIES]);
+      expect(cmp.value()).toEqual([GROCERIES]);
       expect(create).not.toHaveBeenCalled();
     });
 
@@ -171,7 +210,7 @@ describe('TagField', () => {
       await fixture.whenStable();
 
       expect(create).toHaveBeenCalledWith('gro');
-      expect(cmp.selected()).toEqual([created]);
+      expect(cmp.value()).toEqual([created]);
     });
   });
 
@@ -207,7 +246,7 @@ describe('TagField', () => {
       cmp.onInput('Groceries');
       cmp.commitTyped(tokenEnd('Groceries'));
 
-      expect(cmp.selected()).toEqual([GROCERIES]);
+      expect(cmp.value()).toEqual([GROCERIES]);
       expect(create).not.toHaveBeenCalled();
       expect(host().querySelector('mat-error')).toBeNull();
     });
@@ -227,7 +266,7 @@ describe('TagField', () => {
       cmp.commitTyped(tokenEnd('holiday'));
 
       expect(create).toHaveBeenCalledWith('holiday');
-      expect(cmp.selected()).toEqual([holiday]);
+      expect(cmp.value()).toEqual([holiday]);
       expect(host().querySelector('mat-error')).toBeNull();
     });
   });
@@ -239,7 +278,7 @@ describe('TagField', () => {
 
     cmp.onInput('holiday');
     cmp.commitTyped(tokenEnd('holiday'));
-    expect(cmp.selected()).toEqual([created]);
+    expect(cmp.value()).toEqual([created]);
 
     // Detached again, it is offered back as an option rather than lost.
     cmp.remove(created);
@@ -250,29 +289,29 @@ describe('TagField', () => {
   describe('removal', () => {
     it('drops a chip through remove() — the × path', () => {
       const { cmp } = setup();
-      cmp.selected.set([GROCERIES, WORK]);
+      cmp.value.set([GROCERIES, WORK]);
 
       cmp.remove(GROCERIES);
 
-      expect(cmp.selected()).toEqual([WORK]);
+      expect(cmp.value()).toEqual([WORK]);
     });
 
     it('drops the last chip on Backspace when the input is empty', () => {
       const { cmp } = setup();
-      cmp.selected.set([GROCERIES, WORK]);
+      cmp.value.set([GROCERIES, WORK]);
 
       cmp.onBackspace(backspaceEvent(), { value: '' } as HTMLInputElement);
 
-      expect(cmp.selected()).toEqual([GROCERIES]);
+      expect(cmp.value()).toEqual([GROCERIES]);
     });
 
     it('leaves the chips alone on Backspace while the input has text', () => {
       const { cmp } = setup();
-      cmp.selected.set([GROCERIES]);
+      cmp.value.set([GROCERIES]);
 
       cmp.onBackspace(backspaceEvent(), { value: 'gr' } as HTMLInputElement);
 
-      expect(cmp.selected()).toEqual([GROCERIES]);
+      expect(cmp.value()).toEqual([GROCERIES]);
     });
   });
 
@@ -303,10 +342,10 @@ describe('TagField', () => {
         all: () => throwError(() => new ApiError('nope', 500, {})),
       });
 
-      cmp.selected.set([GROCERIES]);
+      cmp.value.set([GROCERIES]);
       fixture.detectChanges();
 
-      expect(cmp.selected()).toEqual([GROCERIES]);
+      expect(cmp.value()).toEqual([GROCERIES]);
     });
   });
 });

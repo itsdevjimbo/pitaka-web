@@ -126,7 +126,7 @@
 
   <!-- Tags: opens with the record's Tags as chips; the payload's tagIds follow
        the chips, so removing one here drops it from the Transaction. -->
-  <tags-tag-field [(selected)]="tags" />
+  <tags-tag-field [formField]="refileForm.tags" />
 
   <!-- Nothing destructive here: removing a Transaction lives on the row's menu,
        not beneath the fields someone was just typing into (ADR 0014). -->

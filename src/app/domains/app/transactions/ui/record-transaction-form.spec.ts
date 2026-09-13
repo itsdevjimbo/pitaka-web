@@ -25,6 +25,7 @@ type Model = {
   time: Date | null;
   categoryId: number | null;
   transferToAccountId: number | null;
+  tags: readonly Tag[];
 };
 
 const KNOWN_TAGS: Tag[] = [
@@ -45,7 +46,6 @@ type RecordFormInternals = {
   categoryOptions: () => Category[];
   destinationOptions: () => TransferDestinationAccount[];
   errorMessage: () => string | null;
-  tags: WritableSignal<readonly Tag[]>;
   recorded: OutputEmitterRef<Transaction>;
   cancelled: OutputEmitterRef<void>;
   save(event: Event): void;
@@ -57,7 +57,13 @@ const COULD_NOT_RECORD =
 
 /** What `list()` returns — active only, the filing rule (#108). */
 const CATEGORIES: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+  {
+    id: 1,
+    name: 'Groceries',
+    kind: 'expense',
+    isActive: true,
+    isDefault: false,
+  },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
@@ -116,7 +122,10 @@ describe('RecordTransactionForm', () => {
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
-        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        {
+          provide: MATERIAL_ANIMATIONS,
+          useValue: { animationsDisabled: true },
+        },
         { provide: TransactionsService, useValue: { record } },
         { provide: CategoriesService, useValue: { list, all: allCategories } },
         { provide: TagsService, useValue: { all: tagsAll } },
@@ -154,6 +163,7 @@ describe('RecordTransactionForm', () => {
       time: AT_1405,
       categoryId: 1,
       transferToAccountId: null,
+      tags: [],
       ...over,
     });
   }
@@ -240,10 +250,13 @@ describe('RecordTransactionForm', () => {
     );
 
     fill(cmp, { direction: 'expense', amount: 120.5, categoryId: 1 });
-    cmp.tags.set([
-      { id: 9, name: 'treats' },
-      { id: 4, name: 'holiday' },
-    ]);
+    cmp.model.update((model) => ({
+      ...model,
+      tags: [
+        { id: 9, name: 'treats' },
+        { id: 4, name: 'holiday' },
+      ],
+    }));
     await submitAndSettle(fixture, cmp);
 
     expect(record).toHaveBeenCalledWith(
@@ -325,7 +338,9 @@ describe('RecordTransactionForm', () => {
     fill(cmp, { categoryId: null });
     await submitAndSettle(fixture, cmp);
 
-    expect(messagesOn(cmp.recordForm.categoryId)).toContain('Choose a category');
+    expect(messagesOn(cmp.recordForm.categoryId)).toContain(
+      'Choose a category'
+    );
     expect(record).not.toHaveBeenCalled();
   });
 
@@ -372,7 +387,9 @@ describe('RecordTransactionForm', () => {
 
   it('shows a bodyless rejection as one form-level line that blames no field', async () => {
     const { fixture, cmp } = setup(() =>
-      throwError(() => new ApiError('We could not record that just now.', 400, {}))
+      throwError(
+        () => new ApiError('We could not record that just now.', 400, {})
+      )
     );
 
     fill(cmp);
@@ -385,7 +402,9 @@ describe('RecordTransactionForm', () => {
   });
 
   it('falls back to the generic banner when the failure is not an ApiError', async () => {
-    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
+    const { fixture, cmp } = setup(() =>
+      throwError(() => new Error('offline'))
+    );
 
     fill(cmp);
     await submitAndSettle(fixture, cmp);

@@ -19,6 +19,7 @@ type Model = {
   time: Date | null;
   categoryId: number | null;
   description: string;
+  tags: readonly Tag[];
 };
 
 /** The slice of the component the tests reach into. */
@@ -33,7 +34,6 @@ type RefileFormInternals = {
   categoryOptions: () => Category[];
   isTransfer: () => boolean;
   errorMessage: () => string | null;
-  tags: WritableSignal<readonly Tag[]>;
   refiled: OutputEmitterRef<Transaction>;
   cancelled: OutputEmitterRef<void>;
   save(event: Event): void;
@@ -45,7 +45,13 @@ const COULD_NOT_REFILE =
 
 /** What `list()` returns — active only, the filing rule (#108). */
 const CATEGORIES: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+  {
+    id: 1,
+    name: 'Groceries',
+    kind: 'expense',
+    isActive: true,
+    isDefault: false,
+  },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
@@ -108,7 +114,10 @@ describe('RefileTransactionForm', () => {
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
-        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        {
+          provide: MATERIAL_ANIMATIONS,
+          useValue: { animationsDisabled: true },
+        },
         { provide: TransactionsService, useValue: { refile } },
         { provide: CategoriesService, useValue: { list, all } },
         { provide: TagsService, useValue: { all: () => of([]) } },
@@ -119,7 +128,11 @@ describe('RefileTransactionForm', () => {
     fixture.componentRef.setInput('transaction', transaction);
     const cmp = fixture.componentInstance as unknown as RefileFormInternals;
     fixture.detectChanges();
-    return { fixture, cmp, text: () => (fixture.nativeElement as HTMLElement).textContent ?? '' };
+    return {
+      fixture,
+      cmp,
+      text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
+    };
   }
 
   async function submitAndSettle(
@@ -141,7 +154,7 @@ describe('RefileTransactionForm', () => {
     const tx = existing();
     const { cmp } = setup(vi.fn(), tx);
 
-    expect(cmp.model()).toEqual({
+    expect(cmp.model()).toMatchObject({
       date: tx.date,
       time: tx.date,
       categoryId: 1,
@@ -150,9 +163,12 @@ describe('RefileTransactionForm', () => {
   });
 
   it('opens with the record’s Tags as chips, seeded from the Transaction', () => {
-    const { cmp } = setup(vi.fn(), existing({ tags: [{ id: 9, name: 'treats' }] }));
+    const { cmp } = setup(
+      vi.fn(),
+      existing({ tags: [{ id: 9, name: 'treats' }] })
+    );
 
-    expect(cmp.tags()).toEqual([{ id: 9, name: 'treats' }]);
+    expect(cmp.model().tags).toMatchObject([{ id: 9, name: 'treats' }]);
   });
 
   it('drops a removed Tag’s id from the save — the pass-through could not', async () => {
@@ -163,7 +179,7 @@ describe('RefileTransactionForm', () => {
       tx
     );
 
-    cmp.tags.set([]);
+    cmp.model.update((model) => ({ ...model, tags: [] }));
     await submitAndSettle(fixture, cmp);
 
     expect(refile).toHaveBeenCalledWith(
@@ -186,7 +202,9 @@ describe('RefileTransactionForm', () => {
   it('points someone who mistyped an amount at removing and recording again', () => {
     const { text } = setup(vi.fn());
 
-    expect(text().toLowerCase()).toContain('remove this transaction and record it again');
+    expect(text().toLowerCase()).toContain(
+      'remove this transaction and record it again'
+    );
   });
 
   it('offers nothing that removes the Transaction — no button, no confirmation (ADR 0014)', () => {
@@ -372,7 +390,9 @@ describe('RefileTransactionForm', () => {
 
   it('shows a bodyless rejection as one form-level line that blames no field', async () => {
     const { fixture, cmp } = setup(() =>
-      throwError(() => new ApiError('We could not refile that just now.', 400, {}))
+      throwError(
+        () => new ApiError('We could not refile that just now.', 400, {})
+      )
     );
 
     await submitAndSettle(fixture, cmp);
@@ -383,7 +403,9 @@ describe('RefileTransactionForm', () => {
   });
 
   it('falls back to the generic banner when the failure is not an ApiError', async () => {
-    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
+    const { fixture, cmp } = setup(() =>
+      throwError(() => new Error('offline'))
+    );
 
     await submitAndSettle(fixture, cmp);
 

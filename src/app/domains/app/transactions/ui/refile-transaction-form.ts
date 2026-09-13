@@ -51,6 +51,7 @@ type RefileTransactionModel = {
   time: Date | null;
   categoryId: number | null;
   description: string;
+  tags: readonly Tag[];
 };
 
 /**
@@ -169,17 +170,8 @@ export class RefileTransactionForm {
     time: this.transaction().date,
     categoryId: this.transaction().categoryId,
     description: this.transaction().description ?? '',
+    tags: [...this.transaction().tags],
   }));
-
-  /**
-   * The Tags on the field, seeded from the Transaction and re-seeded if the
-   * input changes. Not a `refileForm` control — nothing about a Tag is
-   * validated — so it rides alongside the model and folds into the payload as
-   * `tagIds` on submit.
-   */
-  protected readonly tags = linkedSignal<readonly Tag[]>(() => [
-    ...this.transaction().tags,
-  ]);
 
   protected readonly refileForm = form(this.model, (path) => {
     // Day and time are each compulsory — a Transaction always has both, and an
@@ -220,7 +212,7 @@ export class RefileTransactionForm {
         this.errorMessage.set(null);
 
         try {
-          const { date, time, categoryId, description } = this.model();
+          const { date, time, categoryId, description, tags } = this.model();
           const refiled = await firstValueFrom(
             this.service.refile(this.transaction(), {
               // `required` has ruled out a null day or time by the time this
@@ -230,7 +222,7 @@ export class RefileTransactionForm {
               description: description.trim() || null,
               // The chips as they stand — a real replacement, so a Tag removed
               // on the field is a Tag dropped from the Transaction.
-              tagIds: this.tags().map((tag) => tag.id),
+              tagIds: tags.map((tag) => tag.id),
             } satisfies RefileTransaction)
           );
           this.refiled.emit(refiled);

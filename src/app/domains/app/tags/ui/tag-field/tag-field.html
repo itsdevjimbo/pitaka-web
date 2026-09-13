@@ -6,7 +6,7 @@
     aria-label="Tags"
     [disabled]="loadFailed()"
   >
-    @for (tag of selected(); track tag.id) {
+    @for (tag of value(); track tag.id) {
       <mat-chip-row
         (removed)="remove(tag)"
         [editable]="false"
