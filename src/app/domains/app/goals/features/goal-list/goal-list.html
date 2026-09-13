@@ -1,0 +1,47 @@
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
+  <header class="flex items-start justify-between gap-x-4">
+    <div class="flex flex-col gap-y-1">
+      <h1 class="text-2xl font-bold tracking-tight">Goals</h1>
+      <p class="text-neutral-500 dark:text-neutral-400">What you are saving towards.</p>
+    </div>
+
+    @if (!loading() && !errorMessage() && !isEmpty()) {
+      <button matButton="filled"><mat-icon svgIcon="plus" />New goal</button>
+    }
+  </header>
+
+  @if (loading()) {
+    <div class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400" role="status">
+      <mat-icon class="size-6 animate-spin" svgIcon="loader-circle" />
+      <span>Loading your goals…</span>
+    </div>
+  } @else if (errorMessage(); as message) {
+    <div class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800" role="alert">
+      <mat-icon class="size-8 text-neutral-400" svgIcon="circle-alert" />
+      <p class="max-w-sm text-neutral-600 dark:text-neutral-300">{{ message }}</p>
+      <button matButton="filled" (click)="load()"><mat-icon svgIcon="refresh-cw" />Try again</button>
+    </div>
+  } @else if (isEmpty()) {
+    <div class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700">
+      <mat-icon class="size-10 text-neutral-400" svgIcon="target" />
+      <p class="text-lg font-semibold">No goals yet</p>
+      <p class="max-w-xs text-neutral-500 dark:text-neutral-400">A Goal is a savings target you build toward with Contributions. Create one to start tracking your progress.</p>
+      <button matButton="filled" class="mt-2"><mat-icon svgIcon="plus" />New goal</button>
+    </div>
+  } @else {
+    @for (group of groups(); track group.status) {
+      <section class="flex flex-col gap-y-2">
+        <h2 class="text-sm font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">{{ group.label }}</h2>
+        @if (group.rows.length === 0) {
+          <p class="px-1 text-sm text-neutral-500 dark:text-neutral-400">{{ group.emptyLabel }}</p>
+        } @else {
+          <ul class="flex flex-col gap-y-2">
+            @for (goal of group.rows; track goal.id) {
+              <li><goals-goal-row [goal]="goal" /></li>
+            }
+          </ul>
+        }
+      </section>
+    }
+  }
+</div>

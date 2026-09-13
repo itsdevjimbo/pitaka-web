@@ -10,6 +10,7 @@ import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import { AccountsService } from './accounts';
 import { CategoriesService } from './categories';
+import { GoalsService } from './goals';
 import { AppLayout } from './layout/layout';
 import { TransactionsService } from './transactions';
 
@@ -107,6 +108,28 @@ describe('the app area routes', () => {
     expect(
       (harness.routeNativeElement as HTMLElement).textContent
     ).toContain('Expense');
+  });
+
+  it('resolves /app/goals to the Goals list, lazily loaded', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        provideIcons(),
+        { provide: Session, useValue: { isAuthenticated: () => true } },
+        { provide: GoalsService, useValue: { list: () => of([]) } },
+      ],
+    });
+    TestBed.overrideComponent(AppLayout, {
+      set: { template: '<router-outlet />', imports: [RouterOutlet] },
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/goals');
+
+    expect(TestBed.inject(Router).url).toBe('/app/goals');
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain(
+      'No goals yet'
+    );
   });
 
   it('resolves /app/profile to the live identity dashboard', async () => {
