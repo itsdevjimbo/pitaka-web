@@ -40,6 +40,11 @@ const routes: Routes = [
         path: 'tags',
         loadComponent: () => import('./tags/features/tags-list/tags-list'),
       },
+      {
+        path: 'profile',
+        loadComponent: () =>
+          import('./profile/features/profile/profile'),
+      },
     ],
   },
 ];
