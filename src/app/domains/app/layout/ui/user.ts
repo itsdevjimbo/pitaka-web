@@ -3,6 +3,7 @@ import { MatPseudoCheckbox } from '@angular/material/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatDivider } from '@angular/material/list';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import { RouterLink } from '@angular/router';
 import { Session } from '@/app/core/session';
 import { Scheme, Theming } from '@/app/core/theming';
 
@@ -15,6 +16,7 @@ import { Scheme, Theming } from '@/app/core/theming';
     MatMenuItem,
     MatPseudoCheckbox,
     MatMenuTrigger,
+    RouterLink,
   ],
   template: `
     <button
@@ -47,6 +49,13 @@ import { Scheme, Theming } from '@/app/core/theming';
       yPosition="above"
       #userMenu="matMenu"
     >
+      <a
+        mat-menu-item
+        routerLink="/app/profile-prototype"
+      >
+        <mat-icon svgIcon="user-round" />
+        Profile
+      </a>
       <button
         mat-menu-item
         [matMenuTriggerFor]="appearanceMenu"
