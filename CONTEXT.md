@@ -52,8 +52,20 @@ _Avoid_: Archive, close, deactivate, disable
 Bringing a retired Account or Category back into use. The inverse of Retire, and the only word for it.
 _Avoid_: Restore, unretire, reopen, enable
 
+**Complete / Completed**:
+Declaring a Goal achieved after it has reached its target. Completed is a durable state chosen by the person, not a figure derived continuously from the Goal's Contributions; only marking the Goal active ends it.
+_Avoid_: Retire, close, finish
+
+**Abandon / Abandoned**:
+Stopping pursuit of a Goal without erasing it or releasing its earmarks. An Abandoned Goal keeps its Contributions but accepts no new ones until the person marks it active.
+_Avoid_: Retire, cancel, archive
+
+**Mark active / Active**:
+Opening a Completed or Abandoned Goal to pursuit and new Contributions again. It is deliberately distinct from Reactivate, which applies only to a retired Account or Category.
+_Avoid_: Reactivate, restore, reopen
+
 **Delete**:
-Erasing an Account or a Category entirely. Refused for an Account while it still holds Transaction history or money owed to a Goal, and for a Category while anything at all is filed under or narrowed to it — retiring is the way out of both.
+Erasing an Account, Category, or Goal entirely. A Goal's Contributions and earmarks go with it, but not Account money; an Account with Transaction history or earmarks and a Category still in use cannot be deleted — retire either instead.
 _Avoid_: Remove, destroy, close
 
 **Refile**:
@@ -90,8 +102,12 @@ _Avoid_: Used, consumed, progress, current amount
 A savings target the person accumulates toward over time. The person succeeds by reaching it. Distinct from a Budget, which is a ceiling rather than a target.
 _Avoid_: Target, savings plan, budget
 
+**Earmark**:
+An amount within an Account claimed toward a Goal by a Contribution. It remains part of the Account's balance but cannot simultaneously support another Contribution.
+_Avoid_: Allocation, reserved balance, moved money
+
 **Contribution**:
-Money moved from an Account toward a Goal. A Goal's progress is the sum of its Contributions and nothing else.
+An earmark of money in an Account toward a Goal. A Goal's progress is the sum of its Contributions and nothing else.
 _Avoid_: Deposit, saving, goal transaction, allocation
 
 ### Classification
