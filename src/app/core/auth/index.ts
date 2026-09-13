@@ -1,6 +1,7 @@
 export {
   AuthService,
   EmailNotConfirmedError,
+  IncorrectCurrentPasswordError,
   ResetLinkRejectedError,
 } from './auth.service';
 export type {

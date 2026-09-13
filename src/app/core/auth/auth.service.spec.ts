@@ -15,6 +15,7 @@ import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import {
   AuthService,
   EmailNotConfirmedError,
+  IncorrectCurrentPasswordError,
   ResetLinkRejectedError,
 } from './auth.service';
 
@@ -228,6 +229,32 @@ describe('AuthService', () => {
     });
     expect(request.request.context.get(HANDLES_OWN_401)).toBe(true);
     request.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it('changes a password through the password-gated endpoint and keeps its 401 for the form to handle', () => {
+    service.changePassword('current-password', 'new-password').subscribe();
+
+    const request = http.expectOne(`${BASE_URL}/api/profile/password`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      oldPassword: 'current-password',
+      newPassword: 'new-password',
+    });
+    expect(request.request.context.get(HANDLES_OWN_401)).toBe(true);
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it('turns only the password endpoint’s incorrect-current-password response into a semantic error', async () => {
+    const result = firstValueFrom(
+      service.changePassword('wrong-password', 'new-password')
+    );
+
+    http.expectOne(`${BASE_URL}/api/profile/password`).flush(
+      { title: 'Unauthorized', status: 401, detail: 'Your current password is incorrect.' },
+      { status: 401, statusText: 'Unauthorized' }
+    );
+
+    await expect(result).rejects.toBeInstanceOf(IncorrectCurrentPasswordError);
   });
 
   it('turns a 409 taken-email conflict into wording that points at signing in', async () => {
