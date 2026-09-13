@@ -39,11 +39,18 @@ export const NAVIGATION: NavigationItem[] = [
         icon: 'gauge',
         activeOptions: { exact: false },
       },
+      {
+        id: 'goals',
+        label: 'Goals',
+        route: '/app/goals',
+        icon: 'target',
+        activeOptions: { exact: false },
+      },
     ],
   },
 
   // Reference data — visited rarely and deliberately, not part of "where does my
-  // money stand". Schedules and Goals land in this group later (#107).
+  // money stand". Tags and Schedules land in this group later (#107).
   {
     id: 'manage',
     label: 'Manage',

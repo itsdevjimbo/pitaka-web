@@ -32,6 +32,10 @@ const routes: Routes = [
           import('./budgets/features/budget-list/budget-list'),
       },
       {
+        path: 'goals',
+        loadComponent: () => import('./goals/features/goal-list/goal-list'),
+      },
+      {
         path: 'categories',
         loadComponent: () =>
           import('./categories/features/categories-list/categories-list'),
