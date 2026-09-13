@@ -19,7 +19,7 @@ import {
  *   rather than the offset-bearing timestamp the API takes; `to` as the
  *   **inclusive** end day the person picked, not the exclusive `endDay + 1` the
  *   adapter sends (`date-range-bounds.ts`). A shared link reads as "groceries on
- *   the credit card in July", not as a wire payload.
+ *   an Account in July", not as a wire payload.
  * - **`page` is never carried.** It is a position in a result set, not
  *   something the person filtered by, and a page number over someone else's
  *   matches means nothing to whoever receives the link.

@@ -27,7 +27,7 @@ _Avoid_: Banned, suspended, disabled, blocked
 ### Money that has moved
 
 **Account**:
-A container of money the person owns — cash on hand, a bank account, a credit card, a wallet, or an investment holding. It carries a running balance and can be retired without being erased.
+A container of money the person owns — cash on hand, a bank account, a wallet, or an investment holding. It carries a running balance and can be retired without being erased.
 _Avoid_: Wallet, ledger, user account, source
 
 **Transaction**:
