@@ -217,6 +217,19 @@ describe('AuthService', () => {
     });
   });
 
+  it('requests an email change with the password-gated endpoint and keeps its 401 for the form to handle', () => {
+    service.requestEmailChange('new@example.com', 'current-password').subscribe();
+
+    const request = http.expectOne(`${BASE_URL}/api/profile/email-change`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      newEmail: 'new@example.com',
+      currentPassword: 'current-password',
+    });
+    expect(request.request.context.get(HANDLES_OWN_401)).toBe(true);
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
   it('turns a 409 taken-email conflict into wording that points at signing in', async () => {
     const result = firstValueFrom(
       service.register({

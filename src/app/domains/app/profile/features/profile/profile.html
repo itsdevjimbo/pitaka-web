@@ -11,51 +11,7 @@
       <profile-identity />
 
       <div class="flex flex-col gap-4">
-        @if (person.pendingEmail; as pendingEmail) {
-          <section
-            class="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-300 dark:bg-amber-950/30 dark:ring-amber-800"
-          >
-            <div class="flex items-start gap-3">
-              <mat-icon
-                class="mt-0.5 shrink-0 text-amber-700 dark:text-amber-400"
-                svgIcon="mail-clock"
-              />
-              <div class="min-w-0 flex-auto">
-                <p
-                  class="text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-300"
-                >
-                  Action waiting
-                </p>
-                <h2 class="mt-1 text-lg font-bold">
-                  Confirm {{ pendingEmail }}
-                </h2>
-                <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
-                  Open the link we sent there. Until then, sign in with
-                  {{ person.email }}.
-                </p>
-              </div>
-            </div>
-          </section>
-        }
-
-        <section
-          class="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800"
-        >
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h2 class="font-semibold">Email address</h2>
-              <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                Used to sign in and recover access.
-              </p>
-            </div>
-            <button
-              matButton
-              type="button"
-            >
-              Change email
-            </button>
-          </div>
-        </section>
+        <profile-email />
 
         <section
           class="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800"
