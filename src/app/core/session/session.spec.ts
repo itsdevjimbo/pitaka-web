@@ -127,6 +127,31 @@ describe('Session', () => {
     expect(session.profile()).toEqual({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null });
   });
 
+  it('adopts a complete-Profile response only when it belongs to the signed-in Profile', async () => {
+    const session = await verifiedSession();
+
+    session.applyProfileUpdate({
+      id: 7,
+      name: 'Augusta Ada King',
+      email: 'ada@example.com',
+      pendingEmail: null,
+    });
+    expect(session.profile()?.name).toBe('Augusta Ada King');
+
+    session.applyProfileUpdate({
+      id: 8,
+      name: 'Grace Hopper',
+      email: 'grace@example.com',
+      pendingEmail: null,
+    });
+    expect(session.profile()).toEqual({
+      id: 7,
+      name: 'Augusta Ada King',
+      email: 'ada@example.com',
+      pendingEmail: null,
+    });
+  });
+
   it('rejects and stays unauthenticated when sign-in credentials are wrong', async () => {
     const session = configure();
 

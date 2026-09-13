@@ -86,6 +86,16 @@ export class Session {
   }
 
   /**
+   * Reconcile a write response into the shell without a follow-up read. A
+   * response for another Profile must never replace the signed-in identity.
+   */
+  applyProfileUpdate(profile: Profile): void {
+    if (this._profile()?.id === profile.id) {
+      this._profile.set(profile);
+    }
+  }
+
+  /**
    * The person chose to leave. Clear the session client-side — the API has no
    * logout to call (ADR 0004) — and return to sign-in. Unlike `expire`, no
    * return URL is kept: a deliberate exit has nowhere to resume.

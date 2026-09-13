@@ -294,6 +294,27 @@ describe('AuthService', () => {
     });
   });
 
+  it('PUTs a name to the Profile and returns the complete Profile response', async () => {
+    const result = firstValueFrom(service.updateProfile('Augusta Ada King'));
+
+    const request = http.expectOne(`${BASE_URL}/api/profile`);
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual({ name: 'Augusta Ada King' });
+    request.flush({
+      id: 7,
+      name: 'Augusta Ada King',
+      email: 'ada@example.com',
+      pendingEmail: null,
+    });
+
+    await expect(result).resolves.toEqual({
+      id: 7,
+      name: 'Augusta Ada King',
+      email: 'ada@example.com',
+      pendingEmail: null,
+    });
+  });
+
   it('carries the pending address through when an email change is in flight', async () => {
     const result = firstValueFrom(service.me());
 
