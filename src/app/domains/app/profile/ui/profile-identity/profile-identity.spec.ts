@@ -6,7 +6,7 @@ import { ApiError } from '@/app/core/api';
 import { AuthService, Profile } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
-import AppProfile from './profile';
+import { ProfileIdentity } from './profile-identity';
 
 type ProfileInternals = {
   editingName: WritableSignal<boolean>;
@@ -26,15 +26,15 @@ const ADA: Profile = {
   pendingEmail: null,
 };
 
-describe('AppProfile', () => {
-  function setup(
-    updateProfile: AuthService['updateProfile'] = () => of(ADA)
-  ) {
+describe('ProfileIdentity', () => {
+  function setup(updateProfile: AuthService['updateProfile'] = () => of(ADA)) {
     const profile = signal<Profile | null>(ADA);
-    const applyProfileUpdate = vi.fn((updated: Profile) => profile.set(updated));
+    const applyProfileUpdate = vi.fn((updated: Profile) =>
+      profile.set(updated)
+    );
 
     TestBed.configureTestingModule({
-      imports: [AppProfile],
+      imports: [ProfileIdentity],
       providers: [
         provideIcons(),
         { provide: AuthService, useValue: { updateProfile } },
@@ -42,7 +42,7 @@ describe('AppProfile', () => {
       ],
     });
 
-    const fixture = TestBed.createComponent(AppProfile);
+    const fixture = TestBed.createComponent(ProfileIdentity);
     const cmp = fixture.componentInstance as unknown as ProfileInternals;
     fixture.detectChanges();
     return { fixture, cmp, applyProfileUpdate };
@@ -64,7 +64,9 @@ describe('AppProfile', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const input = fixture.nativeElement.querySelector('#profile-name') as HTMLInputElement | null;
+    const input = fixture.nativeElement.querySelector(
+      '#profile-name'
+    ) as HTMLInputElement | null;
     expect(cmp.nameModel().name).toBe('Ada Lovelace');
     expect(input?.value).toBe('Ada Lovelace');
     expect(document.activeElement).toBe(input);
@@ -82,17 +84,23 @@ describe('AppProfile', () => {
     cmp.nameModel.set({ name: '   ' });
     await submitAndSettle(fixture, cmp);
 
-    expect(cmp.nameForm.name().errors().map((error) => error.message)).toContain(
-      'Enter a name'
-    );
+    expect(
+      cmp.nameForm
+        .name()
+        .errors()
+        .map((error) => error.message)
+    ).toContain('Enter a name');
     expect(updateProfile).not.toHaveBeenCalled();
 
     cmp.nameModel.set({ name: 'x'.repeat(256) });
     await submitAndSettle(fixture, cmp);
 
-    expect(cmp.nameForm.name().errors().map((error) => error.message)).toContain(
-      'The name must be 255 characters or fewer'
-    );
+    expect(
+      cmp.nameForm
+        .name()
+        .errors()
+        .map((error) => error.message)
+    ).toContain('The name must be 255 characters or fewer');
     expect(updateProfile).not.toHaveBeenCalled();
   });
 
@@ -113,16 +121,24 @@ describe('AppProfile', () => {
 
   it('keeps the editor stable while saving and updates the signed-in identity on success', async () => {
     const response = new Subject<Profile>();
-    const { fixture, cmp, applyProfileUpdate } = setup(() => response.asObservable());
+    const { fixture, cmp, applyProfileUpdate } = setup(() =>
+      response.asObservable()
+    );
 
     cmp.beginNameEdit();
     cmp.nameModel.set({ name: '  Augusta Ada King  ' });
     cmp.saveName(new Event('submit'));
     fixture.detectChanges();
 
-    const input = fixture.nativeElement.querySelector('#profile-name') as HTMLInputElement;
-    const cancel = fixture.nativeElement.querySelector('button[type="button"]') as HTMLButtonElement;
-    const save = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const input = fixture.nativeElement.querySelector(
+      '#profile-name'
+    ) as HTMLInputElement;
+    const cancel = fixture.nativeElement.querySelector(
+      'button[type="button"]'
+    ) as HTMLButtonElement;
+    const save = fixture.nativeElement.querySelector(
+      'button[type="submit"]'
+    ) as HTMLButtonElement;
     expect(input).not.toBeNull();
     expect(save).not.toBeNull();
     expect(input.disabled).toBe(true);
@@ -147,9 +163,13 @@ describe('AppProfile', () => {
     const { fixture, cmp } = setup(() =>
       throwError(
         () =>
-          new ApiError('Please correct the highlighted fields and try again.', 400, {
-            name: ['Choose a name with fewer characters.'],
-          })
+          new ApiError(
+            'Please correct the highlighted fields and try again.',
+            400,
+            {
+              name: ['Choose a name with fewer characters.'],
+            }
+          )
       )
     );
 
@@ -157,9 +177,12 @@ describe('AppProfile', () => {
     cmp.nameModel.set({ name: 'Ada Byron' });
     await submitAndSettle(fixture, cmp);
 
-    expect(cmp.nameForm.name().errors().map((error) => error.message)).toContain(
-      'Choose a name with fewer characters.'
-    );
+    expect(
+      cmp.nameForm
+        .name()
+        .errors()
+        .map((error) => error.message)
+    ).toContain('Choose a name with fewer characters.');
     expect(cmp.errorMessage()).toBeNull();
     expect(document.activeElement).toBe(
       fixture.nativeElement.querySelector('#profile-name')
@@ -175,8 +198,12 @@ describe('AppProfile', () => {
     await fixture.whenStable();
     expect(cmp.successMessage()).toBeNull();
 
-    const input = fixture.nativeElement.querySelector('#profile-name') as HTMLInputElement;
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const input = fixture.nativeElement.querySelector(
+      '#profile-name'
+    ) as HTMLInputElement;
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
     fixture.detectChanges();
     await fixture.whenStable();
 
