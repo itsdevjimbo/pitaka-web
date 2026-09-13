@@ -309,4 +309,26 @@ export class AuthService {
   updateProfile(name: string): Observable<Profile> {
     return this.http.put<Profile>(`${this.baseUrl}/api/profile`, { name });
   }
+
+  /**
+   * Start (or replace) the signed-in Profile's email change. A wrong current
+   * password is a handled 401, not a lapsed session, so the editor can attach
+   * the error to its password field.
+   */
+  requestEmailChange(newEmail: string, currentPassword: string): Observable<void> {
+    return this.http
+      .post<void>(
+        `${this.baseUrl}/api/profile/email-change`,
+        { newEmail, currentPassword },
+        { context: handlesOwn401() }
+      )
+      .pipe(map(() => undefined));
+  }
+
+  /** Cancel this Profile's pending email change; the endpoint is idempotent. */
+  cancelEmailChange(): Observable<void> {
+    return this.http
+      .post<void>(`${this.baseUrl}/api/profile/email-change/cancel`, null)
+      .pipe(map(() => undefined));
+  }
 }
