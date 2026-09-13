@@ -112,7 +112,10 @@
           recordForm.transferToAccountId().touched() &&
           recordForm.transferToAccountId().invalid()
         ) {
-          @for (error of recordForm.transferToAccountId().errors(); track error) {
+          @for (
+            error of recordForm.transferToAccountId().errors();
+            track error
+          ) {
             {{ error.message }}
           }
         }
@@ -138,6 +141,9 @@
       </mat-error>
     </mat-form-field>
   }
+
+  <!-- Tags: chips inside the field, autocomplete beneath, Enter creates. -->
+  <tags-tag-field [formField]="recordForm.tags" />
 
   <div class="mt-2 flex items-center justify-end gap-x-3">
     <button

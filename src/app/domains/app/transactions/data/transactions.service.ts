@@ -170,6 +170,10 @@ export class TransactionsService {
    * `transferToAccountId: null`. The moment is stamped with its UTC offset
    * because the API rejects a naive `transactionDate` outright.
    *
+   * `tagIds` goes out every time, the whole set the form chose (an empty array
+   * when nothing was tagged) — the same replacement contract {@link refile}
+   * carries, so recording with Tags and refiling them run the one wire shape.
+   *
    * Failures arrive already normalised: a rejection with no body becomes a
    * form-level `ApiError` with an empty field map — a banner line, nothing to
    * pin to a control.
@@ -187,6 +191,7 @@ export class TransactionsService {
         transferToAccountId: isTransfer
           ? transaction.transferToAccountId
           : null,
+        tagIds: [...transaction.tagIds],
       })
       .pipe(map(toTransaction));
   }

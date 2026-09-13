@@ -24,6 +24,7 @@ import {
   Category,
   keepSavedFilingCategory,
 } from '@/app/domains/app/categories';
+import { Tag, TagField } from '@/app/domains/app/tags';
 import { combineDateTime } from '../data/combine-date-time';
 import {
   RefileTransaction,
@@ -50,6 +51,7 @@ type RefileTransactionModel = {
   time: Date | null;
   categoryId: number | null;
   description: string;
+  tags: readonly Tag[];
 };
 
 /**
@@ -66,9 +68,11 @@ type RefileTransactionModel = {
  * so correcting one field cannot null another (the adapter and its spec carry
  * that contract). A Transfer is refiled only from the Account it was recorded
  * against; the screen offers this form nowhere else, and the adapter still
- * forces a Transfer's Category to null on the wire (ADR 0010). Tags have no
- * entry surface in this slice, so the Transaction's current Tag ids ride along
- * unchanged.
+ * forces a Transfer's Category to null on the wire (ADR 0010). The Tag field
+ * opens carrying the Transaction's current Tags as chips (seeded from the
+ * `Transaction`, not a fetch) and the payload's `tagIds` reflect the chips as
+ * they stand at submit — so removing one here really drops its id, which the
+ * old blind pass-through of `transaction().tags` could never do.
  *
  * Removing a Transaction is **not** done here. An earlier slice (story 32) put
  * the *Remove* button in this form's footer, reasoning that removal inherited
@@ -93,6 +97,7 @@ type RefileTransactionModel = {
     MatTimepickerModule,
     PesoPipe,
     FormField,
+    TagField,
   ],
 })
 export class RefileTransactionForm {
@@ -165,6 +170,7 @@ export class RefileTransactionForm {
     time: this.transaction().date,
     categoryId: this.transaction().categoryId,
     description: this.transaction().description ?? '',
+    tags: [...this.transaction().tags],
   }));
 
   protected readonly refileForm = form(this.model, (path) => {
@@ -206,7 +212,7 @@ export class RefileTransactionForm {
         this.errorMessage.set(null);
 
         try {
-          const { date, time, categoryId, description } = this.model();
+          const { date, time, categoryId, description, tags } = this.model();
           const refiled = await firstValueFrom(
             this.service.refile(this.transaction(), {
               // `required` has ruled out a null day or time by the time this
@@ -214,9 +220,9 @@ export class RefileTransactionForm {
               date: combineDateTime(date as Date, time as Date),
               categoryId,
               description: description.trim() || null,
-              // No Tag entry in this slice: the current ids ride along so a
-              // full-replacement payload leaves the Tags exactly as they were.
-              tagIds: this.transaction().tags.map((tag) => tag.id),
+              // The chips as they stand — a real replacement, so a Tag removed
+              // on the field is a Tag dropped from the Transaction.
+              tagIds: tags.map((tag) => tag.id),
             } satisfies RefileTransaction)
           );
           this.refiled.emit(refiled);

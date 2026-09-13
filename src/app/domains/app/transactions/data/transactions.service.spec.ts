@@ -199,6 +199,7 @@ describe('TransactionsService', () => {
         date: new Date(2026, 7, 29, 9, 0, 0),
         categoryId: 2,
         transferToAccountId: null,
+        tagIds: [] as readonly number[],
         ...over,
       };
     }
@@ -215,9 +216,20 @@ describe('TransactionsService', () => {
         categoryId: 2,
         transactionDate: '2026-08-29T09:00:00+05:30',
         transferToAccountId: null,
+        tagIds: [],
       });
 
       request.flush(resource({ id: 55, type: 'Income', amount: 5000 }));
+      await result;
+    });
+
+    it('sends the chosen tagIds as the whole set, the same replacement contract refile carries', async () => {
+      const result = firstValueFrom(service.record(newTx({ tagIds: [9, 4] })));
+
+      const request = http.expectOne(`${BASE_URL}/api/transactions`);
+      expect(request.request.body).toMatchObject({ tagIds: [9, 4] });
+
+      request.flush(resource({ id: 60, type: 'Income' }));
       await result;
     });
 
@@ -236,6 +248,7 @@ describe('TransactionsService', () => {
         categoryId: 4,
         transactionDate: '2026-08-29T09:00:00+05:30',
         transferToAccountId: null,
+        tagIds: [],
       });
 
       request.flush(resource({ id: 56, type: 'Expense' }));
@@ -306,6 +319,7 @@ describe('TransactionsService', () => {
         categoryId: null,
         transactionDate: '2026-08-29T09:00:00+05:30',
         transferToAccountId: 9,
+        tagIds: [],
       });
 
       request.flush(

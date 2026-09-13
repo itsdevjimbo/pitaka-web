@@ -1,11 +1,15 @@
 import { OutputEmitterRef, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FieldTree } from '@angular/forms/signals';
-import { provideNativeDateAdapter } from '@angular/material/core';
+import {
+  MATERIAL_ANIMATIONS,
+  provideNativeDateAdapter,
+} from '@angular/material/core';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
+import { Tag, TagsService } from '@/app/domains/app/tags';
 import {
   Transaction,
   TransactionDirection,
@@ -21,7 +25,13 @@ type Model = {
   time: Date | null;
   categoryId: number | null;
   transferToAccountId: number | null;
+  tags: readonly Tag[];
 };
+
+const KNOWN_TAGS: Tag[] = [
+  { id: 9, name: 'treats' },
+  { id: 4, name: 'holiday' },
+];
 
 /** The slice of the component the tests reach into. */
 type RecordFormInternals = {
@@ -47,7 +57,13 @@ const COULD_NOT_RECORD =
 
 /** What `list()` returns — active only, the filing rule (#108). */
 const CATEGORIES: Category[] = [
-  { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
+  {
+    id: 1,
+    name: 'Groceries',
+    kind: 'expense',
+    isActive: true,
+    isDefault: false,
+  },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
@@ -97,7 +113,8 @@ describe('RecordTransactionForm', () => {
   function setup(
     record: TransactionsService['record'],
     list: CategoriesService['list'] = () => of(CATEGORIES),
-    destinations: TransferDestinationAccount[] = DESTINATIONS
+    destinations: TransferDestinationAccount[] = DESTINATIONS,
+    tagsAll: TagsService['all'] = () => of(KNOWN_TAGS)
   ) {
     allCategories.mockClear();
     TestBed.configureTestingModule({
@@ -105,8 +122,13 @@ describe('RecordTransactionForm', () => {
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
+        {
+          provide: MATERIAL_ANIMATIONS,
+          useValue: { animationsDisabled: true },
+        },
         { provide: TransactionsService, useValue: { record } },
         { provide: CategoriesService, useValue: { list, all: allCategories } },
+        { provide: TagsService, useValue: { all: tagsAll } },
       ],
     });
 
@@ -141,6 +163,7 @@ describe('RecordTransactionForm', () => {
       time: AT_1405,
       categoryId: 1,
       transferToAccountId: null,
+      tags: [],
       ...over,
     });
   }
@@ -196,9 +219,49 @@ describe('RecordTransactionForm', () => {
       date: COMBINED,
       categoryId: 1,
       transferToAccountId: null,
+      tagIds: [],
     });
     expect(emitted).toEqual([RECORDED]);
     expect(cmp.errorMessage()).toBeNull();
+  });
+
+  it('still records when the Tag option set fails to load — the field disables, the form saves', async () => {
+    const record = vi.fn((_tx) => of(RECORDED));
+    const { fixture, cmp } = setup(
+      record as unknown as TransactionsService['record'],
+      undefined,
+      undefined,
+      () => throwError(() => new ApiError('tags down', 500, {}))
+    );
+
+    fill(cmp, { direction: 'expense', amount: 120.5, categoryId: 1 });
+    await submitAndSettle(fixture, cmp);
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ tagIds: [] })
+    );
+    expect(cmp.errorMessage()).toBeNull();
+  });
+
+  it('folds the chosen Tag chips into the payload as tagIds', async () => {
+    const record = vi.fn((_tx) => of(RECORDED));
+    const { fixture, cmp } = setup(
+      record as unknown as TransactionsService['record']
+    );
+
+    fill(cmp, { direction: 'expense', amount: 120.5, categoryId: 1 });
+    cmp.model.update((model) => ({
+      ...model,
+      tags: [
+        { id: 9, name: 'treats' },
+        { id: 4, name: 'holiday' },
+      ],
+    }));
+    await submitAndSettle(fixture, cmp);
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ tagIds: [9, 4] })
+    );
   });
 
   it('records an income against the same endpoint, differing only by direction and Category', async () => {
@@ -217,6 +280,7 @@ describe('RecordTransactionForm', () => {
       date: COMBINED,
       categoryId: 2,
       transferToAccountId: null,
+      tagIds: [],
     });
   });
 
@@ -274,7 +338,9 @@ describe('RecordTransactionForm', () => {
     fill(cmp, { categoryId: null });
     await submitAndSettle(fixture, cmp);
 
-    expect(messagesOn(cmp.recordForm.categoryId)).toContain('Choose a category');
+    expect(messagesOn(cmp.recordForm.categoryId)).toContain(
+      'Choose a category'
+    );
     expect(record).not.toHaveBeenCalled();
   });
 
@@ -321,7 +387,9 @@ describe('RecordTransactionForm', () => {
 
   it('shows a bodyless rejection as one form-level line that blames no field', async () => {
     const { fixture, cmp } = setup(() =>
-      throwError(() => new ApiError('We could not record that just now.', 400, {}))
+      throwError(
+        () => new ApiError('We could not record that just now.', 400, {})
+      )
     );
 
     fill(cmp);
@@ -334,7 +402,9 @@ describe('RecordTransactionForm', () => {
   });
 
   it('falls back to the generic banner when the failure is not an ApiError', async () => {
-    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
+    const { fixture, cmp } = setup(() =>
+      throwError(() => new Error('offline'))
+    );
 
     fill(cmp);
     await submitAndSettle(fixture, cmp);
@@ -413,6 +483,7 @@ describe('RecordTransactionForm', () => {
         date: COMBINED,
         categoryId: null,
         transferToAccountId: 4,
+        tagIds: [],
       });
     });
 
