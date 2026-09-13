@@ -16,6 +16,10 @@ _Avoid_: Account, user account, my account, user settings
 A Profile that has, or has not, proven control of its email address. Registering creates an unconfirmed Profile and does not sign the person in; confirming is the one step between registering and signing in.
 _Avoid_: Verified, activated, validated
 
+**Pending email change**:
+A time-bounded request to replace a Profile's email address. It ends when the new address is confirmed, the request is cancelled or replaced, or its confirmation window expires silently.
+_Avoid_: Email change in progress, pending email, unconfirmed email
+
 **Locked out**:
 A Profile temporarily barred from signing in after repeated failed attempts. A timed state that clears itself — distinct from Retire, which is a deliberate choice and never applies to a Profile.
 _Avoid_: Banned, suspended, disabled, blocked
