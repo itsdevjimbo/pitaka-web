@@ -3,26 +3,47 @@
     class="flex w-fit items-center gap-x-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-100"
     routerLink="/app/goals"
   >
-    <mat-icon class="size-4" svgIcon="arrow-left" />
+    <mat-icon
+      class="size-4"
+      svgIcon="arrow-left"
+    />
     Goals
   </a>
 
   @if (loading()) {
-    <div class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400" role="status">
-      <mat-icon class="size-6 animate-spin" svgIcon="loader-circle" />
+    <div
+      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+      role="status"
+    >
+      <mat-icon
+        class="size-6 animate-spin"
+        svgIcon="loader-circle"
+      />
       <span>Loading contributions…</span>
     </div>
   } @else if (errorMessage(); as message) {
-    <div class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800" role="alert">
-      <mat-icon class="size-8 text-neutral-400" svgIcon="circle-alert" />
+    <div
+      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
+      role="alert"
+    >
+      <mat-icon
+        class="size-8 text-neutral-400"
+        svgIcon="circle-alert"
+      />
       <p class="max-w-sm text-neutral-600 dark:text-neutral-300">{{ message }}</p>
       @if (notFound()) {
-        <a matButton="filled" routerLink="/app/goals">
+        <a
+          matButton="filled"
+          routerLink="/app/goals"
+        >
           <mat-icon svgIcon="arrow-left" />
           Back to goals
         </a>
       } @else {
-        <button matButton="filled" (click)="load()">
+        <button
+          matButton="filled"
+          (click)="load()"
+        >
           <mat-icon svgIcon="refresh-cw" />
           Try again
         </button>
@@ -33,27 +54,145 @@
       <div class="flex items-center justify-between gap-x-4">
         <div class="flex items-center gap-x-2">
           <h1 class="text-2xl font-bold tracking-tight">{{ currentGoal.name }}</h1>
-          <span class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300">{{ currentGoal.status }}</span>
+          <span
+            class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+          >
+            {{ currentGoal.status }}
+          </span>
         </div>
-        @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) { <button matButton="filled" (click)="setStatus('Completed')">Mark complete</button> }
-        <button matIconButton aria-label="Goal actions" [matMenuTriggerFor]="goalMenu" [disabled]="busy()">
+        @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
+          <button
+            matButton="filled"
+            (click)="setStatus('Completed')"
+          >
+            Mark complete
+          </button>
+        }
+        <button
+          matIconButton
+          aria-label="Goal actions"
+          [matMenuTriggerFor]="goalMenu"
+          [disabled]="busy()"
+        >
           <mat-icon svgIcon="ellipsis-vertical" />
         </button>
         <mat-menu #goalMenu>
-          <button mat-menu-item (click)="openEdit(currentGoal)"><mat-icon svgIcon="pencil" /><span>Edit</span></button>
-          @if (currentGoal.status === 'Active') { <button mat-menu-item (click)="askAbandon()"><mat-icon svgIcon="archive" /><span>Abandon</span></button> } @else { <button mat-menu-item (click)="setStatus('Active')"><mat-icon svgIcon="circle-check" /><span>Mark active</span></button> }
-          <button mat-menu-item (click)="askDelete()"><mat-icon svgIcon="trash-2" /><span>Delete</span></button>
+          <button
+            mat-menu-item
+            (click)="openEdit(currentGoal)"
+          >
+            <mat-icon svgIcon="pencil" />
+            <span>Edit</span>
+          </button>
+          @if (currentGoal.status === 'Active') {
+            <button
+              mat-menu-item
+              (click)="askAbandon()"
+            >
+              <mat-icon svgIcon="archive" />
+              <span>Abandon</span>
+            </button>
+          } @else {
+            <button
+              mat-menu-item
+              (click)="setStatus('Active')"
+            >
+              <mat-icon svgIcon="circle-check" />
+              <span>Mark active</span>
+            </button>
+          }
+          <button
+            mat-menu-item
+            (click)="askDelete()"
+          >
+            <mat-icon svgIcon="trash-2" />
+            <span>Delete</span>
+          </button>
         </mat-menu>
       </div>
       <goals-goal-progress [goal]="currentGoal" />
-      @if (confirmingAbandon()) { <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100" role="alertdialog"><p>Abandon <span class="font-semibold">{{ currentGoal.name }}</span>? You won’t be able to add Contributions until you mark it active again.</p><div class="flex gap-x-2"><button matButton (click)="cancelPrompt()">Cancel</button><button matButton="filled" (click)="confirmAbandon()">Abandon</button></div></div> }
-      @if (confirmingDelete(); as confirmation) { <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200" role="alertdialog"><p>Delete <span class="font-semibold">{{ currentGoal.name }}</span>? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{ confirmation.count === 1 ? '' : 's' }}, releasing their earmarks. The {{ currentGoal.currentAmount | peso }} remains in its Accounts but will no longer count toward a Goal.</p><div class="flex gap-x-2"><button matButton (click)="cancelPrompt()">Cancel</button><button matButton="filled" (click)="confirmDelete()">Delete</button></div></div> }
-      @if (notice(); as n) { <app-row-notice [message]="n.message">@if (n.retry; as retry) { <div row-notice-actions><button matButton (click)="retry()">Try again</button></div> }</app-row-notice> }
+      @if (confirmingAbandon()) {
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+          role="alertdialog"
+        >
+          <p>
+            Abandon
+            <span class="font-semibold">{{ currentGoal.name }}</span>
+            ? You won’t be able to add Contributions until you mark it active again.
+          </p>
+          <div class="flex gap-x-2">
+            <button
+              matButton
+              (click)="cancelPrompt()"
+            >
+              Cancel
+            </button>
+            <button
+              matButton="filled"
+              (click)="confirmAbandon()"
+            >
+              Abandon
+            </button>
+          </div>
+        </div>
+      }
+      @if (confirmingDelete(); as confirmation) {
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200"
+          role="alertdialog"
+        >
+          <p>
+            Delete
+            <span class="font-semibold">{{ currentGoal.name }}</span>
+            ? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{
+              confirmation.count === 1 ? '' : 's'
+            }}, releasing their earmarks. The {{ currentGoal.currentAmount | peso }} remains in its Accounts but will no
+            longer count toward a Goal.
+          </p>
+          <div class="flex gap-x-2">
+            <button
+              matButton
+              (click)="cancelPrompt()"
+            >
+              Cancel
+            </button>
+            <button
+              matButton="filled"
+              (click)="confirmDelete()"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      }
+      @if (notice(); as n) {
+        <app-row-notice [message]="n.message">
+          @if (n.retry; as retry) {
+            <div row-notice-actions>
+              <button
+                matButton
+                (click)="retry()"
+              >
+                Try again
+              </button>
+            </div>
+          }
+        </app-row-notice>
+      }
     </header>
 
-    <section class="flex flex-col gap-y-4" aria-labelledby="contributions-heading">
+    <section
+      class="flex flex-col gap-y-4"
+      aria-labelledby="contributions-heading"
+    >
       <div class="flex items-center justify-between gap-x-4">
-        <h2 id="contributions-heading" class="text-lg font-semibold">Contributions</h2>
+        <h2
+          id="contributions-heading"
+          class="text-lg font-semibold"
+        >
+          Contributions
+        </h2>
         @if (currentGoal.status === 'Active' && !isEmpty()) {
           <!-- The Contribution write lifecycle attaches this detail-only action. -->
           <button matButton="filled">
@@ -65,10 +204,17 @@
 
       @if (isEmpty()) {
         @if (currentGoal.status === 'Active') {
-          <div class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700">
-            <mat-icon class="size-10 text-neutral-400" svgIcon="wallet-cards" />
+          <div
+            class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+          >
+            <mat-icon
+              class="size-10 text-neutral-400"
+              svgIcon="wallet-cards"
+            />
             <p class="text-lg font-semibold">No Contributions yet</p>
-            <p class="max-w-xs text-neutral-500 dark:text-neutral-400">Add the first Contribution to start building toward this Goal.</p>
+            <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
+              Add the first Contribution to start building toward this Goal.
+            </p>
             <button matButton="filled">
               <mat-icon svgIcon="plus" />
               Add contribution
