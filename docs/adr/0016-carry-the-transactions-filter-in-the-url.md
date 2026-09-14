@@ -2,15 +2,22 @@
 status: accepted
 ---
 
-# Carry the Transactions filter in the URL, in the person's terms
+# Carry list filters in the URL, in the person's terms
 
-The Transactions list's filter criteria live in the query string, and the
+List filter criteria live in the query string, and the
 route — not a signal on the component — is the source of truth for them (#41). A
 narrowed view survives a refresh, can be bookmarked, and can be sent to someone.
 The filter bar writes the URL and reacts to it; it never sets the criteria
 signal directly.
 
 ## The parameters are the person's criteria, not the wire's
+
+Accounts uses the same route-owned rule. Its default is active Accounts of all
+types and so has no query keys. `status=retired` selects retired Accounts,
+`status=all` includes both lifecycles, and `type=cash|bank|wallet|investment`
+narrows by type. These are lower-case person-facing values; the adapter alone
+translates them to the API's `isActive` and PascalCase enum parameters. An
+unknown Accounts status or type falls back safely to that axis's default.
 
 `GET /api/transactions` takes `accountId`, `categoryId`, `type`, and
 offset-bearing, end-exclusive `from`/`to` (ADR 0011, and the API's own
@@ -27,7 +34,7 @@ filter-bounds ADR). The URL deliberately does **not** mirror that:
 - `page` is not carried at all. It is a position in a result set, not something
   the person filtered by, and a page number over someone else's matches means
   nothing to whoever receives the link. Entry always starts at page 1;
-  *Load more* pages within the session and is forgotten on the next navigation.
+  _Load more_ pages within the session and is forgotten on the next navigation.
 
 ## Parsing is total
 

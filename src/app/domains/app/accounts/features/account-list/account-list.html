@@ -1,5 +1,4 @@
 <div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
-  <!-- Heading -->
   <header class="flex items-start justify-between gap-x-4">
     <div class="flex flex-col gap-y-1">
       <h1 class="text-2xl font-bold tracking-tight">Accounts</h1>
@@ -7,20 +6,16 @@
         Where you stand right now.
       </p>
     </div>
-
     @if (!loading() && !errorMessage()) {
       <button
         matButton="filled"
         (click)="openNewAccountDialog()"
       >
-        <mat-icon svgIcon="plus" />
-        Add account
+        <mat-icon svgIcon="plus" />Add account
       </button>
     }
   </header>
-
   @if (loading()) {
-    <!-- Slow load: show that it is working -->
     <div
       class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
       role="status"
@@ -28,11 +23,9 @@
       <mat-icon
         class="size-6 animate-spin"
         svgIcon="loader-circle"
-      />
-      <span>Loading your accounts…</span>
+      /><span>Loading your accounts…</span>
     </div>
   } @else if (errorMessage(); as message) {
-    <!-- Failed load: explain, and offer a retry -->
     <div
       class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
       role="alert"
@@ -48,12 +41,10 @@
         matButton="filled"
         (click)="load()"
       >
-        <mat-icon svgIcon="refresh-cw" />
-        Try again
+        <mat-icon svgIcon="refresh-cw" />Try again
       </button>
     </div>
-  } @else if (accounts()!.length === 0) {
-    <!-- Nothing yet: say what to do next -->
+  } @else if (trueEmpty()) {
     <div
       class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
     >
@@ -63,7 +54,7 @@
       />
       <p class="text-lg font-semibold">No accounts yet</p>
       <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
-        Add your first account — cash, a bank account, a card, a wallet, or an
+        Add your first account — cash, a bank account, a wallet, or an
         investment — to start tracking where your money sits.
       </p>
       <button
@@ -71,196 +62,235 @@
         class="mt-2"
         (click)="openNewAccountDialog()"
       >
-        <mat-icon svgIcon="plus" />
-        Add account
+        <mat-icon svgIcon="plus" />Add account
       </button>
     </div>
   } @else {
-    <!-- Total, and what it covers -->
-    <div
-      class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-neutral-100 px-4 py-3 dark:bg-neutral-900"
+    <section
+      class="flex flex-col gap-4 rounded-xl bg-neutral-100 px-4 py-3 dark:bg-neutral-900"
+      aria-label="Account filters"
     >
-      <div class="flex flex-col">
-        <span class="text-sm text-neutral-500 dark:text-neutral-400">
-          {{ totalLabel() }}
-        </span>
-        <span class="text-2xl font-bold tracking-tight tabular-nums">
-          {{ total() | peso }}
-        </span>
-        @if (hasRetired() && showRetired()) {
-          <span class="text-sm text-neutral-500 dark:text-neutral-400">
-            Including retired: {{ allAccountsTotal() | peso }}
-          </span>
+      <div
+        class="flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="Filter by status"
+      >
+        @for (
+          status of [
+            { label: 'Active', value: true },
+            { label: 'Retired', value: false },
+            { label: 'All', value: undefined },
+          ];
+          track status.label
+        ) {
+          <button
+            matButton
+            [attr.aria-pressed]="criteria().isActive === status.value"
+            [class.font-bold]="criteria().isActive === status.value"
+            (click)="
+              applyCriteria({ isActive: status.value, type: criteria().type })
+            "
+          >
+            {{ status.label }}
+          </button>
         }
       </div>
-
-      @if (hasRetired()) {
-        <div class="flex items-center gap-x-2">
-          <input
-            id="show-retired"
-            type="checkbox"
-            class="size-4"
-            [checked]="showRetired()"
-            (change)="toggleRetired()"
-          />
-          <label
-            for="show-retired"
-            class="text-sm font-medium text-neutral-600 select-none dark:text-neutral-300"
+      <mat-form-field
+        subscriptSizing="dynamic"
+        class="w-full sm:w-56"
+        ><mat-label>Account type</mat-label
+        ><mat-select
+          aria-label="Filter by account type"
+          [value]="criteria().type ?? null"
+          (selectionChange)="
+            applyCriteria({
+              isActive: criteria().isActive,
+              type: $event.value ?? undefined,
+            })
+          "
+          ><mat-option [value]="null">All types</mat-option>
+          @for (type of types | keyvalue; track type.key) {
+            <mat-option [value]="type.key">{{ type.value.label }}</mat-option>
+          }
+        </mat-select></mat-form-field
+      >
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <span class="text-sm text-neutral-500 dark:text-neutral-400">{{
+            totalLabel()
+          }}</span>
+          <div class="text-2xl font-bold tracking-tight tabular-nums">
+            {{ total() | peso }}
+          </div>
+        </div>
+        @if (filtering()) {
+          <span
+            class="flex items-center gap-2 text-sm text-neutral-500"
+            role="status"
+            ><mat-icon
+              class="size-4 animate-spin"
+              svgIcon="loader-circle"
+            />Updating…</span
           >
-            Show retired
-          </label>
+        }
+      </div>
+      @if (filterError(); as message) {
+        <div
+          class="flex items-center justify-between gap-3 text-sm"
+          role="alert"
+        >
+          <span>{{ message }}</span
+          ><button
+            matButton
+            (click)="retryFilters()"
+          >
+            Try again
+          </button>
         </div>
       }
-    </div>
-
-    <!-- The list -->
-    <ul class="flex flex-col gap-y-2">
-      @for (account of visibleAccounts(); track account.id) {
-        <li
-          class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
-          [class.opacity-55]="!account.isActive"
+      @if (actionMessage(); as message) {
+        <p
+          class="text-sm text-neutral-600 dark:text-neutral-300"
+          role="status"
         >
-          <div class="flex items-center gap-x-3">
-            <a
-              class="-m-2 flex min-w-0 flex-auto items-center gap-x-3 rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-900"
-              [routerLink]="['/app/accounts', account.id]"
-            >
-              <span
-                class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
+          {{ message }}
+        </p>
+      }
+    </section>
+    @if (matchedNothing()) {
+      <div
+        class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-14 text-center dark:border-neutral-700"
+      >
+        <p class="text-lg font-semibold">No Accounts match these filters</p>
+        <button
+          matButton="filled"
+          (click)="clearFilters()"
+        >
+          Clear filters
+        </button>
+      </div>
+    } @else {
+      <ul class="flex flex-col gap-y-2">
+        @for (account of accounts() ?? []; track account.id) {
+          <li
+            class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
+          >
+            <div class="flex items-center gap-x-3">
+              <a
+                class="-m-2 flex min-w-0 flex-auto items-center gap-x-3 rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                [routerLink]="['/app/accounts', account.id]"
+                ><span
+                  class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
+                  ><mat-icon
+                    class="size-5"
+                    [svgIcon]="types[account.type].icon"
+                /></span>
+                <div class="flex min-w-0 flex-auto flex-col">
+                  <span class="truncate font-medium">{{ account.name }}</span
+                  ><span class="text-sm text-neutral-500 dark:text-neutral-400"
+                    >{{ types[account.type].label }}
+                    @if (!account.isActive) {
+                      <span
+                        class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold uppercase dark:bg-neutral-700"
+                        >Retired</span
+                      >
+                    }
+                  </span>
+                </div>
+                <span class="shrink-0 font-semibold tabular-nums">{{
+                  account.currentBalance | peso
+                }}</span></a
               >
+              @if (busyId() === account.id) {
                 <mat-icon
-                  class="size-5"
-                  [svgIcon]="types[account.type].icon"
+                  class="size-5 animate-spin"
+                  svgIcon="loader-circle"
+                  role="status"
                 />
-              </span>
-
-              <div class="flex min-w-0 flex-auto flex-col">
-                <span class="truncate font-medium">{{ account.name }}</span>
-                <span
-                  class="flex items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
+              } @else {
+                <button
+                  matIconButton
+                  aria-label="Account actions"
+                  [matMenuTriggerFor]="rowMenu"
                 >
-                  {{ types[account.type].label }}
-                  @if (!account.isActive) {
-                    <span
-                      class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
-                    >
-                      Retired
-                    </span>
-                  }
-                </span>
-              </div>
-
-              <span class="shrink-0 font-semibold tabular-nums">
-                {{ account.currentBalance | peso }}
-              </span>
-            </a>
-
-            @if (busyId() === account.id) {
-              <mat-icon
-                class="size-5 shrink-0 animate-spin text-neutral-400"
-                svgIcon="loader-circle"
-                role="status"
-                aria-label="Working…"
-              />
-            } @else {
-              <button
-                matIconButton
-                class="shrink-0"
-                aria-label="Account actions"
-                [matMenuTriggerFor]="rowMenu"
+                  <mat-icon svgIcon="ellipsis-vertical" /></button
+                ><mat-menu #rowMenu
+                  ><button
+                    mat-menu-item
+                    (click)="openRenameDialog(account)"
+                  >
+                    <mat-icon svgIcon="pencil" /><span>Rename</span></button
+                  ><button
+                    mat-menu-item
+                    (click)="toggleActive(account)"
+                  >
+                    <mat-icon
+                      [svgIcon]="
+                        account.isActive ? 'archive' : 'archive-restore'
+                      "
+                    /><span>{{
+                      account.isActive ? 'Retire' : 'Reactivate'
+                    }}</span></button
+                  ><button
+                    mat-menu-item
+                    (click)="askDelete(account)"
+                  >
+                    <mat-icon svgIcon="trash-2" /><span>Delete</span>
+                  </button></mat-menu
+                >
+              }
+            </div>
+            @if (confirmingDeleteId() === account.id) {
+              <div
+                role="alertdialog"
+                aria-label="Confirm delete"
               >
-                <mat-icon svgIcon="ellipsis-vertical" />
-              </button>
-              <mat-menu #rowMenu>
-                <button
-                  mat-menu-item
-                  (click)="openRenameDialog(account)"
-                >
-                  <mat-icon svgIcon="pencil" />
-                  <span>Rename</span>
-                </button>
-                <button
-                  mat-menu-item
-                  (click)="toggleActive(account)"
-                >
-                  <mat-icon
-                    [svgIcon]="account.isActive ? 'archive' : 'archive-restore'"
-                  />
-                  <span>{{ account.isActive ? 'Retire' : 'Reactivate' }}</span>
-                </button>
-                <button
-                  mat-menu-item
-                  (click)="askDelete(account)"
-                >
-                  <mat-icon svgIcon="trash-2" />
-                  <span>Delete</span>
-                </button>
-              </mat-menu>
-            }
-          </div>
-
-          @if (confirmingDeleteId() === account.id) {
-            <div
-              class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
-              role="alertdialog"
-              aria-label="Confirm delete"
-            >
-              <p class="text-sm text-neutral-700 dark:text-neutral-200">
-                Delete <span class="font-semibold">{{ account.name }}</span
-                >? This can’t be undone.
-              </p>
-              <div class="flex gap-x-2">
+                <p>
+                  Delete <span class="font-semibold">{{ account.name }}</span
+                  >? This can’t be undone.
+                </p>
                 <button
                   matButton
-                  type="button"
                   (click)="cancelDelete()"
                 >
-                  Cancel
-                </button>
-                <button
+                  Cancel</button
+                ><button
                   matButton="filled"
-                  type="button"
                   (click)="confirmDelete(account)"
                 >
                   Delete
                 </button>
               </div>
-            </div>
-          }
-
-          @if (notice(); as n) {
-            @if (n.id === account.id) {
-              <app-row-notice [message]="n.message">
-                @if (n.retire || n.retry) {
-                  <div
-                    row-notice-actions
-                    class="flex gap-x-2"
-                  >
-                    @if (n.retire; as retire) {
-                      <button
-                        matButton
-                        type="button"
-                        (click)="retire()"
-                      >
-                        Retire instead
-                      </button>
-                    }
-                    @if (n.retry; as retry) {
-                      <button
-                        matButton
-                        type="button"
-                        (click)="retry()"
-                      >
-                        Try again
-                      </button>
-                    }
-                  </div>
-                }
-              </app-row-notice>
             }
-          }
-        </li>
-      }
-    </ul>
+            @if (notice(); as n) {
+              @if (n.id === account.id) {
+                <app-row-notice [message]="n.message">
+                  @if (n.retire || n.retry) {
+                    <div row-notice-actions>
+                      @if (n.retire; as retire) {
+                        <button
+                          matButton
+                          (click)="retire()"
+                        >
+                          Retire instead
+                        </button>
+                      }
+                      @if (n.retry; as retry) {
+                        <button
+                          matButton
+                          (click)="retry()"
+                        >
+                          Try again
+                        </button>
+                      }
+                    </div>
+                  }
+                </app-row-notice>
+              }
+            }
+          </li>
+        }
+      </ul>
+    }
   }
 </div>

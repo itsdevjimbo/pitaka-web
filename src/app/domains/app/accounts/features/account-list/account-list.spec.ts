@@ -1,8 +1,13 @@
 import { Signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
-import { provideRouter } from '@angular/router';
-import { of, Subject, throwError } from 'rxjs';
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  ParamMap,
+  provideRouter,
+} from '@angular/router';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
@@ -25,7 +30,6 @@ type RowNotice = {
 
 /** The slice of the component the tests reach into. */
 type AccountsInternals = {
-  toggleRetired(): void;
   load(): void;
   openNewAccountDialog(): void;
   openRenameDialog(account: Account): void;
@@ -66,7 +70,8 @@ describe('AccountList', () => {
 
   function setup(
     all: AccountsService['all'],
-    overrides: Partial<AccountsService> = {}
+    overrides: Partial<AccountsService> = {},
+    routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({}))
   ) {
     TestBed.configureTestingModule({
       imports: [AccountList],
@@ -74,7 +79,17 @@ describe('AccountList', () => {
         provideIcons(),
         provideRouter([]),
         provideDialogDefaults(),
-        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        {
+          provide: MATERIAL_ANIMATIONS,
+          useValue: { animationsDisabled: true },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { queryParamMap: routeParams.value },
+            queryParamMap: routeParams,
+          },
+        },
         { provide: AccountsService, useValue: { all, ...overrides } },
       ],
     });
@@ -89,6 +104,7 @@ describe('AccountList', () => {
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
       dialog: () => overlay().querySelector<HTMLElement>('[role="dialog"]'),
       dialogText: () => overlay().textContent ?? '',
+      routeParams,
     };
   }
 
@@ -117,9 +133,9 @@ describe('AccountList', () => {
 
   /** Find a button by its text, anywhere in the open overlay. */
   function overlayButton(label: string): HTMLButtonElement {
-    const button = Array.from(
-      overlay().querySelectorAll('button')
-    ).find((element) => (element.textContent ?? '').includes(label));
+    const button = Array.from(overlay().querySelectorAll('button')).find(
+      (element) => (element.textContent ?? '').includes(label)
+    );
     if (!button) {
       throw new Error(`No overlay button labelled "${label}"`);
     }
@@ -189,11 +205,11 @@ describe('AccountList', () => {
     expect(text()).toContain(formatPeso(8500));
   });
 
-  it('shows a plainly-labelled total when nothing is retired', () => {
+  it('names the lifecycle constraint in the total', () => {
     const { text } = setup(() => of([CASH, BANK]));
 
     expect(text()).toContain('Total');
-    expect(text()).not.toContain('Total across');
+    expect(text()).toContain('Total across active accounts');
     expect(text()).toContain(formatPeso(10000));
   });
 
@@ -208,30 +224,28 @@ describe('AccountList', () => {
     expect(text()).toContain(formatPeso(0.3));
   });
 
-  it('hides retired Accounts and their balance from the headline total, without a confusing extra total', () => {
+  it('keeps the lifecycle controls visible when the Profile owns Accounts', () => {
     const { text } = setup(() => of([CASH, BANK, OLD_WALLET]));
 
-    expect(text()).not.toContain('Old GCash');
+    expect(text()).toContain('Old GCash');
+    expect(text()).toContain('Active');
+    expect(text()).toContain('Retired');
+    expect(text()).toContain('All');
     expect(text()).toContain('Total across active accounts');
     // Headline is 1500 + 8500; the retired-inclusive total stays hidden until asked for.
-    expect(text()).toContain(formatPeso(10000));
-    expect(text()).not.toContain('Including retired:');
-  });
-
-  it('reveals retired Accounts on request and confirms the total now covers them all', () => {
-    const { fixture, cmp, text } = setup(() => of([CASH, BANK, OLD_WALLET]));
-
-    cmp.toggleRetired();
-    fixture.detectChanges();
-
-    expect(text()).toContain('Old GCash');
-    expect(text()).toContain('Retired');
-    expect(text()).toContain('Total across all accounts');
-    expect(text()).toContain('Including retired:');
     expect(text()).toContain(formatPeso(10300));
   });
 
-  it('offers no retired toggle when nothing is retired', () => {
+  it('offers a status control even when no Account is retired', () => {
+    const { text } = setup(() => of([CASH, BANK, OLD_WALLET]));
+
+    expect(text()).toContain('Old GCash');
+    expect(text()).toContain('Retired');
+    expect(text()).toContain('Total across active accounts');
+    expect(text()).toContain(formatPeso(10300));
+  });
+
+  it('offers status choices when nothing is retired', () => {
     const { text } = setup(() => of([CASH, BANK]));
 
     expect(text()).not.toContain('Show retired');
@@ -242,6 +256,80 @@ describe('AccountList', () => {
 
     expect(text()).toContain('No accounts yet');
     expect(text()).toContain('Add your first account');
+  });
+
+  it('returns to the true-empty state after deleting the final Account', () => {
+    const all = vi.fn().mockReturnValueOnce(of([CASH])).mockReturnValueOnce(of([]));
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([CASH]))
+      .mockReturnValueOnce(of([]));
+    const { cmp, fixture, text } = setup(all, {
+      list: list as unknown as AccountsService['list'],
+      remove: (() => of(undefined)) as AccountsService['remove'],
+    });
+
+    cmp.confirmDelete(CASH);
+    fixture.detectChanges();
+
+    expect(all).toHaveBeenCalledTimes(2);
+    expect(text()).toContain('No accounts yet');
+    expect(text()).not.toContain('Account filters');
+  });
+
+  it('keeps the current rows and their total constraint until the newer URL criteria succeeds', () => {
+    const retired = new Subject<Account[]>();
+    const all = new Subject<Account[]>();
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([CASH]))
+      .mockReturnValueOnce(retired)
+      .mockReturnValueOnce(all);
+    const { fixture, routeParams, text } = setup(
+      () => of([CASH, OLD_WALLET]),
+      { list: list as unknown as AccountsService['list'] }
+    );
+
+    routeParams.next(convertToParamMap({ status: 'retired' }));
+    fixture.detectChanges();
+    expect(text()).toContain('Cash on hand');
+    expect(text()).toContain('Total across active accounts');
+
+    routeParams.next(convertToParamMap({ status: 'all' }));
+    retired.next([OLD_WALLET]);
+    fixture.detectChanges();
+    expect(text()).toContain('Cash on hand');
+    expect(text()).not.toContain('Old GCash');
+
+    all.next([CASH, OLD_WALLET]);
+    fixture.detectChanges();
+    expect(text()).toContain('Total across all accounts');
+    expect(text()).toContain('Old GCash');
+  });
+
+  it('keeps the previous result and its constraint when a URL-filtered read fails', () => {
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([CASH]))
+      .mockReturnValueOnce(throwError(() => new ApiError('Offline', 0)))
+      .mockReturnValueOnce(of([OLD_WALLET]));
+    const { fixture, routeParams, text } = setup(
+      () => of([CASH, OLD_WALLET]),
+      { list: list as unknown as AccountsService['list'] }
+    );
+
+    routeParams.next(convertToParamMap({ status: 'retired' }));
+    fixture.detectChanges();
+
+    expect(text()).toContain('Cash on hand');
+    expect(text()).toContain('Total across active accounts');
+    expect(text()).toContain('Offline');
+
+    clickButton(fixture, 'Try again');
+
+    expect(list).toHaveBeenLastCalledWith({ isActive: false });
+    expect(text()).toContain('Old GCash');
+    expect(text()).toContain('Total across retired accounts');
   });
 
   it('explains a failed load and retries from the top when asked', () => {
@@ -424,7 +512,7 @@ describe('AccountList', () => {
       });
       expect(dialog()).toBeNull();
       expect(text()).toContain('New Savings');
-      expect(text()).toContain(formatPeso(250));
+      expect(text()).toContain('Updating…');
       expect(list).toHaveBeenCalledTimes(2);
     });
 
@@ -506,7 +594,9 @@ describe('AccountList', () => {
 
   describe('rename, in a dialog', () => {
     it('opens the rename form in a dialog seeded with the current name', async () => {
-      const { fixture, cmp, dialog, dialogText } = setup(() => of([CASH, BANK]));
+      const { fixture, cmp, dialog, dialogText } = setup(() =>
+        of([CASH, BANK])
+      );
 
       cmp.openRenameDialog(CASH);
       await settle(fixture);
@@ -521,8 +611,6 @@ describe('AccountList', () => {
     it('leaves the row showing name, type, balance and retired badge while it is open', async () => {
       const { fixture, cmp, text } = setup(() => of([OLD_WALLET]));
 
-      cmp.toggleRetired();
-      fixture.detectChanges();
       cmp.openRenameDialog(OLD_WALLET);
       await settle(fixture);
 
@@ -633,9 +721,12 @@ describe('AccountList', () => {
             })
         )
       );
-      const { fixture, cmp, dialog, dialogText } = setup(() => of([CASH, BANK]), {
-        rename: rename as unknown as AccountsService['rename'],
-      });
+      const { fixture, cmp, dialog, dialogText } = setup(
+        () => of([CASH, BANK]),
+        {
+          rename: rename as unknown as AccountsService['rename'],
+        }
+      );
 
       cmp.openRenameDialog(CASH);
       await settle(fixture);
