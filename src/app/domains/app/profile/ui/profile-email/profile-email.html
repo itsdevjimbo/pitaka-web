@@ -1,5 +1,5 @@
 @if (pendingEmail(); as pendingEmail) {
-  <section class="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-300 dark:bg-amber-950/30 dark:ring-amber-800">
+  <section class="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-300 dark:bg-amber-950/30 dark:ring-amber-800 mb-4">
     <p class="text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-300">Action waiting</p>
     <h2 class="mt-1 text-lg font-bold">Confirm {{ pendingEmail }}</h2>
     <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-300">Open the link we sent there. Until then, sign in with {{ profile()?.email }}.</p>
@@ -45,7 +45,7 @@
 }
 
 <ng-template #editor>
-  <form class="mt-5" (submit)="send($event)" (keydown.escape)="close()">
+  <form class="mt-5 flex flex-col gap-y-4" (submit)="send($event)" (keydown.escape)="close()">
     <mat-form-field class="w-full">
       <mat-label>New email address</mat-label>
       <input #newEmailInput id="new-email-address" matInput [formField]="emailForm.newEmail" />
@@ -54,7 +54,7 @@
       </mat-error>
     </mat-form-field>
     <ng-container [ngTemplateOutlet]="passwordField" />
-    <div class="flex gap-2 mt-4">
+    <div class="flex gap-2">
       <button matButton type="button" [disabled]="submitting()" (click)="close()">Cancel</button>
       <button matButton="filled" type="submit" [disabled]="emailForm().invalid() || submitting()">
         {{ submitting() ? 'Sending…' : 'Send confirmation email' }}
