@@ -6,38 +6,159 @@
     </div>
 
     @if (!loading() && !errorMessage() && !isEmpty()) {
-      <button matButton="filled"><mat-icon svgIcon="plus" />New goal</button>
+      <button
+        matButton="filled"
+        (click)="openNew()"
+      >
+        <mat-icon svgIcon="plus" />
+        New goal
+      </button>
     }
   </header>
 
   @if (loading()) {
-    <div class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400" role="status">
-      <mat-icon class="size-6 animate-spin" svgIcon="loader-circle" />
+    <div
+      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+      role="status"
+    >
+      <mat-icon
+        class="size-6 animate-spin"
+        svgIcon="loader-circle"
+      />
       <span>Loading your goals…</span>
     </div>
   } @else if (errorMessage(); as message) {
-    <div class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800" role="alert">
-      <mat-icon class="size-8 text-neutral-400" svgIcon="circle-alert" />
+    <div
+      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
+      role="alert"
+    >
+      <mat-icon
+        class="size-8 text-neutral-400"
+        svgIcon="circle-alert"
+      />
       <p class="max-w-sm text-neutral-600 dark:text-neutral-300">{{ message }}</p>
-      <button matButton="filled" (click)="load()"><mat-icon svgIcon="refresh-cw" />Try again</button>
+      <button
+        matButton="filled"
+        (click)="load()"
+      >
+        <mat-icon svgIcon="refresh-cw" />
+        Try again
+      </button>
     </div>
   } @else if (isEmpty()) {
-    <div class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700">
-      <mat-icon class="size-10 text-neutral-400" svgIcon="target" />
+    <div
+      class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+    >
+      <mat-icon
+        class="size-10 text-neutral-400"
+        svgIcon="target"
+      />
       <p class="text-lg font-semibold">No goals yet</p>
-      <p class="max-w-xs text-neutral-500 dark:text-neutral-400">A Goal is a savings target you build toward with Contributions. Create one to start tracking your progress.</p>
-      <button matButton="filled" class="mt-2"><mat-icon svgIcon="plus" />New goal</button>
+      <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
+        A Goal is a savings target you build toward with Contributions. Create one to start tracking your progress.
+      </p>
+      <button
+        matButton="filled"
+        class="mt-2"
+        (click)="openNew()"
+      >
+        <mat-icon svgIcon="plus" />
+        New goal
+      </button>
     </div>
   } @else {
     @for (group of groups(); track group.status) {
       <section class="flex flex-col gap-y-2">
-        <h2 class="text-sm font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">{{ group.label }}</h2>
+        <h2 class="text-sm font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
+          {{ group.label }}
+        </h2>
         @if (group.rows.length === 0) {
           <p class="px-1 text-sm text-neutral-500 dark:text-neutral-400">{{ group.emptyLabel }}</p>
         } @else {
           <ul class="flex flex-col gap-y-2">
             @for (goal of group.rows; track goal.id) {
-              <li><goals-goal-row [goal]="goal" /></li>
+              <li class="flex flex-col gap-y-2">
+                <goals-goal-row
+                  [goal]="goal"
+                  (edit)="openEdit($event)"
+                  (status)="setStatus($event.goal, $event.status)"
+                  (abandon)="askAbandon($event)"
+                  (remove)="askDelete($event)"
+                />
+                @if (confirmingAbandon()?.id === goal.id) {
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+                    role="alertdialog"
+                  >
+                    <p>
+                      Abandon
+                      <span class="font-semibold">{{ goal.name }}</span>
+                      ? You won’t be able to add Contributions until you mark it active again.
+                    </p>
+                    <div class="flex gap-x-2">
+                      <button
+                        matButton
+                        (click)="cancelPrompt()"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        matButton="filled"
+                        (click)="confirmAbandon(goal)"
+                      >
+                        Abandon
+                      </button>
+                    </div>
+                  </div>
+                }
+                @if (confirmingDelete(); as confirmation) {
+                  @if (confirmation.goal.id === goal.id) {
+                    <div
+                      class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200"
+                      role="alertdialog"
+                    >
+                      <p>
+                        Delete
+                        <span class="font-semibold">{{ goal.name }}</span>
+                        ? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{
+                          confirmation.count === 1 ? '' : 's'
+                        }}, releasing their earmarks. The {{ goal.currentAmount | peso }} remains in its Accounts but
+                        will no longer count toward a Goal.
+                      </p>
+                      <div class="flex gap-x-2">
+                        <button
+                          matButton
+                          (click)="cancelPrompt()"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          matButton="filled"
+                          (click)="confirmDelete(goal)"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  }
+                }
+                @if (notice(); as n) {
+                  @if (n.id === goal.id) {
+                    <app-row-notice [message]="n.message">
+                      @if (n.retry; as retry) {
+                        <div row-notice-actions>
+                          <button
+                            matButton
+                            (click)="retry()"
+                          >
+                            Try again
+                          </button>
+                        </div>
+                      }
+                    </app-row-notice>
+                  }
+                }
+              </li>
             }
           </ul>
         }

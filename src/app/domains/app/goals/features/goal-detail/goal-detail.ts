@@ -1,19 +1,14 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  input,
-  OnInit,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { Router, RouterLink } from '@angular/router';
+import { forkJoin, Observable } from 'rxjs';
 import { ApiError } from '@/app/core/api';
+import { PesoPipe } from '@/app/core/money';
+import { RowNotice } from '@/app/core/notices';
 import { AccountsService } from '@/app/domains/app/accounts';
 import {
   Goal,
@@ -23,10 +18,10 @@ import {
   withAccountNames,
 } from '../../index';
 import { ContributionHistoryRow } from '../../ui/contribution-history-row';
+import { EditGoalDialog } from '../../ui/edit-goal-dialog';
 import { GoalProgress } from '../../ui/goal-progress';
 
-const LOAD_FAILED =
-  'Something went wrong loading this Goal. Please try again.';
+const LOAD_FAILED = 'Something went wrong loading this Goal. Please try again.';
 
 /** A Goal's current facts and its complete, account-named Contribution history. */
 @Component({
@@ -39,6 +34,8 @@ const LOAD_FAILED =
     RouterLink,
     GoalProgress,
     ContributionHistoryRow,
+    PesoPipe,
+    RowNotice,
   ],
   host: { class: 'flex flex-auto flex-col' },
 })
@@ -47,18 +44,22 @@ export default class GoalDetail implements OnInit {
   private contributions = inject(GoalContributionsService);
   private accounts = inject(AccountsService);
   private destroyRef = inject(DestroyRef);
+  private dialog = inject(MatDialog);
+  private router = inject(Router);
 
   readonly id = input.required<string>();
   private readonly goalId = computed(() => Number(this.id()));
 
   protected readonly goal = signal<Goal | null>(null);
-  protected readonly history = signal<readonly GoalContributionWithAccountName[] | null>(
-    null
-  );
+  protected readonly history = signal<readonly GoalContributionWithAccountName[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly notFound = signal(false);
   protected readonly isEmpty = computed(() => this.history()?.length === 0);
+  protected readonly busy = signal(false);
+  protected readonly notice = signal<{ message: string; retry?: () => void } | null>(null);
+  protected readonly confirmingAbandon = signal(false);
+  protected readonly confirmingDelete = signal<{ count: number } | null>(null);
 
   ngOnInit(): void {
     this.load();
@@ -87,9 +88,7 @@ export default class GoalDetail implements OnInit {
       .subscribe({
         next: ({ goal, contributions, accounts }) => {
           this.goal.set(goal);
-          this.history.set(
-            withAccountNames(contributions, accounts).sort(byNewestContribution)
-          );
+          this.history.set(withAccountNames(contributions, accounts).sort(byNewestContribution));
           this.loading.set(false);
         },
         error: (error: unknown) => {
@@ -100,14 +99,96 @@ export default class GoalDetail implements OnInit {
         },
       });
   }
+
+  protected openEdit(goal: Goal): void {
+    this.clearPrompts();
+    this.dialog
+      .open<EditGoalDialog, Goal, Goal>(EditGoalDialog, { data: goal })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((saved) => {
+        if (saved) this.load();
+      });
+  }
+  protected askAbandon(): void {
+    this.notice.set(null);
+    this.confirmingDelete.set(null);
+    this.confirmingAbandon.set(true);
+  }
+  protected askDelete(): void {
+    const goal = this.goal();
+    if (!goal) return;
+    this.notice.set(null);
+    this.confirmingAbandon.set(false);
+    this.contributions
+      .list(goal.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (items) => this.confirmingDelete.set({ count: items.length }),
+        error: (error) => this.failed(error, () => this.askDelete()),
+      });
+  }
+  protected cancelPrompt(): void {
+    this.clearPrompts();
+  }
+  protected setStatus(status: Goal['status']): void {
+    const goal = this.goal();
+    if (!goal) return;
+    this.clearPrompts();
+    this.write(
+      this.goals.setStatus(goal.id, status),
+      () => this.load(),
+      () => this.setStatus(status),
+    );
+  }
+  protected confirmAbandon(): void {
+    this.setStatus('Abandoned');
+  }
+  protected confirmDelete(): void {
+    const goal = this.goal();
+    if (!goal) return;
+    this.clearPrompts();
+    this.write(
+      this.goals.delete(goal.id),
+      () => this.router.navigate(['/app/goals']),
+      () => this.confirmDelete(),
+    );
+  }
+  private write(write$: Observable<unknown>, success: () => void, retry: () => void): void {
+    this.notice.set(null);
+    this.busy.set(true);
+    write$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.busy.set(false);
+        success();
+      },
+      error: (error) => {
+        this.busy.set(false);
+        this.failed(error, retry);
+      },
+    });
+  }
+  private failed(error: unknown, retry: () => void): void {
+    if (error instanceof ApiError && error.status === 404) {
+      this.load();
+      return;
+    }
+    if (error instanceof ApiError && error.status === 403) {
+      this.notice.set({ message: 'You can no longer change this Goal.' });
+      this.load();
+      return;
+    }
+    this.notice.set({
+      message: error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+      retry,
+    });
+  }
+  private clearPrompts(): void {
+    this.confirmingAbandon.set(false);
+    this.confirmingDelete.set(null);
+  }
 }
 
-function byNewestContribution(
-  left: GoalContributionWithAccountName,
-  right: GoalContributionWithAccountName
-): number {
-  return (
-    right.contributionDate.getTime() - left.contributionDate.getTime() ||
-    right.id - left.id
-  );
+function byNewestContribution(left: GoalContributionWithAccountName, right: GoalContributionWithAccountName): number {
+  return right.contributionDate.getTime() - left.contributionDate.getTime() || right.id - left.id;
 }

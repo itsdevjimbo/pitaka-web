@@ -14,9 +14,48 @@
     >
       <mat-icon svgIcon="ellipsis-vertical" />
     </button>
-    <!-- Lifecycle actions arrive with the Goal write screen; this trigger is
-         deliberately present now so the row never requires navigation first. -->
-    <mat-menu #menu></mat-menu>
+    <mat-menu #menu>
+      <button
+        mat-menu-item
+        (click)="edit.emit(goal())"
+      >
+        <mat-icon svgIcon="pencil" />
+        <span>Edit</span>
+      </button>
+      @if (goal().status === 'Active') {
+        @if (goal().currentAmount >= goal().targetAmount) {
+          <button
+            mat-menu-item
+            (click)="status.emit({ goal: goal(), status: 'Completed' })"
+          >
+            <mat-icon svgIcon="circle-check" />
+            <span>Mark complete</span>
+          </button>
+        }
+        <button
+          mat-menu-item
+          (click)="abandon.emit(goal())"
+        >
+          <mat-icon svgIcon="archive" />
+          <span>Abandon</span>
+        </button>
+      } @else {
+        <button
+          mat-menu-item
+          (click)="status.emit({ goal: goal(), status: 'Active' })"
+        >
+          <mat-icon svgIcon="circle-check" />
+          <span>Mark active</span>
+        </button>
+      }
+      <button
+        mat-menu-item
+        (click)="remove.emit(goal())"
+      >
+        <mat-icon svgIcon="trash-2" />
+        <span>Delete</span>
+      </button>
+    </mat-menu>
   </div>
 
   <goals-goal-progress [goal]="goal()" />
