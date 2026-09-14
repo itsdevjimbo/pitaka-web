@@ -63,7 +63,7 @@ describe('AccountDetail', () => {
 
   function setup(over: {
     get?: AccountsService['get'];
-    accountsList?: AccountsService['list'];
+    accountsList?: AccountsService['all'];
     list?: TransactionsService['list'];
     names?: CategoriesService['names'];
     record?: TransactionsService['record'];
@@ -92,7 +92,7 @@ describe('AccountDetail', () => {
         provideRouter([]),
         provideDialogDefaults(),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: AccountsService, useValue: { get, list: accountsList } },
+        { provide: AccountsService, useValue: { get, all: accountsList } },
         {
           provide: TransactionsService,
           useValue: { list, record, refile, remove },

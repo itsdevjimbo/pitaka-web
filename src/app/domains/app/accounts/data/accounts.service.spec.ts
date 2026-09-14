@@ -46,8 +46,8 @@ describe('AccountsService', () => {
 
   afterEach(() => http.verify());
 
-  it('GETs /api/accounts and drops the owner id the API attaches', async () => {
-    const result = firstValueFrom(service.list());
+  it('GETs every Account, retired included, and drops the owner id the API attaches', async () => {
+    const result = firstValueFrom(service.all());
 
     const request = http.expectOne(`${BASE_URL}/api/accounts`);
     expect(request.request.method).toBe('GET');
@@ -88,8 +88,56 @@ describe('AccountsService', () => {
     ]);
   });
 
+  it('lists Accounts narrowed to active status', async () => {
+    const result = firstValueFrom(service.list({ isActive: true }));
+
+    const request = http.expectOne(
+      `${BASE_URL}/api/accounts?isActive=true`
+    );
+    expect(request.request.params.keys()).toEqual(['isActive']);
+    request.flush([]);
+
+    await expect(result).resolves.toEqual([]);
+  });
+
+  it('lists Accounts narrowed to retired status', async () => {
+    const result = firstValueFrom(service.list({ isActive: false }));
+
+    const request = http.expectOne(
+      `${BASE_URL}/api/accounts?isActive=false`
+    );
+    expect(request.request.params.keys()).toEqual(['isActive']);
+    request.flush([]);
+
+    await expect(result).resolves.toEqual([]);
+  });
+
+  it('lists Accounts narrowed to one type', async () => {
+    const result = firstValueFrom(service.list({ type: 'Bank' }));
+
+    const request = http.expectOne(`${BASE_URL}/api/accounts?type=Bank`);
+    expect(request.request.params.keys()).toEqual(['type']);
+    request.flush([]);
+
+    await expect(result).resolves.toEqual([]);
+  });
+
+  it('composes Account status and type criteria', async () => {
+    const result = firstValueFrom(
+      service.list({ isActive: false, type: 'Investment' })
+    );
+
+    const request = http.expectOne(
+      `${BASE_URL}/api/accounts?isActive=false&type=Investment`
+    );
+    expect(request.request.params.keys()).toEqual(['isActive', 'type']);
+    request.flush([]);
+
+    await expect(result).resolves.toEqual([]);
+  });
+
   it('yields an empty list, not an error, when the person owns no Accounts', async () => {
-    const result = firstValueFrom(service.list());
+    const result = firstValueFrom(service.all());
 
     http.expectOne(`${BASE_URL}/api/accounts`).flush([]);
 
@@ -97,7 +145,7 @@ describe('AccountsService', () => {
   });
 
   it('surfaces a server failure as a normalised ApiError', async () => {
-    const result = firstValueFrom(service.list());
+    const result = firstValueFrom(service.all());
 
     http
       .expectOne(`${BASE_URL}/api/accounts`)

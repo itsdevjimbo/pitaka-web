@@ -81,7 +81,7 @@ export default class GoalDetail implements OnInit {
     forkJoin({
       goal: this.goals.get(id),
       contributions: this.contributions.list(id),
-      accounts: this.accounts.list(),
+      accounts: this.accounts.all(),
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({

@@ -272,7 +272,7 @@ export default class AccountDetail implements OnInit {
       account: this.accounts.get(this.accountId()),
       transactions: this.transactions.list(this.accountId()),
       names: this.categories.names(),
-      accounts: this.accounts.list(),
+      accounts: this.accounts.all(),
     });
   }
 

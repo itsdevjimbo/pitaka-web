@@ -65,7 +65,7 @@ describe('AccountList', () => {
   const overlay = withOverlayContainer();
 
   function setup(
-    list: AccountsService['list'],
+    all: AccountsService['all'],
     overrides: Partial<AccountsService> = {}
   ) {
     TestBed.configureTestingModule({
@@ -75,7 +75,7 @@ describe('AccountList', () => {
         provideRouter([]),
         provideDialogDefaults(),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: AccountsService, useValue: { list, ...overrides } },
+        { provide: AccountsService, useValue: { all, ...overrides } },
       ],
     });
 
@@ -258,7 +258,7 @@ describe('AccountList', () => {
           )
         : of([CASH, BANK]);
     });
-    const { fixture, text } = setup(list as unknown as AccountsService['list']);
+    const { fixture, text } = setup(list as unknown as AccountsService['all']);
 
     expect(text()).toContain('Could not reach the server.');
 
@@ -406,7 +406,7 @@ describe('AccountList', () => {
       });
       const create = vi.fn(() => of(SERVER_SAVINGS));
       const { fixture, text, dialog } = setup(
-        list as unknown as AccountsService['list'],
+        list as unknown as AccountsService['all'],
         { create: create as unknown as AccountsService['create'] }
       );
 
@@ -487,7 +487,7 @@ describe('AccountList', () => {
       });
       const create = vi.fn(() => of(SERVER_SAVINGS));
       const { fixture, cmp, text } = setup(
-        list as unknown as AccountsService['list'],
+        list as unknown as AccountsService['all'],
         { create: create as unknown as AccountsService['create'] }
       );
 
@@ -584,7 +584,7 @@ describe('AccountList', () => {
         of({ ...CASH, name: 'Everyday cash' })
       );
       const { fixture, cmp, text, dialog } = setup(
-        list as unknown as AccountsService['list'],
+        list as unknown as AccountsService['all'],
         { rename: rename as unknown as AccountsService['rename'] }
       );
 
@@ -654,7 +654,7 @@ describe('AccountList', () => {
     it('retires an active Account through the service and re-reads the list', () => {
       const setActive = vi.fn(() => of({ ...CASH, isActive: false }));
       const list = vi.fn(() => of([CASH]));
-      const { cmp } = setup(list as unknown as AccountsService['list'], {
+      const { cmp } = setup(list as unknown as AccountsService['all'], {
         setActive,
       });
 
@@ -717,7 +717,7 @@ describe('AccountList', () => {
         return attempt === 1 ? of([CASH, BANK]) : of([BANK]);
       });
       const { fixture, cmp, text } = setup(
-        list as unknown as AccountsService['list'],
+        list as unknown as AccountsService['all'],
         { remove }
       );
 

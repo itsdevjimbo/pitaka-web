@@ -526,7 +526,7 @@ export default class TransactionsList {
   private read(): Observable<FirstPageRead> {
     return forkJoin({
       categories: this.categories.all(),
-      accounts: this.accounts.list(),
+      accounts: this.accounts.all(),
       firstPage: this.transactions.search(this.criteria(), 1),
     });
   }

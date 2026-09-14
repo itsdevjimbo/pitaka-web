@@ -21,6 +21,12 @@ export type Account = {
   isActive: boolean;
 };
 
+/** Optional constraints for a purposeful Account collection read. */
+export type AccountCriteria = {
+  isActive?: boolean;
+  type?: AccountType;
+};
+
 /**
  * What the person supplies to open a new Account: a name, a type, and a starting
  * balance. `initialBalance` is always sent — the API defaults it to `0` when

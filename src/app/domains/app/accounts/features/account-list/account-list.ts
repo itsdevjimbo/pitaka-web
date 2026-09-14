@@ -141,7 +141,7 @@ export default class AccountList {
     this.errorMessage.set(null);
 
     this.service
-      .list()
+      .all()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (accounts) => {
@@ -310,7 +310,7 @@ export default class AccountList {
    */
   private reconcile(): void {
     this.service
-      .list()
+      .all()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (accounts) => this.accounts.set(accounts),
