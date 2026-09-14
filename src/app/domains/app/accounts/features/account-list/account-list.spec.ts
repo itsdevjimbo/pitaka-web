@@ -840,7 +840,7 @@ describe('AccountList', () => {
       expect(cmp.notice()?.retire).toBeTypeOf('function');
     });
 
-    it('explains a delete refused for Goal-allocated money, distinctly from history', () => {
+    it('explains a delete refused for Goal earmarks and links to Goals', () => {
       const remove = vi.fn(() =>
         throwError(
           () =>
@@ -855,9 +855,16 @@ describe('AccountList', () => {
       cmp.confirmDelete(CASH);
       fixture.detectChanges();
 
-      expect(text()).toContain('allocated toward a specific goal');
+      expect(text()).toContain(
+        'This Account can’t be deleted while Contributions earmark money in it. Remove those Contributions or delete their Goals, then try again.'
+      );
+      expect(text()).not.toContain('allocated toward a specific goal');
       expect(text()).not.toContain('transaction history');
       expect(text()).not.toContain('Retire instead');
+      const viewGoals = [...fixture.nativeElement.querySelectorAll('a')].find(
+        (element: HTMLAnchorElement) => element.textContent?.trim() === 'View goals'
+      ) as HTMLAnchorElement | undefined;
+      expect(viewGoals?.getAttribute('href')).toBe('/app/goals');
     });
 
     it('reports a delete that lost a concurrency race and offers a retry', () => {

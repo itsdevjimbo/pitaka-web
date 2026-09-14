@@ -265,8 +265,16 @@
             @if (notice(); as n) {
               @if (n.id === account.id) {
                 <app-row-notice [message]="n.message">
-                  @if (n.retire || n.retry) {
+                  @if (n.viewGoals || n.retire || n.retry) {
                     <div row-notice-actions>
+                      @if (n.viewGoals) {
+                        <a
+                          matButton
+                          routerLink="/app/goals"
+                        >
+                          View goals
+                        </a>
+                      }
                       @if (n.retire; as retire) {
                         <button
                           matButton
