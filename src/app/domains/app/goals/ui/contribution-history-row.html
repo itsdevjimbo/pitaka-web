@@ -1,15 +1,31 @@
 <div class="flex min-w-0 flex-col gap-y-1">
   <span class="font-medium tabular-nums">{{ contribution().amount | peso }}</span>
-  <span class="text-sm text-neutral-600 dark:text-neutral-300">{{ contribution().contributionDate | date: 'd MMM y' }} · {{ contribution().accountName || 'Unknown account' }}</span>
+  <span class="text-sm text-neutral-600 dark:text-neutral-300">
+    {{ contribution().contributionDate | date: 'd MMM y' }} · {{ contribution().accountName || 'Unknown account' }}
+  </span>
   @if (contribution().note) {
     <span class="text-sm text-neutral-500 dark:text-neutral-400">{{ contribution().note }}</span>
   }
 </div>
 <!-- Edit and delete are deliberately row-owned; their lifecycle lands in #164. -->
-<button matIconButton aria-label="Contribution actions" [matMenuTriggerFor]="menu">
+<button
+  matIconButton
+  aria-label="Contribution actions"
+  [matMenuTriggerFor]="menu"
+>
   <mat-icon svgIcon="ellipsis-vertical" />
 </button>
 <mat-menu #menu>
-  <button mat-menu-item>Edit contribution</button>
-  <button mat-menu-item>Delete contribution</button>
+  <button
+    mat-menu-item
+    (click)="edit.emit(contribution())"
+  >
+    Edit contribution
+  </button>
+  <button
+    mat-menu-item
+    (click)="delete.emit(contribution())"
+  >
+    Delete contribution
+  </button>
 </mat-menu>

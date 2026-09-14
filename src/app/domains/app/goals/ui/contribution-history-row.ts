@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, input } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -14,4 +14,6 @@ import { GoalContributionWithAccountName } from '../data/contribution-account-na
 })
 export class ContributionHistoryRow {
   readonly contribution = input.required<GoalContributionWithAccountName>();
+  readonly edit = output<GoalContributionWithAccountName>();
+  readonly delete = output<GoalContributionWithAccountName>();
 }
