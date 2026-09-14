@@ -25,7 +25,6 @@ type RowNotice = {
 
 /** The slice of the component the tests reach into. */
 type AccountsInternals = {
-  toggleRetired(): void;
   load(): void;
   openNewAccountDialog(): void;
   openRenameDialog(account: Account): void;
@@ -74,7 +73,10 @@ describe('AccountList', () => {
         provideIcons(),
         provideRouter([]),
         provideDialogDefaults(),
-        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        {
+          provide: MATERIAL_ANIMATIONS,
+          useValue: { animationsDisabled: true },
+        },
         { provide: AccountsService, useValue: { all, ...overrides } },
       ],
     });
@@ -117,9 +119,9 @@ describe('AccountList', () => {
 
   /** Find a button by its text, anywhere in the open overlay. */
   function overlayButton(label: string): HTMLButtonElement {
-    const button = Array.from(
-      overlay().querySelectorAll('button')
-    ).find((element) => (element.textContent ?? '').includes(label));
+    const button = Array.from(overlay().querySelectorAll('button')).find(
+      (element) => (element.textContent ?? '').includes(label)
+    );
     if (!button) {
       throw new Error(`No overlay button labelled "${label}"`);
     }
@@ -189,11 +191,11 @@ describe('AccountList', () => {
     expect(text()).toContain(formatPeso(8500));
   });
 
-  it('shows a plainly-labelled total when nothing is retired', () => {
+  it('names the lifecycle constraint in the total', () => {
     const { text } = setup(() => of([CASH, BANK]));
 
     expect(text()).toContain('Total');
-    expect(text()).not.toContain('Total across');
+    expect(text()).toContain('Total across active accounts');
     expect(text()).toContain(formatPeso(10000));
   });
 
@@ -208,30 +210,28 @@ describe('AccountList', () => {
     expect(text()).toContain(formatPeso(0.3));
   });
 
-  it('hides retired Accounts and their balance from the headline total, without a confusing extra total', () => {
+  it('keeps the lifecycle controls visible when the Profile owns Accounts', () => {
     const { text } = setup(() => of([CASH, BANK, OLD_WALLET]));
 
-    expect(text()).not.toContain('Old GCash');
+    expect(text()).toContain('Old GCash');
+    expect(text()).toContain('Active');
+    expect(text()).toContain('Retired');
+    expect(text()).toContain('All');
     expect(text()).toContain('Total across active accounts');
     // Headline is 1500 + 8500; the retired-inclusive total stays hidden until asked for.
-    expect(text()).toContain(formatPeso(10000));
-    expect(text()).not.toContain('Including retired:');
-  });
-
-  it('reveals retired Accounts on request and confirms the total now covers them all', () => {
-    const { fixture, cmp, text } = setup(() => of([CASH, BANK, OLD_WALLET]));
-
-    cmp.toggleRetired();
-    fixture.detectChanges();
-
-    expect(text()).toContain('Old GCash');
-    expect(text()).toContain('Retired');
-    expect(text()).toContain('Total across all accounts');
-    expect(text()).toContain('Including retired:');
     expect(text()).toContain(formatPeso(10300));
   });
 
-  it('offers no retired toggle when nothing is retired', () => {
+  it('offers a status control even when no Account is retired', () => {
+    const { text } = setup(() => of([CASH, BANK, OLD_WALLET]));
+
+    expect(text()).toContain('Old GCash');
+    expect(text()).toContain('Retired');
+    expect(text()).toContain('Total across active accounts');
+    expect(text()).toContain(formatPeso(10300));
+  });
+
+  it('offers status choices when nothing is retired', () => {
     const { text } = setup(() => of([CASH, BANK]));
 
     expect(text()).not.toContain('Show retired');
@@ -423,8 +423,8 @@ describe('AccountList', () => {
         initialBalance: 0,
       });
       expect(dialog()).toBeNull();
-      expect(text()).toContain('New Savings');
-      expect(text()).toContain(formatPeso(250));
+      expect(text()).not.toContain('New Savings');
+      expect(text()).toContain('Updating…');
       expect(list).toHaveBeenCalledTimes(2);
     });
 
@@ -499,14 +499,16 @@ describe('AccountList', () => {
       });
 
       expect(text()).toContain('Cash on hand');
-      expect(text()).toContain('New Savings');
+      expect(text()).not.toContain('New Savings');
       expect(cmp.errorMessage()).toBeNull();
     });
   });
 
   describe('rename, in a dialog', () => {
     it('opens the rename form in a dialog seeded with the current name', async () => {
-      const { fixture, cmp, dialog, dialogText } = setup(() => of([CASH, BANK]));
+      const { fixture, cmp, dialog, dialogText } = setup(() =>
+        of([CASH, BANK])
+      );
 
       cmp.openRenameDialog(CASH);
       await settle(fixture);
@@ -521,8 +523,6 @@ describe('AccountList', () => {
     it('leaves the row showing name, type, balance and retired badge while it is open', async () => {
       const { fixture, cmp, text } = setup(() => of([OLD_WALLET]));
 
-      cmp.toggleRetired();
-      fixture.detectChanges();
       cmp.openRenameDialog(OLD_WALLET);
       await settle(fixture);
 
@@ -633,9 +633,12 @@ describe('AccountList', () => {
             })
         )
       );
-      const { fixture, cmp, dialog, dialogText } = setup(() => of([CASH, BANK]), {
-        rename: rename as unknown as AccountsService['rename'],
-      });
+      const { fixture, cmp, dialog, dialogText } = setup(
+        () => of([CASH, BANK]),
+        {
+          rename: rename as unknown as AccountsService['rename'],
+        }
+      );
 
       cmp.openRenameDialog(CASH);
       await settle(fixture);
