@@ -17,7 +17,9 @@ import {
   GoalsService,
   withAccountNames,
 } from '../../index';
+import { AddContributionDialog } from '../../ui/add-contribution-dialog';
 import { ContributionHistoryRow } from '../../ui/contribution-history-row';
+import { EditContributionDialog } from '../../ui/edit-contribution-dialog';
 import { EditGoalDialog } from '../../ui/edit-goal-dialog';
 import { GoalProgress } from '../../ui/goal-progress';
 
@@ -60,6 +62,7 @@ export default class GoalDetail implements OnInit {
   protected readonly notice = signal<{ message: string; retry?: () => void } | null>(null);
   protected readonly confirmingAbandon = signal(false);
   protected readonly confirmingDelete = signal<{ count: number } | null>(null);
+  protected readonly confirmingContributionDelete = signal<GoalContributionWithAccountName | null>(null);
 
   ngOnInit(): void {
     this.load();
@@ -109,6 +112,45 @@ export default class GoalDetail implements OnInit {
       .subscribe((saved) => {
         if (saved) this.load();
       });
+  }
+  protected openAdd(goal: Goal): void {
+    this.clearPrompts();
+    this.dialog
+      .open<AddContributionDialog, Goal, 'saved' | 'missing' | 'abandoned'>(AddContributionDialog, { data: goal })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((result) => this.afterContributionDialog(result));
+  }
+  protected openContributionEdit(contribution: GoalContributionWithAccountName): void {
+    const goal = this.goal();
+    if (!goal) return;
+    this.clearPrompts();
+    this.dialog
+      .open<
+        EditContributionDialog,
+        { goal: Goal; contribution: GoalContributionWithAccountName },
+        'saved' | 'missing' | 'abandoned'
+      >(EditContributionDialog, { data: { goal, contribution } })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((result) => this.afterContributionDialog(result));
+  }
+  protected askContributionDelete(contribution: GoalContributionWithAccountName): void {
+    this.notice.set(null);
+    this.confirmingContributionDelete.set(contribution);
+  }
+  protected cancelContributionDelete(): void {
+    this.confirmingContributionDelete.set(null);
+  }
+  protected confirmContributionDelete(): void {
+    const contribution = this.confirmingContributionDelete();
+    if (!contribution) return;
+    this.confirmingContributionDelete.set(null);
+    this.write(
+      this.contributions.delete(contribution.id),
+      () => this.refreshContributionFacts(),
+      () => this.askContributionDelete(contribution),
+    );
   }
   protected askAbandon(): void {
     this.notice.set(null);
@@ -186,6 +228,44 @@ export default class GoalDetail implements OnInit {
   private clearPrompts(): void {
     this.confirmingAbandon.set(false);
     this.confirmingDelete.set(null);
+    this.confirmingContributionDelete.set(null);
+  }
+  private afterContributionDialog(result: 'saved' | 'missing' | 'abandoned' | undefined): void {
+    if (result === 'saved') {
+      this.refreshContributionFacts();
+      return;
+    }
+    if (result === 'abandoned') {
+      this.notice.set({ message: 'This Goal no longer accepts Contributions. Mark it active to add another.' });
+      this.load();
+      return;
+    }
+    if (result === 'missing') this.load();
+  }
+  /** Reconcile every server-derived Goal fact after a Contribution write without hiding the last readable screen. */
+  private refreshContributionFacts(): void {
+    const goal = this.goal();
+    if (!goal) {
+      this.load();
+      return;
+    }
+    forkJoin({
+      goal: this.goals.get(goal.id),
+      contributions: this.contributions.list(goal.id),
+      accounts: this.accounts.all(),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ goal: freshGoal, contributions, accounts }) => {
+          this.goal.set(freshGoal);
+          this.history.set(withAccountNames(contributions, accounts).sort(byNewestContribution));
+        },
+        error: () =>
+          this.notice.set({
+            message: 'The Contribution changed but the latest Goal details could not be loaded.',
+            retry: () => this.refreshContributionFacts(),
+          }),
+      });
   }
 }
 
