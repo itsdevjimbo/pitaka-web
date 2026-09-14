@@ -5,6 +5,9 @@
       Your identity and sign-in details.
     </p>
   </header>
+  @if (emailChangeConfirmed) {
+    <p class="mb-4 text-sm text-green-700 dark:text-green-300" role="status">Email address changed</p>
+  }
 
   @if (profile(); as person) {
     <div class="grid items-start gap-6 lg:grid-cols-[18rem_1fr]">
