@@ -51,7 +51,7 @@ describe('GoalDetail', () => {
   function setup(over: {
     get?: GoalsService['get'];
     list?: GoalContributionsService['list'];
-    accounts?: AccountsService['list'];
+    accounts?: AccountsService['all'];
     id?: string;
   } = {}) {
     const get = over.get ?? (() => of(GOAL));
@@ -67,7 +67,7 @@ describe('GoalDetail', () => {
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: GoalsService, useValue: { get } },
         { provide: GoalContributionsService, useValue: { list } },
-        { provide: AccountsService, useValue: { list: accounts } },
+        { provide: AccountsService, useValue: { all: accounts } },
       ],
     });
 
