@@ -1,8 +1,13 @@
 import { Signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
-import { provideRouter } from '@angular/router';
-import { of, Subject, throwError } from 'rxjs';
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  ParamMap,
+  provideRouter,
+} from '@angular/router';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
@@ -65,7 +70,8 @@ describe('AccountList', () => {
 
   function setup(
     all: AccountsService['all'],
-    overrides: Partial<AccountsService> = {}
+    overrides: Partial<AccountsService> = {},
+    routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({}))
   ) {
     TestBed.configureTestingModule({
       imports: [AccountList],
@@ -76,6 +82,13 @@ describe('AccountList', () => {
         {
           provide: MATERIAL_ANIMATIONS,
           useValue: { animationsDisabled: true },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { queryParamMap: routeParams.value },
+            queryParamMap: routeParams,
+          },
         },
         { provide: AccountsService, useValue: { all, ...overrides } },
       ],
@@ -91,6 +104,7 @@ describe('AccountList', () => {
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
       dialog: () => overlay().querySelector<HTMLElement>('[role="dialog"]'),
       dialogText: () => overlay().textContent ?? '',
+      routeParams,
     };
   }
 
@@ -242,6 +256,80 @@ describe('AccountList', () => {
 
     expect(text()).toContain('No accounts yet');
     expect(text()).toContain('Add your first account');
+  });
+
+  it('returns to the true-empty state after deleting the final Account', () => {
+    const all = vi.fn().mockReturnValueOnce(of([CASH])).mockReturnValueOnce(of([]));
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([CASH]))
+      .mockReturnValueOnce(of([]));
+    const { cmp, fixture, text } = setup(all, {
+      list: list as unknown as AccountsService['list'],
+      remove: (() => of(undefined)) as AccountsService['remove'],
+    });
+
+    cmp.confirmDelete(CASH);
+    fixture.detectChanges();
+
+    expect(all).toHaveBeenCalledTimes(2);
+    expect(text()).toContain('No accounts yet');
+    expect(text()).not.toContain('Account filters');
+  });
+
+  it('keeps the current rows and their total constraint until the newer URL criteria succeeds', () => {
+    const retired = new Subject<Account[]>();
+    const all = new Subject<Account[]>();
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([CASH]))
+      .mockReturnValueOnce(retired)
+      .mockReturnValueOnce(all);
+    const { fixture, routeParams, text } = setup(
+      () => of([CASH, OLD_WALLET]),
+      { list: list as unknown as AccountsService['list'] }
+    );
+
+    routeParams.next(convertToParamMap({ status: 'retired' }));
+    fixture.detectChanges();
+    expect(text()).toContain('Cash on hand');
+    expect(text()).toContain('Total across active accounts');
+
+    routeParams.next(convertToParamMap({ status: 'all' }));
+    retired.next([OLD_WALLET]);
+    fixture.detectChanges();
+    expect(text()).toContain('Cash on hand');
+    expect(text()).not.toContain('Old GCash');
+
+    all.next([CASH, OLD_WALLET]);
+    fixture.detectChanges();
+    expect(text()).toContain('Total across all accounts');
+    expect(text()).toContain('Old GCash');
+  });
+
+  it('keeps the previous result and its constraint when a URL-filtered read fails', () => {
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([CASH]))
+      .mockReturnValueOnce(throwError(() => new ApiError('Offline', 0)))
+      .mockReturnValueOnce(of([OLD_WALLET]));
+    const { fixture, routeParams, text } = setup(
+      () => of([CASH, OLD_WALLET]),
+      { list: list as unknown as AccountsService['list'] }
+    );
+
+    routeParams.next(convertToParamMap({ status: 'retired' }));
+    fixture.detectChanges();
+
+    expect(text()).toContain('Cash on hand');
+    expect(text()).toContain('Total across active accounts');
+    expect(text()).toContain('Offline');
+
+    clickButton(fixture, 'Try again');
+
+    expect(list).toHaveBeenLastCalledWith({ isActive: false });
+    expect(text()).toContain('Old GCash');
+    expect(text()).toContain('Total across retired accounts');
   });
 
   it('explains a failed load and retries from the top when asked', () => {
@@ -423,7 +511,7 @@ describe('AccountList', () => {
         initialBalance: 0,
       });
       expect(dialog()).toBeNull();
-      expect(text()).not.toContain('New Savings');
+      expect(text()).toContain('New Savings');
       expect(text()).toContain('Updating…');
       expect(list).toHaveBeenCalledTimes(2);
     });
@@ -499,7 +587,7 @@ describe('AccountList', () => {
       });
 
       expect(text()).toContain('Cash on hand');
-      expect(text()).not.toContain('New Savings');
+      expect(text()).toContain('New Savings');
       expect(cmp.errorMessage()).toBeNull();
     });
   });

@@ -77,6 +77,9 @@ export default class AccountList {
   protected readonly criteria = signal<AccountCriteria>(
     criteriaFromQueryParams(this.route.snapshot.queryParamMap)
   );
+  protected readonly displayedCriteria = signal<AccountCriteria>(
+    this.criteria()
+  );
   protected readonly confirmingDeleteId = signal<number | null>(null);
   protected readonly busyId = signal<number | null>(null);
   protected readonly notice = signal<RowNoticeState | null>(null);
@@ -86,12 +89,12 @@ export default class AccountList {
   );
   protected readonly totalLabel = computed(() => {
     const status =
-      this.criteria().isActive === false
+      this.displayedCriteria().isActive === false
         ? 'retired'
-        : this.criteria().isActive === undefined
+        : this.displayedCriteria().isActive === undefined
           ? 'all'
           : 'active';
-    const type = this.criteria().type;
+    const type = this.displayedCriteria().type;
     return `Total across ${status} ${type ? `${this.types[type].label} ` : ''}accounts`;
   });
   protected readonly trueEmpty = computed(() => this.ownsAccounts() === false);
@@ -165,7 +168,9 @@ export default class AccountList {
       .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (accounts) => {
+          this.displayedCriteria.set(criteria);
           this.accounts.set(accounts);
+          if (accounts.length === 0) this.checkWhetherProfileOwnsAccounts();
           this.loading.set(false);
           this.filtering.set(false);
         },
@@ -185,6 +190,14 @@ export default class AccountList {
   }
   private list(criteria: AccountCriteria): Observable<Account[]> {
     return this.service.list ? this.service.list(criteria) : this.service.all();
+  }
+  private checkWhetherProfileOwnsAccounts(): void {
+    this.service
+      .all()
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (accounts) => this.ownsAccounts.set(accounts.length > 0),
+      });
   }
   protected openNewAccountDialog(): void {
     this.onDialogResult(
@@ -216,7 +229,10 @@ export default class AccountList {
   }
   private onCreated(account: Account): void {
     this.ownsAccounts.set(true);
-    this.actionMessage.set(messageForOutsideCriteria(account, this.criteria()));
+    const outsideCriteria = messageForOutsideCriteria(account, this.criteria());
+    this.actionMessage.set(outsideCriteria);
+    if (outsideCriteria === null)
+      this.accounts.update((accounts) => [...(accounts ?? []), account]);
     this.reconcile();
   }
   protected toggleActive(account: Account): void {
