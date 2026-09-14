@@ -97,6 +97,14 @@ export class ResetLinkRejectedError extends Error {
   }
 }
 
+/** A password-gated Profile write rejected only the current password. */
+export class IncorrectCurrentPasswordError extends Error {
+  constructor() {
+    super('Your current password is incorrect.');
+    this.name = 'IncorrectCurrentPasswordError';
+  }
+}
+
 /** Wire shape of `POST /api/auth/login` — the API names the identity `user`. */
 type LoginResponse = {
   token: string;
@@ -323,6 +331,36 @@ export class AuthService {
         { context: handlesOwn401() }
       )
       .pipe(map(() => undefined));
+  }
+
+  /**
+   * Replace the signed-in Profile's password. A wrong current password is a
+   * handled 401 rather than a lapsed session, so the inline editor can show it
+   * on the password field while the person remains signed in.
+   */
+  changePassword(oldPassword: string, newPassword: string): Observable<void> {
+    return this.http
+      .post<void>(
+        `${this.baseUrl}/api/profile/password`,
+        { oldPassword, newPassword },
+        { context: handlesOwn401() }
+      )
+      .pipe(
+        map(() => undefined),
+        catchError((error: unknown) => {
+          // The API distinguishes an incorrect current password from a lapsed
+          // session in the ProblemDetails detail; the latter is bodyless and
+          // must remain the truthful session-ended result.
+          if (
+            error instanceof ApiError &&
+            error.status === 401 &&
+            error.message === 'Your current password is incorrect.'
+          ) {
+            return throwError(() => new IncorrectCurrentPasswordError());
+          }
+          return throwError(() => error);
+        })
+      );
   }
 
   /** Cancel this Profile's pending email change; the endpoint is idempotent. */

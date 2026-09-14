@@ -2,11 +2,12 @@ import { Component, inject } from '@angular/core';
 import { Session } from '@/app/core/session';
 import { ProfileEmail } from '../../ui/profile-email/profile-email';
 import { ProfileIdentity } from '../../ui/profile-identity/profile-identity';
+import { ProfilePassword } from '../../ui/profile-password/profile-password';
 
 /** The Profile dashboard groups identity, email, and password settings. */
 @Component({
   selector: 'app-profile',
-  imports: [ProfileEmail, ProfileIdentity],
+  imports: [ProfileEmail, ProfileIdentity, ProfilePassword],
   templateUrl: './profile.html',
   host: { class: 'flex flex-auto flex-col' },
 })
