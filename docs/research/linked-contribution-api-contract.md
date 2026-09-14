@@ -1,0 +1,48 @@
+# Linked Contribution API contract
+
+Research for [Settle the Linked Contribution API contract](https://github.com/itsdevjimbo/pitaka-web/issues/186), against `pitaka` commit [`580c5407`](https://github.com/itsdevjimbo/pitaka/tree/580c5407cc3b90687553396a3c212a6fe264d7ca) and `pitaka-web` commit [`60b62b8b`](https://github.com/itsdevjimbo/pitaka-web/tree/60b62b8b5e0750dcc9d581544c141aceb85e6662).
+
+## Answer
+
+The API has the beginnings of Linked Contributions, but not the settled contract. It already stores and returns a nullable `transactionId`, validates a Transaction/Account relationship, enforces pooled Account headroom, and turns concurrent Account writes into `409 Conflict`. The implementation must still narrow eligibility, allow one Transaction to support several Contributions, enforce Transaction capacity atomically alongside Account headroom, own the creation date, expose authoritative Transaction-side facts, and refuse Transaction removal.
+
+The required API guarantees are:
+
+- A linked create accepts an active Goal, an income Transaction into an active Account, a positive amount, and an optional note. The server resolves the Transaction for the current user and derives the Account from it. Generated income remains eligible because it is still an income Transaction; `recurringTransactionId` only records its origin.
+- The server stamps the Contribution date as today. A linked create does not accept an authoritative client date, and a Linked Contribution update permits only its note to change.
+- One Transaction may back several Linked Contributions across Goals. The server atomically guarantees both `sum(linked Contributions for Transaction) + new amount <= Transaction.amount` and `sum(all Contributions for Account) + new amount <= Account.currentBalance`.
+- Concurrent creates cannot over-commit either capacity. Account optimistic concurrency exists already; Transaction capacity needs an equivalent lock, concurrency token, or serializable database guarantee. A stale capacity decision must be reported as `409 Conflict`, not accepted based on an earlier read.
+- Goal-owned and global Contribution reads continue returning the complete Contribution resource, including `transactionId`. A Transaction-side authoritative read must expose its Linked Contributions and remaining capacity; the exact endpoint/embedding shape is not determined by the existing code.
+- `DELETE /api/transactions/{id}` returns `409 Conflict` while any Linked Contribution refers to the Transaction, changes nothing, and identifies the affected Goals well enough for the client to name and link them. It succeeds normally after the links are removed.
+
+## What exists
+
+`POST /api/goal-contributions` already accepts `goalId`, `accountId`, `amount`, `contributionDate`, optional `transactionId`, and optional `note`; the created resource returns the same identifiers and values. The global, single-Contribution, and Goal-owned reads all use that resource, so Goal-to-Transaction navigation data already crosses the wire. Sources: [create request](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Requests/CreateGoalContributionRequest.cs#L6-L29), [controller](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Controllers/GoalContributionsController.cs#L37-L98), [resource](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Resources/GoalContributionResource.cs#L6-L20), and [Goal-owned read](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Controllers/GoalsController.cs#L141-L153).
+
+Current eligibility resolves the supplied Account and Goal for the current user and requires the Account to be active. It rejects expenses, but also accepts a Transfer into the supplied destination Account, which is broader than the income-only decision. It rejects Abandoned Goals but explicitly permits Completed Goals. Sources: [create validation](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Controllers/GoalContributionsController.cs#L49-L81), [Transaction eligibility](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Services/GoalContributionService.cs#L61-L85), and [Completed-Goal test](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api.Tests/Controllers/GoalContributionsControllerTest.cs#L565-L584).
+
+Account headroom is already server-enforced as the sum of every Contribution for the Account plus the requested amount not exceeding `CurrentBalance`. Creation deliberately marks the Account modified, and `Account.Version` is an optimistic-concurrency token; a competing stale write becomes the API's existing `409 Conflict`. Sources: [headroom and write](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Services/GoalContributionService.cs#L42-L85), [concurrency configuration](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Data/PitakaDbContext.cs#L84-L86), [conflict handler](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Handlers/ExceptionHandler.cs#L27-L53), and [concurrency test](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api.Tests/Data/GoalContributionConcurrencyTest.cs#L26-L52).
+
+The web adapter already models, sends, and reads `transactionId`, although the current form always creates an ordinary Contribution. It calculates Account headroom from fresh Accounts plus the global Contributions collection. Sources: [web adapter](https://github.com/itsdevjimbo/pitaka-web/blob/60b62b8b5e0750dcc9d581544c141aceb85e6662/src/app/domains/app/goals/data/goal-contributions.service.ts#L13-L65) and [headroom projection](https://github.com/itsdevjimbo/pitaka-web/blob/60b62b8b5e0750dcc9d581544c141aceb85e6662/src/app/domains/app/goals/data/account-headroom.ts#L9-L43).
+
+## Gaps in the current contract
+
+The persistence model is one-to-one: `Transaction` has a singular `GoalContribution` navigation, EF uses `WithOne`, and the database has a unique index on `goal_contributions.transaction_id`. That prevents splitting one Transaction across Goals. There is also no validation comparing linked amounts with the Transaction amount. Sources: [Transaction model](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Models/Transaction.cs#L34-L40), [EF relationship](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Data/PitakaDbContext.cs#L134-L138), and [unique index](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Migrations/PitakaDbContextModelSnapshot.cs#L418-L420).
+
+Creation currently requires a client-provided date and stores it unchanged; updates also allow the date to change. The Linked Contribution path must instead make its date server-owned and immutable. Sources: [create request](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Requests/CreateGoalContributionRequest.cs#L10-L29) and [create/update service](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Services/GoalContributionService.cs#L42-L58).
+
+Transaction resources expose no linked Contribution facts. The global Contribution read contains enough raw data for a client-side join, but it does not itself establish a dedicated authoritative refresh contract for one Transaction's capacity. Source: [Transaction resource](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Resources/TransactionResource.cs#L6-L24).
+
+Transaction deletion currently queries every linked Contribution, removes them, then removes the Transaction. A backend test pins that destructive behavior, and the web adapter documents it as a landmine. This must be replaced with dependency refusal. Sources: [delete service](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api/Services/TransactionService.cs#L167-L179), [delete test](https://github.com/itsdevjimbo/pitaka/blob/580c5407cc3b90687553396a3c212a6fe264d7ca/PitakaApp.Api.Tests/Controllers/TransactionsControllerTest.cs#L1528-L1545), and [web warning](https://github.com/itsdevjimbo/pitaka-web/blob/60b62b8b5e0750dcc9d581544c141aceb85e6662/src/app/domains/app/transactions/data/transactions.service.ts#L245-L257).
+
+## Decisions still needed
+
+The source cannot settle these API design details without product input:
+
+- which calendar boundary defines “today” (browser-local, a stored person timezone, Manila time, or UTC);
+- whether linked creation is a distinct endpoint/request or a conditional shape of `POST /api/goal-contributions`;
+- whether Active-only corrects ordinary Contributions too or applies only to linked creation;
+- the stable machine-readable Problem Details reasons and payloads for eligibility, Account capacity, Transaction capacity, concurrent staleness, and blocked removal;
+- whether Transaction-side reads are embedded, a nested endpoint, or a filter over the global Contributions endpoint.
+
+Transaction refiling needs no date coupling under the settled meaning: a Linked Contribution is dated on its own creation day, not the Transaction's date. The eventual contract should preserve that independence explicitly.
