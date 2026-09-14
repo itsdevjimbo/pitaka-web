@@ -1,0 +1,22 @@
+<main class="flex flex-auto items-center justify-center p-4">
+  <section class="w-full max-w-md">
+    @if (state() === 'ready' || state() === 'retry' || state() === 'confirming') {
+      <h1 class="text-2xl font-bold">Confirm email change</h1>
+      <p class="mt-2 text-neutral-500">This will finish changing the email address on the Profile.</p>
+      @if (state() === 'retry') {<p class="mt-3" role="alert">Could not confirm the email change. Try again.</p>}
+      <div class="mt-6 flex gap-2"><button matButton type="button" [disabled]="state() === 'confirming'" (click)="notNow()">Not now</button><button matButton="filled" type="button" [disabled]="state() === 'confirming'" (click)="confirm()">{{ state() === 'confirming' ? 'Confirming…' : 'Confirm change' }}</button></div>
+      @if (state() === 'confirming') {<p class="mt-3" role="status">Confirming…</p>}
+    } @else if (state() === 'success') {
+      <p role="status">Email address changed.</p>
+    } @else if (state() === 'refresh-failed') {
+      <p role="status">Email address changed, but your Profile could not be refreshed.</p><button matButton="filled" type="button" (click)="continue()">Continue to Profile</button>
+    } @else if (state() === 'taken') {
+      <h1 class="text-2xl font-bold" role="status">This email address is no longer available</h1>
+      <p class="mt-2 text-neutral-500">Choose another address from Profile.</p>
+      @if (session.isAuthenticated() && session.profile()?.id === userId) {<button matButton="filled" type="button" (click)="goToProfile()">Choose another address</button>} @else {<button matButton="filled" type="button" (click)="signIn()">Sign in to continue</button>}
+    } @else {
+      <h1 class="text-2xl font-bold" role="status">This email change link is no longer valid</h1>
+      @if (session.isAuthenticated()) {<button matButton="filled" type="button" (click)="goToProfile()">Go to Profile</button>} @else {<button matButton="filled" type="button" (click)="signIn()">Sign in</button>}
+    }
+  </section>
+</main>

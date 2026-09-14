@@ -30,10 +30,11 @@ export const SIGN_IN_REASON_PARAM = 'reason';
  * mints and `reasonMessage` reads back — never a string built from anything a
  * visitor could rewrite.
  */
-export type SignInReason = 'session-expired' | 'email-confirmed' | 'password-reset';
+export type SignInReason = 'session-expired' | 'email-confirmed' | 'email-changed' | 'password-reset';
 
 /** The line shown when a confirmation link has just been spent successfully. */
 const EMAIL_CONFIRMED_MESSAGE = 'Your email is confirmed. Sign in to continue.';
+const EMAIL_CHANGED_MESSAGE = 'Email address changed. Sign in with your new address.';
 
 /** The line shown after a reset link has just set a new password (issue #71). */
 const PASSWORD_RESET_MESSAGE =
@@ -42,6 +43,7 @@ const PASSWORD_RESET_MESSAGE =
 const REASON_MESSAGES: Record<SignInReason, string> = {
   'session-expired': SESSION_ENDED_MESSAGE,
   'email-confirmed': EMAIL_CONFIRMED_MESSAGE,
+  'email-changed': EMAIL_CHANGED_MESSAGE,
   'password-reset': PASSWORD_RESET_MESSAGE,
 };
 

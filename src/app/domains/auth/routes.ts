@@ -46,6 +46,11 @@ const routes: Routes = [
         loadComponent: () =>
           import('./features/reset-password/reset-password'),
       },
+      {
+        path: 'confirm-email-change',
+        loadComponent: () =>
+          import('./features/confirm-email-change/confirm-email-change'),
+      },
     ],
   },
 ];

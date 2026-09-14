@@ -105,6 +105,22 @@ export class IncorrectCurrentPasswordError extends Error {
   }
 }
 
+/** An email-change link was invalid, expired, superseded, cancelled, or spent. */
+export class EmailChangeLinkInvalidError extends Error {
+  constructor() {
+    super('This email change link is no longer valid.');
+    this.name = 'EmailChangeLinkInvalidError';
+  }
+}
+
+/** The requested email was claimed after the change was requested. */
+export class EmailChangeAddressTakenError extends Error {
+  constructor() {
+    super('This email address is no longer available.');
+    this.name = 'EmailChangeAddressTakenError';
+  }
+}
+
 /** Wire shape of `POST /api/auth/login` — the API names the identity `user`. */
 type LoginResponse = {
   token: string;
@@ -357,6 +373,28 @@ export class AuthService {
             error.message === 'Your current password is incorrect.'
           ) {
             return throwError(() => new IncorrectCurrentPasswordError());
+          }
+          return throwError(() => error);
+        })
+      );
+  }
+
+  /** Redeem an anonymous email-change link without disturbing a live session. */
+  confirmEmailChange(userId: number, token: string): Observable<void> {
+    return this.http
+      .post<void>(
+        `${this.baseUrl}/api/profile/email-change/confirm`,
+        { userId, token },
+        { context: handlesOwn401() }
+      )
+      .pipe(
+        map(() => undefined),
+        catchError((error: unknown) => {
+          if (error instanceof ApiError && error.status === 400) {
+            return throwError(() => new EmailChangeLinkInvalidError());
+          }
+          if (error instanceof ApiError && error.status === 409) {
+            return throwError(() => new EmailChangeAddressTakenError());
           }
           return throwError(() => error);
         })

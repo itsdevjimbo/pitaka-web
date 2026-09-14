@@ -1,5 +1,7 @@
 export {
   AuthService,
+  EmailChangeAddressTakenError,
+  EmailChangeLinkInvalidError,
   EmailNotConfirmedError,
   IncorrectCurrentPasswordError,
   ResetLinkRejectedError,
