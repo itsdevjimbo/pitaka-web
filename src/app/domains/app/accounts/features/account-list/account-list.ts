@@ -35,11 +35,12 @@ const DELETE_BLOCK_HINT: Record<AccountDeleteBlockedError['reason'], string> = {
   'transaction-history':
     'You can retire it instead — that keeps everything it has recorded.',
   'goal-allocation':
-    'Resolve that goal first, then the account can be deleted.',
+    'This Account can’t be deleted while Contributions earmark money in it. Remove those Contributions or delete their Goals, then try again.',
 };
 type RowNoticeState = {
   id: number;
   message: string;
+  viewGoals?: boolean;
   retry?: () => void;
   retire?: () => void;
 };
@@ -292,8 +293,12 @@ export default class AccountList {
     if (error instanceof AccountDeleteBlockedError) {
       const notice: RowNoticeState = {
         id: account.id,
-        message: `${error.message} ${DELETE_BLOCK_HINT[error.reason]}`,
+        message:
+          error.reason === 'goal-allocation'
+            ? DELETE_BLOCK_HINT[error.reason]
+            : `${error.message} ${DELETE_BLOCK_HINT[error.reason]}`,
       };
+      if (error.reason === 'goal-allocation') notice.viewGoals = true;
       if (error.reason === 'transaction-history')
         notice.retire = () => this.toggleActive(account);
       return notice;
