@@ -34,9 +34,44 @@
   @if (!pendingEmail() && mode() === 'request') {<ng-container [ngTemplateOutlet]="editor" />}
 </section>
 
-@if (successMessage(); as message) {<p class="mt-3 text-sm text-green-700 dark:text-green-300" role="status">{{ message }}</p>}
-@if (refreshNeeded()) {<p class="mt-3 text-sm text-amber-700 dark:text-amber-300" role="status">Profile couldn't be refreshed. <button matButton type="button" (click)="retryRefresh()">Retry refresh</button></p>}
+@if (successMessage(); as message) {
+  <p class="mt-3 text-sm text-green-700 dark:text-green-300" role="status">{{ message }}</p>
+}
+@if (refreshNeeded()) {
+  <p class="mt-3 text-sm text-amber-700 dark:text-amber-300" role="status">
+    Profile couldn't be refreshed. 
+    <button matButton type="button" (click)="retryRefresh()">Retry refresh</button>
+  </p>
+}
 
-<ng-template #editor><form class="mt-5" (submit)="send($event)" (keydown.escape)="close()"><mat-form-field class="w-full"><mat-label>New email address</mat-label><input #newEmailInput id="new-email-address" matInput [formField]="emailForm.newEmail" /><mat-error>@for (error of emailForm.newEmail().errors(); track error) { {{ error.message }} }</mat-error></mat-form-field><ng-container [ngTemplateOutlet]="passwordField" /><div class="flex gap-2"><button matButton type="button" [disabled]="submitting()" (click)="close()">Cancel</button><button matButton="filled" type="submit" [disabled]="emailForm().invalid() || submitting()">{{ submitting() ? 'Sending…' : 'Send confirmation email' }}</button></div></form></ng-template>
-<ng-template #passwordField><mat-form-field class="w-full"><mat-label>Current password</mat-label><input #passwordInput matInput type="password" [formField]="emailForm.currentPassword" /><mat-error>@for (error of emailForm.currentPassword().errors(); track error) { {{ error.message }} }</mat-error></mat-form-field></ng-template>
-@if (errorMessage(); as message) {<p class="mt-3 text-sm text-red-700 dark:text-red-300" role="alert">{{ message }}</p>}
+<ng-template #editor>
+  <form class="mt-5" (submit)="send($event)" (keydown.escape)="close()">
+    <mat-form-field class="w-full">
+      <mat-label>New email address</mat-label>
+      <input #newEmailInput id="new-email-address" matInput [formField]="emailForm.newEmail" />
+      <mat-error>
+        @for (error of emailForm.newEmail().errors(); track error) { {{ error.message }} }
+      </mat-error>
+    </mat-form-field>
+    <ng-container [ngTemplateOutlet]="passwordField" />
+    <div class="flex gap-2 mt-4">
+      <button matButton type="button" [disabled]="submitting()" (click)="close()">Cancel</button>
+      <button matButton="filled" type="submit" [disabled]="emailForm().invalid() || submitting()">
+        {{ submitting() ? 'Sending…' : 'Send confirmation email' }}
+      </button>
+    </div>
+  </form>
+</ng-template>
+<ng-template #passwordField>
+  <mat-form-field class="w-full">
+    <mat-label>Current password</mat-label>
+    <input #passwordInput matInput type="password" [formField]="emailForm.currentPassword" />
+    <mat-error>
+      @for (error of emailForm.currentPassword().errors(); track error) { {{ error.message }} }
+    </mat-error>
+  </mat-form-field>
+</ng-template>
+
+@if (errorMessage(); as message) {
+  <p class="mt-3 text-sm text-red-700 dark:text-red-300" role="alert">{{ message }}</p>
+}
