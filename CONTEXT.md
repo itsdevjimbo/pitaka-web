@@ -61,7 +61,7 @@ Declaring a Goal achieved after it has reached its target. Completed is a durabl
 _Avoid_: Retire, close, finish
 
 **Completed Schedule**:
-A Schedule that reached its inclusive last generation date. It is reached automatically rather than chosen by the person, and can be extended and resumed; distinct from a Stopped Schedule, which the person ended permanently.
+A Schedule that generated its final eligible occurrence on or before its inclusive Last generation date. It is reached automatically rather than chosen by the person, and can be extended, which reactivates it; distinct from a Stopped Schedule, which the person ended permanently.
 _Avoid_: Stopped, paused, ended, finished
 
 **Abandon / Abandoned**:
