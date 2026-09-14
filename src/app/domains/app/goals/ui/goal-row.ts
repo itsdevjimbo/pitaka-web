@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -20,5 +20,8 @@ import { GoalProgress } from './goal-progress';
 })
 export class GoalRow {
   readonly goal = input.required<Goal>();
-
+  readonly edit = output<Goal>();
+  readonly status = output<{ goal: Goal; status: Goal['status'] }>();
+  readonly abandon = output<Goal>();
+  readonly remove = output<Goal>();
 }

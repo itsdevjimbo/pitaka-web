@@ -6,7 +6,7 @@
     </div>
 
     @if (!loading() && !errorMessage() && !isEmpty()) {
-      <button matButton="filled"><mat-icon svgIcon="plus" />New goal</button>
+      <button matButton="filled" (click)="openNew()"><mat-icon svgIcon="plus" />New goal</button>
     }
   </header>
 
@@ -26,7 +26,7 @@
       <mat-icon class="size-10 text-neutral-400" svgIcon="target" />
       <p class="text-lg font-semibold">No goals yet</p>
       <p class="max-w-xs text-neutral-500 dark:text-neutral-400">A Goal is a savings target you build toward with Contributions. Create one to start tracking your progress.</p>
-      <button matButton="filled" class="mt-2"><mat-icon svgIcon="plus" />New goal</button>
+      <button matButton="filled" class="mt-2" (click)="openNew()"><mat-icon svgIcon="plus" />New goal</button>
     </div>
   } @else {
     @for (group of groups(); track group.status) {
@@ -37,7 +37,12 @@
         } @else {
           <ul class="flex flex-col gap-y-2">
             @for (goal of group.rows; track goal.id) {
-              <li><goals-goal-row [goal]="goal" /></li>
+              <li class="flex flex-col gap-y-2">
+                <goals-goal-row [goal]="goal" (edit)="openEdit($event)" (status)="setStatus($event.goal, $event.status)" (abandon)="askAbandon($event)" (remove)="askDelete($event)" />
+                @if (confirmingAbandon()?.id === goal.id) { <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100" role="alertdialog"><p>Abandon <span class="font-semibold">{{ goal.name }}</span>? You won’t be able to add Contributions until you mark it active again.</p><div class="flex gap-x-2"><button matButton (click)="cancelPrompt()">Cancel</button><button matButton="filled" (click)="confirmAbandon(goal)">Abandon</button></div></div> }
+                @if (confirmingDelete(); as confirmation) { @if (confirmation.goal.id === goal.id) { <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200" role="alertdialog"><p>Delete <span class="font-semibold">{{ goal.name }}</span>? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{ confirmation.count === 1 ? '' : 's' }}, releasing their earmarks. The {{ goal.currentAmount | peso }} remains in its Accounts but will no longer count toward a Goal.</p><div class="flex gap-x-2"><button matButton (click)="cancelPrompt()">Cancel</button><button matButton="filled" (click)="confirmDelete(goal)">Delete</button></div></div> } }
+                @if (notice(); as n) { @if (n.id === goal.id) { <app-row-notice [message]="n.message">@if (n.retry; as retry) { <div row-notice-actions><button matButton (click)="retry()">Try again</button></div> }</app-row-notice> } }
+              </li>
             }
           </ul>
         }
