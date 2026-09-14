@@ -87,17 +87,111 @@ export default class GoalList {
       });
   }
 
-  protected openNew(): void { this.dialog.open<NewGoalDialog, undefined, Goal>(NewGoalDialog).afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((goal) => { if (goal) this.load(); }); }
-  protected openEdit(goal: Goal): void { this.clearPrompts(); this.dialog.open<EditGoalDialog, Goal, Goal>(EditGoalDialog, { data: goal }).afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((saved) => { if (saved) this.load(); }); }
-  protected askAbandon(goal: Goal): void { this.notice.set(null); this.confirmingDelete.set(null); this.confirmingAbandon.set(goal); }
-  protected askDelete(goal: Goal): void { this.notice.set(null); this.confirmingAbandon.set(null); this.injector.get(GoalContributionsService).list(goal.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ next: (items) => this.confirmingDelete.set({ goal, count: items.length }), error: (error) => this.failed(goal.id, error, () => this.askDelete(goal)) }); }
-  protected cancelPrompt(): void { this.clearPrompts(); }
-  protected setStatus(goal: Goal, status: GoalStatus): void { this.clearPrompts(); this.write(goal.id, this.service.setStatus(goal.id, status), () => this.load(), () => this.setStatus(goal, status)); }
-  protected confirmAbandon(goal: Goal): void { this.setStatus(goal, 'Abandoned'); }
-  protected confirmDelete(goal: Goal): void { this.clearPrompts(); this.write(goal.id, this.service.delete(goal.id), () => this.load(), () => this.confirmDelete(goal)); }
-  private write(id: number, write$: import('rxjs').Observable<unknown>, success: () => void, retry: () => void): void { this.notice.set(null); this.busyId.set(id); write$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ next: () => { this.busyId.set(null); success(); }, error: (error) => { this.busyId.set(null); this.failed(id, error, retry); } }); }
-  private failed(id: number, error: unknown, retry: () => void): void { if (error instanceof ApiError && error.status === 404) { this.load(); return; } if (error instanceof ApiError && error.status === 403) { this.notice.set({ id, message: 'You can no longer change this Goal.' }); this.load(); return; } this.notice.set({ id, message: error instanceof ApiError ? error.message : 'Something went wrong. Please try again.', retry }); }
-  private clearPrompts(): void { this.confirmingAbandon.set(null); this.confirmingDelete.set(null); }
+  protected openNew(): void {
+    this.dialog
+      .open<NewGoalDialog, undefined, Goal>(NewGoalDialog)
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((goal) => {
+        if (goal) this.load();
+      });
+  }
+  protected openEdit(goal: Goal): void {
+    this.clearPrompts();
+    this.dialog
+      .open<EditGoalDialog, Goal, Goal>(EditGoalDialog, { data: goal })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((saved) => {
+        if (saved) this.load();
+      });
+  }
+
+  protected askAbandon(goal: Goal): void {
+    this.notice.set(null);
+    this.confirmingDelete.set(null);
+    this.confirmingAbandon.set(goal);
+  }
+
+  protected askDelete(goal: Goal): void {
+    this.notice.set(null);
+    this.confirmingAbandon.set(null);
+    this.injector
+      .get(GoalContributionsService)
+      .list(goal.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (items) => this.confirmingDelete.set({ goal, count: items.length }),
+        error: (error) => this.failed(goal.id, error, () => this.askDelete(goal)),
+      });
+  }
+
+  protected cancelPrompt(): void {
+    this.clearPrompts();
+  }
+
+  protected setStatus(goal: Goal, status: GoalStatus): void {
+    this.clearPrompts();
+    this.write(
+      goal.id,
+      this.service.setStatus(goal.id, status),
+      () => this.load(),
+      () => this.setStatus(goal, status),
+    );
+  }
+
+  protected confirmAbandon(goal: Goal): void {
+    this.setStatus(goal, 'Abandoned');
+  }
+
+  protected confirmDelete(goal: Goal): void {
+    this.clearPrompts();
+    this.write(
+      goal.id,
+      this.service.delete(goal.id),
+      () => this.load(),
+      () => this.confirmDelete(goal),
+    );
+  }
+  
+  private write(id: number, write$: import('rxjs').Observable<unknown>, success: () => void, retry: () => void): void {
+    this.notice.set(null);
+    this.busyId.set(id);
+    write$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.busyId.set(null);
+        success();
+      },
+      error: (error) => {
+        this.busyId.set(null);
+        this.failed(id, error, retry);
+      },
+    });
+  }
+
+  private failed(id: number, error: unknown, retry: () => void): void {
+    if (error instanceof ApiError && error.status === 404) {
+      this.load();
+      return;
+    }
+    
+    if (error instanceof ApiError && error.status === 403) {
+      this.notice.set({ id, message: 'You can no longer change this Goal.' });
+      this.load();
+      return;
+    }
+
+    this.notice.set({
+      id,
+      message: error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+      retry,
+    });
+  }
+
+  private clearPrompts(): void {
+    this.confirmingAbandon.set(null);
+    this.confirmingDelete.set(null);
+  }
 }
 
 function byActiveOrder(left: Goal, right: Goal): number {
