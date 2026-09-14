@@ -6,7 +6,6 @@ import unusedImports from 'eslint-plugin-unused-imports';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import stylistic from '@stylistic/eslint-plugin';
 
 export default defineConfig(
   // Global ignores
@@ -19,7 +18,6 @@ export default defineConfig(
   {
     plugins: {
       'unused-imports': unusedImports,
-      '@stylistic': stylistic,
     },
     rules: {
       'unused-imports/no-unused-imports': 'error',
@@ -125,8 +123,6 @@ export default defineConfig(
       '@angular-eslint/component-class-suffix': 'off',
       '@angular-eslint/directive-class-suffix': 'off',
       '@angular-eslint/no-input-rename': 'off',
-      "@stylistic/object-property-newline": ["error", { "allowAllPropertiesOnSameLine": false }],
-      "@stylistic/object-curly-newline": ["error", { "multiline": true }]
     },
   },
 
