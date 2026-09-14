@@ -36,6 +36,10 @@ const routes: Routes = [
         loadComponent: () => import('./goals/features/goal-list/goal-list'),
       },
       {
+        path: 'goals/:id',
+        loadComponent: () => import('./goals/features/goal-detail/goal-detail'),
+      },
+      {
         path: 'categories',
         loadComponent: () =>
           import('./categories/features/categories-list/categories-list'),
