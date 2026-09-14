@@ -68,8 +68,12 @@ _Avoid_: Retire, cancel, archive
 Opening a Completed or Abandoned Goal to pursuit and new Contributions again. It is deliberately distinct from Reactivate, which applies only to a retired Account or Category.
 _Avoid_: Reactivate, restore, reopen
 
+**Stop / Stopped**:
+Permanently ending a Schedule by deliberate choice while preserving both the standing instruction and every Transaction it generated. A Stopped Schedule cannot be resumed; Pause is the reversible way to suspend one. The API calls this state `Cancelled`, translated at the adapter like Schedule itself.
+_Avoid_: Cancel, cancelled, pause, retire, delete
+
 **Delete**:
-Erasing an Account, Category, or Goal entirely. A Goal's Contributions and earmarks go with it, but not Account money; an Account with Transaction history or earmarks and a Category still in use cannot be deleted — retire either instead.
+Erasing an Account, Category, Goal, or never-used Schedule entirely. A Goal's Contributions and earmarks go with it, but not Account money; an Account with Transaction history or earmarks and a Category still in use cannot be deleted — retire either instead. A Schedule can be deleted only before it has generated a Transaction; stop it afterward so its instruction and generated history remain.
 _Avoid_: Remove, destroy, close
 
 **Refile**:
@@ -83,7 +87,7 @@ _Avoid_: Delete, void, reverse, undo
 ### Money that is planned
 
 **Schedule**:
-A standing instruction that creates a Transaction on a repeating cadence. It is a plan rather than money that has moved, and it can be paused and resumed.
+A standing instruction that creates income or expense Transactions on a repeating cadence. It is a plan rather than money that has moved: it can be paused and resumed, becomes Completed after its inclusive last generation date, or can be Stopped permanently by the person. A Schedule never creates a Transfer.
 _Avoid_: Recurring transaction, recurring, repeat, subscription
 
 **Budget**:
