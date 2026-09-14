@@ -1,7 +1,11 @@
 export default {
-  trailingComma: 'es5',
+  trailingComma: 'all',
   singleQuote: true,
+  printWidth: 120,
+  htmlWhitespaceSensitivity: 'ignore',
   singleAttributePerLine: true,
+  semi: true,
+  arrowParens: 'always',
   overrides: [
     {
       files: '*.html',

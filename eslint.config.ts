@@ -123,6 +123,8 @@ export default defineConfig(
       '@angular-eslint/component-class-suffix': 'off',
       '@angular-eslint/directive-class-suffix': 'off',
       '@angular-eslint/no-input-rename': 'off',
+      "@stylistic/object-property-newline": ["error", { "allowAllPropertiesOnSameLine": false }],
+      "@stylistic/object-curly-newline": ["error", { "multiline": true }]
     },
   },
 
