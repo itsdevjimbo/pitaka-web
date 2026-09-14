@@ -56,9 +56,13 @@ _Avoid_: Archive, close, deactivate, disable
 Bringing a retired Account or Category back into use. The inverse of Retire, and the only word for it.
 _Avoid_: Restore, unretire, reopen, enable
 
-**Complete / Completed**:
+**Complete / Completed Goal**:
 Declaring a Goal achieved after it has reached its target. Completed is a durable state chosen by the person, not a figure derived continuously from the Goal's Contributions; only marking the Goal active ends it.
 _Avoid_: Retire, close, finish
+
+**Completed Schedule**:
+A Schedule that reached its inclusive last generation date. It is reached automatically rather than chosen by the person, and can be extended and resumed; distinct from a Stopped Schedule, which the person ended permanently.
+_Avoid_: Stopped, paused, ended, finished
 
 **Abandon / Abandoned**:
 Stopping pursuit of a Goal without erasing it or releasing its earmarks. An Abandoned Goal keeps its Contributions but accepts no new ones until the person marks it active.
@@ -69,7 +73,7 @@ Opening a Completed or Abandoned Goal to pursuit and new Contributions again. It
 _Avoid_: Reactivate, restore, reopen
 
 **Stop / Stopped**:
-Permanently ending a Schedule by deliberate choice while preserving both the standing instruction and every Transaction it generated. A Stopped Schedule cannot be resumed; Pause is the reversible way to suspend one. The API calls this state `Cancelled`, translated at the adapter like Schedule itself.
+Permanently ending a Schedule by deliberate choice while preserving both the standing instruction and every Transaction it generated. A Stopped Schedule cannot be resumed; Pause is the reversible way to suspend one.
 _Avoid_: Cancel, cancelled, pause, retire, delete
 
 **Delete**:
