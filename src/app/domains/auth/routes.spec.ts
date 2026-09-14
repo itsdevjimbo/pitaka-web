@@ -40,7 +40,7 @@ describe('the auth area routes', () => {
             completePasswordReset: () => undefined,
           },
         },
-        { provide: AccountsService, useValue: { list: () => of([]) } },
+        { provide: AccountsService, useValue: { all: () => of([]) } },
         // confirm-email fires this on init, and reset-password's form calls the
         // other on submit; both stubbed here so neither depends on a real HTTP
         // round trip nobody in these tests flushes.

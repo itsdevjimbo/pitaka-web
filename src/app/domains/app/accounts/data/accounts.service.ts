@@ -1,8 +1,8 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
-import { Account, AccountType, NewAccount } from './account';
+import { Account, AccountCriteria, AccountType, NewAccount } from './account';
 import {
   AccountDeleteBlockedError,
   AccountModifiedError,
@@ -60,11 +60,31 @@ export class AccountsService {
   private baseUrl = inject(API_BASE_URL);
 
   /**
-   * Every Account the signed-in person owns, balances included. Deliberately a
-   * cold `Observable` with no caching: the balance is the server's recomputed
-   * figure and every entry to the list re-reads it (ADR 0006).
+   * The Accounts matching `criteria`, balances included. An omitted criterion
+   * stays absent from the request, leaving the API to narrow only on the
+   * collection meaning its caller supplies. Deliberately cold: every entry
+   * re-reads the server's recomputed balances (ADR 0006).
    */
-  list(): Observable<Account[]> {
+  list(criteria: AccountCriteria): Observable<Account[]> {
+    let params = new HttpParams();
+
+    if (criteria.isActive !== undefined) {
+      params = params.set('isActive', criteria.isActive);
+    }
+    if (criteria.type !== undefined) {
+      params = params.set('type', criteria.type);
+    }
+
+    return this.http
+      .get<AccountResource[]>(`${this.baseUrl}/api/accounts`, { params })
+      .pipe(map((resources) => resources.map(toAccount)));
+  }
+
+  /**
+   * Every Account the signed-in person owns, retired included — for historical
+   * names and finding past activity. Deliberately an unfiltered cold request.
+   */
+  all(): Observable<Account[]> {
     return this.http
       .get<AccountResource[]>(`${this.baseUrl}/api/accounts`)
       .pipe(map((resources) => resources.map(toAccount)));

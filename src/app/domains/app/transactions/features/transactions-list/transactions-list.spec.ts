@@ -95,7 +95,7 @@ describe('TransactionsList', () => {
     over: {
       search?: TransactionsService['search'];
       categoryRead?: CategoriesService['all'];
-      accounts?: AccountsService['list'];
+      accounts?: AccountsService['all'];
       refile?: TransactionsService['refile'];
       remove?: TransactionsService['remove'];
       queryParams?: Record<string, string>;
@@ -132,7 +132,7 @@ describe('TransactionsList', () => {
           useValue: { all: categoryRead, list: categoryRead },
         },
         { provide: TagsService, useValue: { all: () => of([]) } },
-        { provide: AccountsService, useValue: { list: accounts } },
+        { provide: AccountsService, useValue: { all: accounts } },
         { provide: ActivatedRoute, useValue: url.activatedRoute },
       ],
     });
@@ -209,7 +209,7 @@ describe('TransactionsList', () => {
     const { fixture, text } = setup({
       search: () => pending.asObservable(),
       categoryRead: categoryRead as unknown as CategoriesService['all'],
-      accounts: accounts as unknown as AccountsService['list'],
+      accounts: accounts as unknown as AccountsService['all'],
     });
 
     // All three are asked for, and nothing renders until every one is in.
@@ -1082,7 +1082,7 @@ describe('TransactionsList', () => {
       const accounts = vi.fn(() => of(ACCOUNTS as unknown as never));
       const { fixture, cmp } = setup({
         categoryRead: categoryRead as unknown as CategoriesService['all'],
-        accounts: accounts as unknown as AccountsService['list'],
+        accounts: accounts as unknown as AccountsService['all'],
       });
 
       expect(categoryRead).toHaveBeenCalledTimes(1);

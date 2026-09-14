@@ -35,7 +35,7 @@ describe('the app area routes', () => {
         provideHttpClientTesting(),
         provideIcons(),
         { provide: Session, useValue: { isAuthenticated: () => true } },
-        { provide: AccountsService, useValue: { list: () => of([]) } },
+        { provide: AccountsService, useValue: { all: () => of([]) } },
       ],
     });
     // The shell chrome is irrelevant here — swap it for a bare outlet so the
@@ -61,7 +61,7 @@ describe('the app area routes', () => {
         provideHttpClientTesting(),
         provideIcons(),
         { provide: Session, useValue: { isAuthenticated: () => true } },
-        { provide: AccountsService, useValue: { list: () => of([]) } },
+        { provide: AccountsService, useValue: { all: () => of([]) } },
         {
           provide: TransactionsService,
           useValue: { search: () => of({ transactions: [], totalCount: 0 }) },
@@ -93,7 +93,7 @@ describe('the app area routes', () => {
         provideHttpClientTesting(),
         provideIcons(),
         { provide: Session, useValue: { isAuthenticated: () => true } },
-        { provide: AccountsService, useValue: { list: () => of([]) } },
+        { provide: AccountsService, useValue: { all: () => of([]) } },
         { provide: CategoriesService, useValue: { readAll: () => of([]) } },
       ],
     });
