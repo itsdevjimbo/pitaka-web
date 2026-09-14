@@ -6,6 +6,7 @@ import unusedImports from 'eslint-plugin-unused-imports';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import stylistic from '@stylistic/eslint-plugin';
 
 export default defineConfig(
   // Global ignores
@@ -18,6 +19,7 @@ export default defineConfig(
   {
     plugins: {
       'unused-imports': unusedImports,
+      '@stylistic': stylistic,
     },
     rules: {
       'unused-imports/no-unused-imports': 'error',
