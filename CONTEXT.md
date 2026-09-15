@@ -123,7 +123,7 @@ An earmark of money in an Account toward a Goal. A Goal's progress is the sum of
 _Avoid_: Deposit, saving, goal transaction, allocation
 
 **Linked Contribution**:
-A Contribution sourced from an income Transaction into an active Account. Its Account is the Transaction's, its Contribution date is the day it is created, and its amount may be some or all of the Transaction's amount still uncommitted to other Linked Contributions, subject also to the Account's available money. Its amount and Transaction link are settled when it is created; changing either means deleting it and creating another. The Transaction cannot be removed while the link exists.
+A Contribution sourced from an income Transaction into an active Account. Its Account is the Transaction's, its Contribution date is the person's local calendar day when it is created, and its amount may be some or all of the Transaction's amount still uncommitted to other Linked Contributions, subject also to the Account's available money. Its amount and Transaction link are settled when it is created; changing either means deleting it and creating another. The Transaction cannot be removed while the link exists.
 _Avoid_: Earmarked transaction, transaction earmark
 
 ### Classification
