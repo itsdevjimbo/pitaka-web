@@ -69,6 +69,13 @@ export const NAVIGATION: NavigationItem[] = [
         icon: 'tag',
         activeOptions: { exact: false },
       },
+      {
+        id: 'schedules-prototype',
+        label: 'Schedules',
+        route: '/app/prototype/schedules',
+        icon: 'calendar-clock',
+        activeOptions: { exact: false },
+      },
     ],
   },
 ];

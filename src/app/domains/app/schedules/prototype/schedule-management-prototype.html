@@ -1,0 +1,386 @@
+<main class="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 pb-24 sm:p-8 sm:pb-24">
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Schedules</h1>
+      <p class="mt-1 text-neutral-500 dark:text-neutral-400">Money that repeats on your terms.</p>
+    </div>
+    <button
+      class="bg-primary text-on-primary rounded-full px-4 py-2 text-sm font-semibold shadow-sm"
+      (click)="openDialog('new')"
+    >
+      + New schedule
+    </button>
+  </header>
+
+  @if (variant() === 'A') {
+    <div class="grid gap-7 lg:grid-cols-[minmax(0,1fr)_15rem]">
+      <div class="space-y-7">
+        @for (state of ['Active', 'Paused']; track state) {
+          <section class="space-y-2">
+            <div class="flex items-center justify-between">
+              <h2 class="text-xs font-bold tracking-widest text-neutral-500 uppercase">{{ state }}</h2>
+              <span class="text-xs text-neutral-400">{{ state === 'Active' ? '2 schedules' : '1 schedule' }}</span>
+            </div>
+            @for (item of schedules; track item.name) {
+              @if (item.state === state) {
+                <article
+                  class="rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs dark:border-neutral-800 dark:bg-neutral-950"
+                >
+                  <div class="flex items-start gap-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="font-semibold">{{ item.name }}</h3>
+                        <span
+                          class="rounded-full px-2 py-0.5 text-xs"
+                          [class]="
+                            item.direction === 'Income'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          "
+                        >
+                          {{ item.direction }}
+                        </span>
+                      </div>
+                      <p class="mt-1 text-sm text-neutral-500">{{ item.amount }} · {{ item.cadence }}</p>
+                    </div>
+                    <button
+                      class="rounded-lg border px-3 py-1.5 text-sm"
+                      (click)="openDialog('edit')"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                  <div class="mt-4 grid gap-3 border-t pt-3 text-sm sm:grid-cols-3 dark:border-neutral-800">
+                    <div>
+                      <span class="block text-xs text-neutral-400">Next generation</span>
+                      <strong>{{ item.next }}</strong>
+                    </div>
+                    <div>
+                      <span class="block text-xs text-neutral-400">Filed to</span>
+                      {{ item.account }} · {{ item.category }}
+                    </div>
+                    <div>
+                      <span class="block text-xs text-neutral-400">History</span>
+                      <a class="text-primary font-medium">{{ item.generated }} generated →</a>
+                    </div>
+                  </div>
+                </article>
+              }
+            }
+          </section>
+        }
+        <section>
+          <button
+            class="flex w-full items-center justify-between rounded-xl border border-neutral-200 px-4 py-3 text-left dark:border-neutral-800"
+            (click)="pastOpen.set(!pastOpen())"
+          >
+            <span>
+              <strong>Past schedules</strong>
+              <span class="ml-2 text-sm text-neutral-400">2</span>
+            </span>
+            <span>{{ pastOpen() ? '−' : '+' }}</span>
+          </button>
+          @if (pastOpen()) {
+            <div class="mt-2 space-y-2 opacity-75">
+              @for (item of schedules; track item.name) {
+                @if (item.state === 'Completed' || item.state === 'Stopped') {
+                  <button
+                    class="flex w-full items-center justify-between rounded-xl border p-3 text-left dark:border-neutral-800"
+                    (click)="choose(item.name)"
+                  >
+                    <span>
+                      <strong>{{ item.name }}</strong>
+                      <small class="ml-2">{{ item.state }}</small>
+                    </span>
+                    <span>{{ item.generated }} generated →</span>
+                  </button>
+                }
+              }
+            </div>
+          }
+        </section>
+      </div>
+      <aside class="h-fit rounded-2xl bg-neutral-100 p-4 text-sm dark:bg-neutral-900">
+        <h2 class="font-semibold">At a glance</h2>
+        <dl class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-1">
+          <div>
+            <dt class="text-neutral-500">Next 30 days</dt>
+            <dd class="text-lg font-bold">₱82,000 in</dd>
+            <dd class="text-rose-600">₱20,700 out</dd>
+          </div>
+          <div>
+            <dt class="text-neutral-500">Next up</dt>
+            <dd class="font-semibold">Salary · tomorrow</dd>
+          </div>
+        </dl>
+      </aside>
+    </div>
+  }
+
+  @if (variant() === 'B') {
+    <section class="grid gap-8 lg:grid-cols-[12rem_minmax(0,1fr)]">
+      <nav class="flex gap-2 overflow-x-auto lg:flex-col">
+        <button class="rounded-xl bg-neutral-900 px-4 py-3 text-left text-sm text-white dark:bg-white dark:text-black">
+          Upcoming
+          <b class="float-right">2</b>
+        </button>
+        <button class="rounded-xl px-4 py-3 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900">
+          Paused
+          <b class="float-right">1</b>
+        </button>
+        <button class="rounded-xl px-4 py-3 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900">
+          Past
+          <b class="float-right">2</b>
+        </button>
+      </nav>
+      <div>
+        <div class="mb-5 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="text-xl font-semibold">Coming up</h2>
+          <span class="text-sm text-neutral-500">Projected from your active Schedules</span>
+        </div>
+        <div class="relative ml-3 border-l-2 border-neutral-200 pl-7 dark:border-neutral-800">
+          @for (item of schedules; track item.name) {
+            @if (item.state === 'Active') {
+              <article class="relative mb-8 rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
+                <span
+                  class="bg-primary absolute top-5 -left-9.5 size-5 rounded-full border-4 border-white dark:border-neutral-950"
+                ></span>
+                <p class="text-primary text-xs font-bold tracking-wide uppercase">{{ item.next }}</p>
+                <div class="mt-2 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 class="text-lg font-semibold">{{ item.name }}</h3>
+                    <p class="text-sm text-neutral-500">{{ item.cadence }}</p>
+                  </div>
+                  <strong class="text-lg">{{ item.amount }}</strong>
+                </div>
+                <p class="mt-4 text-sm">
+                  {{ item.account }}
+                  <span class="text-neutral-400">·</span>
+                  {{ item.category }}
+                </p>
+                <div class="mt-4 flex flex-wrap gap-2 border-t pt-4 dark:border-neutral-800">
+                  <button class="rounded-lg border px-3 py-1.5 text-sm">Pause</button>
+                  <button
+                    class="rounded-lg border px-3 py-1.5 text-sm"
+                    (click)="openDialog('edit')"
+                  >
+                    Edit
+                  </button>
+                  <a class="text-primary px-3 py-1.5 text-sm font-medium">View {{ item.generated }} generated</a>
+                </div>
+              </article>
+            }
+          }
+        </div>
+      </div>
+    </section>
+  }
+
+  @if (variant() === 'C') {
+    <section
+      class="overflow-hidden rounded-2xl border border-neutral-200 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] dark:border-neutral-800"
+    >
+      <div class="border-b lg:border-r lg:border-b-0 dark:border-neutral-800">
+        <div class="border-b p-3 dark:border-neutral-800">
+          <input
+            class="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
+            placeholder="Find a schedule"
+          />
+        </div>
+        <div class="max-h-72 overflow-auto lg:max-h-[36rem]">
+          @for (item of schedules; track item.name) {
+            <button
+              class="flex w-full items-center gap-3 border-b p-4 text-left dark:border-neutral-800"
+              [class.bg-neutral-100]="selected() === item.name"
+              (click)="choose(item.name)"
+            >
+              <span
+                class="size-2 shrink-0 rounded-full"
+                [class]="
+                  item.state === 'Active'
+                    ? 'bg-emerald-500'
+                    : item.state === 'Paused'
+                      ? 'bg-amber-500'
+                      : 'bg-neutral-400'
+                "
+              ></span>
+              <span class="min-w-0 flex-1">
+                <strong class="block truncate">{{ item.name }}</strong>
+                <small class="text-neutral-500">{{ item.state }} · {{ item.amount }}</small>
+              </span>
+              <span>›</span>
+            </button>
+          }
+        </div>
+      </div>
+      <article class="p-5 sm:p-8">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <span class="text-sm font-semibold text-emerald-600">{{ selectedSchedule().state }}</span>
+            <h2 class="mt-1 text-2xl font-bold">{{ selectedSchedule().name }}</h2>
+            <p class="mt-1 text-neutral-500">
+              {{ selectedSchedule().amount }} {{ selectedSchedule().direction.toLowerCase() }}
+            </p>
+          </div>
+          <button
+            class="rounded-lg border px-3 py-2 text-sm"
+            (click)="openDialog('edit')"
+          >
+            Edit details
+          </button>
+        </div>
+        <div class="bg-primary/10 my-7 rounded-2xl p-5">
+          <span class="text-sm text-neutral-500">Next generation</span>
+          <strong class="mt-1 block text-xl">{{ selectedSchedule().next }}</strong>
+          <span class="text-sm">{{ selectedSchedule().cadence }}</span>
+        </div>
+        <dl class="grid gap-5 text-sm sm:grid-cols-2">
+          <div>
+            <dt class="text-neutral-500">Account</dt>
+            <dd class="font-medium">{{ selectedSchedule().account }}</dd>
+          </div>
+          <div>
+            <dt class="text-neutral-500">Category</dt>
+            <dd class="font-medium">{{ selectedSchedule().category }}</dd>
+          </div>
+          <div>
+            <dt class="text-neutral-500">Generated history</dt>
+            <dd>
+              <a class="text-primary font-medium">View {{ selectedSchedule().generated }} Transactions →</a>
+            </dd>
+          </div>
+          <div>
+            <dt class="text-neutral-500">Lifecycle</dt>
+            <dd>Started 15 Jul 2025 · No last generation</dd>
+          </div>
+        </dl>
+        <div class="mt-8 flex flex-wrap gap-2 border-t pt-5 dark:border-neutral-800">
+          <button class="rounded-lg border px-4 py-2 text-sm">Pause</button>
+          <button
+            class="rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700"
+            (click)="openDialog('stop')"
+          >
+            Stop permanently
+          </button>
+        </div>
+      </article>
+    </section>
+  }
+</main>
+
+@if (dialog(); as openDialog) {
+  <div class="fixed inset-0 z-40 flex items-end justify-center p-0 sm:items-center sm:p-6">
+    <button
+      class="absolute inset-0 size-full bg-black/45"
+      aria-label="Close dialog"
+      (click)="closeDialog()"
+    ></button>
+    <section class="relative w-full max-w-lg rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl dark:bg-neutral-950">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="text-primary text-xs font-bold tracking-widest uppercase">Prototype dialog</p>
+          <h2 class="mt-1 text-xl font-bold">
+            {{ openDialog === 'new' ? 'New schedule' : openDialog === 'stop' ? 'Stop Rent?' : 'Edit Rent' }}
+          </h2>
+        </div>
+        <button
+          class="text-2xl"
+          (click)="closeDialog()"
+        >
+          ×
+        </button>
+      </div>
+      @if (openDialog === 'stop') {
+        <p class="mt-5 text-neutral-600 dark:text-neutral-300">
+          Stopping is permanent. Rent will create no more Transactions, but its instruction and 9 generated Transactions
+          stay in history.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
+          <button
+            class="rounded-lg px-4 py-2"
+            (click)="closeDialog()"
+          >
+            Keep active
+          </button>
+          <button class="rounded-lg bg-rose-600 px-4 py-2 font-semibold text-white">Stop schedule</button>
+        </div>
+      } @else {
+        <div class="mt-5 grid gap-4 sm:grid-cols-2">
+          <label class="sm:col-span-2">
+            <span class="mb-1 block text-sm">Name</span>
+            <input
+              class="w-full rounded-lg border bg-transparent px-3 py-2"
+              value="Rent"
+            />
+          </label>
+          <label>
+            <span class="mb-1 block text-sm">Direction</span>
+            <select class="w-full rounded-lg border bg-transparent px-3 py-2">
+              <option>Expense</option>
+              <option>Income</option>
+            </select>
+          </label>
+          <label>
+            <span class="mb-1 block text-sm">Amount</span>
+            <input
+              class="w-full rounded-lg border bg-transparent px-3 py-2"
+              value="18,500"
+            />
+          </label>
+          <label>
+            <span class="mb-1 block text-sm">Cadence</span>
+            <select class="w-full rounded-lg border bg-transparent px-3 py-2">
+              <option>Monthly</option>
+            </select>
+          </label>
+          <label>
+            <span class="mb-1 block text-sm">First generation</span>
+            <input
+              class="w-full rounded-lg border bg-transparent px-3 py-2"
+              value="2026-10-01"
+            />
+          </label>
+        </div>
+        <p class="mt-4 rounded-lg bg-neutral-100 p-3 text-sm dark:bg-neutral-900">
+          Generates monthly on day 1. Next: 1 Oct 2026. No last generation.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
+          <button
+            class="rounded-lg px-4 py-2"
+            (click)="closeDialog()"
+          >
+            Cancel
+          </button>
+          <button class="bg-primary text-on-primary rounded-lg px-4 py-2 font-semibold">
+            {{ openDialog === 'new' ? 'Create schedule' : 'Save changes' }}
+          </button>
+        </div>
+      }
+    </section>
+  </div>
+}
+
+@if (isPrototype) {
+  <div
+    class="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-neutral-950 px-3 py-2 text-sm text-white shadow-2xl ring-1 ring-white/20"
+  >
+    <button
+      class="grid size-8 place-items-center rounded-full hover:bg-white/15"
+      aria-label="Previous variant"
+      (click)="cycle(-1)"
+    >
+      ←
+    </button>
+    <span class="min-w-36 text-center">
+      <b>{{ variant() }}</b>
+      · {{ variantNames[variant()] }}
+    </span>
+    <button
+      class="grid size-8 place-items-center rounded-full hover:bg-white/15"
+      aria-label="Next variant"
+      (click)="cycle(1)"
+    >
+      →
+    </button>
+  </div>
+}

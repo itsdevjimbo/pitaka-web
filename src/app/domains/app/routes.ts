@@ -13,23 +13,19 @@ const routes: Routes = [
       },
       {
         path: 'accounts',
-        loadComponent: () =>
-          import('./accounts/features/account-list/account-list'),
+        loadComponent: () => import('./accounts/features/account-list/account-list'),
       },
       {
         path: 'accounts/:id',
-        loadComponent: () =>
-          import('./accounts/features/account-detail/account-detail'),
+        loadComponent: () => import('./accounts/features/account-detail/account-detail'),
       },
       {
         path: 'transactions',
-        loadComponent: () =>
-          import('./transactions/features/transactions-list/transactions-list'),
+        loadComponent: () => import('./transactions/features/transactions-list/transactions-list'),
       },
       {
         path: 'budgets',
-        loadComponent: () =>
-          import('./budgets/features/budget-list/budget-list'),
+        loadComponent: () => import('./budgets/features/budget-list/budget-list'),
       },
       {
         path: 'goals',
@@ -41,17 +37,19 @@ const routes: Routes = [
       },
       {
         path: 'categories',
-        loadComponent: () =>
-          import('./categories/features/categories-list/categories-list'),
+        loadComponent: () => import('./categories/features/categories-list/categories-list'),
       },
       {
         path: 'tags',
         loadComponent: () => import('./tags/features/tags-list/tags-list'),
       },
       {
+        path: 'prototype/schedules',
+        loadComponent: () => import('./schedules/prototype/schedule-management-prototype'),
+      },
+      {
         path: 'profile',
-        loadComponent: () =>
-          import('./profile/features/profile/profile'),
+        loadComponent: () => import('./profile/features/profile/profile'),
       },
     ],
   },
