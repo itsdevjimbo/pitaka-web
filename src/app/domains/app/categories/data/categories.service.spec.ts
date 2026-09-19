@@ -100,6 +100,28 @@ describe('CategoriesService', () => {
       ]);
     });
 
+    it('refreshList() drops a warm cache and returns the current active Categories', async () => {
+      const warm = firstValueFrom(service.list());
+      http
+        .expectOne(`${BASE_URL}/api/categories`)
+        .flush([resource(1, 'Old name')]);
+      await warm;
+
+      const refreshed = firstValueFrom(service.refreshList());
+      http.expectOne(`${BASE_URL}/api/categories`).flush([
+        resource(1, 'New name'),
+        resource(2, 'Retired', { isActive: false }),
+      ]);
+
+      await expect(refreshed).resolves.toEqual([
+        expect.objectContaining({
+          id: 1,
+          name: 'New name',
+          isActive: true,
+        }),
+      ]);
+    });
+
     it('all() returns the whole set, retired included, carrying kind and isActive', async () => {
       const result = firstValueFrom(service.all());
 

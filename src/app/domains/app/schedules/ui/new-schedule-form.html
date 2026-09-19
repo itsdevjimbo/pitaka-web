@@ -1,0 +1,217 @@
+<form
+  class="grid gap-x-4 gap-y-3 sm:grid-cols-2"
+  (submit)="save($event)"
+>
+  @if (errorMessage(); as message) {
+    <div
+      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      role="alert"
+    >
+      {{ message }}
+    </div>
+  }
+  @if (optionsFailed()) {
+    <div
+      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      role="alert"
+    >
+      Eligible Accounts and Categories couldn’t be loaded. Close the dialog and try again.
+    </div>
+  }
+
+  <mat-form-field class="sm:col-span-2">
+    <mat-label>Name</mat-label>
+    <input
+      id="schedule-name"
+      matInput
+      [formField]="scheduleForm.name"
+    />
+    <mat-error>
+      @if (scheduleForm.name().touched() && scheduleForm.name().invalid()) {
+        @for (error of scheduleForm.name().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Direction</mat-label>
+    <mat-select
+      id="schedule-direction"
+      [formField]="scheduleForm.direction"
+      (selectionChange)="directionChanged()"
+    >
+      @for (option of directions; track option.value) {
+        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+    <mat-error>
+      @if (scheduleForm.direction().touched() && scheduleForm.direction().invalid()) {
+        @for (error of scheduleForm.direction().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Amount</mat-label>
+    <span
+      matTextPrefix
+      aria-hidden="true"
+    >
+      ₱&nbsp;
+    </span>
+    <input
+      id="schedule-amount"
+      matInput
+      type="number"
+      step="0.01"
+      inputmode="decimal"
+      [formField]="scheduleForm.amount"
+    />
+    <mat-error>
+      @if (scheduleForm.amount().touched() && scheduleForm.amount().invalid()) {
+        @for (error of scheduleForm.amount().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Account</mat-label>
+    <mat-select
+      id="schedule-account"
+      [formField]="scheduleForm.accountId"
+      (selectionChange)="eligibilityChanged()"
+    >
+      @for (account of accounts(); track account.id) {
+        <mat-option [value]="account.id">{{ account.name }}</mat-option>
+      }
+    </mat-select>
+    <mat-error>
+      @if (scheduleForm.accountId().touched() && scheduleForm.accountId().invalid()) {
+        @for (error of scheduleForm.accountId().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Category</mat-label>
+    <mat-select
+      id="schedule-category"
+      [formField]="scheduleForm.categoryId"
+      (selectionChange)="eligibilityChanged()"
+    >
+      @for (category of categoryOptions(); track category.id) {
+        <mat-option [value]="category.id">{{ category.name }}</mat-option>
+      }
+    </mat-select>
+    <mat-error>
+      @if (scheduleForm.categoryId().touched() && scheduleForm.categoryId().invalid()) {
+        @for (error of scheduleForm.categoryId().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Cadence</mat-label>
+    <mat-select
+      id="schedule-frequency"
+      [formField]="scheduleForm.frequency"
+    >
+      @for (option of frequencies; track option.value) {
+        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+    <mat-error>
+      @if (scheduleForm.frequency().touched() && scheduleForm.frequency().invalid()) {
+        @for (error of scheduleForm.frequency().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>First generation</mat-label>
+    <input
+      id="schedule-first-generation"
+      matInput
+      [matDatepicker]="firstPicker"
+      [min]="firstGenerationMinimum"
+      [formField]="scheduleForm.firstGeneration"
+    />
+    <mat-datepicker-toggle
+      matIconSuffix
+      [for]="firstPicker"
+    />
+    <mat-datepicker #firstPicker />
+    <mat-error>
+      @if (scheduleForm.firstGeneration().touched() && scheduleForm.firstGeneration().invalid()) {
+        @for (error of scheduleForm.firstGeneration().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Last generation</mat-label>
+    <input
+      id="schedule-last-generation"
+      matInput
+      [matDatepicker]="lastPicker"
+      [formField]="scheduleForm.lastGeneration"
+    />
+    <mat-datepicker-toggle
+      matIconSuffix
+      [for]="lastPicker"
+    />
+    <mat-datepicker #lastPicker />
+    <mat-hint>Optional. An occurrence on this date is included.</mat-hint>
+    <mat-error>
+      @if (scheduleForm.lastGeneration().touched() && scheduleForm.lastGeneration().invalid()) {
+        @for (error of scheduleForm.lastGeneration().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field class="sm:col-span-2">
+    <mat-label>Description</mat-label>
+    <textarea
+      id="schedule-description"
+      matInput
+      rows="3"
+      [formField]="scheduleForm.description"
+    ></textarea>
+    <mat-hint>Optional. Generated Transactions keep their existing description.</mat-hint>
+  </mat-form-field>
+
+  <div class="mt-2 flex items-center justify-end gap-3 sm:col-span-2">
+    <button
+      matButton
+      type="button"
+      (click)="cancel()"
+    >
+      Cancel
+    </button>
+    <button
+      matButton="filled"
+      type="submit"
+      [disabled]="
+        scheduleForm().invalid() || submitting() || loadingOptions() || optionsFailed() || eligibilityRejected()
+      "
+    >
+      {{ submitting() ? 'Creating…' : 'Create Schedule' }}
+    </button>
+  </div>
+</form>
