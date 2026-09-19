@@ -2,12 +2,14 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin } from 'rxjs';
 import { PesoPipe } from '@/app/core/money';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { Schedule, SCHEDULE_FREQUENCIES, ScheduleStatus, SchedulesService } from '../..';
+import { NewScheduleDialog } from '../../ui/new-schedule-dialog';
 
 type ScheduleView = 'upcoming' | 'paused' | 'past';
 
@@ -43,6 +45,7 @@ export default class ScheduleList {
   private readonly accountsService = inject(AccountsService);
   private readonly categoriesService = inject(CategoriesService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dialog = inject(MatDialog);
 
   protected readonly schedules = signal<readonly Schedule[] | null>(null);
   private readonly accounts = signal<readonly Account[]>([]);
@@ -148,5 +151,16 @@ export default class ScheduleList {
 
   protected historyLabel(count: number): string {
     return `${count} surviving generated ${count === 1 ? 'Transaction' : 'Transactions'}`;
+  }
+
+  protected openCreateDialog(): void {
+    if (this.stale() || this.refreshing()) return;
+    this.dialog
+      .open<NewScheduleDialog, undefined, Schedule>(NewScheduleDialog)
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((created) => {
+        if (created) this.load();
+      });
   }
 }

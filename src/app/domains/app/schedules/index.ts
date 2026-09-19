@@ -4,5 +4,9 @@ export {
   type ScheduleDirection,
   type ScheduleFrequency,
   type ScheduleStatus,
+  type NewSchedule,
+  SCHEDULE_AMOUNT_MAX,
+  SCHEDULE_AMOUNT_MIN,
+  SCHEDULE_NAME_MAX,
 } from './data/schedule';
 export { SchedulesService } from './data/schedules.service';

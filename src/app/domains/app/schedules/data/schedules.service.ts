@@ -1,8 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { map, Observable } from 'rxjs';
-import { API_BASE_URL } from '@/app/core/api';
-import { Schedule, ScheduleDirection, ScheduleFrequency, ScheduleStatus } from './schedule';
+import { catchError, map, Observable, throwError } from 'rxjs';
+import { ApiError, API_BASE_URL } from '@/app/core/api';
+import { NewSchedule, Schedule, ScheduleDirection, ScheduleFrequency, ScheduleStatus } from './schedule';
 
 /** The API resource. Its recurring-transaction vocabulary ends at this adapter. */
 type RecurringTransactionResource = {
@@ -38,6 +38,22 @@ const STATUS: Record<RecurringTransactionResource['status'], ScheduleStatus> = {
   Completed: 'completed',
   Cancelled: 'cancelled',
 };
+const API_DIRECTION: Record<ScheduleDirection, RecurringTransactionResource['type']> = {
+  income: 'Income',
+  expense: 'Expense',
+};
+const API_FREQUENCY: Record<ScheduleFrequency, RecurringTransactionResource['frequency']> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+};
+const API_FIELD_TO_PRODUCT_FIELD: Readonly<Record<string, string>> = {
+  type: 'direction',
+  startDate: 'firstGeneration',
+  endDate: 'lastGeneration',
+};
+const DUPLICATE_NAME = /name.*already exists|already exists.*name/i;
 
 /** Handwritten Schedule HTTP adapter (ADRs 0002 and 0003). */
 @Injectable({ providedIn: 'root' })
@@ -51,6 +67,26 @@ export class SchedulesService {
       .get<RecurringTransactionResource[]>(`${this.baseUrl}/api/recurring-transactions`)
       .pipe(map((resources) => resources.map(toSchedule)));
   }
+
+  /** Create one Schedule, translating product vocabulary and calendar dates at the adapter. */
+  create(schedule: NewSchedule): Observable<Schedule> {
+    return this.http
+      .post<RecurringTransactionResource>(`${this.baseUrl}/api/recurring-transactions`, {
+        accountId: schedule.accountId,
+        categoryId: schedule.categoryId,
+        name: schedule.name,
+        type: API_DIRECTION[schedule.direction],
+        amount: schedule.amount,
+        description: schedule.description,
+        frequency: API_FREQUENCY[schedule.frequency],
+        startDate: toDateOnly(schedule.firstGeneration),
+        endDate: schedule.lastGeneration === null ? null : toDateOnly(schedule.lastGeneration),
+      })
+      .pipe(
+        map(toSchedule),
+        catchError((error: unknown) => throwError(() => toScheduleError(error))),
+      );
+  }
 }
 
 function toSchedule(resource: RecurringTransactionResource): Schedule {
@@ -61,6 +97,7 @@ function toSchedule(resource: RecurringTransactionResource): Schedule {
     name: resource.name,
     direction: DIRECTION[resource.type],
     amount: resource.amount,
+    description: resource.description,
     frequency: FREQUENCY[resource.frequency],
     firstGeneration: toCalendarDate(resource.startDate),
     lastGeneration: resource.endDate === null ? null : toCalendarDate(resource.endDate),
@@ -75,4 +112,28 @@ function toSchedule(resource: RecurringTransactionResource): Schedule {
 function toCalendarDate(value: string): Date {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year, month - 1, day);
+}
+
+/** Assemble an API DateOnly from local calendar getters without a UTC conversion. */
+function toDateOnly(value: Date): string {
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Keep API field names and recurring-transaction wording inside this adapter. */
+function toScheduleError(error: unknown): unknown {
+  if (!(error instanceof ApiError)) return error;
+
+  if (error.status === 409 && DUPLICATE_NAME.test(error.message)) {
+    const message = 'A Schedule with this name already exists.';
+    return new ApiError(message, error.status, { name: [message] });
+  }
+
+  const fieldErrors: Record<string, readonly string[]> = {};
+  for (const [field, messages] of Object.entries(error.fieldErrors)) {
+    fieldErrors[API_FIELD_TO_PRODUCT_FIELD[field] ?? field] = messages;
+  }
+  return new ApiError(error.message, error.status, fieldErrors);
 }

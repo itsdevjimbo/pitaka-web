@@ -87,6 +87,16 @@ export class CategoriesService {
   }
 
   /**
+   * Re-read active Categories after the server rejects a formerly eligible
+   * selection. This exceptional refresh drops the shared cache first so a form
+   * cannot immediately offer the same stale choice again.
+   */
+  refreshList(): Observable<Category[]> {
+    this.invalidate();
+    return this.list();
+  }
+
+  /**
    * The **whole set**, retired included, each carrying `kind` and `isActive` —
    * for the places that must show a retired Category *marked* rather than
    * hidden: the Transactions filter, which governs finding rather than filing

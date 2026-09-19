@@ -6,6 +6,7 @@ export type Schedule = {
   name: string;
   direction: ScheduleDirection;
   amount: number;
+  description: string | null;
   frequency: ScheduleFrequency;
   firstGeneration: Date;
   lastGeneration: Date | null;
@@ -26,6 +27,23 @@ export type ScheduleFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
  * Completed and appears in Past until lifecycle actions arrive.
  */
 export type ScheduleStatus = 'active' | 'paused' | 'completed' | 'cancelled';
+
+/** The fields supplied when creating an income or expense Schedule. */
+export type NewSchedule = {
+  accountId: number;
+  categoryId: number;
+  name: string;
+  direction: ScheduleDirection;
+  amount: number;
+  description: string | null;
+  frequency: ScheduleFrequency;
+  firstGeneration: Date;
+  lastGeneration: Date | null;
+};
+
+export const SCHEDULE_NAME_MAX = 255;
+export const SCHEDULE_AMOUNT_MIN = 0.01;
+export const SCHEDULE_AMOUNT_MAX = 999_999_999_999.99;
 
 export const SCHEDULE_FREQUENCIES: Record<ScheduleFrequency, string> = {
   daily: 'Daily',
