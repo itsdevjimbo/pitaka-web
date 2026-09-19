@@ -1,0 +1,152 @@
+import { DatePipe } from '@angular/common';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { forkJoin } from 'rxjs';
+import { PesoPipe } from '@/app/core/money';
+import { Account, AccountsService } from '@/app/domains/app/accounts';
+import { CategoriesService, Category } from '@/app/domains/app/categories';
+import { Schedule, SCHEDULE_FREQUENCIES, ScheduleStatus, SchedulesService } from '../..';
+
+type ScheduleView = 'upcoming' | 'paused' | 'past';
+
+type ScheduleRow = {
+  schedule: Schedule;
+  accountName: string;
+  accountRetired: boolean;
+  categoryName: string;
+  categoryRetired: boolean;
+};
+
+const VIEWS: readonly { id: ScheduleView; label: string }[] = [
+  { id: 'upcoming', label: 'Upcoming' },
+  { id: 'paused', label: 'Paused' },
+  { id: 'past', label: 'Past' },
+];
+
+const STATUS_VIEW: Record<ScheduleStatus, ScheduleView> = {
+  active: 'upcoming',
+  paused: 'paused',
+  completed: 'past',
+  cancelled: 'past',
+};
+
+@Component({
+  selector: 'schedule-list',
+  templateUrl: './schedule-list.html',
+  imports: [DatePipe, MatButtonModule, MatIconModule, PesoPipe],
+  host: { class: 'flex flex-auto flex-col' },
+})
+export default class ScheduleList {
+  private readonly schedulesService = inject(SchedulesService);
+  private readonly accountsService = inject(AccountsService);
+  private readonly categoriesService = inject(CategoriesService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly schedules = signal<readonly Schedule[] | null>(null);
+  private readonly accounts = signal<readonly Account[]>([]);
+  private readonly categories = signal<readonly Category[]>([]);
+  protected readonly loading = signal(true);
+  protected readonly refreshing = signal(false);
+  protected readonly loadFailed = signal(false);
+
+  /** True after a refresh failure until all three collections refresh successfully. */
+  protected readonly stale = signal(false);
+  protected readonly selectedView = signal<ScheduleView>('upcoming');
+  protected readonly views = VIEWS;
+  protected readonly frequencies = SCHEDULE_FREQUENCIES;
+
+  protected readonly rows = computed<readonly ScheduleRow[]>(() => {
+    const accountById = new Map(this.accounts().map((account) => [account.id, account]));
+    const categoryById = new Map(this.categories().map((category) => [category.id, category]));
+
+    return (this.schedules() ?? []).map((schedule) => {
+      const account = accountById.get(schedule.accountId);
+      const category = schedule.categoryId === null ? undefined : categoryById.get(schedule.categoryId);
+      return {
+        schedule,
+        accountName: account?.name ?? 'Unknown Account',
+        accountRetired: account !== undefined && !account.isActive,
+        categoryName: schedule.categoryId === null ? 'Uncategorized' : (category?.name ?? 'Unknown Category'),
+        categoryRetired: category !== undefined && !category.isActive,
+      };
+    });
+  });
+
+  protected readonly visibleRows = computed(() => {
+    const view = this.selectedView();
+    return this.rows()
+      .filter((row) => STATUS_VIEW[row.schedule.status] === view)
+      .sort((a, b) => {
+        if (view === 'upcoming') {
+          return (
+            a.schedule.nextGeneration.getTime() - b.schedule.nextGeneration.getTime() ||
+            a.schedule.name.localeCompare(b.schedule.name)
+          );
+        }
+        return a.schedule.name.localeCompare(b.schedule.name);
+      });
+  });
+
+  protected readonly counts = computed<Record<ScheduleView, number>>(() => {
+    const result: Record<ScheduleView, number> = {
+      upcoming: 0,
+      paused: 0,
+      past: 0,
+    };
+    for (const row of this.rows()) result[STATUS_VIEW[row.schedule.status]] += 1;
+    return result;
+  });
+
+  protected readonly empty = computed(() => this.schedules()?.length === 0);
+
+  constructor() {
+    this.load();
+  }
+
+  protected load(): void {
+    const hasCurrentData = this.schedules() !== null;
+    if (hasCurrentData) this.refreshing.set(true);
+    else this.loading.set(true);
+    this.loadFailed.set(false);
+
+    forkJoin({
+      schedules: this.schedulesService.list(),
+      accounts: this.accountsService.all(),
+      categories: this.categoriesService.all(),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ schedules, accounts, categories }) => {
+          this.schedules.set(schedules);
+          this.accounts.set(accounts);
+          this.categories.set(categories);
+          this.stale.set(false);
+          this.loading.set(false);
+          this.refreshing.set(false);
+        },
+        error: () => {
+          if (hasCurrentData) this.stale.set(true);
+          else this.loadFailed.set(true);
+          this.loading.set(false);
+          this.refreshing.set(false);
+        },
+      });
+  }
+
+  protected emptyMessage(): string {
+    switch (this.selectedView()) {
+      case 'upcoming':
+        return 'No upcoming Schedules';
+      case 'paused':
+        return 'No paused Schedules';
+      case 'past':
+        return 'No past Schedules';
+    }
+  }
+
+  protected historyLabel(count: number): string {
+    return `${count} surviving generated ${count === 1 ? 'Transaction' : 'Transactions'}`;
+  }
+}

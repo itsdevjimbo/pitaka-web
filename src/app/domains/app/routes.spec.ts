@@ -12,6 +12,7 @@ import { AccountsService } from './accounts';
 import { CategoriesService } from './categories';
 import { GoalsService } from './goals';
 import { AppLayout } from './layout/layout';
+import { SchedulesService } from './schedules';
 import { TransactionsService } from './transactions';
 
 /**
@@ -48,9 +49,7 @@ describe('the app area routes', () => {
     await harness.navigateByUrl('/app');
 
     expect(TestBed.inject(Router).url).toBe('/app/accounts');
-    expect(
-      (harness.routeNativeElement as HTMLElement).textContent
-    ).toContain('No accounts yet');
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain('No accounts yet');
   });
 
   it('resolves /app/transactions to the Transactions list, lazily loaded', async () => {
@@ -80,9 +79,7 @@ describe('the app area routes', () => {
     await harness.navigateByUrl('/app/transactions');
 
     expect(TestBed.inject(Router).url).toBe('/app/transactions');
-    expect(
-      (harness.routeNativeElement as HTMLElement).textContent
-    ).toContain('No transactions yet');
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain('No transactions yet');
   });
 
   it('resolves /app/categories to the Categories screen, lazily loaded', async () => {
@@ -105,9 +102,7 @@ describe('the app area routes', () => {
     await harness.navigateByUrl('/app/categories');
 
     expect(TestBed.inject(Router).url).toBe('/app/categories');
-    expect(
-      (harness.routeNativeElement as HTMLElement).textContent
-    ).toContain('Expense');
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain('Expense');
   });
 
   it('resolves /app/goals to the Goals list, lazily loaded', async () => {
@@ -127,9 +122,29 @@ describe('the app area routes', () => {
     await harness.navigateByUrl('/app/goals');
 
     expect(TestBed.inject(Router).url).toBe('/app/goals');
-    expect((harness.routeNativeElement as HTMLElement).textContent).toContain(
-      'No goals yet'
-    );
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain('No goals yet');
+  });
+
+  it('resolves /app/schedules to the lifecycle browser, lazily loaded', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        provideIcons(),
+        { provide: Session, useValue: { isAuthenticated: () => true } },
+        { provide: SchedulesService, useValue: { list: () => of([]) } },
+        { provide: AccountsService, useValue: { all: () => of([]) } },
+        { provide: CategoriesService, useValue: { all: () => of([]) } },
+      ],
+    });
+    TestBed.overrideComponent(AppLayout, {
+      set: { template: '<router-outlet />', imports: [RouterOutlet] },
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/schedules');
+
+    expect(TestBed.inject(Router).url).toBe('/app/schedules');
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain('No Schedules yet');
   });
 
   it('resolves /app/profile to the live identity dashboard', async () => {
@@ -151,8 +166,6 @@ describe('the app area routes', () => {
     await harness.navigateByUrl('/app/profile');
 
     expect(TestBed.inject(Router).url).toBe('/app/profile');
-    expect((harness.routeNativeElement as HTMLElement).textContent).toContain(
-      'Ada Lovelace'
-    );
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain('Ada Lovelace');
   });
 });

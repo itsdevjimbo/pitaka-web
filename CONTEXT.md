@@ -2,7 +2,7 @@
 
 Pitaka Web is the Angular client for Pitaka, a personal expense tracker. (*Pitaka* is Tagalog for wallet.)
 
-This glossary fixes the words the client uses. In three places those words deliberately differ from the names the backend uses; where they do, the backend's name is listed under `_Avoid_` and the translation happens at the HTTP adapter, never above it.
+This glossary fixes the words the client uses. In two places those words deliberately differ from the names the backend uses; where they do, the backend's name is listed under `_Avoid_` and the translation happens at the HTTP adapter, never above it.
 
 ## Language
 
@@ -61,7 +61,7 @@ Declaring a Goal achieved after it has reached its target. Completed is a durabl
 _Avoid_: Retire, close, finish
 
 **Completed Schedule**:
-A Schedule that generated its final eligible occurrence on or before its inclusive Last generation date. It is reached automatically rather than chosen by the person, and can be extended, which reactivates it; distinct from a Stopped Schedule, which the person ended permanently.
+A Schedule that generated its final eligible occurrence on or before its inclusive Last generation date. It is reached automatically rather than chosen by the person, and can be extended, which reactivates it.
 _Avoid_: Stopped, paused, ended, finished
 
 **Abandon / Abandoned**:
@@ -72,12 +72,12 @@ _Avoid_: Retire, cancel, archive
 Opening a Completed or Abandoned Goal to pursuit and new Contributions again. It is deliberately distinct from Reactivate, which applies only to a retired Account or Category.
 _Avoid_: Reactivate, restore, reopen
 
-**Stop / Stopped**:
-Permanently ending a Schedule by deliberate choice while preserving both the standing instruction and every Transaction it generated. A Stopped Schedule cannot be resumed; Pause is the reversible way to suspend one.
-_Avoid_: Cancel, cancelled, pause, retire, delete
+**Cancelled Schedule**:
+An existing Schedule in the API's reversible Cancelled state. It appears under Past and can be resumed. Permanent stopping is not part of the current product lifecycle.
+_Avoid_: Stopped, ended, retired
 
 **Delete**:
-Erasing an Account, Category, Goal, or never-used Schedule entirely. A Goal's Contributions and earmarks go with it, but not Account money; an Account with Transaction history or earmarks and a Category still in use cannot be deleted — retire either instead. A Schedule can be deleted only before it has generated a Transaction; stop it afterward so its instruction and generated history remain.
+Erasing an Account, Category, Goal, or never-used Schedule entirely. A Goal's Contributions and earmarks go with it, but not Account money; an Account with Transaction history or earmarks and a Category still in use cannot be deleted — retire either instead. A Schedule can be deleted only before it has ever generated a Transaction, even if none of its generated Transactions survive.
 _Avoid_: Remove, destroy, close
 
 **Refile**:
@@ -91,7 +91,7 @@ _Avoid_: Delete, void, reverse, undo
 ### Money that is planned
 
 **Schedule**:
-A standing instruction that creates income or expense Transactions on a repeating cadence. It is a plan rather than money that has moved: it can be paused and resumed, becomes Completed after its inclusive last generation date, or can be Stopped permanently by the person. A Schedule never creates a Transfer.
+A standing instruction that creates income or expense Transactions on a repeating cadence. It is a plan rather than money that has moved: it can be paused and resumed, becomes Completed after its inclusive Last generation date, and an existing Cancelled Schedule can be resumed. A Schedule never creates a Transfer.
 _Avoid_: Recurring transaction, recurring, repeat, subscription
 
 **Budget**:
