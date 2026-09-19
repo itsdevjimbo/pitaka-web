@@ -13,7 +13,7 @@ Translation happens in the HTTP adapter and nowhere above it. See [CONTEXT.md](.
 - The translation budget is the small, explicit set recorded here and in its amendments. Every other API name passes through unchanged, because a translation layer that renames things for taste becomes a full-time job and a second vocabulary to learn.
 - Route, folder, and type names above the adapter use the product term: `schedules`, not `recurring-transactions`.
 - A Schedule's calendar fields use the product language `firstGeneration`, `lastGeneration`, and `nextGeneration` above the adapter. The API's `startDate`, `endDate`, and `nextRunDate` remain inside the recurring-transaction resource translation. These are parts of the Schedule translation, not additional domain concepts.
-- A future reader comparing the two repos will find `SchedulesService` calling `/api/recurringtransactions`. That mismatch is deliberate and lives in one file.
+- A future reader comparing the two repos will find `SchedulesService` calling `/api/recurring-transactions`. That mismatch is deliberate and lives in one file.
 
 ## Amendment (2026-09-13): Profile is now shared language
 

@@ -48,7 +48,7 @@ export class SchedulesService {
   /** Every Schedule the signed-in person owns, read fresh for lifecycle management. */
   list(): Observable<Schedule[]> {
     return this.http
-      .get<RecurringTransactionResource[]>(`${this.baseUrl}/api/recurringtransactions`)
+      .get<RecurringTransactionResource[]>(`${this.baseUrl}/api/recurring-transactions`)
       .pipe(map((resources) => resources.map(toSchedule)));
   }
 }

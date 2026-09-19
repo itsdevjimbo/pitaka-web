@@ -51,7 +51,7 @@ describe('SchedulesService', () => {
   it('GETs recurring transactions and translates the complete list resource', async () => {
     const result = firstValueFrom(service.list());
 
-    const request = http.expectOne(`${BASE_URL}/api/recurringtransactions`);
+    const request = http.expectOne(`${BASE_URL}/api/recurring-transactions`);
     expect(request.request.method).toBe('GET');
     request.flush([resource()]);
 
@@ -77,7 +77,7 @@ describe('SchedulesService', () => {
   it('preserves date-only values as local calendar days west of UTC', async () => {
     const result = firstValueFrom(service.list());
 
-    http.expectOne(`${BASE_URL}/api/recurringtransactions`).flush([
+    http.expectOne(`${BASE_URL}/api/recurring-transactions`).flush([
       resource({
         startDate: '2026-08-01',
         endDate: '2026-12-31',
@@ -94,7 +94,7 @@ describe('SchedulesService', () => {
   it('maps every lifecycle state and keeps Cancelled reversible in product vocabulary', async () => {
     const result = firstValueFrom(service.list());
 
-    http.expectOne(`${BASE_URL}/api/recurringtransactions`).flush([
+    http.expectOne(`${BASE_URL}/api/recurring-transactions`).flush([
       resource({ id: 1, status: 'Active' }),
       resource({ id: 2, status: 'Paused' }),
       resource({ id: 3, status: 'Completed' }),
@@ -115,7 +115,7 @@ describe('SchedulesService', () => {
   it('surfaces list failures as normalized API errors', async () => {
     const result = firstValueFrom(service.list());
 
-    http.expectOne(`${BASE_URL}/api/recurringtransactions`).flush(null, { status: 500, statusText: 'Server Error' });
+    http.expectOne(`${BASE_URL}/api/recurring-transactions`).flush(null, { status: 500, statusText: 'Server Error' });
 
     const error = await result.catch((value: unknown) => value);
     expect(error).toBeInstanceOf(ApiError);
