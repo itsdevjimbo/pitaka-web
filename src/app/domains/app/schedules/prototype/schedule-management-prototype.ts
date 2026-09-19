@@ -1,8 +1,9 @@
 import { Component, HostListener, computed, inject, isDevMode, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 
 type VariantKey = 'A' | 'B' | 'C';
-type ScheduleState = 'Active' | 'Paused' | 'Completed' | 'Stopped';
+type ScheduleState = 'Active' | 'Paused' | 'Completed' | 'Cancelled';
 
 type Schedule = {
   name: string;
@@ -28,20 +29,27 @@ type Schedule = {
 export default class ScheduleManagementPrototype {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly queryParams = toSignal(this.route.queryParamMap, {
+    initialValue: this.route.snapshot.queryParamMap,
+  });
 
   protected readonly variants: readonly VariantKey[] = ['A', 'B', 'C'];
   protected readonly variantNames: Record<VariantKey, string> = {
     A: 'Grouped list',
-    B: 'Next-up timeline',
+    B: 'Timeline + cards',
     C: 'Master detail',
   };
   protected readonly isPrototype = isDevMode();
   protected readonly variant = computed<VariantKey>(() => {
-    const requested = this.route.snapshot.queryParamMap.get('variant');
+    const requested = this.queryParams().get('variant');
     return requested === 'B' || requested === 'C' ? requested : 'A';
   });
   protected readonly pastOpen = signal(false);
-  protected readonly dialog = signal<'new' | 'edit' | 'stop' | null>(null);
+  protected readonly dialog = signal<'new' | 'edit' | 'pause' | 'resume' | 'extend' | null>(null);
+  protected readonly section = signal<'Upcoming' | 'Paused' | 'Past'>('Upcoming');
+  protected readonly sections = ['Upcoming', 'Paused', 'Past'] as const;
+  protected readonly stateOverrides = signal<Record<string, ScheduleState>>({});
+  protected readonly notice = signal('');
   protected readonly selected = signal('Rent');
 
   protected readonly schedules: readonly Schedule[] = [
@@ -97,7 +105,7 @@ export default class ScheduleManagementPrototype {
       category: 'Software',
       cadence: 'Monthly · every 4th',
       next: '—',
-      state: 'Stopped',
+      state: 'Cancelled',
       generated: 4,
     },
   ];
@@ -106,10 +114,35 @@ export default class ScheduleManagementPrototype {
     () => this.schedules.find((item) => item.name === this.selected()) ?? this.schedules[0],
   );
 
+  protected stateOf(item: Schedule): ScheduleState {
+    return this.stateOverrides()[item.name] ?? item.state;
+  }
+
+  protected itemsFor(section: string): readonly Schedule[] {
+    return this.schedules.filter((item) => {
+      const state = this.stateOf(item);
+      return section === 'Upcoming'
+        ? state === 'Active'
+        : section === 'Paused'
+          ? state === 'Paused'
+          : state === 'Completed' || state === 'Cancelled';
+    });
+  }
+
+  protected confirmLifecycle(): void {
+    const action = this.dialog();
+    const state = action === 'pause' ? 'Paused' : 'Active';
+    const name = this.selected();
+    this.stateOverrides.update((states) => ({ ...states, [name]: state }));
+    this.notice.set(`${name} is now ${state.toLowerCase()}. Prototype only; reload to reset.`);
+    this.closeDialog();
+  }
+
   protected choose(name: string): void {
     this.selected.set(name);
   }
-  protected openDialog(kind: 'new' | 'edit' | 'stop'): void {
+  protected openDialog(kind: 'new' | 'edit' | 'pause' | 'resume' | 'extend', name?: string): void {
+    if (name) this.choose(name);
     this.dialog.set(kind);
   }
   protected closeDialog(): void {

@@ -83,7 +83,7 @@
           @if (pastOpen()) {
             <div class="mt-2 space-y-2 opacity-75">
               @for (item of schedules; track item.name) {
-                @if (item.state === 'Completed' || item.state === 'Stopped') {
+                @if (item.state === 'Completed' || item.state === 'Cancelled') {
                   <button
                     class="flex w-full items-center justify-between rounded-xl border p-3 text-left dark:border-neutral-800"
                     (click)="choose(item.name)"
@@ -120,56 +120,113 @@
   @if (variant() === 'B') {
     <section class="grid gap-8 lg:grid-cols-[12rem_minmax(0,1fr)]">
       <nav class="flex gap-2 overflow-x-auto lg:flex-col">
-        <button class="rounded-xl bg-neutral-900 px-4 py-3 text-left text-sm text-white dark:bg-white dark:text-black">
-          Upcoming
-          <b class="float-right">2</b>
-        </button>
-        <button class="rounded-xl px-4 py-3 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900">
-          Paused
-          <b class="float-right">1</b>
-        </button>
-        <button class="rounded-xl px-4 py-3 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900">
-          Past
-          <b class="float-right">2</b>
-        </button>
+        @for (tab of sections; track tab) {
+          <button
+            class="flex items-center justify-between gap-4 rounded-xl px-4 py-3 text-left text-sm"
+            [class.bg-primary]="section() === tab"
+            [class.text-on-primary]="section() === tab"
+            [attr.aria-pressed]="section() === tab"
+            (click)="section.set(tab)"
+          >
+            {{ tab }}
+            <b>{{ itemsFor(tab).length }}</b>
+          </button>
+        }
       </nav>
       <div>
         <div class="mb-5 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 class="text-xl font-semibold">Coming up</h2>
-          <span class="text-sm text-neutral-500">Projected from your active Schedules</span>
+          <h2 class="text-xl font-semibold">
+            {{ section() === 'Upcoming' ? 'Coming up' : section() === 'Past' ? 'Past schedules' : 'Paused schedules' }}
+          </h2>
+          <span class="text-sm text-neutral-500">
+            {{
+              section() === 'Upcoming'
+                ? 'Your next generations'
+                : section() === 'Paused'
+                  ? 'Ready when you are'
+                  : 'Completed and cancelled'
+            }}
+          </span>
         </div>
+        @if (notice()) {
+          <p
+            role="status"
+            class="mb-4 rounded-xl bg-neutral-100 p-3 text-sm dark:bg-neutral-900"
+          >
+            {{ notice() }}
+          </p>
+        }
         <div class="relative ml-3 border-l-2 border-neutral-200 pl-7 dark:border-neutral-800">
-          @for (item of schedules; track item.name) {
-            @if (item.state === 'Active') {
-              <article class="relative mb-8 rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
-                <span
-                  class="bg-primary absolute top-5 -left-9.5 size-5 rounded-full border-4 border-white dark:border-neutral-950"
-                ></span>
-                <p class="text-primary text-xs font-bold tracking-wide uppercase">{{ item.next }}</p>
-                <div class="mt-2 flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 class="text-lg font-semibold">{{ item.name }}</h3>
-                    <p class="text-sm text-neutral-500">{{ item.cadence }}</p>
+          @for (item of itemsFor(section()); track item.name) {
+            <article
+              class="relative mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs dark:border-neutral-800 dark:bg-neutral-950"
+            >
+              <span
+                class="bg-primary absolute top-5 -left-9.5 size-5 rounded-full border-4 border-white dark:border-neutral-950"
+              ></span>
+              <p class="text-primary text-xs font-bold tracking-wide uppercase">
+                {{ stateOf(item) === 'Active' ? item.next : stateOf(item) }}
+              </p>
+              <div class="mt-2 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="font-semibold">{{ item.name }}</h3>
+                    <span
+                      class="rounded-full px-2 py-0.5 text-xs"
+                      [class]="
+                        item.direction === 'Income' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      "
+                    >
+                      {{ item.direction }}
+                    </span>
                   </div>
-                  <strong class="text-lg">{{ item.amount }}</strong>
+                  <p class="mt-1 text-sm text-neutral-500">{{ item.amount }} · {{ item.cadence }}</p>
                 </div>
-                <p class="mt-4 text-sm">
-                  {{ item.account }}
-                  <span class="text-neutral-400">·</span>
-                  {{ item.category }}
-                </p>
-                <div class="mt-4 flex flex-wrap gap-2 border-t pt-4 dark:border-neutral-800">
-                  <button class="rounded-lg border px-3 py-1.5 text-sm">Pause</button>
+              </div>
+              <div class="mt-4 grid gap-3 border-t pt-3 text-sm sm:grid-cols-3 dark:border-neutral-800">
+                <div>
+                  <span class="block text-xs text-neutral-400">Next generation</span>
+                  <strong>
+                    {{ stateOf(item) === 'Active' ? item.next : stateOf(item) === 'Paused' ? 'Paused' : 'None' }}
+                  </strong>
+                </div>
+                <div>
+                  <span class="block text-xs text-neutral-400">Filed to</span>
+                  {{ item.account }} · {{ item.category }}
+                </div>
+                <div>
+                  <span class="block text-xs text-neutral-400">History</span>
+                  <span class="text-primary font-medium">{{ item.generated }} generated</span>
+                </div>
+              </div>
+              <div class="mt-4 flex flex-wrap gap-2 border-t pt-4 dark:border-neutral-800">
+                @if (stateOf(item) === 'Active' || stateOf(item) === 'Paused') {
                   <button
                     class="rounded-lg border px-3 py-1.5 text-sm"
-                    (click)="openDialog('edit')"
+                    (click)="openDialog(stateOf(item) === 'Active' ? 'pause' : 'resume', item.name)"
+                  >
+                    {{ stateOf(item) === 'Active' ? 'Pause' : 'Resume' }}
+                  </button>
+                  <button
+                    class="rounded-lg border px-3 py-1.5 text-sm"
+                    (click)="openDialog('edit', item.name)"
                   >
                     Edit
                   </button>
-                  <a class="text-primary px-3 py-1.5 text-sm font-medium">View {{ item.generated }} generated</a>
-                </div>
-              </article>
-            }
+                } @else if (stateOf(item) === 'Completed') {
+                  <button
+                    class="rounded-lg border px-3 py-1.5 text-sm"
+                    (click)="openDialog('extend', item.name)"
+                  >
+                    Extend schedule
+                  </button>
+                } @else {
+                  <p class="text-sm text-neutral-500">Cancelled. Generated Transactions are preserved.</p>
+                }
+              </div>
+            </article>
+          } @empty {
+            <p class="py-6 text-sm text-neutral-500">No {{ section().toLowerCase() }} schedules.</p>
           }
         </div>
       </div>
@@ -256,12 +313,6 @@
         </dl>
         <div class="mt-8 flex flex-wrap gap-2 border-t pt-5 dark:border-neutral-800">
           <button class="rounded-lg border px-4 py-2 text-sm">Pause</button>
-          <button
-            class="rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700"
-            (click)="openDialog('stop')"
-          >
-            Stop permanently
-          </button>
         </div>
       </article>
     </section>
@@ -280,7 +331,19 @@
         <div>
           <p class="text-primary text-xs font-bold tracking-widest uppercase">Prototype dialog</p>
           <h2 class="mt-1 text-xl font-bold">
-            {{ openDialog === 'new' ? 'New schedule' : openDialog === 'stop' ? 'Stop Rent?' : 'Edit Rent' }}
+            {{
+              openDialog === 'new'
+                ? 'New schedule'
+                : (openDialog === 'pause'
+                    ? 'Pause '
+                    : openDialog === 'resume'
+                      ? 'Resume '
+                      : openDialog === 'extend'
+                        ? 'Extend '
+                        : 'Edit ') +
+                  selectedSchedule().name +
+                  (openDialog === 'pause' || openDialog === 'resume' ? '?' : '')
+            }}
           </h2>
         </div>
         <button
@@ -290,19 +353,50 @@
           ×
         </button>
       </div>
-      @if (openDialog === 'stop') {
+      @if (openDialog === 'pause' || openDialog === 'resume') {
         <p class="mt-5 text-neutral-600 dark:text-neutral-300">
-          Stopping is permanent. Rent will create no more Transactions, but its instruction and 9 generated Transactions
-          stay in history.
+          {{
+            openDialog === 'pause'
+              ? 'No new Transactions will be generated while this Schedule is paused. You can resume it later.'
+              : 'This Schedule will become active again. The exact next-generation behavior is pending the API-contract decision.'
+          }}
+          Existing generated Transactions stay unchanged.
         </p>
         <div class="mt-6 flex justify-end gap-2">
           <button
             class="rounded-lg px-4 py-2"
             (click)="closeDialog()"
           >
-            Keep active
+            Cancel
           </button>
-          <button class="rounded-lg bg-rose-600 px-4 py-2 font-semibold text-white">Stop schedule</button>
+          <button
+            class="bg-primary text-on-primary rounded-lg px-4 py-2 font-semibold"
+            (click)="confirmLifecycle()"
+          >
+            {{ openDialog === 'pause' ? 'Pause schedule' : 'Resume schedule' }}
+          </button>
+        </div>
+      } @else if (openDialog === 'extend') {
+        <p class="mt-5 text-sm text-neutral-600 dark:text-neutral-300">
+          Choose a later Last generation to allow this completed Schedule to generate again.
+        </p>
+        <label class="mt-4 block">
+          <span class="mb-1 block text-sm">Last generation</span>
+          <input
+            type="date"
+            class="w-full rounded-lg border bg-transparent px-3 py-2"
+          />
+        </label>
+        <p class="mt-3 text-xs text-neutral-500">
+          Layout preview only. Extension behavior awaits the API-contract decision.
+        </p>
+        <div class="mt-6 flex justify-end">
+          <button
+            class="rounded-lg border px-4 py-2"
+            (click)="closeDialog()"
+          >
+            Close preview
+          </button>
         </div>
       } @else {
         <div class="mt-5 grid gap-4 sm:grid-cols-2">
@@ -310,7 +404,7 @@
             <span class="mb-1 block text-sm">Name</span>
             <input
               class="w-full rounded-lg border bg-transparent px-3 py-2"
-              value="Rent"
+              [value]="openDialog === 'new' ? '' : selectedSchedule().name"
             />
           </label>
           <label>
