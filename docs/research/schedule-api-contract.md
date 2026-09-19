@@ -12,12 +12,12 @@ The API already supports listing, creating, reading, partially editing, pausing,
 
 The authenticated controller exposes:
 
-- `GET /api/recurringtransactions`
-- `POST /api/recurringtransactions`
-- `GET /api/recurringtransactions/{id}`
-- `PUT /api/recurringtransactions/{id}`
-- `PATCH /api/recurringtransactions/{id}/status`
-- `DELETE /api/recurringtransactions/{id}`
+- `GET /api/recurring-transactions`
+- `POST /api/recurring-transactions`
+- `GET /api/recurring-transactions/{id}`
+- `PUT /api/recurring-transactions/{id}`
+- `PATCH /api/recurring-transactions/{id}/status`
+- `DELETE /api/recurring-transactions/{id}`
 
 The route follows ASP.NET's controller-name convention (`Controllers/RecurringTransactionsController.cs:12-16,64-205`). The returned resource carries `id`, `accountId`, nullable `categoryId`, `name`, `type`, `amount`, nullable `description`, `frequency`, `startDate`, nullable `endDate`, `nextRunDate`, and `status` (`Resources/RecurringTransactionResource.cs:6-18`). The collection query has no ordering, pagination, filtering, Account/Category names, generated-history count, or deletability indicator (`Services/RecurringTransactionService.cs:22-26`).
 

@@ -49,8 +49,8 @@ export const NAVIGATION: NavigationItem[] = [
     ],
   },
 
-  // Reference data — visited rarely and deliberately, not part of "where does my
-  // money stand". Tags and Schedules land in this group later (#107).
+  // Reference data and standing instructions — visited deliberately, not part
+  // of "where does my money stand" (#107, #206).
   {
     id: 'manage',
     label: 'Manage',
@@ -67,6 +67,13 @@ export const NAVIGATION: NavigationItem[] = [
         label: 'Tags',
         route: '/app/tags',
         icon: 'tag',
+        activeOptions: { exact: false },
+      },
+      {
+        id: 'schedules',
+        label: 'Schedules',
+        route: '/app/schedules',
+        icon: 'calendar-clock',
         activeOptions: { exact: false },
       },
     ],

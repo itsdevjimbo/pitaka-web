@@ -27,7 +27,7 @@ This is a single-context repo:
 
 When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
 
-Three terms in this repo deliberately differ from the names the Pitaka API uses — `Schedule`, `Profile`, and `generated transaction`. The translation happens at the HTTP adapter and nowhere above it, so API names such as `RecurringTransaction` are correct inside the adapter and wrong everywhere else. See ADR 0003.
+Two terms in this repo deliberately differ from the names the Pitaka API uses — `Schedule` and `generated transaction`. The translation happens at the HTTP adapter and nowhere above it, so API names such as `RecurringTransaction`, `startDate`, and `nextRunDate` are correct inside the adapter and wrong everywhere else. The Schedule model uses `firstGeneration`, `lastGeneration`, and `nextGeneration`; Profile is now shared language with the API. See ADR 0003.
 
 If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 
