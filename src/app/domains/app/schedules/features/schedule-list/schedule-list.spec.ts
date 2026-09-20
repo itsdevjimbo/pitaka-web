@@ -278,7 +278,8 @@ describe('ScheduleList', () => {
       expect(listed.dialogText()).toContain('Category');
       expect(listed.dialogText()).toContain('Description');
       expect(listed.dialogText()).toContain('Direction');
-      expect(listed.dialogText()).toContain('Cadence');
+      expect(listed.dialogText()).toContain('Frequency');
+      expect(listed.dialogText()).not.toContain('Cadence');
       expect(listed.dialogText()).toContain('First generation');
       expect(listed.dialogText()).toContain('Last generation');
     });

@@ -91,8 +91,12 @@ _Avoid_: Delete, void, reverse, undo
 ### Money that is planned
 
 **Schedule**:
-A standing instruction that creates income or expense Transactions on a repeating cadence. It is a plan rather than money that has moved: it can be paused and resumed, becomes Completed after its inclusive Last generation date, and an existing Cancelled Schedule can be resumed. A Schedule never creates a Transfer.
+A standing instruction that creates income or expense Transactions on a repeating Frequency. It is a plan rather than money that has moved: it can be paused and resumed, becomes Completed after its inclusive Last generation date, and an existing Cancelled Schedule can be resumed. A Schedule never creates a Transfer.
 _Avoid_: Recurring transaction, recurring, repeat, subscription
+
+**Frequency**:
+How often a Schedule generates a Transaction: Daily, Weekly, Monthly, or Yearly.
+_Avoid_: Cadence, period, interval
 
 **Budget**:
 A recurring spending ceiling for one Cycle, optionally narrowed to a single Category. Only expenses count against it — never income, never a Transfer — and an unnarrowed Budget watches all spending. The person succeeds by staying under it.

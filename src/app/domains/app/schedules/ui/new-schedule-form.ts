@@ -104,7 +104,7 @@ export class NewScheduleForm {
     required(path.accountId, { message: 'Choose an Account' });
     required(path.categoryId, { message: 'Choose a Category' });
     required(path.direction, { message: 'Choose a direction' });
-    required(path.frequency, { message: 'Choose a cadence' });
+    required(path.frequency, { message: 'Choose a frequency' });
     required(path.firstGeneration, { message: 'Choose a First generation date' });
     validate(path.firstGeneration, (context) => {
       const value = context.value();
