@@ -53,10 +53,11 @@ export class LinkedContributionPanel {
   protected async toggle(): Promise<void> {
     const showing = !this.showing();
     this.showing.set(showing);
-    if (showing && this.snapshot() === null) await this.load();
+    if (showing && this.snapshot() === null) await this.refresh();
   }
 
-  protected async load(): Promise<void> {
+  /** Fresh read after entry, retry, or a write because these facts carry money (ADR 0006). */
+  async refresh(): Promise<void> {
     this.loading.set(true);
     this.errorMessage.set(null);
     try {
@@ -88,7 +89,7 @@ export class LinkedContributionPanel {
     this.deletingId.set(contribution.id);
     try {
       await firstValueFrom(this.injector.get(ContributionDeletionCoordinator).attempt(contribution.id));
-      await this.refresh(contribution);
+      await this.refreshAfterDeletion(contribution);
     } catch (error) {
       this.deleteFailure.set({
         contribution,
@@ -102,7 +103,7 @@ export class LinkedContributionPanel {
     }
   }
 
-  protected async refresh(contribution: TransactionLinkedContribution): Promise<void> {
+  protected async refreshAfterDeletion(contribution: TransactionLinkedContribution): Promise<void> {
     this.refreshFailure.set(null);
     try {
       const facts = await firstValueFrom(

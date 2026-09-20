@@ -163,27 +163,45 @@ describe('TransactionSplitRecoveryStore', () => {
     expect(store.state()).toMatchObject({ status: 'uncertain', attempt: { key: firstKey } });
   });
 
-  it('does not interpret idempotency mismatch as failure of the original operation', async () => {
+  it('replaces a freshly generated key collision only after explicit confirmation', async () => {
     split
       .mockReturnValueOnce(throwError(() => apiError(409, { reason: 'idempotency_mismatch' })))
-      .mockReturnValueOnce(of(success()))
       .mockReturnValueOnce(of(success()));
 
     await store.submit(payload({ contributionDate: '2026-09-21' }));
 
     expect(store.state()).toMatchObject({
       status: 'idempotency-mismatch',
+      freshKeyCollision: true,
       attempt: { key: firstKey, payload: payload({ contributionDate: '2026-09-21' }) },
     });
     expect(store.state()).not.toHaveProperty('message', "We couldn't save your contributions. Nothing was created.");
     expect(await store.submit(payload())).toBe(false);
 
-    await store.resolveMismatch(payload());
-    expect(split).toHaveBeenNthCalledWith(2, payload(), firstKey);
-    expect(store.state()).toMatchObject({ status: 'confirmed', attempt: { key: firstKey, payload: payload() } });
+    await store.retryFreshKeyCollision();
+    expect(split).toHaveBeenNthCalledWith(2, payload({ contributionDate: '2026-09-21' }), secondKey);
+    expect(store.state()).toMatchObject({ status: 'confirmed', attempt: { key: secondKey } });
+  });
 
-    await store.submit(payload({ contributionDate: '2026-09-21' }));
-    expect(split).toHaveBeenNthCalledWith(3, payload({ contributionDate: '2026-09-21' }), secondKey);
+  it('keeps a replay mismatch tied to its original key until the original payload is supplied', async () => {
+    split
+      .mockReturnValueOnce(throwError(() => apiError(503, { reason: 'operation_outcome_unknown' })))
+      .mockReturnValueOnce(throwError(() => apiError(409, { reason: 'idempotency_mismatch' })))
+      .mockReturnValueOnce(of(success()));
+
+    await store.submit(payload());
+    await store.retryUncertain();
+
+    expect(store.state()).toMatchObject({
+      status: 'idempotency-mismatch',
+      freshKeyCollision: false,
+      attempt: { key: firstKey },
+    });
+    expect(await store.retryFreshKeyCollision()).toBe(false);
+
+    await store.resolveMismatch(payload());
+    expect(split).toHaveBeenNthCalledWith(3, payload(), firstKey);
+    expect(store.state()).toMatchObject({ status: 'confirmed', attempt: { key: firstKey } });
   });
 
   it('treats a replay after deletion as historical and a failed current read never resubmits', async () => {

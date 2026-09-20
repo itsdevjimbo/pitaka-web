@@ -108,6 +108,15 @@
       <mat-icon svgIcon="ellipsis-vertical" />
     </button>
     <mat-menu #rowMenu>
+      @if (row().direction === 'income') {
+        <button
+          mat-menu-item
+          (click)="openContributionDialog()"
+        >
+          <mat-icon svgIcon="landmark" />
+          <span>Contribute to a Goal</span>
+        </button>
+      }
       <button
         mat-menu-item
         (click)="refile.emit()"

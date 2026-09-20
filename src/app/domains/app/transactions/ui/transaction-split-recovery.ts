@@ -62,6 +62,7 @@ export type TransactionSplitRecoveryState =
   | {
       status: 'idempotency-mismatch';
       attempt: TransactionSplitAttempt;
+      freshKeyCollision: boolean;
       message: string;
     }
   | {
@@ -88,6 +89,13 @@ export class TransactionSplitRecoveryStore {
 
   readonly state = this.current.asReadonly();
 
+  /** Start a new dialog session only after any earlier operation has a definitive outcome. */
+  prepareForDialog(): boolean {
+    if (this.hasUnresolvedOperation()) return false;
+    this.current.set({ status: 'idle' });
+    return true;
+  }
+
   /** Start a fresh operation unless an earlier operation is still unresolved. */
   async submit(payload: TransactionSplitPayload): Promise<boolean> {
     if (this.hasUnresolvedOperation()) return false;
@@ -96,7 +104,7 @@ export class TransactionSplitRecoveryStore {
       key: this.createKey(),
       payload: copyPayload(payload),
     };
-    await this.run(attempt);
+    await this.run(attempt, true);
     return true;
   }
 
@@ -104,7 +112,7 @@ export class TransactionSplitRecoveryStore {
   async retryUncertain(): Promise<boolean> {
     const state = this.current();
     if (state.status !== 'uncertain') return false;
-    await this.run(state.attempt);
+    await this.run(state.attempt, false);
     return true;
   }
 
@@ -116,7 +124,15 @@ export class TransactionSplitRecoveryStore {
   async resolveMismatch(originalPayload: TransactionSplitPayload): Promise<boolean> {
     const state = this.current();
     if (state.status !== 'idempotency-mismatch') return false;
-    await this.run({ key: state.attempt.key, payload: copyPayload(originalPayload) });
+    await this.run({ key: state.attempt.key, payload: copyPayload(originalPayload) }, false);
+    return true;
+  }
+
+  /** Replace a freshly generated key that the server reports already belongs to another payload. */
+  async retryFreshKeyCollision(): Promise<boolean> {
+    const state = this.current();
+    if (state.status !== 'idempotency-mismatch' || !state.freshKeyCollision) return false;
+    await this.run({ key: this.createKey(), payload: copyPayload(state.attempt.payload) }, true);
     return true;
   }
 
@@ -125,7 +141,7 @@ export class TransactionSplitRecoveryStore {
     return status === 'pending' || status === 'uncertain' || status === 'idempotency-mismatch';
   }
 
-  private async run(attempt: TransactionSplitAttempt): Promise<void> {
+  private async run(attempt: TransactionSplitAttempt, freshKey: boolean): Promise<void> {
     this.current.set({ status: 'pending', attempt });
     try {
       const result = await firstValueFrom(this.transactions.splitLinkedContributions(attempt.payload, attempt.key));
@@ -137,11 +153,11 @@ export class TransactionSplitRecoveryStore {
         refresh: refreshed ? 'succeeded' : 'failed',
       });
     } catch (error) {
-      await this.handleFailure(attempt, error);
+      await this.handleFailure(attempt, error, freshKey);
     }
   }
 
-  private async handleFailure(attempt: TransactionSplitAttempt, error: unknown): Promise<void> {
+  private async handleFailure(attempt: TransactionSplitAttempt, error: unknown, freshKey: boolean): Promise<void> {
     if (error instanceof ApiError && error.status === 400) {
       this.current.set({
         status: 'validation-error',
@@ -155,7 +171,10 @@ export class TransactionSplitRecoveryStore {
       this.current.set({
         status: 'idempotency-mismatch',
         attempt,
-        message: 'This recovery key belongs to different contribution details. Resolve the original operation first.',
+        freshKeyCollision: freshKey,
+        message: freshKey
+          ? 'This new recovery key was already used for different contribution details. Try again with a new key.'
+          : 'This recovery key belongs to different contribution details. Resolve the original operation first.',
       });
       return;
     }

@@ -21,7 +21,7 @@
           <button
             matButton
             type="button"
-            (click)="load()"
+            (click)="refresh()"
           >
             Try again
           </button>
@@ -121,7 +121,7 @@
             <button
               matButton
               type="button"
-              (click)="refresh(failure.contribution)"
+              (click)="refreshAfterDeletion(failure.contribution)"
             >
               Try refresh again
             </button>

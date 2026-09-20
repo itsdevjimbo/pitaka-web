@@ -1,0 +1,336 @@
+<app-dialog-shell heading="Contribute to a Goal">
+  @switch (contextState().status) {
+    @case ('loading') {
+      <p
+        class="py-8 text-center text-sm text-neutral-500"
+        role="status"
+      >
+        Loading current capacity and Goals…
+      </p>
+    }
+    @case ('initial-error') {
+      <div
+        class="flex flex-col items-center gap-3 py-8 text-center"
+        role="alert"
+      >
+        <p>Could not load the current Transaction, Account, and Goal details.</p>
+        <button
+          matButton="outlined"
+          type="button"
+          (click)="retryContext()"
+        >
+          Try again
+        </button>
+      </div>
+    }
+    @case ('refreshing') {
+      <p
+        class="py-8 text-center text-sm text-neutral-500"
+        role="status"
+      >
+        Refreshing current details…
+      </p>
+    }
+    @case ('refresh-failed') {
+      <div
+        class="flex flex-col items-center gap-3 py-8 text-center"
+        role="alert"
+      >
+        <p>The latest capacity could not be loaded, so another split cannot be confirmed yet.</p>
+        <button
+          matButton="outlined"
+          type="button"
+          (click)="retryContext()"
+        >
+          Try refresh again
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (readyContext(); as context) {
+        <form
+          novalidate
+          class="flex flex-col gap-y-5"
+          (submit)="submit($event)"
+        >
+          <section class="rounded-lg bg-neutral-100 p-4 text-sm dark:bg-neutral-800">
+            <p class="font-medium">{{ source.description || 'Income Transaction' }}</p>
+            <p>
+              {{ source.date | date: (source.generated ? 'd MMM y' : 'd MMM y, h:mm a') }} · {{ source.amount | peso }}
+            </p>
+            <p class="mt-2">{{ context.snapshot.account.name }}</p>
+            <p class="text-neutral-600 dark:text-neutral-300">
+              {{ context.snapshot.linkedTotal | peso }} already linked ·
+              {{ context.snapshot.remainingCapacity | peso }} Transaction capacity ·
+              {{ context.snapshot.account.availableHeadroom | peso }} Account headroom
+            </p>
+          </section>
+
+          @if (!context.availability.available) {
+            <p
+              class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+              role="alert"
+            >
+              {{ context.availability.explanation }}
+            </p>
+          }
+
+          <fieldset [disabled]="formLocked()">
+            <label class="flex flex-col gap-1 text-sm font-medium">
+              Contribution date
+              <input
+                class="rounded-lg border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
+                type="date"
+                aria-label="Contribution date"
+                [formField]="splitForm.contributionDate"
+              />
+            </label>
+          </fieldset>
+          @if (showErrors() && splitForm.contributionDate().invalid()) {
+            @for (error of splitForm.contributionDate().errors(); track error) {
+              <p
+                class="text-sm text-red-700"
+                role="alert"
+              >
+                {{ error.message }}
+              </p>
+            }
+          }
+          @for (message of dateServerErrors(); track message) {
+            <p
+              class="text-sm text-red-700"
+              role="alert"
+            >
+              {{ message }}
+            </p>
+          }
+
+          <div class="flex flex-col gap-y-3">
+            @for (rowField of splitForm.contributions; track $index; let index = $index) {
+              @let row = model().contributions[index];
+              <fieldset
+                class="flex flex-col gap-y-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
+                [disabled]="formLocked()"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <legend class="font-medium">Contribution {{ index + 1 }}</legend>
+                  <button
+                    matButton
+                    type="button"
+                    [disabled]="model().contributions.length === 1 || pending()"
+                    (click)="removeRow(index)"
+                  >
+                    Remove row
+                  </button>
+                </div>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                  Goal
+                  <select
+                    class="rounded-lg border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
+                    [attr.aria-label]="'Contribution ' + (index + 1) + ' Goal'"
+                    [formField]="rowField.goalId"
+                  >
+                    <option value="">Choose a Goal</option>
+                    @for (goal of context.goals; track goal.id) {
+                      <option [value]="goal.id">
+                        {{ goal.name }} — {{ goal.currentAmount | peso }} of {{ goal.targetAmount | peso }}
+                      </option>
+                    }
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                  Amount
+                  <span class="flex items-center rounded-lg border border-neutral-300 px-3 dark:border-neutral-700">
+                    <span>₱&nbsp;</span>
+                    <input
+                      class="min-w-0 flex-auto bg-transparent py-2 outline-none"
+                      type="number"
+                      [attr.aria-label]="'Contribution ' + (index + 1) + ' amount'"
+                      step="0.01"
+                      inputmode="decimal"
+                      [formField]="rowField.amount"
+                    />
+                  </span>
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                  Note
+                  <span class="font-normal text-neutral-500">Optional</span>
+                  <input
+                    class="rounded-lg border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
+                    [attr.aria-label]="'Contribution ' + (index + 1) + ' note'"
+                    [formField]="rowField.note"
+                  />
+                </label>
+
+                @if (goalFor(row); as goal) {
+                  <p class="text-sm text-neutral-600 dark:text-neutral-300">
+                    {{ goal.name }} is at {{ goal.currentAmount | peso }} of {{ goal.targetAmount | peso }}.
+                  </p>
+                }
+                @if (targetOverrun(index); as overrun) {
+                  <div
+                    class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+                  >
+                    <p>
+                      This would put {{ overrun.goal.name }} at {{ overrun.proposedProgress | peso }},
+                      {{ overrun.overBy | peso }} over its target.
+                    </p>
+                    <label class="mt-2 flex items-start gap-2 font-medium">
+                      <input
+                        type="checkbox"
+                        [attr.aria-label]="'Contribution ' + (index + 1) + ' acknowledge target overrun'"
+                        [formField]="rowField.acknowledgeTargetOverrun"
+                      />
+                      I acknowledge this target overrun
+                    </label>
+                  </div>
+                }
+
+                @if (showErrors()) {
+                  @for (field of [rowField.goalId, rowField.amount]; track $index) {
+                    @if (field().invalid()) {
+                      @for (error of field().errors(); track error) {
+                        <p
+                          class="text-sm text-red-700"
+                          role="alert"
+                        >
+                          {{ error.message }}
+                        </p>
+                      }
+                    }
+                  }
+                  @for (message of rowServerErrors(index); track message) {
+                    <p
+                      class="text-sm text-red-700"
+                      role="alert"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                }
+              </fieldset>
+            }
+          </div>
+
+          <button
+            matButton="outlined"
+            type="button"
+            [disabled]="formLocked()"
+            (click)="addRow()"
+          >
+            Add another Goal
+          </button>
+
+          <section class="rounded-lg bg-neutral-100 p-4 text-sm dark:bg-neutral-800">
+            <p class="font-medium">Split summary</p>
+            @for (row of model().contributions; track $index) {
+              <p>{{ goalFor(row)?.name || 'Choose a Goal' }} · {{ row.amount || 0 | peso }}</p>
+            }
+            <p class="mt-2 font-semibold">Total · {{ total() | peso }}</p>
+          </section>
+
+          @if (showErrors() && duplicateGoals()) {
+            <p
+              class="text-sm text-red-700"
+              role="alert"
+            >
+              Choose each Goal only once.
+            </p>
+          }
+          @if (showErrors() && transactionCapacityExceeded()) {
+            <p
+              class="text-sm text-red-700"
+              role="alert"
+            >
+              The total exceeds the remaining Transaction capacity.
+            </p>
+          }
+          @if (showErrors() && accountHeadroomExceeded()) {
+            <p
+              class="text-sm text-red-700"
+              role="alert"
+            >
+              The total exceeds the Account headroom.
+            </p>
+          }
+          @for (message of sharedServerErrors(); track message) {
+            <p
+              class="text-sm text-red-700"
+              role="alert"
+            >
+              {{ message }}
+            </p>
+          }
+          @for (message of sharedRefusalErrors(); track message) {
+            <p
+              class="text-sm text-red-700"
+              role="alert"
+            >
+              {{ message }}
+            </p>
+          }
+
+          @switch (recoveryState().status) {
+            @case ('refused') {
+              <p
+                class="text-sm text-red-700"
+                role="alert"
+              >
+                {{ recoveryMessage() }}
+              </p>
+            }
+            @case ('uncertain') {
+              <div
+                class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                role="alert"
+              >
+                <p>{{ recoveryMessage() }}</p>
+                <button
+                  matButton="outlined"
+                  type="button"
+                  (click)="retryUncertain()"
+                >
+                  Retry safely
+                </button>
+              </div>
+            }
+            @case ('idempotency-mismatch') {
+              <div
+                class="text-sm text-amber-900"
+                role="alert"
+              >
+                <p>{{ recoveryMessage() }}</p>
+                @if (freshKeyCollision()) {
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    (click)="retryFreshKeyCollision()"
+                  >
+                    Try with a new key
+                  </button>
+                }
+              </div>
+            }
+          }
+
+          <div class="flex items-center justify-end gap-3">
+            <button
+              matButton
+              type="button"
+              (click)="dialogRef.close()"
+            >
+              Cancel
+            </button>
+            <button
+              matButton="filled"
+              type="submit"
+              [disabled]="submitDisabled()"
+            >
+              {{ pending() ? 'Creating…' : 'Create contributions' }}
+            </button>
+          </div>
+        </form>
+      }
+    }
+  }
+</app-dialog-shell>
