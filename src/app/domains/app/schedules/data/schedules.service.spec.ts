@@ -7,7 +7,7 @@ import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { withPinnedTimezone } from '@/testing/timezone';
 import { SchedulesService } from './schedules.service';
 
-function resource(over: Partial<Record<string, unknown>> = {}) {
+function resource(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 7,
     accountId: 2,
@@ -23,7 +23,7 @@ function resource(over: Partial<Record<string, unknown>> = {}) {
     status: 'Active',
     generatedTransactionCount: 9,
     canDelete: false,
-    ...over,
+    ...overrides,
   };
 }
 
@@ -63,6 +63,7 @@ describe('SchedulesService', () => {
         name: 'Rent',
         direction: 'expense',
         amount: 18500,
+        description: 'Home',
         frequency: 'monthly',
         firstGeneration: new Date(2026, 7, 1),
         lastGeneration: null,
@@ -120,5 +121,142 @@ describe('SchedulesService', () => {
     const error = await result.catch((value: unknown) => value);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(500);
+  });
+
+  describe('create', () => {
+    function newSchedule(overrides: Partial<Record<string, unknown>> = {}) {
+      return {
+        accountId: 2,
+        categoryId: 4,
+        name: 'Rent',
+        direction: 'expense' as const,
+        amount: 18500,
+        description: 'Home',
+        frequency: 'monthly' as const,
+        firstGeneration: new Date(2026, 9, 1),
+        lastGeneration: new Date(2027, 9, 1),
+        ...overrides,
+      };
+    }
+
+    it('POSTs the complete recurring-transaction request and maps the created Schedule', async () => {
+      const result = firstValueFrom(service.create(newSchedule()));
+
+      const request = http.expectOne(`${BASE_URL}/api/recurring-transactions`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({
+        accountId: 2,
+        categoryId: 4,
+        name: 'Rent',
+        type: 'Expense',
+        amount: 18500,
+        description: 'Home',
+        frequency: 'Monthly',
+        startDate: '2026-10-01',
+        endDate: '2027-10-01',
+      });
+      request.flush(
+        resource({
+          id: 12,
+          startDate: '2026-10-01',
+          endDate: '2027-10-01',
+          nextRunDate: '2026-10-01',
+        }),
+      );
+
+      await expect(result).resolves.toMatchObject({
+        id: 12,
+        description: 'Home',
+        firstGeneration: new Date(2026, 9, 1),
+        lastGeneration: new Date(2027, 9, 1),
+        nextGeneration: new Date(2026, 9, 1),
+        status: 'active',
+      });
+    });
+
+    it('preserves the entered local calendar dates on the wire', async () => {
+      const result = firstValueFrom(
+        service.create(
+          newSchedule({
+            firstGeneration: new Date(2026, 8, 30, 23, 30),
+            lastGeneration: null,
+          }),
+        ),
+      );
+
+      const request = http.expectOne(`${BASE_URL}/api/recurring-transactions`);
+      expect(request.request.body.startDate).toBe('2026-09-30');
+      expect(request.request.body.endDate).toBeNull();
+      request.flush(resource({ startDate: '2026-09-30', endDate: null }));
+      await result;
+    });
+
+    it('attributes a duplicate-name conflict to the name field', async () => {
+      const result = firstValueFrom(service.create(newSchedule()));
+
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions`)
+        .flush(
+          { detail: 'A recurring transaction with this name already exists.' },
+          { status: 409, statusText: 'Conflict' },
+        );
+
+      const error = await result.catch((value: unknown) => value);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).fieldErrors['name']).toEqual(['A Schedule with this name already exists.']);
+    });
+
+    it('leaves a non-name conflict unattributed for state-conflict recovery', async () => {
+      const result = firstValueFrom(service.create(newSchedule()));
+
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions`)
+        .flush({ detail: 'The selected filing destination changed.' }, { status: 409, statusText: 'Conflict' });
+
+      const error = await result.catch((value: unknown) => value);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(409);
+      expect((error as ApiError).fieldErrors).toEqual({});
+    });
+
+    it('translates API validation fields and explains the actual date minimums', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-19T18:30:00.000Z'));
+      try {
+        const result = firstValueFrom(service.create(newSchedule()));
+
+        http.expectOne(`${BASE_URL}/api/recurring-transactions`).flush(
+          {
+            errors: {
+              Type: ['Choose a direction.'],
+              StartDate: ['Choose a later date.'],
+              EndDate: ['Choose a later date.'],
+            },
+          },
+          { status: 400, statusText: 'Bad Request' },
+        );
+
+        const error = (await result.catch((value: unknown) => value)) as ApiError;
+        expect(error.fieldErrors).toEqual({
+          direction: ['Choose a direction.'],
+          firstGeneration: ['Choose 20 Sep 2026 or later'],
+          lastGeneration: ['Choose 2 Oct 2026 or later'],
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps a retired-Category rejection attributed to the Category field', async () => {
+      const result = firstValueFrom(service.create(newSchedule()));
+
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions`)
+        .flush({ errors: { CategoryId: ['Choose an active Category.'] } }, { status: 400, statusText: 'Bad Request' });
+
+      const error = await result.catch((value: unknown) => value);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).fieldErrors['categoryId']).toEqual(['Choose an active Category.']);
+    });
   });
 });

@@ -1,0 +1,27 @@
+@if (scope() === 'all') {
+  <section
+    class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+  >
+    <mat-icon
+      class="size-10 text-neutral-400"
+      svgIcon="calendar-clock"
+    />
+    <p class="text-lg font-semibold">No Schedules yet</p>
+    <p class="max-w-sm text-neutral-500 dark:text-neutral-400">
+      Schedules will appear here once you have a standing instruction.
+    </p>
+    <button
+      matButton="filled"
+      class="mt-2"
+      [disabled]="createDisabled()"
+      (click)="create.emit()"
+    >
+      <mat-icon svgIcon="plus" />
+      Create Schedule
+    </button>
+  </section>
+} @else {
+  <div class="rounded-xl border border-dashed border-neutral-300 px-6 py-14 text-center dark:border-neutral-700">
+    <p class="font-semibold">{{ viewMessage() }}</p>
+  </div>
+}
