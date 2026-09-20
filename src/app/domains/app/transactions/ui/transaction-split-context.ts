@@ -3,18 +3,12 @@ import { firstValueFrom, forkJoin } from 'rxjs';
 import { Goal, GoalsService } from '@/app/domains/app/goals';
 import { TransactionLinkedContributions } from '../data/linked-contribution';
 import { Transaction } from '../data/transaction';
+import {
+  TransactionSplitAvailability,
+  transactionSplitFinancialAvailability,
+  unavailableTransactionSplit,
+} from '../data/transaction-split-availability';
 import { TransactionsService } from '../data/transactions.service';
-
-export type TransactionSplitUnavailableReason =
-  'transaction-ineligible' | 'account-inactive' | 'transaction-capacity' | 'account-headroom' | 'no-active-goals';
-
-export type TransactionSplitAvailability =
-  | { available: true; reason: null; explanation: null }
-  | {
-      available: false;
-      reason: TransactionSplitUnavailableReason;
-      explanation: string;
-    };
 
 /** The fixed source facts and choices a future Transaction-first dialog renders. */
 export type TransactionSplitContext = {
@@ -146,29 +140,18 @@ function availabilityFor(
   activeGoals: readonly Goal[],
 ): TransactionSplitAvailability {
   if (source.direction !== 'income') {
-    return unavailable('transaction-ineligible', 'Only income Transactions can fund Linked Contributions.');
-  }
-  if (!snapshot.account.active) {
-    return unavailable(
-      'account-inactive',
-      "The Transaction's Account is retired and cannot fund a new Linked Contribution.",
+    return unavailableTransactionSplit(
+      'transaction-ineligible',
+      'Only income Transactions can fund Linked Contributions.',
     );
   }
-  if (snapshot.remainingCapacity <= 0) {
-    return unavailable(
-      'transaction-capacity',
-      'This Transaction has no remaining capacity for a new Linked Contribution.',
-    );
-  }
-  if (snapshot.account.availableHeadroom <= 0) {
-    return unavailable('account-headroom', 'This Account has no available headroom for a new Linked Contribution.');
-  }
+  const financialAvailability = transactionSplitFinancialAvailability(snapshot);
+  if (!financialAvailability.available) return financialAvailability;
   if (activeGoals.length === 0) {
-    return unavailable('no-active-goals', 'There are no Active Goals available for a new Linked Contribution.');
+    return unavailableTransactionSplit(
+      'no-active-goals',
+      'There are no Active Goals available for a new Linked Contribution.',
+    );
   }
   return { available: true, reason: null, explanation: null };
-}
-
-function unavailable(reason: TransactionSplitUnavailableReason, explanation: string): TransactionSplitAvailability {
-  return { available: false, reason, explanation };
 }

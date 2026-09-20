@@ -231,7 +231,16 @@ export class TransactionRow {
   /** Structured Linked Contributions that must be deleted before this Transaction can be removed. */
   protected readonly removalBlock = signal<LinkedContributionRemovalBlock | null>(null);
 
+  protected readonly contributionActionState = computed(
+    () => this.linkedContributionPanel()?.creationAvailability() ?? { status: 'unchecked' as const, explanation: null },
+  );
+
+  protected checkContributionAvailability(): void {
+    if (this.row().direction === 'income') void this.linkedContributionPanel()?.refresh();
+  }
+
   protected openContributionDialog(): void {
+    if (this.contributionActionState().status !== 'available') return;
     const recovery = this.recoveryOwner();
     recovery.prepareForDialog();
     this.splitDialogOpen.set(true);

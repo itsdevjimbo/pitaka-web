@@ -4,16 +4,13 @@ import { applyEach, form, FormField, max, min, required, validate } from '@angul
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
-import { PesoPipe, sumPesos } from '@/app/core/money';
-import { Goal, GOAL_AMOUNT_MAX, GOAL_AMOUNT_MIN } from '@/app/domains/app/goals';
+import { partitionServerErrorMessages } from '@/app/core/forms';
+import { formatPeso, PesoPipe, sumPesos } from '@/app/core/money';
+import { Goal, GOAL_AMOUNT_MAX, GOAL_AMOUNT_MIN, toGoalDateOnly } from '@/app/domains/app/goals';
 import { Transaction } from '../data/transaction';
-import { TransactionSplitPayload } from '../data/transaction-split';
+import { TransactionSplitFailure, TransactionSplitPayload } from '../data/transaction-split';
 import { TransactionSplitContext, TransactionSplitContextStore } from './transaction-split-context';
-import {
-  TransactionSplitFailure,
-  TransactionSplitRecoveryState,
-  TransactionSplitRecoveryStore,
-} from './transaction-split-recovery';
+import { TransactionSplitRecoveryState, TransactionSplitRecoveryStore } from './transaction-split-recovery';
 
 export type TransactionSplitDialogData = { transaction: Transaction };
 
@@ -86,10 +83,7 @@ export class TransactionSplitDialog {
     return context !== null && this.total() > context.snapshot.account.availableHeadroom;
   });
   protected readonly pending = computed(() => this.recoveryState().status === 'pending');
-  protected readonly formLocked = computed(() => {
-    const status = this.recoveryState().status;
-    return status === 'pending' || status === 'uncertain' || status === 'idempotency-mismatch';
-  });
+  protected readonly formLocked = this.recoveryStore.unresolved;
   protected readonly recoveryMessage = computed(() => {
     const state = this.recoveryState();
     return 'message' in state ? state.message : '';
@@ -104,12 +98,31 @@ export class TransactionSplitDialog {
     return (
       context?.availability.available === true &&
       rows.length > 0 &&
+      rows.every((row) => this.goalFor(row) !== null) &&
       !this.splitForm().invalid() &&
       !this.duplicateGoals() &&
       !this.transactionCapacityExceeded() &&
       !this.accountHeadroomExceeded() &&
       rows.every((row, index) => this.targetOverrun(index) === null || row.acknowledgeTargetOverrun) &&
       !this.formLocked()
+    );
+  });
+  private readonly validationErrors = computed(() => {
+    const state = this.recoveryState();
+    if (state.status !== 'validation-error') return { fieldMessages: {}, bannerMessage: null };
+
+    const acceptedFields = new Set<string>(['contributionDate', 'contributions']);
+    this.model().contributions.forEach((_row, index) => {
+      acceptedFields.add(`contributions[${index}]`);
+      acceptedFields.add(`contributions[${index}].goalId`);
+      acceptedFields.add(`contributions[${index}].amount`);
+      acceptedFields.add(`contributions[${index}].note`);
+      acceptedFields.add(`contributions[${index}].acknowledgeTargetOverrun`);
+    });
+    return partitionServerErrorMessages(
+      state.error,
+      acceptedFields,
+      'Something went wrong validating these contributions. Please try again.',
     );
   });
   protected readonly submitDisabled = computed(
@@ -153,20 +166,19 @@ export class TransactionSplitDialog {
   }
 
   protected sharedServerErrors(): readonly string[] {
-    const state = this.recoveryState();
-    return state.status === 'validation-error' ? (state.fieldErrors['contributions'] ?? []) : [];
+    const errors = this.validationErrors();
+    return [...(errors.fieldMessages['contributions'] ?? []), ...(errors.bannerMessage ? [errors.bannerMessage] : [])];
   }
 
   protected dateServerErrors(): readonly string[] {
-    const state = this.recoveryState();
-    return state.status === 'validation-error' ? (state.fieldErrors['contributionDate'] ?? []) : [];
+    return this.validationErrors().fieldMessages['contributionDate'] ?? [];
   }
 
   protected rowServerErrors(index: number): readonly string[] {
     const state = this.recoveryState();
     if (state.status === 'validation-error') {
       const prefix = `contributions[${index}]`;
-      return Object.entries(state.fieldErrors)
+      return Object.entries(this.validationErrors().fieldMessages)
         .filter(([key]) => key === prefix || key.startsWith(`${prefix}.`))
         .flatMap(([, messages]) => messages);
     }
@@ -240,11 +252,7 @@ function initialModel(state: TransactionSplitRecoveryState): SplitFormModel {
 }
 
 function todayDateOnly(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return toGoalDateOnly(new Date());
 }
 
 function hasCentPrecision(value: number): boolean {
@@ -252,18 +260,11 @@ function hasCentPrecision(value: number): boolean {
 }
 
 function failureMessage(failure: TransactionSplitFailure): string {
-  const goalName = typeof failure['goalName'] === 'string' ? failure['goalName'] : 'This Goal';
   switch (failure.reason) {
     case 'goal_inactive':
-      return `${goalName} is no longer Active.`;
-    case 'target_overrun_acknowledgement_required': {
-      const current = numberFact(failure, 'currentProgress');
-      const target = numberFact(failure, 'target');
-      const proposed = numberFact(failure, 'proposedProgress');
-      return current !== null && target !== null && proposed !== null
-        ? `${goalName} is at ₱${current.toFixed(2)} of ₱${target.toFixed(2)}; this row would make it ₱${proposed.toFixed(2)}. Acknowledge the target overrun and try again.`
-        : `${goalName} now requires target-overrun acknowledgement. Review the row and try again.`;
-    }
+      return `${failure.goalName} is no longer Active.`;
+    case 'target_overrun_acknowledgement_required':
+      return `This Goal is at ${formatPeso(failure.currentProgress)} of ${formatPeso(failure.target)}; this row would make it ${formatPeso(failure.proposedProgress)}. Acknowledge the target overrun and try again.`;
     case 'account_headroom_exceeded':
       return 'The Account no longer has enough headroom for this split.';
     case 'transaction_capacity_exceeded':
@@ -277,9 +278,4 @@ function failureMessage(failure: TransactionSplitFailure): string {
     case 'concurrent_state_changed':
       return 'The Transaction, Account, or a Goal changed. Review the refreshed details and try again.';
   }
-}
-
-function numberFact(failure: TransactionSplitFailure, name: string): number | null {
-  const value = failure[name];
-  return typeof value === 'number' ? value : null;
 }

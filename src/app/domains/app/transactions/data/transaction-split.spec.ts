@@ -4,6 +4,11 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
+import {
+  TransactionSplitIdempotencyMismatchError,
+  TransactionSplitRefusalError,
+  TransactionSplitValidationError,
+} from './transaction-split';
 import { TransactionsService } from './transactions.service';
 
 describe('Transaction split write adapter', () => {
@@ -56,7 +61,7 @@ describe('Transaction split write adapter', () => {
     });
   });
 
-  it('preserves structured refusal reasons and every returned failure', async () => {
+  it('translates structured refusal reasons and every returned failure', async () => {
     const result = firstValueFrom(
       service.splitLinkedContributions(
         { transactionId: 42, contributionDate: '2026-09-20', contributions: [] },
@@ -77,17 +82,56 @@ describe('Transaction split write adapter', () => {
     );
 
     const error = await result.catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(TransactionSplitRefusalError);
     expect(error).toMatchObject({
-      status: 409,
-      details: {
-        reason: 'split_rejected',
-        created: false,
-        failures: [
-          { reason: 'goal_inactive', rowIndex: 0, goalId: 12 },
-          { reason: 'account_headroom_exceeded', accountId: 7 },
-        ],
+      failures: [
+        { reason: 'goal_inactive', rowIndex: 0, goalId: 12, goalName: 'Holiday' },
+        { reason: 'account_headroom_exceeded' },
+      ],
+    });
+  });
+
+  it('translates indexed validation paths for the split form', async () => {
+    const result = firstValueFrom(
+      service.splitLinkedContributions(
+        { transactionId: 42, contributionDate: '', contributions: [] },
+        '74287c99-1f5c-49b7-9d24-81e884c634a0',
+      ),
+    );
+    http.expectOne(`${BASE_URL}/api/transactions/42/linked-contributions`).flush(
+      {
+        errors: {
+          ContributionDate: ['Choose a valid date.'],
+          'Contributions[1].Amount': ['Use a positive cent-precise amount.'],
+        },
+      },
+      { status: 400, statusText: 'Bad Request' },
+    );
+
+    const error = await result.catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(TransactionSplitValidationError);
+    expect(error).toMatchObject({
+      fieldErrors: {
+        contributionDate: ['Choose a valid date.'],
+        'contributions[1].amount': ['Use a positive cent-precise amount.'],
       },
     });
+  });
+
+  it('translates idempotency mismatch without treating it as an atomic refusal', async () => {
+    const result = firstValueFrom(
+      service.splitLinkedContributions(
+        { transactionId: 42, contributionDate: '2026-09-20', contributions: [] },
+        '74287c99-1f5c-49b7-9d24-81e884c634a0',
+      ),
+    );
+    http
+      .expectOne(`${BASE_URL}/api/transactions/42/linked-contributions`)
+      .flush({ reason: 'idempotency_mismatch' }, { status: 409, statusText: 'Conflict' });
+
+    const error = await result.catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(TransactionSplitIdempotencyMismatchError);
+    expect(error).not.toBeInstanceOf(TransactionSplitRefusalError);
   });
 });
 

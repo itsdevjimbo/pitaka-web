@@ -15,7 +15,7 @@ import {
   TransactionSearchResult,
 } from './transaction';
 import { toTransactionRemovalError } from './transaction-removal';
-import { TransactionSplitPayload, TransactionSplitResult } from './transaction-split';
+import { toTransactionSplitError, TransactionSplitPayload, TransactionSplitResult } from './transaction-split';
 
 /**
  * Wire shape of one Transaction from the API. `GET /api/accounts/:id/
@@ -136,6 +136,7 @@ export class TransactionsService {
           ...resource,
           contributions: resource.contributions.map(toCreatedSplitContribution),
         })),
+        catchError((error: unknown) => throwError(() => toTransactionSplitError(error))),
       );
   }
 

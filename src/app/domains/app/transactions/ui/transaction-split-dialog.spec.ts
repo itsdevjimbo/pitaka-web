@@ -5,7 +5,12 @@ import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { GoalContributionsService, GoalsService } from '@/app/domains/app/goals';
 import { Transaction } from '../data/transaction';
-import { TransactionSplitResult } from '../data/transaction-split';
+import {
+  TransactionSplitIdempotencyMismatchError,
+  TransactionSplitRefusalError,
+  TransactionSplitResult,
+  TransactionSplitValidationError,
+} from '../data/transaction-split';
 import { TransactionsService } from '../data/transactions.service';
 import { TransactionSplitContextStore } from './transaction-split-context';
 import { TransactionSplitDialog } from './transaction-split-dialog';
@@ -55,6 +60,7 @@ describe('TransactionSplitDialog', () => {
       snapshot?: typeof SNAPSHOT;
       split?: TransactionsService['splitLinkedContributions'];
       linkedContributions?: TransactionsService['linkedContributions'];
+      goals?: GoalsService['list'];
     } = {},
   ) {
     split = vi.fn(
@@ -84,7 +90,7 @@ describe('TransactionSplitDialog', () => {
             splitLinkedContributions: split,
           },
         },
-        { provide: GoalsService, useValue: { list: () => of(GOALS) } },
+        { provide: GoalsService, useValue: { list: overrides.goals ?? (() => of(GOALS)) } },
         { provide: GoalContributionsService, useValue: { list: () => of([]) } },
         { provide: TRANSACTION_SPLIT_IDEMPOTENCY_KEY, useValue: () => keys.shift()! },
       ],
@@ -306,7 +312,7 @@ describe('TransactionSplitDialog', () => {
       split: () => {
         attempts += 1;
         return attempts === 1
-          ? throwError(() => new ApiError('Mismatch.', 409, {}, { reason: 'idempotency_mismatch' }))
+          ? throwError(() => new TransactionSplitIdempotencyMismatchError())
           : of({ ...SNAPSHOT, contributions: [] });
       },
     });
@@ -331,7 +337,7 @@ describe('TransactionSplitDialog', () => {
       split: () =>
         throwError(
           () =>
-            new ApiError('Correct the fields.', 400, {
+            new TransactionSplitValidationError({
               'contributions[0].amount': ['Use a positive cent-precise amount.'],
               contributionDate: ['Choose a valid date.'],
               contributions: ['Goal indexes 0 and 1 are duplicates.'],
@@ -357,20 +363,7 @@ describe('TransactionSplitDialog', () => {
         reads += 1;
         return reads === 2 ? throwError(() => new ApiError('Unavailable.', 503)) : of(SNAPSHOT);
       },
-      split: () =>
-        throwError(
-          () =>
-            new ApiError(
-              'Refused.',
-              409,
-              {},
-              {
-                reason: 'account_headroom_exceeded',
-                created: false,
-                failures: [{ reason: 'account_headroom_exceeded' }],
-              },
-            ),
-        ),
+      split: () => throwError(() => new TransactionSplitRefusalError([{ reason: 'account_headroom_exceeded' }])),
     });
     await settle();
     chooseGoal(0, '9');
@@ -384,6 +377,30 @@ describe('TransactionSplitDialog', () => {
 
     expect(reads).toBe(3);
     expect(text()).toContain('₱400.00 Transaction capacity');
+  });
+
+  it('does not resubmit a Goal that became inactive after a definitive refusal', async () => {
+    let goalReads = 0;
+    setup({
+      goals: () => of(goalReads++ === 0 ? GOALS : [GOALS[1]]),
+      split: () =>
+        throwError(
+          () =>
+            new TransactionSplitRefusalError([
+              { reason: 'goal_inactive', rowIndex: 0, goalId: 12, goalName: 'Holiday' },
+            ]),
+        ),
+    });
+    await settle();
+    chooseGoal(0, '12');
+    input('input[aria-label="Contribution 1 amount"]', '25');
+    button('Create contributions').click();
+    await settle();
+
+    expect(text()).toContain('Holiday is no longer Active');
+    button('Create contributions').click();
+
+    expect(split).toHaveBeenCalledOnce();
   });
 
   function chooseGoal(index: number, value: string) {

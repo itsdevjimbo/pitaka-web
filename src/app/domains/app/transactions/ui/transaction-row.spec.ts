@@ -348,7 +348,14 @@ describe('TransactionRow', () => {
   }
 
   function menuItem(items: HTMLButtonElement[], label: string) {
-    return items.find((b) => (b.textContent ?? '').trim() === label);
+    return items.find((b) => (b.textContent ?? '').includes(label));
+  }
+
+  async function openMenuWithAvailability(fixture: ReturnType<typeof renderFixture>) {
+    openMenu(fixture);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return Array.from(overlay().querySelectorAll<HTMLButtonElement>('button'));
   }
 
   /** A button anywhere in the row host, matched by exact trimmed text. */
@@ -769,6 +776,74 @@ describe('TransactionRow', () => {
       expect(menuItem(items, 'Remove')).toBeDefined();
     });
 
+    it.each([
+      {
+        snapshot: { ...linkedSnapshot(), remainingCapacity: 0 },
+        explanation: 'This Transaction has no remaining capacity',
+      },
+      {
+        snapshot: {
+          ...linkedSnapshot(),
+          account: { ...linkedSnapshot().account, availableHeadroom: 0 },
+        },
+        explanation: 'This Account has no available headroom',
+      },
+      {
+        snapshot: {
+          ...linkedSnapshot(),
+          account: { ...linkedSnapshot().account, active: false },
+        },
+        explanation: "The Transaction's Account is retired",
+      },
+    ])(
+      'keeps unavailable contribution creation visible and disabled with its reason',
+      async ({ snapshot, explanation }) => {
+        const fixture = renderFixture(
+          toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3),
+          () => of(undefined),
+          () => of(snapshot),
+        );
+
+        const action = menuItem(await openMenuWithAvailability(fixture), 'Contribute to a Goal');
+
+        expect(action).toBeDefined();
+        expect(action?.disabled).toBe(true);
+        expect(action?.textContent).toContain(explanation);
+      },
+    );
+
+    it('keeps the newest capacity when overlapping menu reads finish out of order', async () => {
+      const older = new Subject<TransactionLinkedContributions>();
+      const newer = new Subject<TransactionLinkedContributions>();
+      const linkedRead = vi.fn().mockReturnValueOnce(older).mockReturnValueOnce(newer);
+      const fixture = renderFixture(
+        toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3),
+        () => of(undefined),
+        linkedRead,
+      );
+
+      openMenu(fixture);
+      actionsTrigger(fixture.nativeElement as HTMLElement)?.click();
+      fixture.detectChanges();
+      openMenu(fixture);
+      newer.next({ ...linkedSnapshot(), remainingCapacity: 0 });
+      newer.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      older.next(linkedSnapshot());
+      older.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const action = menuItem(
+        Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')),
+        'Contribute to a Goal',
+      );
+      expect(linkedRead).toHaveBeenCalledTimes(2);
+      expect(action?.disabled).toBe(true);
+      expect(action?.textContent).toContain('This Transaction has no remaining capacity');
+    });
+
     it('refreshes authoritative Linked Contribution facts after the split dialog confirms', async () => {
       const linkedRead = vi.fn(() => of(linkedSnapshot()));
       const fixture = renderFixture(
@@ -781,17 +856,18 @@ describe('TransactionRow', () => {
         afterClosed: () => closed.asObservable(),
       } as never);
 
-      menuItem(openMenu(fixture), 'Contribute to a Goal')?.click();
+      menuItem(await openMenuWithAvailability(fixture), 'Contribute to a Goal')?.click();
       fixture.detectChanges();
       expect(open).toHaveBeenCalledOnce();
-      expect(linkedRead).not.toHaveBeenCalled();
+      expect(linkedRead).toHaveBeenCalledOnce();
 
       closed.next(true);
       closed.complete();
       await fixture.whenStable();
       fixture.detectChanges();
 
-      expect(linkedRead).toHaveBeenCalledWith(1);
+      expect(linkedRead).toHaveBeenCalledTimes(2);
+      expect(linkedRead).toHaveBeenLastCalledWith(1);
     });
 
     it('keeps an in-flight split owned by the row after the dialog is dismissed', async () => {
@@ -803,7 +879,7 @@ describe('TransactionRow', () => {
         linkedRead,
         { split: () => pending.asObservable() },
       );
-      menuItem(openMenu(fixture), 'Contribute to a Goal')?.click();
+      menuItem(await openMenuWithAvailability(fixture), 'Contribute to a Goal')?.click();
       await fixture.whenStable();
       fixture.detectChanges();
       const dialog = overlay();
@@ -819,7 +895,7 @@ describe('TransactionRow', () => {
         .find((button) => button.textContent?.trim() === 'Create contributions')!
         .click();
       fixture.detectChanges();
-      expect(linkedRead).toHaveBeenCalledTimes(1);
+      expect(linkedRead).toHaveBeenCalledTimes(2);
 
       dialog.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
       await fixture.whenStable();
@@ -836,7 +912,7 @@ describe('TransactionRow', () => {
       });
       pending.complete();
 
-      await vi.waitFor(() => expect(linkedRead).toHaveBeenCalledTimes(3));
+      await vi.waitFor(() => expect(linkedRead).toHaveBeenCalledTimes(4));
       expect(linkedRead).toHaveBeenLastCalledWith(1);
     });
 
@@ -990,6 +1066,7 @@ describe('TransactionRow', () => {
       };
       const linkedRead = vi
         .fn()
+        .mockReturnValueOnce(of(oneLinkedContribution))
         .mockReturnValueOnce(of(oneLinkedContribution))
         .mockReturnValueOnce(of(noLinkedContributions));
       const deleteContribution = vi.fn(() => {
