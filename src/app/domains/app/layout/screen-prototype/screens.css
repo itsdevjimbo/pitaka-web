@@ -27,46 +27,11 @@
 .family-results {
   min-width: 0;
 }
-/* User-selected planning mix: compact cards, without a centered width cap.
+/* User-selected planning mix: C's existing design, without its centered width cap.
    Explicit A/B/C URLs retain the original comparison compositions. */
-.pp.compact-planning .content {
+.pp.full-width-planning[data-variant] .content {
   max-width: none;
   margin: 0;
-}
-.compact-planning .family-study {
-  gap: 16px;
-}
-.compact-planning .family-controls {
-  align-items: center;
-}
-.compact-planning .family-controls > p {
-  width: auto;
-  margin-left: auto;
-}
-.compact-planning .planning-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 16px;
-  align-items: start;
-}
-.compact-planning .planning-card {
-  padding: 16px;
-  gap: 8px;
-}
-.compact-planning .planning-title h2 {
-  font-size: 1.125rem;
-}
-.compact-planning .planning-amounts {
-  margin-top: 4px;
-  gap: 12px;
-}
-.compact-planning .planning-amounts strong {
-  font-size: 1.25rem;
-}
-.compact-planning .planning-card progress {
-  height: 8px;
-}
-.compact-planning .planning-card .text-action {
-  align-self: flex-start;
 }
 .planning-grid {
   display: grid;

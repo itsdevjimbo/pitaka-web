@@ -70,7 +70,9 @@ export default class ScreenPrototype {
     ['signin', 'signup', 'forgot', 'reset', 'confirm', 'emailchange'].includes(this.screen()),
   );
   readonly isFamily = computed(() => Object.hasOwn(this.titles, this.screen()));
-  readonly selectedVariant = computed(() => (['account', 'goal'].includes(this.screen()) ? 'B' : 'A'));
+  readonly selectedVariant = computed(() =>
+    ['budgets', 'goals'].includes(this.screen()) ? 'C' : ['account', 'goal'].includes(this.screen()) ? 'B' : 'A',
+  );
   readonly navigation = [
     { label: 'Accounts', screen: 'accounts', icon: '▣' },
     { label: 'Transactions', screen: 'transactions', icon: '⇄' },

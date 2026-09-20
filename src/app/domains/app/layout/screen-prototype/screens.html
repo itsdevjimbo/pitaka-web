@@ -2,7 +2,7 @@
   class="pp"
   [attr.data-dark]="dark()"
   [attr.data-variant]="variant()"
-  [class.compact-planning]="composition() === 'selected' && ['budgets', 'goals'].includes(screen())"
+  [class.full-width-planning]="composition() === 'selected' && ['budgets', 'goals'].includes(screen())"
 >
   <a
     class="skip"
@@ -815,14 +815,14 @@
           {{
             composition() === 'selected'
               ? ['budgets', 'goals'].includes(screen())
-                ? 'Selected · Compact cards'
+                ? 'Selected · C'
                 : 'Selected · ' + variant()
               : variant()
           }}
           ·
           {{
             composition() === 'selected' && ['budgets', 'goals'].includes(screen())
-              ? 'Full-width grid'
+              ? 'Full-width compact ledger'
               : names[variant()]
           }}
         </strong>
