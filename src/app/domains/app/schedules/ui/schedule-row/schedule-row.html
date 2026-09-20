@@ -65,46 +65,116 @@
   </div>
 </dl>
 
-<div class="mt-4 flex flex-wrap gap-2 border-t border-neutral-200 pt-4 dark:border-neutral-800">
-  @if (row().schedule.status === 'active') {
-    <button
-      matButton="outlined"
-      type="button"
-      [disabled]="writeDisabled()"
-      (click)="request('pause')"
+<div
+  class="mt-4 flex flex-wrap items-start justify-between gap-3 border-t border-neutral-200 pt-4 dark:border-neutral-800"
+>
+  <div class="flex flex-wrap gap-2">
+    @if (row().schedule.status === 'active') {
+      <button
+        matButton="outlined"
+        type="button"
+        [disabled]="writeDisabled() || deleting()"
+        (click)="request('pause')"
+      >
+        Pause
+      </button>
+    } @else if (row().schedule.status === 'paused' || row().schedule.status === 'cancelled') {
+      <button
+        matButton="outlined"
+        type="button"
+        [disabled]="writeDisabled() || deleting() || row().accountRetired"
+        [attr.aria-describedby]="row().accountRetired ? 'resume-blocked-' + row().schedule.id : null"
+        (click)="request('resume')"
+      >
+        Resume
+      </button>
+    } @else if (row().schedule.status === 'completed') {
+      <button
+        matButton="outlined"
+        type="button"
+        [disabled]="writeDisabled() || deleting() || row().accountRetired"
+        [attr.aria-describedby]="row().accountRetired ? 'extend-blocked-' + row().schedule.id : null"
+        (click)="extend.emit(row())"
+      >
+        Extend
+      </button>
+    }
+    @if (row().schedule.status === 'active' || row().schedule.status === 'paused') {
+      <button
+        matButton="outlined"
+        type="button"
+        [disabled]="writeDisabled() || deleting()"
+        (click)="edit.emit(row())"
+      >
+        Edit
+      </button>
+    }
+  </div>
+
+  @if (confirmingDelete()) {
+    <div
+      class="flex max-w-md flex-col gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
+      role="alertdialog"
+      [attr.aria-label]="'Delete ' + row().schedule.name"
     >
-      Pause
-    </button>
-  } @else if (row().schedule.status === 'paused' || row().schedule.status === 'cancelled') {
-    <button
-      matButton="outlined"
-      type="button"
-      [disabled]="writeDisabled() || row().accountRetired"
-      [attr.aria-describedby]="row().accountRetired ? 'resume-blocked-' + row().schedule.id : null"
-      (click)="request('resume')"
-    >
-      Resume
-    </button>
-  } @else if (row().schedule.status === 'completed') {
-    <button
-      matButton="outlined"
-      type="button"
-      [disabled]="writeDisabled() || row().accountRetired"
-      [attr.aria-describedby]="row().accountRetired ? 'extend-blocked-' + row().schedule.id : null"
-      (click)="extend.emit(row())"
-    >
-      Extend
-    </button>
-  }
-  @if (row().schedule.status === 'active' || row().schedule.status === 'paused') {
-    <button
-      matButton="outlined"
-      type="button"
-      [disabled]="writeDisabled()"
-      (click)="edit.emit(row())"
-    >
-      Edit
-    </button>
+      <p class="text-sm text-neutral-700 dark:text-neutral-200">
+        <span class="font-semibold">Delete ‘{{ row().schedule.name }}’?</span>
+        This permanently deletes this Schedule.
+      </p>
+      @if (deleteError(); as error) {
+        <p
+          class="text-sm text-red-700 dark:text-red-300"
+          role="alert"
+        >
+          {{ error }}
+        </p>
+      }
+      @if (!row().schedule.canDelete) {
+        <p class="text-sm text-neutral-600 dark:text-neutral-300">
+          This Schedule can’t be deleted because it has generated a Transaction.
+        </p>
+      }
+      <div class="flex gap-2 self-end">
+        <button
+          #deleteCancel
+          matButton
+          type="button"
+          [disabled]="deleting()"
+          (click)="cancelDelete()"
+        >
+          Cancel
+        </button>
+        <button
+          matButton="filled"
+          type="button"
+          [disabled]="deleting() || writeDisabled() || !row().schedule.canDelete"
+          (click)="confirmDelete()"
+        >
+          {{ deleting() ? 'Deleting…' : 'Delete' }}
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="flex max-w-xs flex-col items-start gap-1 sm:items-end">
+      <button
+        #deleteTrigger
+        matButton="outlined"
+        type="button"
+        [disabled]="writeDisabled() || !row().schedule.canDelete"
+        [attr.aria-describedby]="!row().schedule.canDelete ? 'delete-blocked-' + row().schedule.id : null"
+        (click)="askDelete()"
+      >
+        Delete
+      </button>
+      @if (!row().schedule.canDelete) {
+        <p
+          [id]="'delete-blocked-' + row().schedule.id"
+          class="text-xs text-neutral-500 sm:text-right dark:text-neutral-400"
+        >
+          This Schedule can’t be deleted because it has generated a Transaction.
+        </p>
+      }
+    </div>
   }
 </div>
 
