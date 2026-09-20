@@ -34,6 +34,8 @@ import {
 const DIRECTION_PARAM = 'direction';
 const ACCOUNT_PARAM = 'account';
 const CATEGORY_PARAM = 'category';
+const SCHEDULE_PARAM = 'schedule';
+const SCHEDULE_NAME_PARAM = 'scheduleName';
 const NOTE_PARAM = 'note';
 const FROM_PARAM = 'from';
 const TO_PARAM = 'to';
@@ -53,7 +55,8 @@ const TO_PARAM = 'to';
  * the identity and every serialised URL round-trips.
  */
 export function criteriaToQueryParams(
-  criteria: TransactionCriteria
+  criteria: TransactionCriteria,
+  scheduleName?: string
 ): Record<string, string> {
   const params: Record<string, string> = {};
 
@@ -65,6 +68,13 @@ export function criteriaToQueryParams(
   }
   if (criteria.categoryId !== undefined) {
     params[CATEGORY_PARAM] = String(criteria.categoryId);
+  }
+  if (criteria.scheduleId !== undefined) {
+    params[SCHEDULE_PARAM] = String(criteria.scheduleId);
+    const name = scheduleName?.trim();
+    if (name) {
+      params[SCHEDULE_NAME_PARAM] = name;
+    }
   }
   const note = (criteria.description ?? '').trim();
   if (note !== '') {
@@ -80,6 +90,19 @@ export function criteriaToQueryParams(
   }
 
   return params;
+}
+
+/** Query parameters for opening one Schedule's generated Transaction history. */
+export function scheduleHistoryQueryParams(
+  scheduleId: number,
+  scheduleName: string
+): Record<string, string> {
+  return criteriaToQueryParams({ scheduleId }, scheduleName);
+}
+
+/** Read the Schedule display name carried beside its URL-backed criterion. */
+export function scheduleNameFromQueryParams(params: ParamMap): string | undefined {
+  return params.get(SCHEDULE_NAME_PARAM)?.trim() || undefined;
 }
 
 /**
@@ -106,6 +129,11 @@ export function criteriaFromQueryParams(
   const categoryId = toPositiveInt(params.get(CATEGORY_PARAM));
   if (categoryId !== null) {
     criteria.categoryId = categoryId;
+  }
+
+  const scheduleId = toPositiveInt(params.get(SCHEDULE_PARAM));
+  if (scheduleId !== null) {
+    criteria.scheduleId = scheduleId;
   }
 
   const note = (params.get(NOTE_PARAM) ?? '').trim();

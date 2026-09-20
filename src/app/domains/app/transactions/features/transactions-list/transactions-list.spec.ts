@@ -1135,6 +1135,84 @@ describe('TransactionsList', () => {
   });
 
   describe('the URL is the source of truth (#41)', () => {
+    it('reloads a named Schedule filter, removes it without disturbing other criteria, and uses the history empty state', async () => {
+      const search = vi.fn((criteria: Record<string, unknown>) =>
+        Object.keys(criteria).length === 0
+          ? of(page({ transactions: [tx({ description: 'Whole history' })], totalCount: 1 }))
+          : of(page({ transactions: [], totalCount: 0 }))
+      );
+      const { fixture, text, navigate } = setup({
+        search: search as unknown as TransactionsService['search'],
+        queryParams: { schedule: '12', scheduleName: 'Monthly rent' },
+      });
+
+      expect(search).toHaveBeenCalledWith({ scheduleId: 12 }, 1);
+      expect(text()).toContain('Schedule: Monthly rent');
+      expect(text()).toContain('No generated Transactions to show');
+      expect(text()).not.toContain('No transactions match these filters');
+
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('button[aria-label="Remove Schedule filter"]')!
+        .click();
+      await settle(fixture);
+
+      expect(navigate).toHaveBeenLastCalledWith(
+        [],
+        expect.objectContaining({ queryParams: {}, replaceUrl: true })
+      );
+      expect(search).toHaveBeenLastCalledWith({}, 1);
+      expect(text()).toContain('Whole history');
+    });
+
+    it('reads linked history from URL state without depending on the Schedule collection', () => {
+      const search = vi.fn(() =>
+        of(page({ transactions: [tx({ generated: true, description: 'Generated rent' })], totalCount: 1 }))
+      );
+      const { text } = setup({
+        search: search as unknown as TransactionsService['search'],
+        queryParams: { schedule: '12', scheduleName: 'Monthly rent' },
+      });
+
+      expect(search).toHaveBeenCalledWith({ scheduleId: 12 }, 1);
+      expect(text()).toContain('Schedule: Monthly rent');
+      expect(text()).toContain('Generated rent');
+      expect(text()).not.toContain('Something went wrong loading');
+    });
+
+    it('preserves the Schedule id and name when another filter changes', () => {
+      const { cmp, navigate } = setup({
+        queryParams: { schedule: '12', scheduleName: 'Monthly rent' },
+      });
+
+      cmp.applyCriteria({ scheduleId: 12, direction: 'income' });
+
+      expect(navigate).toHaveBeenLastCalledWith(
+        [],
+        expect.objectContaining({
+          queryParams: {
+            direction: 'income',
+            schedule: '12',
+            scheduleName: 'Monthly rent',
+          },
+          replaceUrl: true,
+        })
+      );
+    });
+
+    it('uses the normal no-match wording when another criterion hides Schedule history', () => {
+      const { text } = setup({
+        search: () => of(page({ transactions: [], totalCount: 0 })),
+        queryParams: {
+          schedule: '12',
+          scheduleName: 'Monthly rent',
+          direction: 'income',
+        },
+      });
+
+      expect(text()).toContain('No transactions match these filters');
+      expect(text()).not.toContain('No generated Transactions to show');
+    });
+
     it('hydrates the criteria from the query string and reads the list already narrowed on entry', () => {
       const search = vi.fn(() =>
         of(page({ transactions: [tx({ description: 'Narrowed' })], totalCount: 1 }))

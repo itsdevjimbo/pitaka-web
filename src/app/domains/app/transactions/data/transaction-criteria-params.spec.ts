@@ -4,6 +4,7 @@ import { TransactionCriteria } from './transaction';
 import {
   criteriaFromQueryParams,
   criteriaToQueryParams,
+  scheduleNameFromQueryParams,
   sameCriteria,
 } from './transaction-criteria-params';
 
@@ -38,6 +39,7 @@ describe('transaction criteria <-> query params', () => {
           direction: 'expense',
           accountId: 3,
           categoryId: 7,
+          scheduleId: 12,
           description: 'coffee',
           from: day(2026, 7, 1),
           to: day(2026, 7, 31),
@@ -46,6 +48,7 @@ describe('transaction criteria <-> query params', () => {
         direction: 'expense',
         account: '3',
         category: '7',
+        schedule: '12',
         note: 'coffee',
         from: '2026-07-01',
         // The person's inclusive end day, not the wire's exclusive `endDay + 1`.
@@ -55,6 +58,14 @@ describe('transaction criteria <-> query params', () => {
 
     it('serialises empty criteria to no parameters at all', () => {
       expect(criteriaToQueryParams({})).toEqual({});
+    });
+
+    it('carries a Schedule name only beside its Schedule criterion', () => {
+      expect(criteriaToQueryParams({ scheduleId: 12 }, 'Monthly rent')).toEqual({
+        schedule: '12',
+        scheduleName: 'Monthly rent',
+      });
+      expect(criteriaToQueryParams({}, 'Monthly rent')).toEqual({});
     });
 
     it('omits the key for every unset axis', () => {
@@ -118,6 +129,7 @@ describe('transaction criteria <-> query params', () => {
         direction: 'expense',
         accountId: 3,
         categoryId: 7,
+        scheduleId: 12,
         description: 'coffee',
         from: day(2026, 7, 1),
         to: day(2026, 7, 31),
@@ -129,6 +141,10 @@ describe('transaction criteria <-> query params', () => {
     it('reads an absent parameter as an unfiltered axis', () => {
       expect(parse({})).toEqual({});
       expect(parse({ account: '3' })).toEqual({ accountId: 3 });
+      expect(parse({ schedule: '12' })).toEqual({ scheduleId: 12 });
+      expect(
+        scheduleNameFromQueryParams(convertToParamMap({ scheduleName: ' Monthly rent ' }))
+      ).toBe('Monthly rent');
     });
 
     it('reads `to` as the inclusive calendar day the URL carries, at local midnight', () => {

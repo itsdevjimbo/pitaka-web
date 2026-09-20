@@ -20,6 +20,7 @@ export type {
 export type { RecordTransactionDialogData } from './ui/record-transaction-dialog';
 export type { RefileTransactionDialogData } from './ui/refile-transaction-dialog';
 export { TransactionsService } from './data/transactions.service';
+export { scheduleHistoryQueryParams } from './data/transaction-criteria-params';
 export { RecordTransactionDialog } from './ui/record-transaction-dialog';
 export { RefileTransactionDialog } from './ui/refile-transaction-dialog';
 export { TransactionSplitContextStore } from './ui/transaction-split-context';

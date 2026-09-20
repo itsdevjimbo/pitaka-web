@@ -45,7 +45,7 @@ describe('TransactionsFilterBar', () => {
 
   function setup(
     criteria: TransactionCriteria = {},
-    { phone = false }: { phone?: boolean } = {}
+    { phone = false, scheduleName }: { phone?: boolean; scheduleName?: string } = {}
   ) {
     TestBed.configureTestingModule({
       imports: [TransactionsFilterBar],
@@ -66,6 +66,7 @@ describe('TransactionsFilterBar', () => {
     fixture.componentRef.setInput('accounts', ACCOUNTS);
     fixture.componentRef.setInput('categories', CATEGORIES);
     fixture.componentRef.setInput('criteria', criteria);
+    fixture.componentRef.setInput('scheduleName', scheduleName);
     fixture.detectChanges();
 
     const cmp = fixture.componentInstance as unknown as FilterBarInternals;
@@ -154,6 +155,21 @@ describe('TransactionsFilterBar', () => {
       'Expense',
       'Transfer',
     ]);
+  });
+
+  it('shows a removable named Schedule criterion', () => {
+    const { fixture, emitted, text } = setup(
+      { scheduleId: 12, direction: 'expense' },
+      { scheduleName: 'Monthly rent' }
+    );
+
+    expect(text()).toContain('Schedule: Monthly rent');
+    const remove = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove Schedule filter"]'
+    )!;
+    remove.click();
+
+    expect(emitted.at(-1)).toEqual({ direction: 'expense' });
   });
 
   it('folds a chosen direction into the criteria', () => {
@@ -350,6 +366,7 @@ describe('TransactionsFilterBar', () => {
       direction: 'income',
       accountId: 9,
       categoryId: 2,
+      scheduleId: 12,
       description: 'coffee',
       from: new Date(2026, 8, 1),
       to: new Date(2026, 8, 30),

@@ -1,4 +1,18 @@
 <div class="flex flex-col gap-3">
+  @if (criteria().scheduleId !== undefined) {
+    <div>
+      <button
+        matButton="outlined"
+        type="button"
+        aria-label="Remove Schedule filter"
+        (click)="removeSchedule()"
+      >
+        Schedule: {{ scheduleName() }}
+        <mat-icon svgIcon="x" />
+      </button>
+    </div>
+  }
+
   <!-- Top row: the note search stays visible at every width (#35, #64), and at
        phone width a disclosure toggle sits beside it while everything else
        collapses (#42). Empty or all-whitespace drops the note axis. -->

@@ -749,6 +749,25 @@ describe('ScheduleList', () => {
     expect(text()).not.toContain('may be out of date');
   });
 
+  it('keeps generated history accessible while the Schedule list is stale', () => {
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([ALL[0]]))
+      .mockReturnValueOnce(throwError(() => new ApiError('Offline', 0)));
+    const { fixture } = setup(list as SchedulesService['list']);
+
+    click(fixture, 'Refresh');
+    const link = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>(
+      'a[aria-label="View generated Transactions for Later salary"]'
+    );
+
+    expect(link).not.toBeNull();
+    expect(link!.getAttribute('href')).toBe(
+      '/app/transactions?schedule=1&scheduleName=Later%20salary'
+    );
+    expect(link!.getAttribute('aria-disabled')).toBeNull();
+  });
+
   it('disables Edit while the list is stale', () => {
     const list = vi
       .fn()
