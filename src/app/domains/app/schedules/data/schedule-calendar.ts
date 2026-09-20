@@ -28,9 +28,21 @@ export function nextEligibleGeneration(schedule: Schedule, now = new Date()): Da
   if (schedule.status === 'active') return schedule.nextGeneration;
 
   const today = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const occurrences = Math.max(numberOfOccurrences(schedule.firstGeneration, today, schedule.frequency), 0);
+  return occurrenceOnOrAfter(schedule, today);
+}
+
+/** The first cadence occurrence after both UTC today and the Completed Schedule's inclusive end. */
+export function nextExtensionGeneration(schedule: Schedule, now = new Date()): Date {
+  const today = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const afterCurrentEnd = schedule.lastGeneration === null ? today : addCalendarDays(schedule.lastGeneration, 1);
+  const threshold = compareCalendarDates(afterCurrentEnd, today) > 0 ? afterCurrentEnd : today;
+  return occurrenceOnOrAfter(schedule, threshold);
+}
+
+function occurrenceOnOrAfter(schedule: Schedule, threshold: Date): Date {
+  const occurrences = Math.max(numberOfOccurrences(schedule.firstGeneration, threshold, schedule.frequency), 0);
   const candidate = addOccurrences(schedule.firstGeneration, schedule.frequency, occurrences);
-  return compareCalendarDates(candidate, today) < 0
+  return compareCalendarDates(candidate, threshold) < 0
     ? addOccurrences(schedule.firstGeneration, schedule.frequency, occurrences + 1)
     : candidate;
 }

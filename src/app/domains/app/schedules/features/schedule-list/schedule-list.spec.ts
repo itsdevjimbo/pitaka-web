@@ -60,6 +60,7 @@ describe('ScheduleList', () => {
       create?: SchedulesService['create'];
       update?: SchedulesService['update'];
       setStatus?: SchedulesService['setStatus'];
+      extend?: SchedulesService['extend'];
       accounts?: Account[];
       categories?: Category[];
       refreshCategories?: CategoriesService['refreshList'];
@@ -82,6 +83,7 @@ describe('ScheduleList', () => {
             create: overrides.create ?? (() => of(ALL[0])),
             update: overrides.update ?? (() => of(ALL[0])),
             setStatus: overrides.setStatus ?? (() => of(ALL[0])),
+            extend: overrides.extend ?? (() => of(ALL[0])),
           },
         },
         { provide: AccountsService, useValue: { all: () => of(accounts) } },
@@ -441,6 +443,250 @@ describe('ScheduleList', () => {
       expect(text()).toContain('This Schedule changed in another request.');
       expect(text()).toContain('It is currently paused.');
       expect(text()).toContain('Review the refreshed Schedule before trying again.');
+    });
+  });
+
+  describe('extend a Completed Schedule', () => {
+    const pinTimezone = withPinnedTimezone();
+    beforeEach(() => pinTimezone('Asia/Manila'));
+
+    const completed = schedule({
+      id: 41,
+      name: 'Quarterly dues',
+      direction: 'expense',
+      frequency: 'monthly',
+      firstGeneration: new Date(2026, 0, 31),
+      lastGeneration: new Date(2026, 7, 31),
+      nextGeneration: new Date(2026, 7, 31),
+      status: 'completed',
+    });
+
+    async function openExtend(fixture: ComponentFixture<ScheduleList>) {
+      click(fixture, 'Past');
+      click(fixture, 'Extend');
+      await settle(fixture);
+    }
+
+    async function withSystemTime(instant: string, run: () => Promise<void>) {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(instant));
+      try {
+        await run();
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+
+    it('offers Extend only for Completed Schedules and explains the next cadence occurrence', async () => {
+      await withSystemTime('2026-09-20T01:00:00.000Z', async () => {
+        const { fixture, dialog, dialogText } = setup(() => of([completed, ALL[4]]));
+        click(fixture, 'Past');
+        const rows = Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('li[schedules-schedule-row]'),
+        );
+        expect(rows.find((row) => row.textContent?.includes('Quarterly dues'))?.textContent).toContain('Extend');
+        expect(rows.find((row) => row.textContent?.includes('Old plan'))?.textContent).not.toContain('Extend');
+
+        click(fixture, 'Extend');
+        await settle(fixture);
+        expect(dialog()).not.toBeNull();
+        expect(dialogText()).toContain('Extend ‘Quarterly dues’');
+        expect(dialogText()).toContain('Last generation');
+        expect(dialogText()).toContain('Continue indefinitely');
+        expect(dialogText()).toContain(
+          'Your Schedule will continue from 30 Sep 2026. Missed occurrences won’t be generated.',
+        );
+        expect(dialogText()).toContain('An occurrence on this date is included.');
+        expect(overlayButton('Extend and resume')).not.toBeNull();
+      });
+    });
+
+    it('submits a finite end, closes, refreshes, and shows the active Schedule', async () => {
+      await withSystemTime('2026-09-20T01:00:00.000Z', async () => {
+        const resumed = schedule({
+          ...completed,
+          status: 'active',
+          lastGeneration: new Date(2026, 11, 31),
+          nextGeneration: new Date(2026, 8, 30),
+        });
+        const list = vi
+          .fn()
+          .mockReturnValueOnce(of([completed]))
+          .mockReturnValueOnce(of([resumed]));
+        const extend = vi.fn((_id: number, _lastGeneration: Date | null) => of(resumed));
+        const { fixture, dialog, text } = setup(list as SchedulesService['list'], {
+          extend: extend as SchedulesService['extend'],
+        });
+
+        await openExtend(fixture);
+        typeInto('#extend-schedule-last-generation', '2026-12-31');
+        await settle(fixture);
+        overlayButton('Extend and resume').click();
+        await settle(fixture);
+
+        expect(extend).toHaveBeenCalledWith(41, expect.any(Date));
+        const submitted = extend.mock.calls[0][1] as Date;
+        expect([submitted.getFullYear(), submitted.getMonth(), submitted.getDate()]).toEqual([2026, 11, 31]);
+        expect(dialog()).toBeNull();
+        expect(list).toHaveBeenCalledTimes(2);
+        expect(text()).toContain('Next generation: 30 Sep 2026');
+      });
+    });
+
+    it('sends explicit indefinite continuation and keeps controls pending', async () => {
+      const pending = new Subject<Schedule>();
+      const extend = vi.fn(() => pending.asObservable());
+      const { fixture, dialogText } = setup(() => of([completed]), {
+        extend: extend as SchedulesService['extend'],
+      });
+
+      await openExtend(fixture);
+      overlay().querySelector<HTMLInputElement>('#extend-schedule-indefinite')!.click();
+      await settle(fixture);
+      overlayButton('Extend and resume').click();
+      fixture.detectChanges();
+
+      expect(extend).toHaveBeenCalledWith(41, null);
+      expect(dialogText()).toContain('Extending…');
+      expect(overlayButton('Extending…').disabled).toBe(true);
+      expect(overlayButton('Cancel').disabled).toBe(true);
+
+      pending.next({ ...completed, status: 'active', lastGeneration: null });
+      pending.complete();
+      await settle(fixture);
+    });
+
+    it('validates the finite inclusive end against the next eligible occurrence', async () => {
+      await withSystemTime('2026-09-20T01:00:00.000Z', async () => {
+        const { fixture, dialogText } = setup(() => of([completed]));
+        await openExtend(fixture);
+        typeInto('#extend-schedule-last-generation', '2026-09-29');
+        overlay().querySelector<HTMLInputElement>('#extend-schedule-last-generation')!.dispatchEvent(new Event('blur'));
+        await settle(fixture);
+
+        expect(dialogText()).toContain('Choose 30 Sep 2026 or later');
+        expect(overlayButton('Extend and resume').disabled).toBe(true);
+      });
+    });
+
+    it('uses UTC today for the preview when the local calendar is already tomorrow', async () => {
+      await withSystemTime('2026-09-19T18:30:00.000Z', async () => {
+        const daily = schedule({
+          ...completed,
+          frequency: 'daily',
+          firstGeneration: new Date(2026, 8, 1),
+          lastGeneration: new Date(2026, 8, 18),
+          nextGeneration: new Date(2026, 8, 18),
+        });
+        const { fixture, dialogText } = setup(() => of([daily]));
+        await openExtend(fixture);
+
+        expect(dialogText()).toContain('Your Schedule will continue from 19 Sep 2026.');
+      });
+    });
+
+    it('advances beyond the old inclusive end before previewing continuation', async () => {
+      await withSystemTime('2026-09-19T18:30:00.000Z', async () => {
+        const daily = schedule({
+          ...completed,
+          frequency: 'daily',
+          firstGeneration: new Date(2026, 8, 1),
+          lastGeneration: new Date(2026, 8, 19),
+          nextGeneration: new Date(2026, 8, 19),
+        });
+        const { fixture, dialogText } = setup(() => of([daily]));
+        await openExtend(fixture);
+
+        expect(dialogText()).toContain('Your Schedule will continue from 20 Sep 2026.');
+        typeInto('#extend-schedule-last-generation', '2026-09-19');
+        overlay().querySelector<HTMLInputElement>('#extend-schedule-last-generation')!.dispatchEvent(new Event('blur'));
+        await settle(fixture);
+        expect(dialogText()).toContain('Choose 20 Sep 2026 or later');
+      });
+    });
+
+    it('uses the shared responsive dialog and restores focus after Escape', async () => {
+      const originalWidth = window.innerWidth;
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+      try {
+        const { fixture, dialog } = setup(() => of([completed]));
+        click(fixture, 'Past');
+        const opener = Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+        ).find((button) => button.textContent?.includes('Extend'))!;
+        opener.focus();
+        opener.click();
+        await settle(fixture);
+        expect(dialog()).not.toBeNull();
+        expect(overlay().querySelector('.app-dialog-panel')).not.toBeNull();
+
+        pressEscape();
+        await settle(fixture);
+        expect(dialog()).toBeNull();
+        expect(document.activeElement).toBe(opener);
+      } finally {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+      }
+    });
+
+    it('keeps the finite end after a validation error', async () => {
+      const validationExtend = vi.fn(() =>
+        throwError(() => new ApiError('Validation failed.', 400, { lastGeneration: ['Choose 1 Jan 2027 or later'] })),
+      );
+      const validation = setup(() => of([completed]), {
+        extend: validationExtend as SchedulesService['extend'],
+      });
+      await openExtend(validation.fixture);
+      typeInto('#extend-schedule-last-generation', '2026-12-31');
+      await settle(validation.fixture);
+      overlayButton('Extend and resume').click();
+      await settle(validation.fixture);
+      expect(validation.dialog()).not.toBeNull();
+      expect(validation.dialogText()).toContain('Choose 1 Jan 2027 or later');
+      expect(overlay().querySelector<HTMLInputElement>('#extend-schedule-last-generation')!.value).toBe('2026-12-31');
+    });
+
+    it('closes and refreshes after a state conflict', async () => {
+      const list = vi.fn().mockReturnValue(of([completed]));
+      const conflictExtend = vi.fn(() => throwError(() => new ApiError('This Schedule changed.', 409)));
+      const conflict = setup(list as SchedulesService['list'], {
+        extend: conflictExtend as SchedulesService['extend'],
+      });
+      await openExtend(conflict.fixture);
+      overlay().querySelector<HTMLInputElement>('#extend-schedule-indefinite')!.click();
+      await settle(conflict.fixture);
+      overlayButton('Extend and resume').click();
+      await settle(conflict.fixture);
+      expect(conflict.dialog()).toBeNull();
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(conflict.text()).toContain('This Schedule changed.');
+      expect(conflict.text()).toContain('Review the refreshed Schedule before trying again.');
+    });
+
+    it('disables Extend for a retired Account and explains reactivation', () => {
+      const retired = { ...completed, accountId: 2 };
+      const extend = vi.fn(() => of(completed));
+      const retiredList = setup(() => of([retired]), { extend: extend as SchedulesService['extend'] });
+      click(retiredList.fixture, 'Past');
+      const retiredButton = Array.from(
+        (retiredList.fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+      ).find((button) => button.textContent?.includes('Extend'))!;
+      expect(retiredButton.disabled).toBe(true);
+      expect(retiredList.text()).toContain('Reactivate this Account before extending the Schedule.');
+    });
+
+    it('disables Extend while information is stale', () => {
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([completed]))
+        .mockReturnValueOnce(throwError(() => new ApiError('Offline', 0)));
+      const stale = setup(list as SchedulesService['list']);
+      click(stale.fixture, 'Refresh');
+      click(stale.fixture, 'Past');
+      const staleButton = Array.from(
+        (stale.fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+      ).find((button) => button.textContent?.includes('Extend'))!;
+      expect(staleButton.disabled).toBe(true);
     });
   });
 

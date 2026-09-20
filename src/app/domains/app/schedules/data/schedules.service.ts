@@ -116,6 +116,18 @@ export class SchedulesService {
       );
   }
 
+  /** Atomically extend and resume a Completed Schedule. */
+  extend(id: number, lastGeneration: Date | null): Observable<Schedule> {
+    return this.http
+      .post<RecurringTransactionResource>(`${this.baseUrl}/api/recurring-transactions/${id}/extend`, {
+        endDate: lastGeneration === null ? null : toDateOnly(lastGeneration),
+      })
+      .pipe(
+        map(toSchedule),
+        catchError((error: unknown) => throwError(() => toScheduleError(error))),
+      );
+  }
+
   /** Pause or resume generation while preserving the Schedule and its generated Transactions. */
   setStatus(id: number, status: 'active' | 'paused'): Observable<Schedule> {
     return this.http
