@@ -1,170 +1,229 @@
 <div
-  class="brand-prototype"
-  [attr.data-variant]="variant()"
+  class="identity-prototype"
   [attr.data-dark]="dark()"
-  [class.scheme-dark]="dark()"
-  [class.scheme-light]="!dark()"
+  [attr.data-mono]="mono()"
+  [style.--identity-font]="font()"
+  [style.--body-font]="pairing() ? 'Geist' : font()"
   [style.color-scheme]="dark() ? 'dark' : 'light'"
 >
-  <header class="brand-header">
+  <header class="identity-header">
     <a
-      class="brand-wordmark"
-      href="/auth/sign-in?variant=A"
-      aria-label="Pitaka branding preview"
+      href="/auth/sign-in?variant=B"
+      class="identity-lockup"
+      aria-label="Pitaka identity preview"
     >
       <svg
-        class="brand-mark"
         viewBox="0 0 48 48"
-        fill="none"
         aria-hidden="true"
       >
-        <rect
-          x="5"
-          y="9"
-          width="38"
-          height="31"
-          rx="10"
-          fill="currentColor"
-        />
-        <path
-          d="M9 12L26 5C30 3 34 6 34 10V13"
-          stroke="currentColor"
-          stroke-width="4"
-        />
-        <path
-          d="M31 21H43V31H31C25 31 25 21 31 21Z"
-          fill="var(--paper)"
-        />
-        <circle
-          cx="32"
-          cy="26"
-          r="2"
-          fill="currentColor"
-        />
+        <path [attr.d]="variant().path" />
       </svg>
-      pitaka
+      <b>pitaka</b>
     </a>
-    <span class="brand-header-note">A little clarity. Every day.</span>
-    <label class="brand-appearance">
-      Appearance
-      <select
-        [value]="appearance()"
-        (change)="appearance.set($any($event.target).value)"
-      >
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
+    <div class="identity-controls">
+      <label>
+        Font
+        <select
+          [value]="font()"
+          (change)="choose('font', $any($event.target).value)"
+        >
+          @for (f of fonts; track f) {
+            <option [value]="f">{{ f }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Appearance
+        <select
+          [value]="appearance()"
+          (change)="appearance.set($any($event.target).value)"
+        >
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label class="check">
+        <input
+          type="checkbox"
+          [checked]="mono()"
+          (change)="mono.set($any($event.target).checked)"
+        />
+        Monochrome
+      </label>
+      <label class="check">
+        <input
+          type="checkbox"
+          [checked]="pairing()"
+          (change)="pairing.set($any($event.target).checked)"
+        />
+        Geist for UI
+      </label>
+    </div>
   </header>
-  <main class="brand-layout">
-    <section class="brand-story">
-      <p class="brand-eyebrow">YOUR EVERYDAY MONEY COMPANION</p>
-      @switch (variant()) {
-        @case ('A') {
-          <h1>
-            A little more
-            <br />
-            peace of
-            <em>mind.</em>
-          </h1>
-          <p class="brand-description">
-            Know where your money goes.
-            <br />
-            Make room for what matters.
-          </p>
-        }
-        @case ('B') {
-          <h1>
-            Your money.
-            <br />
-            Your story.
-          </h1>
-          <p class="brand-description">
-            A clearer view of today.
-            <br />
-            A thoughtful start to tomorrow.
-          </p>
-        }
-        @case ('C') {
-          <h1>
-            Small steps.
-            <br />
-            <span>Big possibilities.</span>
-          </h1>
-          <p class="brand-description">
-            Every coffee, every payday, every little goal.
-            <br />
-            It all belongs in your pitaka.
-          </p>
-        }
-      }
-      <div
-        class="brand-demo"
-        aria-label="Illustrative product preview with sample amounts"
-      >
-        <div class="brand-demo-top">
-          <span>YOUR MONTH, AT A GLANCE</span>
-          <span>SEPTEMBER ↗</span>
-        </div>
-        <p class="brand-balance-label">Across your accounts</p>
-        <strong class="brand-balance">
-          ₱48,250
-          <span>.00</span>
-        </strong>
-        <div class="brand-mini-stats">
-          <div>
-            <span>Income</span>
-            <b class="brand-income">+₱32,000</b>
-          </div>
-          <div>
-            <span>Expenses</span>
-            <b class="brand-expense">−₱12,750</b>
-          </div>
-        </div>
-        <div class="brand-goal">
-          <div>
-            <span>✳ &nbsp; A little getaway</span>
-            <b>68%</b>
-          </div>
-          <div class="brand-track"><span></span></div>
-          <small>₱17,000 toward your ₱25,000 goal</small>
-        </div>
-      </div>
-      <p class="brand-caption">
-        A home for everyday money.
-        <span>Made for real life.</span>
-      </p>
+  <main>
+    <section class="identity-intro">
+      <p class="identity-kicker">POCKET POP / IDENTITY STUDY</p>
+      <h1>
+        Small steps.
+        <br />
+        <span>Big possibilities.</span>
+      </h1>
+      <p>Everyday money, a little clearer.</p>
+      <small>Headline and supporting copy are examples, pending your choice.</small>
     </section>
     <section
-      class="brand-signin"
-      aria-label="Sign in"
+      class="identity-options"
+      aria-label="Wallet mark concepts"
     >
-      <ng-content />
+      @for (m of marks; track m.key) {
+        <button
+          type="button"
+          [class.selected]="variant().key === m.key"
+          (click)="choose('variant', m.key)"
+          [attr.aria-pressed]="variant().key === m.key"
+        >
+          <svg
+            viewBox="0 0 48 48"
+            aria-hidden="true"
+          >
+            <path [attr.d]="m.path" />
+          </svg>
+          <strong>{{ m.name }}</strong>
+          <span>{{ m.key }}</span>
+        </button>
+      }
     </section>
+    <div class="identity-note">
+      <strong>{{ variant().name }}</strong>
+      <p>{{ variant().note }}</p>
+    </div>
+    <section class="identity-context">
+      <article class="identity-money">
+        <div class="identity-miniheader">
+          <span>Accounts</span>
+          <span>Sample figures</span>
+        </div>
+        <p class="identity-muted">Total balance</p>
+        <strong class="identity-balance">₱48,250.00</strong>
+        <div class="identity-longname">Everyday spending and household expenses</div>
+        <div class="identity-row">
+          <span>Income</span>
+          <b class="identity-income">+₱32,000.00</b>
+        </div>
+        <div class="identity-row">
+          <span>Expense</span>
+          <b class="identity-expense">−₱12,750.00</b>
+        </div>
+        <div class="identity-row">
+          <span>Transfer</span>
+          <b>₱1,111.11</b>
+        </div>
+        <div class="identity-row">
+          <span>Account balance</span>
+          <b>−₱888.88</b>
+        </div>
+        <p class="identity-muted">Emergency fund for our family</p>
+        <div class="identity-progress"><span></span></div>
+        <small>₱17,000.00 toward ₱25,000.00</small>
+        <div class="identity-status">Transaction recorded</div>
+      </article>
+      <section
+        class="identity-signin"
+        aria-label="Sign-in typography specimen"
+      >
+        <ng-content />
+      </section>
+    </section>
+    <section class="identity-specimens">
+      <article>
+        <p class="identity-kicker">ACTUAL SIZE / 16 · 24 · 32 · 48 PX</p>
+        <div class="identity-sizes">
+          @for (s of [16, 24, 32, 48]; track s) {
+            <div>
+              <svg
+                viewBox="0 0 48 48"
+                [style.width.px]="s"
+                [style.height.px]="s"
+                aria-hidden="true"
+              >
+                <path [attr.d]="variant().path" />
+              </svg>
+              <small>{{ s }}</small>
+            </div>
+          }
+        </div>
+        <div class="identity-inverted">
+          <svg
+            viewBox="0 0 48 48"
+            aria-hidden="true"
+          >
+            <path [attr.d]="variant().path" />
+          </svg>
+          <b>pitaka</b>
+        </div>
+      </article>
+      <article>
+        <p class="identity-kicker">TYPE CHECK / {{ font() }}</p>
+        <h2>Your money, at your pace.</h2>
+        <p>Record an expense. Make room for your next Goal.</p>
+        <div class="identity-glyphs">
+          ₱ 0123456789
+          <br />
+          ₱111,111.11
+          <br />
+          ₱888,888.88
+        </div>
+        <small>
+          Headings 750 · body 400 · labels 600 · amounts 650
+          <br />
+          {{ fontNote() }}
+        </small>
+      </article>
+    </section>
+    <section class="identity-fonts">
+      <p class="identity-kicker">COMPARE ALL FIVE / SAME SIZE AND WEIGHT</p>
+      @for (f of fonts; track f) {
+        <button
+          type="button"
+          (click)="choose('font', f)"
+          [class.selected]="font() === f"
+          [style.font-family]="f"
+        >
+          <span class="identity-fontlabel">{{ f }}</span>
+          <b>pitaka</b>
+          <strong>Small steps. Big possibilities.</strong>
+          <span class="identity-fontnumber">₱48,250.00</span>
+        </button>
+      }
+    </section>
+    <footer>
+      Throwaway identity exploration · Pocket Pop palette held constant · No logo or font approved yet.
+      <br />
+      Agreed voice: warm welcomes and celebrations; direct money, error, and destructive-action copy.
+    </footer>
   </main>
-  <footer class="brand-footer">
-    <span>Clarity, at your own pace.</span>
-    <span>TRACK · PLAN · GROW</span>
-  </footer>
   <aside
-    class="brand-switcher"
+    class="identity-switcher"
     aria-label="Prototype controls"
   >
     <button
       type="button"
-      aria-label="Previous brand direction"
+      aria-label="Previous mark"
       (click)="cycle(-1)"
     >
       ←
     </button>
     <div aria-live="polite">
-      <strong>{{ variant() }} · {{ names[variant()] }}</strong>
-      <small>Throwaway preview · {{ appearance() }} → {{ dark() ? 'dark' : 'light' }} · sample figures</small>
+      <strong>{{ variant().key }} · {{ variant().name }} / {{ font() }}</strong>
+      <small>
+        {{ appearance() }} → {{ dark() ? 'dark' : 'light' }} · {{ mono() ? 'monochrome' : 'color' }} ·
+        {{ pairing() ? 'Geist UI' : 'one family' }}
+      </small>
     </div>
     <button
       type="button"
-      aria-label="Next brand direction"
+      aria-label="Next mark"
       (click)="cycle(1)"
     >
       →

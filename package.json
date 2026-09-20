@@ -8,11 +8,15 @@
     "build": "ng build",
     "lint": "ng lint",
     "ng": "ng",
-    "start": "ng serve",
+    "prepare": "husky",
     "prototype:branding": "ng serve --port 4300 --open /auth/sign-in?variant=A",
+    "prototype:identity": "ng serve --port 4317",
+    "start": "ng serve",
     "test": "ng test",
-    "watch": "ng build --watch --configuration development",
-    "prepare": "husky"
+    "watch": "ng build --watch --configuration development"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,html}": "prettier --write"
   },
   "dependencies": {
     "@angular/aria": "22.1.1",
@@ -61,8 +65,5 @@
   },
   "engines": {
     "node": ">=24.0.0"
-  },
-  "lint-staged": {
-    "src/**/*.{ts,html}": "prettier --write"
   }
 }

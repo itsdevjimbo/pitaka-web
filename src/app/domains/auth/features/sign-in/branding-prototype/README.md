@@ -1,26 +1,33 @@
-# Pitaka branding prototype — throwaway
+# Pocket Pop identity study — throwaway
 
-Question: which visual identity makes everyday money feel approachable in both light and dark appearance?
+Question: which wallet mark and typography treatment carry Pocket Pop into a usable product identity?
 
-Run `npm run prototype:branding`, or visit http://localhost:4300/auth/sign-in?variant=A while the preview server is running. A guest session is required by the existing sign-in route.
+Run `npm run prototype:identity`, then open http://localhost:4317/auth/sign-in?variant=B . This development-only preview uses the existing sign-in route and requires a guest session. Do not submit the sign-in form for this study.
 
-- **A — Everyday Sage (recommended):** folded-wallet symbol, lowercase Geist wordmark, cream and forest green, generous space, a soft split layout. Voice: “A little more peace of mind.”
-- **B — Ink & Paper:** serif wordmark and headlines, warm paper, terracotta accents, ruled editorial columns. Voice: “Your money. Your story.”
-- **C — Pocket Pop:** bold geometric typography, cobalt and periwinkle, centered poster layout with an oversized pocket card. Voice: “Small steps. Big possibilities.”
+Five mark concepts: A Folded wallet, B Open pocket, C Pocket p, D Double pocket, E Clasp wallet. These are refinements within the selected Pocket Pop direction, not the former A/B/C brand contest.
 
-All directions retain distinct income/expense colors, signed amounts, and labels. Sample figures are illustrative, not fetched financial data. The existing sign-in form and guest guard remain functional.
+Select Plus Jakarta Sans, Outfit, Manrope, DM Sans, or the original Geist independently. `font` and `variant` query parameters preserve the pairing. Arrow keys and the bottom bar cycle marks. System/Light/Dark, monochrome, and Geist-for-UI controls are temporary in-memory review settings. The font comparison rows remain single-family samples so each candidate can be inspected independently of pairing mode.
 
-Appearance defaults to System and follows changes live. Light and Dark overrides last only for the mounted preview. Variant selection is stored in the query string; the floating controls and keyboard left/right arrows cycle A/B/C. The preview is gated by Angular development mode and the variant query parameter.
+Includes the actual sign-in form, sample financial data, long names, negative direction-neutral balance, 16/24/32/48px icon specimens, inverted lockup, and matching-size font rows. No financial or appearance behavior is being decided here. Existing Pocket Pop prototype colors are provisional. No production assets are approved.
 
-Suggested A palette:
+## Font evidence
 
-| Role | Light | Dark |
-| --- | --- | --- |
-| Canvas | #F6F5EE | #121C18 |
-| Surface | #FFFFFF | #1C2922 |
-| Text | #213E35 | #EDF2E8 |
-| Secondary text | #59685F | #B0BEB2 |
-| Accent | #285C49 | #B7D8A6 |
-| Border | #D5DDCF | #3A4B3E |
+Upright variable binaries downloaded from the official Google Fonts repository and inspected with fontTools on 2026-09-20. Fonts and their OFL licenses are included under `public/fonts/identity/`.
 
-Verdict: A is the design recommendation; user selection is pending. No production branding decision has been validated. Keep this experiment on `prototype/pitaka-brand-directions`. No implementation issue was provided. Once a direction is selected, implement it through the app's shared theme and brand assets, then link that implementation issue back to this branch. Do not merge the prototype wholesale.
+| Family | Peso U+20B1 | Tabular numerals | Source |
+| --- | --- | --- | --- |
+| Plus Jakarta Sans | Native | Yes | https://github.com/google/fonts/tree/main/ofl/plusjakartasans |
+| Manrope | Native | Yes | https://github.com/google/fonts/tree/main/ofl/manrope |
+| Outfit | Fallback required | Yes | https://github.com/google/fonts/tree/main/ofl/outfit |
+| DM Sans | Fallback required | No tnum in inspected file; digits vary in width | https://github.com/google/fonts/tree/main/ofl/dmsans |
+
+Outfit and DM Sans are included as possible display faces; try pairing with Geist for UI and amounts. Font choice remains pending. Keeping a new display or UI font would explicitly revise ADR 0008's decision to retain Geist; it does not revise semantic money colors.
+
+## Live discussion
+
+User agreed: warm and lightly playful welcomes, empty states, and celebrations; direct money, error, and destructive-action language. Logo and typography require further visual review. Tagline remains undecided.
+
+Map: https://github.com/itsdevjimbo/pitaka-web/issues/216
+Decision: https://github.com/itsdevjimbo/pitaka-web/issues/217
+
+Do not merge this branch into production. Capture the final decision on the decision ticket after user review.
