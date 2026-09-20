@@ -211,6 +211,17 @@ describe('ScheduleList', () => {
     expect(rowFor('Old plan').textContent).not.toContain('Edit');
   });
 
+  it('places card actions after the Schedule details', () => {
+    const { fixture } = setup(() => of(ALL));
+    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('li[schedules-schedule-row]')!;
+    const details = card.querySelector('dl')!;
+    const pause = Array.from(card.querySelectorAll('button')).find(
+      (button) => (button.textContent ?? '').trim() === 'Pause',
+    )!;
+
+    expect(details.compareDocumentPosition(pause)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   describe('pause and resume', () => {
     it('offers Pause for Active and Resume for Paused and Cancelled Schedules', () => {
       const { fixture } = setup(() => of(ALL));
