@@ -1,5 +1,7 @@
 # Pocket Pop — second layout review
 
+**Archived review history:** the user has now confirmed the full-width C composition and Goal-status treatment. [FINAL-REVIEW.md](FINAL-REVIEW.md) supersedes this document's provisional status and remaining-layout checklist, and records final evidence versus deferred interaction acceptance.
+
 The user chose A for Accounts, Transactions, Schedules, Categories, Tags, Profile and sign-in, and B for Account/Goal detail. Budgets and Goals list use **C's existing card/ledger design**, across the available content width instead of its narrow centered container. Sign-up inherits A; recovery and confirmation use compact centered cards. Sidebar headings and the phone More panel are approved. `variant=selected` follows that mix. The initial recommendation of C for Transactions is superseded.
 
 The user clarified that the previous compact A-style card grid was not what they meant. That revision is superseded. Selected Budgets and Goals now resolve to C; only their content max-width cap and auto-centering are removed. C's card structure, typography, spacing and phone stacking remain unchanged. Explicit A/B/C retain their original structures for comparison.

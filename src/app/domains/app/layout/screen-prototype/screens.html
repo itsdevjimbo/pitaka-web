@@ -62,6 +62,12 @@
           <option value="error">Error / stale view</option>
           <option value="invalid">Invalid link</option>
           <option value="success">Success / target reached</option>
+          <optgroup label="Goal detail cases">
+            <option value="over">Over target</option>
+            <option value="overdue">Target overdue</option>
+            <option value="completed">Completed Goal</option>
+            <option value="abandoned">Abandoned Goal</option>
+          </optgroup>
         </select>
       </label>
     </div>
@@ -270,7 +276,7 @@
                       ? 'The movements behind your balances.'
                       : screen() === 'account'
                         ? 'Bank account · ' + (scenario() === 'retired' ? 'Retired' : 'Active')
-                        : descriptions[screen()] || 'Active · Target date 31 Dec 2026'
+                        : descriptions[screen()] || goalStatus() + ' Goal'
                 }}
               </p>
             </div>
@@ -297,12 +303,50 @@
               }
               @if (screen() === 'goal') {
                 <button (click)="open('Edit goal', dialog)">Edit goal</button>
-                <button
-                  class="primary"
-                  (click)="open('Add contribution', dialog)"
-                >
-                  ＋ Add contribution
-                </button>
+                <details class="actions">
+                  <summary aria-label="Goal actions">•••</summary>
+                  <div>
+                    @if (goalStatus() === 'Active') {
+                      @if (goalCurrent() >= 50000) {
+                        <button
+                          (click)="notice.set('Mark complete confirmation preview. Sample Goal remains unchanged.')"
+                        >
+                          Mark complete
+                        </button>
+                      }
+                      <button
+                        (click)="
+                          notice.set(
+                            'Abandon confirmation: adding Contributions is blocked until marked active. Sample Goal remains unchanged.'
+                          )
+                        "
+                      >
+                        Abandon
+                      </button>
+                    } @else {
+                      <button (click)="notice.set('Mark active preview. Sample Goal remains unchanged.')">
+                        Mark active
+                      </button>
+                    }
+                    <button
+                      (click)="
+                        notice.set(
+                          'Delete confirmation uses a fresh Contribution count and explains released earmarks. Money remains in Accounts. No sample data changed.'
+                        )
+                      "
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </details>
+                @if (goalStatus() === 'Active') {
+                  <button
+                    class="primary"
+                    (click)="open('Add contribution', dialog)"
+                  >
+                    ＋ Add contribution
+                  </button>
+                }
               }
             </div>
           </header>
@@ -474,6 +518,16 @@
                   <span>{{ rows().length }} shown</span>
                 </div>
                 @if (screen() === 'transactions') {
+                  @if (schedule()) {
+                    <div class="active-filters">
+                      <button
+                        (click)="clearSchedule()"
+                        [attr.aria-label]="'Remove Schedule filter: ' + scheduleName()"
+                      >
+                        Schedule: {{ scheduleName() }} ×
+                      </button>
+                    </div>
+                  }
                   <div class="filter-toolbar">
                     <label class="search">
                       Search notes
@@ -559,7 +613,12 @@
                     </span>
                     <div class="transaction-copy">
                       <strong>{{ rowTitle(row) }}</strong>
-                      <p>{{ row.date }} · {{ row.direction }}{{ row.category ? ' · ' + row.category : '' }}</p>
+                      <p>
+                        {{ row.date }} · {{ row.direction }}{{ row.category ? ' · ' + row.category : '' }}
+                        @if (row.schedule) {
+                          <span class="tag">Generated</span>
+                        }
+                      </p>
                       <p>
                         {{
                           row.direction === 'Transfer'
@@ -623,7 +682,13 @@
                 } @empty {
                   <div class="empty">
                     <h2>
-                      {{ search() || direction() !== 'All' ? 'No matching Transactions' : 'No Transactions yet' }}
+                      {{
+                        search() || direction() !== 'All'
+                          ? 'No matching Transactions'
+                          : schedule()
+                            ? 'No generated Transactions to show'
+                            : 'No Transactions yet'
+                      }}
                     </h2>
                     <p>
                       {{
@@ -651,18 +716,46 @@
           @if (screen() === 'goal') {
             <div class="goal-composition">
               <section class="balance-summary goal-summary">
+                <div class="goal-statuses">
+                  <span class="goal-badge goal-progress">{{ goalStatus() }}</span>
+                  @if (goalCurrent() > 50000) {
+                    <span class="goal-badge goal-over">↑ Over target · {{ money(goalCurrent() - 50000) }}</span>
+                  } @else if (goalCurrent() === 50000) {
+                    <span class="goal-badge goal-reached">✓ Target reached</span>
+                  } @else {
+                    <span class="goal-badge goal-progress">◔ In progress</span>
+                  }
+                  @if (scenario() === 'overdue') {
+                    <span class="goal-badge goal-overdue">! Target overdue</span>
+                  }
+                </div>
                 <span>Earmarked toward your Goal</span>
-                <strong class="balance">₱{{ scenario() === 'empty' ? '0.00' : '35,000.00' }}</strong>
+                <strong class="balance">{{ money(goalCurrent()) }}</strong>
                 <p>of ₱50,000.00 target</p>
                 <progress
-                  [value]="scenario() === 'empty' ? 0 : 70"
+                  [value]="goalCurrent() / 500"
                   max="100"
                   aria-label="Goal progress"
                 ></progress>
                 <div class="split">
-                  <strong>{{ scenario() === 'empty' ? '0%' : '70%' }}</strong>
-                  <span>₱{{ scenario() === 'empty' ? '50,000' : '15,000' }} remaining</span>
+                  <strong>{{ goalCurrent() / 500 }}%</strong>
+                  <span>
+                    {{
+                      goalCurrent() > 50000
+                        ? money(goalCurrent() - 50000) + ' over target'
+                        : goalCurrent() === 50000
+                          ? 'Target reached'
+                          : money(50000 - goalCurrent()) + ' to go'
+                    }}
+                  </span>
                 </div>
+                @if (goalStatus() === 'Active') {
+                  <p [class.goal-date-overdue]="scenario() === 'overdue'">
+                    Target date {{ scenario() === 'overdue' ? '1 Sep 2026 · Overdue' : '31 Dec 2026' }}
+                  </p>
+                } @else {
+                  <p>Mark active to add more Contributions. Existing Contributions stay earmarked.</p>
+                }
                 <p class="explanation">Contributions earmark money already in your Accounts. They do not move it.</p>
               </section>
               <section class="panel contributions">
@@ -682,7 +775,7 @@
                     </button>
                   </section>
                 } @else {
-                  @for (amount of [15000, 12500, 7500]; track amount; let i = $index) {
+                  @for (amount of contributionAmounts(); track $index; let i = $index) {
                     <article class="contribution-row">
                       <div>
                         <strong>
@@ -928,7 +1021,7 @@
             <input placeholder="Add a tag" />
           </label>
         } @else if (editor() === 'Edit linked contribution') {
-          <p>From Monthly salary · ₱15,000.00 · Everyday Bank</p>
+          <p>From Monthly salary · {{ money(contributionAmounts()[0]) }} · Everyday Bank</p>
           <p>The amount and Transaction link are fixed. Delete and create another Contribution to change them.</p>
           <label>
             Contribution date
@@ -943,22 +1036,26 @@
           </label>
         } @else if (editor().toLowerCase().includes('contribution')) {
           <p>Earmark money toward Rainy day fund.</p>
-          <label>
-            Account
-            <select>
-              <option>Everyday Bank · available ₱33,200.50</option>
-              <option>Travel fund · available ₱7,900.00</option>
-            </select>
-          </label>
-          <label>
-            Amount (₱)
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              required
-            />
-          </label>
+          @if (editor() === 'Edit contribution') {
+            <p>Account and amount are fixed. Edit the Contribution date and note only.</p>
+          } @else {
+            <label>
+              Account
+              <select>
+                <option>Everyday Bank · available ₱33,200.50</option>
+                <option>Travel fund · available ₱7,900.00</option>
+              </select>
+            </label>
+            <label>
+              Amount (₱)
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+              />
+            </label>
+          }
           <label>
             Contribution date
             <input

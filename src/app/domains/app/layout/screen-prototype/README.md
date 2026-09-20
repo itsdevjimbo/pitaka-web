@@ -1,5 +1,7 @@
 # Pocket Pop screen layouts — throwaway review
 
+**Final review:** all compositions and the Goal-status treatment are confirmed. See [FINAL-REVIEW.md](FINAL-REVIEW.md) for the approved matrix, final evidence and explicit handoff limits. It supersedes provisional status and remaining-layout checklists below and in STAGE-TWO.
+
 **Current status:** the user selected **A for Accounts, Transactions, Schedules, Categories, Tags, Profile and sign-in; B for Account detail and Goal detail; C for Budgets and Goals list, without the narrow centered container**. Sign-up inherits A; recovery and confirmation use compact centered cards. Sidebar headings and the phone More panel are approved. Open `?variant=selected` (or omit `variant`) to carry this mix between routes. Explicit A/B/C URLs retain the original comparisons. The earlier compact card grid was a misinterpretation and is superseded; the selected planning design now preserves C and changes only its container width/alignment. Final layout validation is still open. See [the current stage-two review and coverage matrix](STAGE-TWO.md).
 
 ## Historical first-stage record

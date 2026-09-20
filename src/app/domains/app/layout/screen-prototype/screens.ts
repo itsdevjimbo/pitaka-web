@@ -23,6 +23,21 @@ export default class ScreenPrototype {
   readonly search = signal('');
   readonly accountStatus = signal('Active');
   readonly direction = signal('All');
+  readonly schedule = signal('');
+  readonly scheduleName = signal('');
+  readonly goalStatus = computed(() =>
+    this.scenario() === 'completed' ? 'Completed' : this.scenario() === 'abandoned' ? 'Abandoned' : 'Active',
+  );
+  readonly goalCurrent = computed(() =>
+    this.scenario() === 'empty'
+      ? 0
+      : ['success', 'completed'].includes(this.scenario())
+        ? 50000
+        : this.scenario() === 'over'
+          ? 52000
+          : 35000,
+  );
+  readonly contributionAmounts = computed(() => [this.goalCurrent() - 20000, 12500, 7500]);
   readonly more = signal(false);
   readonly userMenu = signal(false);
   readonly filters = signal(false);
@@ -146,6 +161,7 @@ export default class ScreenPrototype {
       direction: 'Income',
       note: 'September salary',
       tags: 'Work',
+      schedule: 'Monthly salary',
     },
     {
       name: 'Groceries for the week',
@@ -206,6 +222,7 @@ export default class ScreenPrototype {
         : this.allRows;
     return base.filter(
       (r) =>
+        (!this.schedule() || !!r.schedule) &&
         (this.direction() === 'All' || r.direction === this.direction()) &&
         `${r.name} ${r.note} ${r.account} ${r.tags}`.toLowerCase().includes(this.search().toLowerCase()),
     );
@@ -217,6 +234,8 @@ export default class ScreenPrototype {
       this.accountStatus.set(q.get('status') || (q.get('case') === 'retired' ? 'Retired' : 'Active'));
       this.search.set(q.get('search') || '');
       this.direction.set(q.get('direction') || 'All');
+      this.schedule.set(q.get('schedule') || '');
+      this.scheduleName.set(q.get('scheduleName') || 'Unknown Schedule');
       const path = this.router.url.split('?')[0];
       this.screen.set(Object.entries(this.paths).find(([, value]) => value === path)?.[0] || 'accounts');
       this.composition.set(q.get('variant') || 'selected');
@@ -243,11 +262,25 @@ export default class ScreenPrototype {
       return;
     }
     this.router.navigate([this.paths[screen]], {
-      queryParams: { variant: this.composition(), scheme: this.scheme(), case: this.scenario() },
+      queryParams: {
+        variant: this.composition(),
+        scheme: this.scheme(),
+        case: this.scenario(),
+        ...(screen === 'transactions' && this.screen() === 'schedules'
+          ? { schedule: 'sample-salary', scheduleName: 'Monthly salary' }
+          : {}),
+      },
     });
   }
   cycle(offset: number) {
     this.set('variant', ['A', 'B', 'C'][(['A', 'B', 'C'].indexOf(this.variant()) + offset + 3) % 3]);
+  }
+  clearSchedule() {
+    this.router.navigate([], {
+      queryParams: { schedule: null, scheduleName: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
   @HostListener('window:keydown', ['$event']) keyboard(e: KeyboardEvent) {
     if ((e.target as HTMLElement).closest('input,textarea,select,[contenteditable],dialog') || this.editor()) return;
