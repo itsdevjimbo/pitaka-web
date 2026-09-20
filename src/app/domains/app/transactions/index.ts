@@ -12,17 +12,23 @@ export type {
   TransactionDirection,
   TransferDestinationAccount,
 } from './data/transaction';
+export type {
+  LinkedContributionAccount,
+  TransactionLinkedContribution,
+  TransactionLinkedContributions,
+} from './data/linked-contribution';
 export type { RecordTransactionDialogData } from './ui/record-transaction-dialog';
 export type { RefileTransactionDialogData } from './ui/refile-transaction-dialog';
 export { TransactionsService } from './data/transactions.service';
 export { RecordTransactionDialog } from './ui/record-transaction-dialog';
 export { RefileTransactionDialog } from './ui/refile-transaction-dialog';
-export {
-  TransactionRow,
-  toAccountRow,
-  toSpanningRow,
-} from './ui/transaction-row';
+export { TransactionSplitContextStore } from './ui/transaction-split-context';
 export type {
-  TransactionRowModel,
-  TransactionRowReading,
-} from './ui/transaction-row';
+  TransactionSplitAvailability,
+  TransactionSplitContext,
+  TransactionSplitContextState,
+  TransactionSplitHistoryContext,
+  TransactionSplitUnavailableReason,
+} from './ui/transaction-split-context';
+export { TransactionRow, toAccountRow, toSpanningRow } from './ui/transaction-row';
+export type { TransactionRowModel, TransactionRowReading } from './ui/transaction-row';
