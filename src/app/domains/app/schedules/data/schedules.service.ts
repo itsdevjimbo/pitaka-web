@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
@@ -84,7 +85,7 @@ export class SchedulesService {
       })
       .pipe(
         map(toSchedule),
-        catchError((error: unknown) => throwError(() => toScheduleError(error))),
+        catchError((error: unknown) => throwError(() => toScheduleError(error, schedule))),
       );
   }
 }
@@ -123,7 +124,7 @@ function toDateOnly(value: Date): string {
 }
 
 /** Keep API field names and recurring-transaction wording inside this adapter. */
-function toScheduleError(error: unknown): unknown {
+function toScheduleError(error: unknown, schedule: NewSchedule): unknown {
   if (!(error instanceof ApiError)) return error;
 
   if (error.status === 409 && DUPLICATE_NAME.test(error.message)) {
@@ -133,7 +134,28 @@ function toScheduleError(error: unknown): unknown {
 
   const fieldErrors: Record<string, readonly string[]> = {};
   for (const [field, messages] of Object.entries(error.fieldErrors)) {
-    fieldErrors[API_FIELD_TO_PRODUCT_FIELD[field] ?? field] = messages;
+    const productField = API_FIELD_TO_PRODUCT_FIELD[field] ?? field;
+    fieldErrors[productField] = scheduleFieldErrors(productField, messages, schedule);
   }
   return new ApiError(error.message, error.status, fieldErrors);
+}
+
+function scheduleFieldErrors(field: string, messages: readonly string[], schedule: NewSchedule): readonly string[] {
+  if (messages.length === 0) return messages;
+  if (field === 'firstGeneration') return [minimumMessage(firstGenerationMinimum())];
+  if (field === 'lastGeneration') return [minimumMessage(addCalendarDays(schedule.firstGeneration, 1))];
+  return messages;
+}
+
+/** Tomorrow in the UTC calendar, represented as the same local calendar day. */
+function firstGenerationMinimum(now = new Date()): Date {
+  return new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+}
+
+function addCalendarDays(value: Date, count: number): Date {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate() + count);
+}
+
+function minimumMessage(minimum: Date): string {
+  return `Choose ${formatDate(minimum, 'd MMM y', 'en-US')} or later`;
 }
