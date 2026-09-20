@@ -41,6 +41,15 @@ export type NewSchedule = {
   lastGeneration: Date | null;
 };
 
+/** The details that may change without replacing a Schedule's identity or Frequency. */
+export type ScheduleUpdate = {
+  name: string;
+  amount: number;
+  categoryId: number | null;
+  description: string | null;
+  lastGeneration: Date | null;
+};
+
 export const SCHEDULE_NAME_MAX = 255;
 export const SCHEDULE_AMOUNT_MIN = 0.01;
 export const SCHEDULE_AMOUNT_MAX = 999_999_999_999.99;

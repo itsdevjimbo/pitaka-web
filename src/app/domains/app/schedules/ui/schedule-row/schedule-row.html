@@ -36,6 +36,16 @@
       {{ frequencies[row().schedule.frequency] }}
     </p>
   </div>
+  @if (row().schedule.status === 'active' || row().schedule.status === 'paused') {
+    <button
+      matButton="outlined"
+      type="button"
+      [disabled]="writeDisabled()"
+      (click)="edit.emit(row())"
+    >
+      Edit
+    </button>
+  }
 </div>
 
 <dl class="mt-4 grid gap-3 border-t border-neutral-200 pt-3 text-sm sm:grid-cols-2 dark:border-neutral-800">

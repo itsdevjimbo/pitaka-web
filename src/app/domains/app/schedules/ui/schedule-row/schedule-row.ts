@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
-import { Component, input } from '@angular/core';
+import { Component, input, output } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import { PesoPipe } from '@/app/core/money';
 import { Schedule, SCHEDULE_FREQUENCIES } from '../../data/schedule';
 
@@ -16,7 +17,7 @@ export type ScheduleRowData = {
 @Component({
   selector: 'li[schedules-schedule-row]',
   templateUrl: './schedule-row.html',
-  imports: [DatePipe, PesoPipe],
+  imports: [DatePipe, MatButtonModule, PesoPipe],
   host: {
     class:
       'relative mb-6 block rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs last:mb-0 dark:border-neutral-800 dark:bg-neutral-950',
@@ -24,6 +25,8 @@ export type ScheduleRowData = {
 })
 export class ScheduleRow {
   readonly row = input.required<ScheduleRowData>();
+  readonly writeDisabled = input(false);
+  readonly edit = output<ScheduleRowData>();
 
   protected readonly frequencies = SCHEDULE_FREQUENCIES;
 

@@ -1,9 +1,16 @@
-import { formatDate } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
-import { NewSchedule, Schedule, ScheduleDirection, ScheduleFrequency, ScheduleStatus } from './schedule';
+import {
+  NewSchedule,
+  Schedule,
+  ScheduleDirection,
+  ScheduleFrequency,
+  ScheduleStatus,
+  ScheduleUpdate,
+} from './schedule';
+import { addCalendarDays, formatCalendarDate } from './schedule-calendar';
 
 /** The API resource. Its recurring-transaction vocabulary ends at this adapter. */
 type RecurringTransactionResource = {
@@ -88,6 +95,22 @@ export class SchedulesService {
         catchError((error: unknown) => throwError(() => toScheduleError(error, schedule))),
       );
   }
+
+  /** Update only the details the API permits to change on an existing Schedule. */
+  update(id: number, changes: ScheduleUpdate): Observable<Schedule> {
+    return this.http
+      .put<RecurringTransactionResource>(`${this.baseUrl}/api/recurring-transactions/${id}`, {
+        name: changes.name,
+        amount: changes.amount,
+        categoryId: changes.categoryId,
+        description: changes.description,
+        endDate: changes.lastGeneration === null ? null : toDateOnly(changes.lastGeneration),
+      })
+      .pipe(
+        map(toSchedule),
+        catchError((error: unknown) => throwError(() => toScheduleError(error))),
+      );
+  }
 }
 
 function toSchedule(resource: RecurringTransactionResource): Schedule {
@@ -124,7 +147,7 @@ function toDateOnly(value: Date): string {
 }
 
 /** Keep API field names and recurring-transaction wording inside this adapter. */
-function toScheduleError(error: unknown, schedule: NewSchedule): unknown {
+function toScheduleError(error: unknown, schedule?: NewSchedule): unknown {
   if (!(error instanceof ApiError)) return error;
 
   if (error.status === 409 && DUPLICATE_NAME.test(error.message)) {
@@ -135,7 +158,7 @@ function toScheduleError(error: unknown, schedule: NewSchedule): unknown {
   const fieldErrors: Record<string, readonly string[]> = {};
   for (const [field, messages] of Object.entries(error.fieldErrors)) {
     const productField = API_FIELD_TO_PRODUCT_FIELD[field] ?? field;
-    fieldErrors[productField] = scheduleFieldErrors(productField, messages, schedule);
+    fieldErrors[productField] = schedule ? scheduleFieldErrors(productField, messages, schedule) : messages;
   }
   return new ApiError(error.message, error.status, fieldErrors);
 }
@@ -152,10 +175,6 @@ function firstGenerationMinimum(now = new Date()): Date {
   return new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
 }
 
-function addCalendarDays(value: Date, count: number): Date {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate() + count);
-}
-
 function minimumMessage(minimum: Date): string {
-  return `Choose ${formatDate(minimum, 'd MMM y', 'en-US')} or later`;
+  return `Choose ${formatCalendarDate(minimum)} or later`;
 }
