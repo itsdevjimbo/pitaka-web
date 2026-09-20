@@ -25,9 +25,9 @@ Outfit and DM Sans are included as possible display faces; try pairing with Geis
 
 ## Live discussion
 
-User agreed: warm and lightly playful welcomes, empty states, and celebrations; direct money, error, and destructive-action language. Selected mark: Pocket p. Wordmark: capitalized Pitaka. Outfit is used for the wordmark and headings; Geist for interface text and amounts. Symbol-only use in favicons and compact navigation, plus light/dark/monochrome treatments, was agreed with the capitalization correction. Tagline remains undecided. Defaults now show the selected pairing.
+User agreed: warm and lightly playful welcomes, empty states, and celebrations; direct money, error, and destructive-action language. Selected mark: Pocket p. Wordmark: capitalized Pitaka. Outfit is used for the wordmark and headings; Geist for interface text and amounts. Symbol-only use in favicons and compact navigation, plus light/dark/monochrome treatments, was agreed with the capitalization correction. User chose flexible, screen-specific copy with no permanent tagline. Defaults now show the selected pairing.
 
 Map: https://github.com/itsdevjimbo/pitaka-web/issues/216
 Decision: https://github.com/itsdevjimbo/pitaka-web/issues/217
 
-Do not merge this branch into production. Capture the final decision on the decision ticket after user review.
+Do not merge this branch into production. The canonical identity resolution is recorded on the decision ticket. This branch is visual evidence, not a production implementation.
