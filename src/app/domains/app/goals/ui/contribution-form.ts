@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField, max, min, required, submit, validate } from '@angular/forms/signals';
@@ -29,6 +30,7 @@ type ContributionModel = { accountId: number | null; amount: number | null; cont
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    DatePipe,
     PesoPipe,
     FormField,
   ],
@@ -113,7 +115,6 @@ export class ContributionForm {
           if (existing) {
             await firstValueFrom(
               this.contributions.update(existing.id, {
-                contributionDate: value.contributionDate,
                 note: value.note.trim() || null,
               } satisfies UpdateGoalContribution),
             );

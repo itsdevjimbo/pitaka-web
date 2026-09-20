@@ -19,8 +19,7 @@ export type NewGoalContribution = {
   note: string | null;
 };
 
-/** The two Contribution fields the API permits a person to correct. */
+/** The one Contribution field the API permits a person to correct. */
 export type UpdateGoalContribution = {
-  contributionDate: Date;
   note: string | null;
 };

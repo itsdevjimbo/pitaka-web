@@ -5,15 +5,13 @@ import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
+import { AccountsService } from '@/app/domains/app/accounts';
+import { ContributionDeletionCoordinator, GoalContributionsService, GoalsService } from '@/app/domains/app/goals';
 import { withOverlayContainer } from '@/testing/overlay';
+import { TransactionLinkedContributions } from '../data/linked-contribution';
 import { Transaction } from '../data/transaction';
 import { TransactionsService } from '../data/transactions.service';
-import {
-  TransactionRow,
-  TransactionRowModel,
-  toAccountRow,
-  toSpanningRow,
-} from './transaction-row';
+import { TransactionRow, TransactionRowModel, toAccountRow, toSpanningRow } from './transaction-row';
 
 const NAMES = new Map<number, string>([
   [1, 'Groceries'],
@@ -41,6 +39,45 @@ function tx(over: Partial<Transaction> = {}): Transaction {
   };
 }
 
+function linkedSnapshot(): TransactionLinkedContributions {
+  return {
+    transactionId: 42,
+    transactionAmount: 500,
+    linkedTotal: 300,
+    remainingCapacity: 200,
+    account: {
+      id: 3,
+      name: 'Everyday cash',
+      currentBalance: 1000,
+      earmarkedTotal: 300,
+      availableHeadroom: 700,
+      active: true,
+    },
+    linkedContributions: [
+      {
+        id: 91,
+        goalId: 2,
+        goalName: 'Emergency fund',
+        accountId: 3,
+        transactionId: 42,
+        amount: 150,
+        contributionDate: new Date(2026, 8, 15),
+        note: 'First slice',
+      },
+      {
+        id: 92,
+        goalId: 2,
+        goalName: 'Emergency fund',
+        accountId: 3,
+        transactionId: 42,
+        amount: 150,
+        contributionDate: new Date(2026, 8, 16),
+        note: null,
+      },
+    ],
+  };
+}
+
 /**
  * The two pure builders that turn a domain {@link Transaction} into the finished
  * row. Both resolve the Category name through the caller's shared cache and
@@ -49,38 +86,24 @@ function tx(over: Partial<Transaction> = {}): Transaction {
  */
 describe('toAccountRow', () => {
   it('resolves the Category name from the shared cache', () => {
-    expect(toAccountRow(tx({ categoryId: 2 }), NAMES, 3).categoryName).toBe(
-      'Salary'
-    );
+    expect(toAccountRow(tx({ categoryId: 2 }), NAMES, 3).categoryName).toBe('Salary');
   });
 
   it('labels an uncategorised income or expense rather than leaving it blank', () => {
-    expect(toAccountRow(tx({ categoryId: null }), NAMES, 3).categoryName).toBe(
-      'Uncategorised'
-    );
-    expect(toAccountRow(tx({ categoryId: 999 }), NAMES, 3).categoryName).toBe(
-      'Uncategorised'
-    );
+    expect(toAccountRow(tx({ categoryId: null }), NAMES, 3).categoryName).toBe('Uncategorised');
+    expect(toAccountRow(tx({ categoryId: 999 }), NAMES, 3).categoryName).toBe('Uncategorised');
   });
 
   it('heads a row with its note when it has one', () => {
-    expect(toAccountRow(tx({ description: 'Coffee' }), NAMES, 3).headline).toBe(
-      'Coffee'
-    );
+    expect(toAccountRow(tx({ description: 'Coffee' }), NAMES, 3).headline).toBe('Coffee');
   });
 
   it('falls back to the Category for an un-noted income or expense', () => {
-    expect(
-      toAccountRow(tx({ description: null, categoryId: 1 }), NAMES, 3).headline
-    ).toBe('Groceries');
+    expect(toAccountRow(tx({ description: null, categoryId: 1 }), NAMES, 3).headline).toBe('Groceries');
   });
 
   it('never heads a Transfer with a Category label, even with no note', () => {
-    const row = toAccountRow(
-      tx({ direction: 'transfer', description: null, categoryId: null }),
-      NAMES,
-      3
-    );
+    const row = toAccountRow(tx({ direction: 'transfer', description: null, categoryId: null }), NAMES, 3);
 
     expect(row.headline).toBe('Transfer');
   });
@@ -107,13 +130,13 @@ describe('toAccountRow', () => {
       tx({ direction: 'transfer', accountId: 3, transferToAccountId: 9 }),
       NAMES,
       3,
-      ACCOUNT_NAMES
+      ACCOUNT_NAMES,
     );
     const landing = toAccountRow(
       tx({ direction: 'transfer', accountId: 9, transferToAccountId: 3 }),
       NAMES,
       3,
-      ACCOUNT_NAMES
+      ACCOUNT_NAMES,
     );
 
     expect(leaving.reading).toEqual({
@@ -133,14 +156,9 @@ describe('toAccountRow', () => {
       tx({ direction: 'transfer', accountId: 3, transferToAccountId: 9 }),
       NAMES,
       3,
-      ACCOUNT_NAMES
+      ACCOUNT_NAMES,
     );
-    const expense = toAccountRow(
-      tx({ direction: 'expense' }),
-      NAMES,
-      3,
-      ACCOUNT_NAMES
-    );
+    const expense = toAccountRow(tx({ direction: 'expense' }), NAMES, 3, ACCOUNT_NAMES);
 
     expect(leaving.reading).toMatchObject({ recordedAgainst: null });
     expect(expense.reading).toMatchObject({ recordedAgainst: null });
@@ -151,7 +169,7 @@ describe('toAccountRow', () => {
       tx({ direction: 'transfer', accountId: 42, transferToAccountId: 3 }),
       NAMES,
       3,
-      ACCOUNT_NAMES
+      ACCOUNT_NAMES,
     );
 
     expect(landing.reading).toMatchObject({
@@ -169,11 +187,7 @@ describe('toSpanningRow', () => {
   });
 
   it('never heads a Transfer with a Category label', () => {
-    const row = toSpanningRow(
-      tx({ direction: 'transfer', description: null, categoryId: null }),
-      NAMES,
-      ACCOUNT_NAMES
-    );
+    const row = toSpanningRow(tx({ direction: 'transfer', description: null, categoryId: null }), NAMES, ACCOUNT_NAMES);
 
     expect(row.headline).toBe('Transfer');
   });
@@ -186,11 +200,7 @@ describe('toSpanningRow', () => {
   });
 
   it('names the row’s own Account on every row', () => {
-    const income = toSpanningRow(
-      tx({ direction: 'income', accountId: 9 }),
-      NAMES,
-      ACCOUNT_NAMES
-    );
+    const income = toSpanningRow(tx({ direction: 'income', accountId: 9 }), NAMES, ACCOUNT_NAMES);
 
     expect(income.reading).toEqual({
       kind: 'spanning',
@@ -208,7 +218,7 @@ describe('toSpanningRow', () => {
         categoryId: null,
       }),
       NAMES,
-      ACCOUNT_NAMES
+      ACCOUNT_NAMES,
     );
 
     expect(transfer.reading).toEqual({
@@ -227,7 +237,7 @@ describe('toSpanningRow', () => {
         categoryId: null,
       }),
       NAMES,
-      ACCOUNT_NAMES
+      ACCOUNT_NAMES,
     );
 
     expect(transfer.reading).toEqual({
@@ -238,18 +248,27 @@ describe('toSpanningRow', () => {
   });
 
   it('leaves transferTo null on an income or an expense', () => {
-    expect(
-      toSpanningRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES).reading
-    ).toMatchObject({ transferTo: null });
+    expect(toSpanningRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES).reading).toMatchObject({
+      transferTo: null,
+    });
   });
 });
 
 describe('TransactionRow', () => {
   const overlay = withOverlayContainer();
 
+  type LinkedOverrides = {
+    deleteContribution?: GoalContributionsService['delete'];
+    goalHistory?: GoalContributionsService['list'];
+    goal?: GoalsService['get'];
+    accounts?: AccountsService['all'];
+  };
+
   function renderFixture(
     row: TransactionRowModel,
-    remove: TransactionsService['remove'] = () => of(undefined)
+    remove: TransactionsService['remove'] = () => of(undefined),
+    linkedContributions: TransactionsService['linkedContributions'] = () => of(linkedSnapshot()),
+    linked: LinkedOverrides = {},
   ) {
     TestBed.configureTestingModule({
       imports: [TransactionRow],
@@ -257,7 +276,17 @@ describe('TransactionRow', () => {
         provideIcons(),
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: TransactionsService, useValue: { remove } },
+        { provide: TransactionsService, useValue: { remove, linkedContributions } },
+        ContributionDeletionCoordinator,
+        {
+          provide: GoalContributionsService,
+          useValue: {
+            delete: linked.deleteContribution ?? (() => of(undefined)),
+            list: linked.goalHistory ?? (() => of([])),
+          },
+        },
+        { provide: GoalsService, useValue: { get: linked.goal ?? (() => of({})) } },
+        { provide: AccountsService, useValue: { all: linked.accounts ?? (() => of([])) } },
       ],
     });
     const fixture = TestBed.createComponent(TransactionRow);
@@ -277,15 +306,12 @@ describe('TransactionRow', () => {
   /** The ellipsis trigger a row shows when it can be acted on here. */
   function actionsTrigger(host: HTMLElement) {
     return Array.from(host.querySelectorAll('button')).find(
-      (b) => b.getAttribute('aria-label') === 'Transaction actions'
+      (b) => b.getAttribute('aria-label') === 'Transaction actions',
     );
   }
 
   /** Open the row's actions menu and return the menu items now in the overlay. */
-  function openMenu(fixture: {
-    nativeElement: unknown;
-    detectChanges(): void;
-  }) {
+  function openMenu(fixture: { nativeElement: unknown; detectChanges(): void }) {
     actionsTrigger(fixture.nativeElement as HTMLElement)?.click();
     fixture.detectChanges();
     return Array.from(overlay().querySelectorAll<HTMLButtonElement>('button'));
@@ -297,10 +323,188 @@ describe('TransactionRow', () => {
 
   /** A button anywhere in the row host, matched by exact trimmed text. */
   function rowButton(host: HTMLElement, label: string) {
-    return Array.from(host.querySelectorAll('button')).find(
-      (b) => (b.textContent ?? '').trim() === label
-    );
+    return Array.from(host.querySelectorAll('button')).find((b) => (b.textContent ?? '').trim() === label);
   }
+
+  it('progressively reveals every Linked Contribution, including repeated Goals', async () => {
+    const fixture = renderFixture(
+      toSpanningRow(tx({ id: 42, direction: 'income', amount: 500, categoryId: 2 }), NAMES, ACCOUNT_NAMES),
+      () => of(undefined),
+      () => of(linkedSnapshot()),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    rowButton(host, 'Show contributions')?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain(`${formatPeso(300)} earmarked`);
+    expect(host.textContent).toContain(`${formatPeso(200)} remaining`);
+    expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(2);
+    expect(host.textContent?.match(/Emergency fund/g)?.length).toBe(2);
+    expect(host.textContent).toContain('15 Sep 2026');
+    expect(host.textContent).toContain('First slice');
+    const goalLinks = Array.from(host.querySelectorAll('a')).filter((link) =>
+      (link.textContent ?? '').includes('Emergency fund'),
+    );
+    expect(goalLinks.map((link) => link.getAttribute('href'))).toEqual(['/app/goals/2', '/app/goals/2']);
+  });
+
+  it('confirms an individual deletion, disables it while pending, and refreshes every affected fact', async () => {
+    const pending = new Subject<void>();
+    const removeContribution = vi.fn(() => pending.asObservable());
+    const linkedRead = vi
+      .fn()
+      .mockReturnValueOnce(of(linkedSnapshot()))
+      .mockReturnValueOnce(
+        of({
+          ...linkedSnapshot(),
+          linkedTotal: 150,
+          remainingCapacity: 350,
+          linkedContributions: [linkedSnapshot().linkedContributions[1]],
+        }),
+      );
+    const goal = vi.fn(() =>
+      of({
+        id: 2,
+        name: 'Emergency fund',
+        targetAmount: 1000,
+        targetDate: null,
+        status: 'Active' as const,
+        currentAmount: 150,
+      }),
+    );
+    const goalHistory = vi.fn(() => of([]));
+    const fixture = renderFixture(
+      toSpanningRow(tx({ id: 42, direction: 'income', categoryId: 2 }), NAMES, ACCOUNT_NAMES),
+      () => of(undefined),
+      linkedRead,
+      { deleteContribution: removeContribution, goal, goalHistory },
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    rowButton(host, 'Show contributions')?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    rowButton(host, 'Delete contribution')?.click();
+    fixture.detectChanges();
+    expect(host.querySelector('[aria-label="Confirm contribution deletion"]')).not.toBeNull();
+    expect(removeContribution).not.toHaveBeenCalled();
+
+    rowButton(host, 'Delete')?.click();
+    fixture.detectChanges();
+    expect(removeContribution).toHaveBeenCalledWith(91);
+    expect(rowButton(host, 'Deleting…')?.disabled).toBe(true);
+    expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(2);
+
+    pending.next();
+    pending.complete();
+    await Promise.resolve();
+    await Promise.resolve();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(linkedRead).toHaveBeenCalledTimes(2);
+    expect(goal).toHaveBeenCalledWith(2);
+    expect(goalHistory).toHaveBeenCalledWith(2);
+    expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(1);
+    expect(host.textContent).toContain(`${formatPeso(350)} remaining`);
+    expect(host.textContent).toContain(`${formatPeso(150)} across 0 Contributions`);
+  });
+
+  it('keeps an ambiguously deleted row visible until an explicit retry establishes absence', async () => {
+    let attempts = 0;
+    const removeContribution = vi.fn(() => {
+      attempts += 1;
+      return throwError(() =>
+        attempts === 1 ? new ApiError('The request timed out.', 504) : new ApiError('Missing', 404),
+      );
+    });
+    const linkedRead = vi
+      .fn()
+      .mockReturnValueOnce(of(linkedSnapshot()))
+      .mockReturnValueOnce(
+        of({
+          ...linkedSnapshot(),
+          linkedTotal: 150,
+          remainingCapacity: 350,
+          linkedContributions: [linkedSnapshot().linkedContributions[1]],
+        }),
+      );
+    const fixture = renderFixture(
+      toSpanningRow(tx({ id: 42, direction: 'income', categoryId: 2 }), NAMES, ACCOUNT_NAMES),
+      () => of(undefined),
+      linkedRead,
+      { deleteContribution: removeContribution },
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    rowButton(host, 'Show contributions')?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    rowButton(host, 'Delete contribution')?.click();
+    fixture.detectChanges();
+    rowButton(host, 'Delete')?.click();
+    await Promise.resolve();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('The request timed out.');
+    expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(2);
+
+    rowButton(host, 'Retry deletion')?.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(removeContribution).toHaveBeenCalledTimes(2);
+    expect(linkedRead).toHaveBeenCalledTimes(2);
+    expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(1);
+  });
+
+  it('never retries deletion after a failed facts refresh and keeps stale history until refresh succeeds', async () => {
+    const removeContribution = vi.fn(() => of(undefined));
+    const refreshed = {
+      ...linkedSnapshot(),
+      linkedTotal: 150,
+      remainingCapacity: 350,
+      linkedContributions: [linkedSnapshot().linkedContributions[1]],
+    };
+    const linkedRead = vi
+      .fn()
+      .mockReturnValueOnce(of(linkedSnapshot()))
+      .mockReturnValueOnce(throwError(() => new ApiError('Refresh failed', 503)))
+      .mockReturnValueOnce(of(refreshed));
+    const fixture = renderFixture(
+      toSpanningRow(tx({ id: 42, direction: 'income', categoryId: 2 }), NAMES, ACCOUNT_NAMES),
+      () => of(undefined),
+      linkedRead,
+      { deleteContribution: removeContribution },
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    rowButton(host, 'Show contributions')?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    rowButton(host, 'Delete contribution')?.click();
+    fixture.detectChanges();
+    rowButton(host, 'Delete')?.click();
+    await Promise.resolve();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('latest Transaction, Account, and Goal details could not be loaded');
+    expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(2);
+    expect(removeContribution).toHaveBeenCalledTimes(1);
+
+    rowButton(host, 'Try refresh again')?.click();
+    await Promise.resolve();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(removeContribution).toHaveBeenCalledTimes(1);
+    expect(linkedRead).toHaveBeenCalledTimes(3);
+    expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(1);
+  });
 
   it('shows the date and time, the direction, the Category, and a signed amount', () => {
     const text = render(
@@ -311,8 +515,8 @@ describe('TransactionRow', () => {
           date: new Date('2026-08-29T14:05:00'),
         }),
         NAMES,
-        3
-      )
+        3,
+      ),
     );
 
     expect(text).toContain('29 Aug 2026');
@@ -332,8 +536,8 @@ describe('TransactionRow', () => {
           date: new Date('2026-08-29T00:00:00'),
         }),
         NAMES,
-        3
-      )
+        3,
+      ),
     );
 
     expect(text).toContain('Generated');
@@ -351,8 +555,8 @@ describe('TransactionRow', () => {
           transferToAccountId: 9,
         }),
         NAMES,
-        3
-      )
+        3,
+      ),
     );
 
     expect(text).toContain('Transfer');
@@ -371,38 +575,26 @@ describe('TransactionRow', () => {
         }),
         NAMES,
         3,
-        ACCOUNT_NAMES
-      )
+        ACCOUNT_NAMES,
+      ),
     );
 
     expect(host.textContent).toContain('Recorded against');
-    const link = Array.from(host.querySelectorAll('a')).find((a) =>
-      (a.textContent ?? '').includes('Savings')
-    );
+    const link = Array.from(host.querySelectorAll('a')).find((a) => (a.textContent ?? '').includes('Savings'));
     expect(link?.getAttribute('href')).toBe('/app/accounts/9');
   });
 
   describe('the spanning reading', () => {
     it('renders an income with a plus', () => {
       const text = render(
-        toSpanningRow(
-          tx({ direction: 'income', amount: 1000, categoryId: 2 }),
-          NAMES,
-          ACCOUNT_NAMES
-        )
+        toSpanningRow(tx({ direction: 'income', amount: 1000, categoryId: 2 }), NAMES, ACCOUNT_NAMES),
       );
 
       expect(text).toContain(`+${formatPeso(1000)}`);
     });
 
     it('renders an expense with a minus', () => {
-      const text = render(
-        toSpanningRow(
-          tx({ direction: 'expense', amount: 250 }),
-          NAMES,
-          ACCOUNT_NAMES
-        )
-      );
+      const text = render(toSpanningRow(tx({ direction: 'expense', amount: 250 }), NAMES, ACCOUNT_NAMES));
 
       expect(text).toContain(formatPeso(-250));
     });
@@ -418,8 +610,8 @@ describe('TransactionRow', () => {
             categoryId: null,
           }),
           NAMES,
-          ACCOUNT_NAMES
-        )
+          ACCOUNT_NAMES,
+        ),
       );
 
       expect(text).toContain(formatPeso(500));
@@ -429,16 +621,10 @@ describe('TransactionRow', () => {
 
     it('names the row’s own Account and links to it, without making the row a link', () => {
       const host = renderElement(
-        toSpanningRow(
-          tx({ direction: 'expense', accountId: 9, description: 'Coffee' }),
-          NAMES,
-          ACCOUNT_NAMES
-        )
+        toSpanningRow(tx({ direction: 'expense', accountId: 9, description: 'Coffee' }), NAMES, ACCOUNT_NAMES),
       );
 
-      const link = Array.from(host.querySelectorAll('a')).find((a) =>
-        (a.textContent ?? '').includes('Savings')
-      );
+      const link = Array.from(host.querySelectorAll('a')).find((a) => (a.textContent ?? '').includes('Savings'));
       expect(link?.getAttribute('href')).toBe('/app/accounts/9');
       // The row's own element is a list item, not an anchor.
       expect(host.closest('a')).toBeNull();
@@ -454,13 +640,11 @@ describe('TransactionRow', () => {
             categoryId: null,
           }),
           NAMES,
-          ACCOUNT_NAMES
-        )
+          ACCOUNT_NAMES,
+        ),
       );
 
-      const hrefs = Array.from(host.querySelectorAll('a')).map((a) =>
-        a.getAttribute('href')
-      );
+      const hrefs = Array.from(host.querySelectorAll('a')).map((a) => a.getAttribute('href'));
       expect(hrefs).toContain('/app/accounts/3');
       expect(hrefs).toContain('/app/accounts/9');
       expect(host.textContent).toContain('Everyday cash');
@@ -479,8 +663,8 @@ describe('TransactionRow', () => {
             tags: [{ id: 1, name: 'home' }],
           }),
           NAMES,
-          ACCOUNT_NAMES
-        )
+          ACCOUNT_NAMES,
+        ),
       );
 
       expect(text).toContain('29 Aug 2026');
@@ -490,13 +674,9 @@ describe('TransactionRow', () => {
     });
 
     it('still offers no whole-row link and keeps the actions menu in place', () => {
-      const fixture = renderFixture(
-        toSpanningRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES)
-      );
+      const fixture = renderFixture(toSpanningRow(tx({ direction: 'expense' }), NAMES, ACCOUNT_NAMES));
 
-      expect(
-        actionsTrigger(fixture.nativeElement as HTMLElement)
-      ).toBeDefined();
+      expect(actionsTrigger(fixture.nativeElement as HTMLElement)).toBeDefined();
     });
   });
 
@@ -510,13 +690,9 @@ describe('TransactionRow', () => {
     });
 
     it('offers the menu on an income', () => {
-      const fixture = renderFixture(
-        toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3)
-      );
+      const fixture = renderFixture(toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3));
 
-      expect(
-        actionsTrigger(fixture.nativeElement as HTMLElement)
-      ).toBeDefined();
+      expect(actionsTrigger(fixture.nativeElement as HTMLElement)).toBeDefined();
       const items = openMenu(fixture);
       expect(menuItem(items, 'Refile')).toBeDefined();
       expect(menuItem(items, 'Remove')).toBeDefined();
@@ -533,19 +709,15 @@ describe('TransactionRow', () => {
           }),
           NAMES,
           3,
-          ACCOUNT_NAMES
-        )
+          ACCOUNT_NAMES,
+        ),
       );
 
-      expect(
-        actionsTrigger(fixture.nativeElement as HTMLElement)
-      ).toBeDefined();
+      expect(actionsTrigger(fixture.nativeElement as HTMLElement)).toBeDefined();
     });
 
     it('offers the same actions on a generated transaction', () => {
-      const fixture = renderFixture(
-        toAccountRow(tx({ generated: true, description: 'Rent' }), NAMES, 3)
-      );
+      const fixture = renderFixture(toAccountRow(tx({ generated: true, description: 'Rent' }), NAMES, 3));
 
       const items = openMenu(fixture);
       expect(menuItem(items, 'Refile')).toBeDefined();
@@ -563,8 +735,8 @@ describe('TransactionRow', () => {
           }),
           NAMES,
           3,
-          ACCOUNT_NAMES
-        )
+          ACCOUNT_NAMES,
+        ),
       );
 
       expect(actionsTrigger(host)).toBeUndefined();
@@ -588,7 +760,7 @@ describe('TransactionRow', () => {
       const remove = vi.fn(() => of(undefined));
       const fixture = renderFixture(
         toAccountRow(tx({ amount: 120.5, description: 'Coffee' }), NAMES, 3),
-        remove as unknown as TransactionsService['remove']
+        remove as unknown as TransactionsService['remove'],
       );
 
       menuItem(openMenu(fixture), 'Remove')?.click();
@@ -609,7 +781,7 @@ describe('TransactionRow', () => {
       const remove = vi.fn(() => of(undefined));
       const fixture = renderFixture(
         toAccountRow(tx({ description: 'Coffee' }), NAMES, 3),
-        remove as unknown as TransactionsService['remove']
+        remove as unknown as TransactionsService['remove'],
       );
       const removed: unknown[] = [];
       fixture.componentInstance.removed.subscribe(() => removed.push('removed'));
@@ -630,7 +802,7 @@ describe('TransactionRow', () => {
       const remove = vi.fn(() => of(undefined));
       const fixture = renderFixture(
         toAccountRow(tx({ id: 7 }), NAMES, 3),
-        remove as unknown as TransactionsService['remove']
+        remove as unknown as TransactionsService['remove'],
       );
       const removed: unknown[] = [];
       fixture.componentInstance.removed.subscribe(() => removed.push('removed'));
@@ -649,7 +821,7 @@ describe('TransactionRow', () => {
       const remove = vi.fn(() => inFlight.asObservable());
       const fixture = renderFixture(
         toAccountRow(tx({ id: 7 }), NAMES, 3),
-        remove as unknown as TransactionsService['remove']
+        remove as unknown as TransactionsService['remove'],
       );
 
       menuItem(openMenu(fixture), 'Remove')?.click();
@@ -665,12 +837,10 @@ describe('TransactionRow', () => {
     });
 
     it('pins a notice with Try again on a failed removal, leaves the row, and emits nothing', async () => {
-      const remove = vi.fn(() =>
-        throwError(() => new ApiError('That could not be removed just now.', 500))
-      );
+      const remove = vi.fn(() => throwError(() => new ApiError('That could not be removed just now.', 500)));
       const fixture = renderFixture(
         toAccountRow(tx({ id: 7, description: 'Coffee' }), NAMES, 3),
-        remove as unknown as TransactionsService['remove']
+        remove as unknown as TransactionsService['remove'],
       );
       const removed: unknown[] = [];
       fixture.componentInstance.removed.subscribe(() => removed.push('removed'));
@@ -693,7 +863,7 @@ describe('TransactionRow', () => {
       const remove = vi.fn(() => throwError(() => new Error('offline')));
       const fixture = renderFixture(
         toAccountRow(tx({ id: 7 }), NAMES, 3),
-        remove as unknown as TransactionsService['remove']
+        remove as unknown as TransactionsService['remove'],
       );
 
       menuItem(openMenu(fixture), 'Remove')?.click();
@@ -702,23 +872,20 @@ describe('TransactionRow', () => {
       await fixture.whenStable();
       fixture.detectChanges();
 
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')
-          ?.textContent
-      ).toContain('Something went wrong removing this transaction');
+      expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
+        'Something went wrong removing this transaction',
+      );
     });
 
     it('retries the removal from Try again and, on success, emits removed', async () => {
       let attempt = 0;
       const remove = vi.fn(() => {
         attempt += 1;
-        return attempt === 1
-          ? throwError(() => new ApiError('Try later.', 500))
-          : of(undefined);
+        return attempt === 1 ? throwError(() => new ApiError('Try later.', 500)) : of(undefined);
       });
       const fixture = renderFixture(
         toAccountRow(tx({ id: 7 }), NAMES, 3),
-        remove as unknown as TransactionsService['remove']
+        remove as unknown as TransactionsService['remove'],
       );
       const removed: unknown[] = [];
       fixture.componentInstance.removed.subscribe(() => removed.push('removed'));
@@ -748,8 +915,8 @@ describe('TransactionRow', () => {
           ],
         }),
         NAMES,
-        3
-      )
+        3,
+      ),
     );
 
     expect(text).toContain('#work');

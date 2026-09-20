@@ -14,6 +14,7 @@ import { GoalContributionWithAccountName } from '../data/contribution-account-na
 })
 export class ContributionHistoryRow {
   readonly contribution = input.required<GoalContributionWithAccountName>();
+  readonly pending = input(false);
   readonly edit = output<GoalContributionWithAccountName>();
   readonly delete = output<GoalContributionWithAccountName>();
 }

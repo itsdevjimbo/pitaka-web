@@ -5,12 +5,14 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { Router, RouterLink } from '@angular/router';
-import { forkJoin, Observable } from 'rxjs';
+import { forkJoin, map, Observable, of, switchMap } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
 import { AccountsService } from '@/app/domains/app/accounts';
+import { Transaction, TransactionLinkedContributions, TransactionsService } from '@/app/domains/app/transactions';
 import {
+  ContributionDeletionCoordinator,
   Goal,
   GoalContributionWithAccountName,
   GoalContributionsService,
@@ -39,15 +41,18 @@ const LOAD_FAILED = 'Something went wrong loading this Goal. Please try again.';
     PesoPipe,
     RowNotice,
   ],
+  providers: [ContributionDeletionCoordinator],
   host: { class: 'flex flex-auto flex-col' },
 })
 export default class GoalDetail implements OnInit {
   private goals = inject(GoalsService);
   private contributions = inject(GoalContributionsService);
   private accounts = inject(AccountsService);
+  private transactions = inject(TransactionsService);
   private destroyRef = inject(DestroyRef);
   private dialog = inject(MatDialog);
   private router = inject(Router);
+  private contributionDeletion = inject(ContributionDeletionCoordinator);
 
   readonly id = input.required<string>();
   private readonly goalId = computed(() => Number(this.id()));
@@ -63,6 +68,8 @@ export default class GoalDetail implements OnInit {
   protected readonly confirmingAbandon = signal(false);
   protected readonly confirmingDelete = signal<{ count: number } | null>(null);
   protected readonly confirmingContributionDelete = signal<GoalContributionWithAccountName | null>(null);
+  protected readonly deletingContributionId = signal<number | null>(null);
+  protected readonly linkedSourceSnapshot = signal<TransactionLinkedContributions | null>(null);
 
   ngOnInit(): void {
     this.load();
@@ -82,16 +89,12 @@ export default class GoalDetail implements OnInit {
       return;
     }
 
-    forkJoin({
-      goal: this.goals.get(id),
-      contributions: this.contributions.list(id),
-      accounts: this.accounts.all(),
-    })
+    this.readContributionFacts(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: ({ goal, contributions, accounts }) => {
+        next: ({ goal, contributions, accounts, sourceTransactions }) => {
           this.goal.set(goal);
-          this.history.set(withAccountNames(contributions, accounts).sort(byNewestContribution));
+          this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
           this.loading.set(false);
         },
         error: (error: unknown) => {
@@ -144,13 +147,33 @@ export default class GoalDetail implements OnInit {
   }
   protected confirmContributionDelete(): void {
     const contribution = this.confirmingContributionDelete();
-    if (!contribution) return;
-    this.confirmingContributionDelete.set(null);
-    this.write(
-      this.contributions.delete(contribution.id),
-      () => this.refreshContributionFacts(),
-      () => this.askContributionDelete(contribution),
-    );
+    if (!contribution || this.deletingContributionId() !== null) return;
+    this.notice.set(null);
+    this.deletingContributionId.set(contribution.id);
+    this.contributionDeletion
+      .attempt(contribution.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.deletingContributionId.set(null);
+          this.confirmingContributionDelete.set(null);
+          this.refreshContributionFacts(contribution.transactionId);
+        },
+        error: (error) => {
+          this.deletingContributionId.set(null);
+          this.confirmingContributionDelete.set(null);
+          this.notice.set({
+            message:
+              error instanceof ApiError
+                ? error.message
+                : 'We could not confirm whether this Contribution was deleted. Retry safely to check.',
+            retry: () => {
+              this.confirmingContributionDelete.set(contribution);
+              this.confirmContributionDelete();
+            },
+          });
+        },
+      });
   }
   protected askAbandon(): void {
     this.notice.set(null);
@@ -243,29 +266,51 @@ export default class GoalDetail implements OnInit {
     if (result === 'missing') this.load();
   }
   /** Reconcile every server-derived Goal fact after a Contribution write without hiding the last readable screen. */
-  private refreshContributionFacts(): void {
+  private refreshContributionFacts(transactionId: number | null = null): void {
     const goal = this.goal();
     if (!goal) {
       this.load();
       return;
     }
     forkJoin({
-      goal: this.goals.get(goal.id),
-      contributions: this.contributions.list(goal.id),
-      accounts: this.accounts.all(),
+      facts: this.readContributionFacts(goal.id),
+      transaction: transactionId === null ? of(null) : this.transactions.linkedContributions(transactionId),
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: ({ goal: freshGoal, contributions, accounts }) => {
+        next: ({ facts: { goal: freshGoal, contributions, accounts, sourceTransactions }, transaction }) => {
           this.goal.set(freshGoal);
-          this.history.set(withAccountNames(contributions, accounts).sort(byNewestContribution));
+          this.linkedSourceSnapshot.set(transaction);
+          this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
         },
         error: () =>
           this.notice.set({
             message: 'The Contribution changed but the latest Goal details could not be loaded.',
-            retry: () => this.refreshContributionFacts(),
+            retry: () => this.refreshContributionFacts(transactionId),
           }),
       });
+  }
+
+  private readContributionFacts(goalId: number) {
+    return forkJoin({
+      goal: this.goals.get(goalId),
+      contributions: this.contributions.list(goalId),
+      accounts: this.accounts.all(),
+    }).pipe(
+      switchMap((facts) => {
+        const accountIds = [
+          ...new Set(
+            facts.contributions
+              .filter((contribution) => contribution.transactionId !== null)
+              .map((contribution) => contribution.accountId),
+          ),
+        ];
+        const sourceReads = accountIds.map((accountId) => this.transactions.list(accountId));
+        return (sourceReads.length ? forkJoin(sourceReads) : of([] as Transaction[][])).pipe(
+          map((groups) => ({ ...facts, sourceTransactions: groups.flat() })),
+        );
+      }),
+    );
   }
 }
 

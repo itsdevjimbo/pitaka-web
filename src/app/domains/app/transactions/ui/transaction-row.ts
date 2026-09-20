@@ -1,12 +1,5 @@
 import { DatePipe } from '@angular/common';
-import {
-  Component,
-  computed,
-  inject,
-  input,
-  output,
-  signal,
-} from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -17,10 +10,10 @@ import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
 import { Transaction, TRANSACTION_DIRECTIONS } from '../data/transaction';
 import { TransactionsService } from '../data/transactions.service';
+import { LinkedContributionPanel } from './linked-contribution-panel';
 
 /** The banner line for a removal that failed with nothing more specific to say. */
-const COULD_NOT_REMOVE =
-  'Something went wrong removing this transaction. Please try again.';
+const COULD_NOT_REMOVE = 'Something went wrong removing this transaction. Please try again.';
 
 /** Shown for an income or expense the person never filed under a Category. */
 const NO_CATEGORY = 'Uncategorised';
@@ -103,6 +96,7 @@ export type TransactionRowModel = Transaction & {
   templateUrl: './transaction-row.html',
   imports: [
     DatePipe,
+    LinkedContributionPanel,
     MatButtonModule,
     MatIconModule,
     MatMenuModule,
@@ -111,8 +105,7 @@ export type TransactionRowModel = Transaction & {
     RowNotice,
   ],
   host: {
-    class:
-      'flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800',
+    class: 'flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800',
   },
 })
 export class TransactionRow {
@@ -218,9 +211,7 @@ export class TransactionRow {
       await firstValueFrom(this.service.remove(this.row().id));
       this.removed.emit();
     } catch (error) {
-      this.removeError.set(
-        error instanceof ApiError ? error.message : COULD_NOT_REMOVE
-      );
+      this.removeError.set(error instanceof ApiError ? error.message : COULD_NOT_REMOVE);
     } finally {
       this.removing.set(false);
     }
@@ -235,28 +226,19 @@ export class TransactionRow {
  */
 function baseRow(
   transaction: Transaction,
-  categoryNames: ReadonlyMap<number, string>
+  categoryNames: ReadonlyMap<number, string>,
 ): { categoryName: string; headline: string } {
-  const resolved =
-    transaction.categoryId === null
-      ? null
-      : (categoryNames.get(transaction.categoryId) ?? null);
+  const resolved = transaction.categoryId === null ? null : (categoryNames.get(transaction.categoryId) ?? null);
   const categoryName = resolved ?? NO_CATEGORY;
 
   const headline =
-    transaction.description ||
-    (isTransfer(transaction)
-      ? TRANSACTION_DIRECTIONS.transfer.label
-      : categoryName);
+    transaction.description || (isTransfer(transaction) ? TRANSACTION_DIRECTIONS.transfer.label : categoryName);
 
   return { categoryName, headline };
 }
 
 /** An Account's id and name, or a stand-in name when the id is not in the map. */
-function nameAccount(
-  id: number,
-  accountNames: ReadonlyMap<number, string>
-): NamedAccount {
+function nameAccount(id: number, accountNames: ReadonlyMap<number, string>): NamedAccount {
   return { id, name: accountNames.get(id) ?? UNNAMED_ACCOUNT };
 }
 
@@ -273,19 +255,15 @@ export function toAccountRow(
   transaction: Transaction,
   categoryNames: ReadonlyMap<number, string>,
   viewedAccountId: number,
-  accountNames: ReadonlyMap<number, string> = NO_ACCOUNT_NAMES
+  accountNames: ReadonlyMap<number, string> = NO_ACCOUNT_NAMES,
 ): TransactionRowModel {
-  const landedHere =
-    isTransfer(transaction) &&
-    transaction.transferToAccountId === viewedAccountId;
+  const landedHere = isTransfer(transaction) && transaction.transferToAccountId === viewedAccountId;
 
   const incoming = transaction.direction === 'income' || landedHere;
 
   // Only on the landing side: `accountId` is the Transfer's home, the one place
   // it can be acted on. The row points there.
-  const recordedAgainst = landedHere
-    ? nameAccount(transaction.accountId, accountNames)
-    : null;
+  const recordedAgainst = landedHere ? nameAccount(transaction.accountId, accountNames) : null;
 
   return {
     ...transaction,
@@ -306,7 +284,7 @@ export function toAccountRow(
 export function toSpanningRow(
   transaction: Transaction,
   categoryNames: ReadonlyMap<number, string>,
-  accountNames: ReadonlyMap<number, string>
+  accountNames: ReadonlyMap<number, string>,
 ): TransactionRowModel {
   const transferTo =
     isTransfer(transaction) && transaction.transferToAccountId !== null

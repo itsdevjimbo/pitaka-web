@@ -14,7 +14,10 @@
     <div class="rounded-lg bg-neutral-100 px-4 py-3 text-sm dark:bg-neutral-800">
       <p>{{ existing.amount | peso }} from {{ existing.accountName || 'this Account' }}</p>
       <p class="mt-1 text-neutral-600 dark:text-neutral-300">
-        To change the amount or Account, delete this Contribution and add another.
+        Dated {{ existing.contributionDate | date: 'd MMM y' }}.
+      </p>
+      <p class="mt-1 text-neutral-600 dark:text-neutral-300">
+        To change the date, amount, Account, or source Transaction, delete this Contribution and add another.
       </p>
     </div>
   } @else {
@@ -68,26 +71,28 @@
       </p>
     }
   }
-  <mat-form-field class="w-full">
-    <mat-label>Contribution date</mat-label>
-    <input
-      matInput
-      [matDatepicker]="picker"
-      [formField]="contributionForm.contributionDate"
-    />
-    <mat-datepicker-toggle
-      matIconSuffix
-      [for]="picker"
-    />
-    <mat-datepicker #picker />
-    <mat-error>
-      @if (contributionForm.contributionDate().touched() && contributionForm.contributionDate().invalid()) {
-        @for (error of contributionForm.contributionDate().errors(); track error) {
-          {{ error.message }}
+  @if (!contribution()) {
+    <mat-form-field class="w-full">
+      <mat-label>Contribution date</mat-label>
+      <input
+        matInput
+        [matDatepicker]="picker"
+        [formField]="contributionForm.contributionDate"
+      />
+      <mat-datepicker-toggle
+        matIconSuffix
+        [for]="picker"
+      />
+      <mat-datepicker #picker />
+      <mat-error>
+        @if (contributionForm.contributionDate().touched() && contributionForm.contributionDate().invalid()) {
+          @for (error of contributionForm.contributionDate().errors(); track error) {
+            {{ error.message }}
+          }
         }
-      }
-    </mat-error>
-  </mat-form-field>
+      </mat-error>
+    </mat-form-field>
+  }
   <mat-form-field class="w-full">
     <mat-label>Note</mat-label>
     <input

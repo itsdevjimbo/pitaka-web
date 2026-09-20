@@ -180,6 +180,15 @@
           }
         </app-row-notice>
       }
+      @if (linkedSourceSnapshot(); as source) {
+        <p
+          class="text-sm text-neutral-600 dark:text-neutral-300"
+          role="status"
+        >
+          The source Transaction now has {{ source.remainingCapacity | peso }} remaining capacity, and
+          {{ source.account.availableHeadroom | peso }} remains available in {{ source.account.name }}.
+        </p>
+      }
     </header>
 
     <section
@@ -236,6 +245,7 @@
               goals-contribution-history-row
               class="flex items-start justify-between gap-x-4 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
               [contribution]="contribution"
+              [pending]="deletingContributionId() === contribution.id"
               (edit)="openContributionEdit($event)"
               (delete)="askContributionDelete($event)"
             ></li>
@@ -256,15 +266,17 @@
                   <div class="flex gap-x-2">
                     <button
                       matButton
+                      [disabled]="deletingContributionId() !== null"
                       (click)="cancelContributionDelete()"
                     >
                       Cancel
                     </button>
                     <button
                       matButton="filled"
+                      [disabled]="deletingContributionId() !== null"
                       (click)="confirmContributionDelete()"
                     >
-                      Delete
+                      {{ deletingContributionId() === contribution.id ? 'Deleting…' : 'Delete' }}
                     </button>
                   </div>
                 </li>

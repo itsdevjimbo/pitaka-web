@@ -1,8 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import {
-  MATERIAL_ANIMATIONS,
-  provideNativeDateAdapter,
-} from '@angular/material/core';
+import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { GoalContributionWithAccountName } from '../data/contribution-account-name';
@@ -17,11 +14,12 @@ const CONTRIBUTION: GoalContributionWithAccountName = {
   contributionDate: new Date(2026, 8, 12),
   note: 'First earmark',
   accountName: 'Everyday cash',
+  source: { kind: 'ordinary' },
 };
 
 describe('ContributionHistoryRow', () => {
   function setup(
-    contribution: GoalContributionWithAccountName = CONTRIBUTION
+    contribution: GoalContributionWithAccountName = CONTRIBUTION,
   ): ComponentFixture<ContributionHistoryRow> {
     TestBed.configureTestingModule({
       imports: [ContributionHistoryRow],
@@ -48,8 +46,7 @@ describe('ContributionHistoryRow', () => {
   });
 
   it('names an unresolved Account and omits an absent note', () => {
-    const element = setup({ ...CONTRIBUTION, accountName: '', note: null })
-      .nativeElement as HTMLElement;
+    const element = setup({ ...CONTRIBUTION, accountName: '', note: null }).nativeElement as HTMLElement;
 
     expect(element.textContent).toContain('Unknown account');
     expect(element.textContent).not.toContain('First earmark');

@@ -24,8 +24,8 @@ describe('withAccountNames', () => {
             currentBalance: 500,
             isActive: true,
           },
-        ]
-      )
+        ],
+      ),
     ).toEqual([
       {
         id: 4,
@@ -36,6 +36,7 @@ describe('withAccountNames', () => {
         contributionDate: new Date(2026, 8, 13),
         note: null,
         accountName: 'Everyday cash',
+        source: { kind: 'ordinary' },
       },
     ]);
   });
