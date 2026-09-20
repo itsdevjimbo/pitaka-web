@@ -2,7 +2,7 @@
 
 Question: which wallet mark and typography treatment carry Pocket Pop into a usable product identity?
 
-Run `npm run prototype:identity`, then open http://localhost:4317/auth/sign-in?variant=B . This development-only preview uses the existing sign-in route and requires a guest session. Do not submit the sign-in form for this study.
+Run `npm run prototype:identity`, then open http://localhost:4317/auth/sign-in?variant=C&font=Outfit . This development-only preview uses the existing sign-in route and requires a guest session. Do not submit the sign-in form for this study.
 
 Five mark concepts: A Folded wallet, B Open pocket, C Pocket p, D Double pocket, E Clasp wallet. These are refinements within the selected Pocket Pop direction, not the former A/B/C brand contest.
 
@@ -21,11 +21,11 @@ Upright variable binaries downloaded from the official Google Fonts repository a
 | Outfit | Fallback required | Yes | https://github.com/google/fonts/tree/main/ofl/outfit |
 | DM Sans | Fallback required | No tnum in inspected file; digits vary in width | https://github.com/google/fonts/tree/main/ofl/dmsans |
 
-Outfit and DM Sans are included as possible display faces; try pairing with Geist for UI and amounts. Font choice remains pending. Keeping a new display or UI font would explicitly revise ADR 0008's decision to retain Geist; it does not revise semantic money colors.
+Outfit and DM Sans are included as possible display faces; try pairing with Geist for UI and amounts. The user selected Outfit for the wordmark and headings, paired with Geist for interface text and amounts. This revises ADR 0008's Geist-only typography decision; it does not revise semantic money colors.
 
 ## Live discussion
 
-User agreed: warm and lightly playful welcomes, empty states, and celebrations; direct money, error, and destructive-action language. Logo and typography require further visual review. Tagline remains undecided.
+User agreed: warm and lightly playful welcomes, empty states, and celebrations; direct money, error, and destructive-action language. Selected mark: Pocket p. Wordmark: capitalized Pitaka. Outfit is used for the wordmark and headings; Geist for interface text and amounts. Symbol-only use in favicons and compact navigation, plus light/dark/monochrome treatments, was agreed with the capitalization correction. Tagline remains undecided. Defaults now show the selected pairing.
 
 Map: https://github.com/itsdevjimbo/pitaka-web/issues/216
 Decision: https://github.com/itsdevjimbo/pitaka-web/issues/217

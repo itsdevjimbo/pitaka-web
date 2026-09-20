@@ -47,8 +47,8 @@ export class BrandingPrototype {
     },
   ];
   protected fonts = ['Plus Jakarta Sans', 'Outfit', 'Manrope', 'DM Sans', 'Geist'];
-  protected variant = computed(() => this.marks.find((m) => m.key === this.params().get('variant')) ?? this.marks[1]);
-  protected font = computed(() => this.fonts.find((f) => f === this.params().get('font')) ?? this.fonts[0]);
+  protected variant = computed(() => this.marks.find((m) => m.key === this.params().get('variant')) ?? this.marks[2]);
+  protected font = computed(() => this.fonts.find((f) => f === this.params().get('font')) ?? this.fonts[1]);
   protected fontNote = computed(() =>
     this.font() === 'Outfit'
       ? 'Outfit: peso symbol uses a fallback. Try Geist for UI.'
@@ -58,7 +58,7 @@ export class BrandingPrototype {
   );
   protected appearance = signal('system');
   protected mono = signal(false);
-  protected pairing = signal(false);
+  protected pairing = signal(true);
   private media = window.matchMedia('(prefers-color-scheme: dark)');
   private systemDark = signal(this.media.matches);
   protected dark = computed(
