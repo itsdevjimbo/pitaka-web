@@ -22,7 +22,7 @@ import {
   ScheduleDirection,
   ScheduleFrequency,
   SchedulesService,
-} from '..';
+} from '../..';
 
 type NewScheduleModel = {
   name: string;

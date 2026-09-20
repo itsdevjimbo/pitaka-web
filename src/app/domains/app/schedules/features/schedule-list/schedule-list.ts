@@ -1,32 +1,20 @@
-import { DatePipe } from '@angular/common';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatBadgeModule } from '@angular/material/badge';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin } from 'rxjs';
-import { PesoPipe } from '@/app/core/money';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
-import { Schedule, SCHEDULE_FREQUENCIES, ScheduleStatus, SchedulesService } from '../..';
-import { NewScheduleDialog } from '../../ui/new-schedule-dialog';
-
-type ScheduleView = 'upcoming' | 'paused' | 'past';
-
-type ScheduleRow = {
-  schedule: Schedule;
-  accountName: string;
-  accountRetired: boolean;
-  categoryName: string;
-  categoryRetired: boolean;
-};
-
-const VIEWS: readonly { id: ScheduleView; label: string }[] = [
-  { id: 'upcoming', label: 'Upcoming' },
-  { id: 'paused', label: 'Paused' },
-  { id: 'past', label: 'Past' },
-];
+import { Schedule, ScheduleStatus, SchedulesService } from '../..';
+import { NewScheduleDialog } from '../../ui/new-schedule/new-schedule-dialog';
+import { ScheduleEmptyState } from '../../ui/schedule-empty-state/schedule-empty-state';
+import {
+  ScheduleLifecycleNav,
+  ScheduleView,
+  ScheduleViewCounts,
+} from '../../ui/schedule-lifecycle-nav/schedule-lifecycle-nav';
+import { ScheduleRow, ScheduleRowData } from '../../ui/schedule-row/schedule-row';
 
 const STATUS_VIEW: Record<ScheduleStatus, ScheduleView> = {
   active: 'upcoming',
@@ -38,7 +26,7 @@ const STATUS_VIEW: Record<ScheduleStatus, ScheduleView> = {
 @Component({
   selector: 'schedule-list',
   templateUrl: './schedule-list.html',
-  imports: [DatePipe, MatBadgeModule, MatButtonModule, MatIconModule, PesoPipe],
+  imports: [MatButtonModule, MatIconModule, ScheduleEmptyState, ScheduleLifecycleNav, ScheduleRow],
   host: { class: 'flex flex-auto flex-col' },
 })
 export default class ScheduleList {
@@ -58,10 +46,8 @@ export default class ScheduleList {
   /** True after a refresh failure until all three collections refresh successfully. */
   protected readonly stale = signal(false);
   protected readonly selectedView = signal<ScheduleView>('upcoming');
-  protected readonly views = VIEWS;
-  protected readonly frequencies = SCHEDULE_FREQUENCIES;
 
-  protected readonly rows = computed<readonly ScheduleRow[]>(() => {
+  protected readonly rows = computed<readonly ScheduleRowData[]>(() => {
     const accountById = new Map(this.accounts().map((account) => [account.id, account]));
     const categoryById = new Map(this.categories().map((category) => [category.id, category]));
 
@@ -93,7 +79,7 @@ export default class ScheduleList {
       });
   });
 
-  protected readonly counts = computed<Record<ScheduleView, number>>(() => {
+  protected readonly counts = computed<ScheduleViewCounts>(() => {
     const result: Record<ScheduleView, number> = {
       upcoming: 0,
       paused: 0,
@@ -137,21 +123,6 @@ export default class ScheduleList {
           this.refreshing.set(false);
         },
       });
-  }
-
-  protected emptyMessage(): string {
-    switch (this.selectedView()) {
-      case 'upcoming':
-        return 'No upcoming Schedules';
-      case 'paused':
-        return 'No paused Schedules';
-      case 'past':
-        return 'No past Schedules';
-    }
-  }
-
-  protected historyLabel(count: number): string {
-    return `${count} surviving generated ${count === 1 ? 'Transaction' : 'Transactions'}`;
   }
 
   protected openCreateDialog(): void {

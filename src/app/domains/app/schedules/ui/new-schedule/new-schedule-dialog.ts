@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
-import { Schedule } from '../data/schedule';
+import { Schedule } from '../../data/schedule';
 import { NewScheduleForm } from './new-schedule-form';
 
 /** The shared create-Schedule form inside the application's accessible dialog shell. */

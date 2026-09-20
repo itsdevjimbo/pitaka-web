@@ -82,142 +82,28 @@
     }
 
     @if (empty()) {
-      <section
-        class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
-      >
-        <mat-icon
-          class="size-10 text-neutral-400"
-          svgIcon="calendar-clock"
-        />
-        <p class="text-lg font-semibold">No Schedules yet</p>
-        <p class="max-w-sm text-neutral-500 dark:text-neutral-400">
-          Schedules will appear here once you have a standing instruction.
-        </p>
-        <button
-          matButton="filled"
-          class="mt-2"
-          [disabled]="refreshing() || stale()"
-          (click)="openCreateDialog()"
-        >
-          <mat-icon svgIcon="plus" />
-          Create Schedule
-        </button>
-      </section>
+      <schedules-empty-state
+        scope="all"
+        [createDisabled]="refreshing() || stale()"
+        (create)="openCreateDialog()"
+      />
     } @else {
       <section class="grid gap-7 lg:grid-cols-[12rem_minmax(0,1fr)]">
-        <nav
-          class="flex gap-2 overflow-x-auto lg:flex-col"
-          aria-label="Schedule lifecycle"
-        >
-          @for (view of views; track view.id) {
-            <button
-              matButton
-              class="flex min-w-32 items-center justify-between gap-4 rounded-xl px-4 py-3 text-left"
-              [attr.aria-pressed]="selectedView() === view.id"
-              [class.bg-neutral-100]="selectedView() === view.id"
-              [class.dark:bg-neutral-900]="selectedView() === view.id"
-              (click)="selectedView.set(view.id)"
-            >
-              <span
-                class="mr-4"
-                [matBadge]="counts()[view.id]"
-                matBadgeOverlap="false"
-              >
-                {{ view.label }}
-                <span class="sr-only">{{ counts()[view.id] }}</span>
-              </span>
-            </button>
-          }
-        </nav>
+        <schedules-lifecycle-nav
+          [counts]="counts()"
+          [(view)]="selectedView"
+        />
 
         <div class="min-w-0">
           @if (visibleRows().length === 0) {
-            <div
-              class="rounded-xl border border-dashed border-neutral-300 px-6 py-14 text-center dark:border-neutral-700"
-            >
-              <p class="font-semibold">{{ emptyMessage() }}</p>
-            </div>
+            <schedules-empty-state [scope]="selectedView()" />
           } @else {
             <ol class="relative ml-3 border-l-2 border-neutral-200 pl-7 dark:border-neutral-800">
               @for (row of visibleRows(); track row.schedule.id) {
                 <li
-                  class="relative mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs last:mb-0 dark:border-neutral-800 dark:bg-neutral-950"
-                >
-                  <span
-                    class="bg-primary absolute top-5 -left-9.5 size-5 rounded-full border-4 border-white dark:border-neutral-950"
-                    aria-hidden="true"
-                  ></span>
-
-                  <p class="text-primary text-xs font-bold tracking-wide uppercase">
-                    @if (row.schedule.status === 'active' && !row.accountRetired) {
-                      Next generation: {{ row.schedule.nextGeneration | date: 'd MMM y' }}
-                    } @else if (row.schedule.status === 'active') {
-                      Generation blocked
-                    } @else if (row.schedule.status === 'paused') {
-                      Generation paused
-                    } @else if (row.schedule.status === 'completed') {
-                      Completed
-                    } @else {
-                      Cancelled
-                    }
-                  </p>
-
-                  <div class="mt-2 flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h2 class="font-semibold">{{ row.schedule.name }}</h2>
-                        <span
-                          class="rounded-full px-2 py-0.5 text-xs"
-                          [class.bg-emerald-100]="row.schedule.direction === 'income'"
-                          [class.text-emerald-800]="row.schedule.direction === 'income'"
-                          [class.bg-rose-100]="row.schedule.direction === 'expense'"
-                          [class.text-rose-800]="row.schedule.direction === 'expense'"
-                        >
-                          {{ row.schedule.direction === 'income' ? 'Income' : 'Expense' }}
-                        </span>
-                      </div>
-                      <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                        {{ row.schedule.amount | peso }} ·
-                        {{ frequencies[row.schedule.frequency] }}
-                      </p>
-                    </div>
-                  </div>
-
-                  <dl
-                    class="mt-4 grid gap-3 border-t border-neutral-200 pt-3 text-sm sm:grid-cols-2 dark:border-neutral-800"
-                  >
-                    <div>
-                      <dt class="text-xs text-neutral-400">Filed to</dt>
-                      <dd>
-                        {{ row.accountName }} · {{ row.categoryName }}
-                        @if (row.categoryRetired) {
-                          <span
-                            class="ml-1 rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold uppercase dark:bg-neutral-700"
-                          >
-                            Retired
-                          </span>
-                        }
-                      </dd>
-                    </div>
-                    <div>
-                      <dt class="text-xs text-neutral-400">History</dt>
-                      <dd>{{ historyLabel(row.schedule.generatedTransactionCount) }}</dd>
-                    </div>
-                  </dl>
-
-                  @if (row.accountRetired) {
-                    <div
-                      class="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-100"
-                    >
-                      <p class="font-medium">This Account is retired. Generation is blocked.</p>
-                      @if (row.schedule.status === 'active') {
-                        <p class="mt-1">
-                          Reactivating the Account resumes generation and may create one overdue Transaction.
-                        </p>
-                      }
-                    </div>
-                  }
-                </li>
+                  schedules-schedule-row
+                  [row]="row"
+                ></li>
               }
             </ol>
           }
