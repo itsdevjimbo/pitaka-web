@@ -13,14 +13,23 @@ export class ApiError extends Error {
   /** The HTTP status that produced this error, or `0` for a transport failure. */
   readonly status: number;
 
+  /**
+   * Machine-readable ProblemDetails extensions. Human-readable fields are
+   * deliberately excluded so callers branch on stable contract values rather
+   * than server prose.
+   */
+  readonly details: Readonly<Record<string, unknown>>;
+
   constructor(
     message: string,
     status: number,
-    fieldErrors: Record<string, readonly string[]> = {}
+    fieldErrors: Record<string, readonly string[]> = {},
+    details: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.fieldErrors = fieldErrors;
+    this.details = details;
   }
 }
