@@ -30,9 +30,15 @@ export class ScheduleLifecycleCoordinator {
   readonly events = this.eventSubject.asObservable();
 
   setStatus(scheduleId: number, status: 'active' | 'paused'): Observable<Schedule> {
-    const request = this.schedulesService
-      .setStatus(scheduleId, status)
-      .pipe(shareReplay({ bufferSize: 1, refCount: false }));
+    return this.track(scheduleId, this.schedulesService.setStatus(scheduleId, status));
+  }
+
+  extend(scheduleId: number, lastGeneration: Date | null): Observable<Schedule> {
+    return this.track(scheduleId, this.schedulesService.extend(scheduleId, lastGeneration));
+  }
+
+  private track(scheduleId: number, source: Observable<Schedule>): Observable<Schedule> {
+    const request = source.pipe(shareReplay({ bufferSize: 1, refCount: false }));
 
     this.eventSubject.next({ kind: 'started', scheduleId });
     request.subscribe({

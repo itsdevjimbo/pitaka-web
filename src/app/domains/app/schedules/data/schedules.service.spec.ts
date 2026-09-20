@@ -387,4 +387,53 @@ describe('SchedulesService', () => {
       );
     });
   });
+
+  describe('extend', () => {
+    it('POSTs a finite Last generation to the single atomic extension endpoint', async () => {
+      const result = firstValueFrom(service.extend(7, new Date(2027, 5, 30, 23, 30)));
+
+      const request = http.expectOne(`${BASE_URL}/api/recurring-transactions/7/extend`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({ endDate: '2027-06-30' });
+      request.flush(resource({ endDate: '2027-06-30', status: 'Active', nextRunDate: '2026-11-01' }));
+
+      await expect(result).resolves.toMatchObject({
+        id: 7,
+        lastGeneration: new Date(2027, 5, 30),
+        nextGeneration: new Date(2026, 10, 1),
+        status: 'active',
+      });
+    });
+
+    it('sends an explicit null to continue indefinitely', async () => {
+      const result = firstValueFrom(service.extend(7, null));
+
+      const request = http.expectOne(`${BASE_URL}/api/recurring-transactions/7/extend`);
+      expect(request.request.body).toEqual({ endDate: null });
+      request.flush(resource({ endDate: null, status: 'Active' }));
+
+      await expect(result).resolves.toMatchObject({ lastGeneration: null, status: 'active' });
+    });
+
+    it('attributes extension date validation and leaves state conflicts unattributed', async () => {
+      const validationResult = firstValueFrom(service.extend(7, new Date(2026, 9, 1)));
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions/7/extend`)
+        .flush({ errors: { EndDate: ['Choose a later date.'] } }, { status: 400, statusText: 'Bad Request' });
+      const validation = (await validationResult.catch((value: unknown) => value)) as ApiError;
+      expect(validation.fieldErrors).toEqual({ lastGeneration: ['Choose a later date.'] });
+
+      const conflictResult = firstValueFrom(service.extend(7, null));
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions/7/extend`)
+        .flush(
+          { detail: 'The recurring transaction is no longer Completed.' },
+          { status: 409, statusText: 'Conflict' },
+        );
+      const conflict = (await conflictResult.catch((value: unknown) => value)) as ApiError;
+      expect(conflict.status).toBe(409);
+      expect(conflict.fieldErrors).toEqual({});
+      expect(conflict.message).toBe('The Schedule is no longer Completed.');
+    });
+  });
 });

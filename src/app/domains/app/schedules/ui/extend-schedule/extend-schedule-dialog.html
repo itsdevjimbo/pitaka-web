@@ -1,0 +1,85 @@
+<app-dialog-shell [heading]="'Extend ‘' + row.schedule.name + '’'">
+  <form
+    class="grid gap-4"
+    (submit)="save($event)"
+  >
+    <p class="text-sm text-neutral-600 dark:text-neutral-300">
+      Your Schedule will continue from {{ nextGeneration | date: 'd MMM y' }}. Missed occurrences won’t be generated.
+    </p>
+
+    <fieldset class="grid gap-3">
+      <legend class="text-sm font-medium">Continuation</legend>
+      <label class="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="radio"
+          name="extension-kind"
+          [checked]="!indefinite()"
+          (change)="setIndefinite(false)"
+        />
+        Last generation
+      </label>
+      <label class="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          id="extend-schedule-indefinite"
+          type="radio"
+          name="extension-kind"
+          [checked]="indefinite()"
+          (change)="setIndefinite(true)"
+        />
+        Continue indefinitely
+      </label>
+    </fieldset>
+
+    @if (!indefinite()) {
+      <mat-form-field>
+        <mat-label>Last generation</mat-label>
+        <input
+          id="extend-schedule-last-generation"
+          matInput
+          [matDatepicker]="lastPicker"
+          [formField]="extendForm.lastGeneration"
+        />
+        <mat-datepicker-toggle
+          matIconSuffix
+          [for]="lastPicker"
+        />
+        <mat-datepicker #lastPicker />
+        <mat-hint>An occurrence on this date is included.</mat-hint>
+        <mat-error>
+          @if (extendForm.lastGeneration().touched() && extendForm.lastGeneration().invalid()) {
+            @for (error of extendForm.lastGeneration().errors(); track error) {
+              {{ error.message }}
+            }
+          }
+        </mat-error>
+      </mat-form-field>
+    }
+
+    @if (errorMessage(); as message) {
+      <p
+        class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-100"
+        role="alert"
+      >
+        {{ message }}
+      </p>
+    }
+
+    <div class="mt-2 flex justify-end gap-2">
+      <button
+        matButton
+        type="button"
+        [disabled]="submitting()"
+        (click)="dialogRef.close()"
+      >
+        Cancel
+      </button>
+      <button
+        matButton="filled"
+        type="submit"
+        [disabled]="submitting() || (!indefinite() && extendForm().invalid())"
+      >
+        {{ submitting() ? 'Extending…' : 'Extend and resume' }}
+      </button>
+    </div>
+  </form>
+</app-dialog-shell>

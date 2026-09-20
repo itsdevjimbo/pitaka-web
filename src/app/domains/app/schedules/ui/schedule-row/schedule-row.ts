@@ -28,6 +28,7 @@ export class ScheduleRow {
   readonly row = input.required<ScheduleRowData>();
   readonly writeDisabled = input(false);
   readonly edit = output<ScheduleRowData>();
+  readonly extend = output<ScheduleRowData>();
   readonly lifecycle = output<{ row: ScheduleRowData; action: ScheduleLifecycleAction }>();
 
   protected readonly frequencies = SCHEDULE_FREQUENCIES;

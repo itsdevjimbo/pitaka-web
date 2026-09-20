@@ -9,6 +9,7 @@ import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { Schedule, ScheduleStatus, SchedulesService } from '../..';
 import { ScheduleLifecycleCoordinator, ScheduleLifecycleEvent } from '../../data/schedule-lifecycle-coordinator';
 import { EditScheduleDialog } from '../../ui/edit-schedule/edit-schedule-dialog';
+import { ExtendScheduleDialog } from '../../ui/extend-schedule/extend-schedule-dialog';
 import { NewScheduleDialog } from '../../ui/new-schedule/new-schedule-dialog';
 import { ScheduleEmptyState } from '../../ui/schedule-empty-state/schedule-empty-state';
 import {
@@ -161,6 +162,12 @@ export default class ScheduleList {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.load());
+  }
+
+  protected openExtendDialog(row: ScheduleRowData): void {
+    if (this.stale() || this.refreshing() || row.accountRetired || row.schedule.status !== 'completed') return;
+    this.actionMessage.set(null);
+    this.dialog.open<ExtendScheduleDialog, ScheduleRowData>(ExtendScheduleDialog, { data: row });
   }
 
   protected openLifecycleDialog(row: ScheduleRowData, action: ScheduleLifecycleAction): void {
