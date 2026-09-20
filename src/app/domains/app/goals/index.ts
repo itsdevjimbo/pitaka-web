@@ -5,6 +5,7 @@ export type { Goal, GoalStatus, NewGoal, UpdateGoal } from './data/goal';
 export type { GoalContribution, NewGoalContribution, UpdateGoalContribution } from './data/goal-contribution';
 export { GoalsService } from './data/goals.service';
 export { GoalContributionsService } from './data/goal-contributions.service';
+export { toGoalDateOnly } from './data/goal-calendar';
 export { ContributionDeletionCoordinator } from './data/contribution-deletion';
 export type { ContributionDeletionResult } from './data/contribution-deletion';
 export { accountHeadroom, signedAccountHeadroom } from './data/account-headroom';

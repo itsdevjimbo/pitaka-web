@@ -1,8 +1,14 @@
-import { inject, Injectable, InjectionToken, signal } from '@angular/core';
+import { computed, inject, Injectable, InjectionToken, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { ApiError } from '@/app/core/api';
 import { GoalContributionsService } from '@/app/domains/app/goals';
-import { TransactionSplitPayload, TransactionSplitResult } from '../data/transaction-split';
+import {
+  TransactionSplitFailure,
+  TransactionSplitIdempotencyMismatchError,
+  TransactionSplitPayload,
+  TransactionSplitRefusalError,
+  TransactionSplitResult,
+  TransactionSplitValidationError,
+} from '../data/transaction-split';
 import { TransactionsService } from '../data/transactions.service';
 import { TransactionSplitContextStore } from './transaction-split-context';
 
@@ -14,29 +20,12 @@ export const UNCERTAIN_SPLIT_MESSAGE =
   "We couldn't confirm whether the contribution was created. Retry safely to check.";
 export const REFUSED_SPLIT_MESSAGE = "We couldn't save your contributions. Nothing was created.";
 
-const DEFINITIVE_REASONS = [
-  'goal_inactive',
-  'account_inactive',
-  'transaction_ineligible',
-  'transaction_missing',
-  'transaction_capacity_exceeded',
-  'account_headroom_exceeded',
-  'concurrent_state_changed',
-  'target_overrun_acknowledgement_required',
-] as const;
-
-export type TransactionSplitFailureReason = (typeof DEFINITIVE_REASONS)[number];
-
-export type TransactionSplitFailure = Readonly<Record<string, unknown>> & {
-  reason: TransactionSplitFailureReason;
-  rowIndex?: number;
-  goalId?: number;
-};
-
 export type TransactionSplitAttempt = {
   key: string;
   payload: TransactionSplitPayload;
 };
+
+type SplitKeyProvenance = 'fresh' | 'replay';
 
 export type TransactionSplitRecoveryState =
   | { status: 'idle' }
@@ -44,7 +33,7 @@ export type TransactionSplitRecoveryState =
   | {
       status: 'validation-error';
       attempt: TransactionSplitAttempt;
-      fieldErrors: ApiError['fieldErrors'];
+      error: TransactionSplitValidationError;
     }
   | {
       status: 'refused';
@@ -62,6 +51,7 @@ export type TransactionSplitRecoveryState =
   | {
       status: 'idempotency-mismatch';
       attempt: TransactionSplitAttempt;
+      freshKeyCollision: boolean;
       message: string;
     }
   | {
@@ -70,8 +60,6 @@ export type TransactionSplitRecoveryState =
       historicalResult: TransactionSplitResult;
       refresh: 'succeeded' | 'failed';
     };
-
-const DEFINITIVE_REASON_SET: ReadonlySet<string> = new Set(DEFINITIVE_REASONS);
 
 /**
  * Owns one dialog's durable monetary-write attempt. It is intentionally
@@ -87,16 +75,27 @@ export class TransactionSplitRecoveryStore {
   private readonly current = signal<TransactionSplitRecoveryState>({ status: 'idle' });
 
   readonly state = this.current.asReadonly();
+  readonly unresolved = computed(() => {
+    const status = this.current().status;
+    return status === 'pending' || status === 'uncertain' || status === 'idempotency-mismatch';
+  });
+
+  /** Start a new dialog session only after any earlier operation has a definitive outcome. */
+  prepareForDialog(): boolean {
+    if (this.unresolved()) return false;
+    this.current.set({ status: 'idle' });
+    return true;
+  }
 
   /** Start a fresh operation unless an earlier operation is still unresolved. */
   async submit(payload: TransactionSplitPayload): Promise<boolean> {
-    if (this.hasUnresolvedOperation()) return false;
+    if (this.unresolved()) return false;
 
     const attempt: TransactionSplitAttempt = {
       key: this.createKey(),
       payload: copyPayload(payload),
     };
-    await this.run(attempt);
+    await this.run(attempt, 'fresh');
     return true;
   }
 
@@ -104,7 +103,7 @@ export class TransactionSplitRecoveryStore {
   async retryUncertain(): Promise<boolean> {
     const state = this.current();
     if (state.status !== 'uncertain') return false;
-    await this.run(state.attempt);
+    await this.run(state.attempt, 'replay');
     return true;
   }
 
@@ -116,16 +115,19 @@ export class TransactionSplitRecoveryStore {
   async resolveMismatch(originalPayload: TransactionSplitPayload): Promise<boolean> {
     const state = this.current();
     if (state.status !== 'idempotency-mismatch') return false;
-    await this.run({ key: state.attempt.key, payload: copyPayload(originalPayload) });
+    await this.run({ key: state.attempt.key, payload: copyPayload(originalPayload) }, 'replay');
     return true;
   }
 
-  private hasUnresolvedOperation(): boolean {
-    const status = this.current().status;
-    return status === 'pending' || status === 'uncertain' || status === 'idempotency-mismatch';
+  /** Replace a freshly generated key that the server reports already belongs to another payload. */
+  async retryFreshKeyCollision(): Promise<boolean> {
+    const state = this.current();
+    if (state.status !== 'idempotency-mismatch' || !state.freshKeyCollision) return false;
+    await this.run({ key: this.createKey(), payload: copyPayload(state.attempt.payload) }, 'fresh');
+    return true;
   }
 
-  private async run(attempt: TransactionSplitAttempt): Promise<void> {
+  private async run(attempt: TransactionSplitAttempt, keyProvenance: SplitKeyProvenance): Promise<void> {
     this.current.set({ status: 'pending', attempt });
     try {
       const result = await firstValueFrom(this.transactions.splitLinkedContributions(attempt.payload, attempt.key));
@@ -137,31 +139,39 @@ export class TransactionSplitRecoveryStore {
         refresh: refreshed ? 'succeeded' : 'failed',
       });
     } catch (error) {
-      await this.handleFailure(attempt, error);
+      await this.handleFailure(attempt, error, keyProvenance);
     }
   }
 
-  private async handleFailure(attempt: TransactionSplitAttempt, error: unknown): Promise<void> {
-    if (error instanceof ApiError && error.status === 400) {
+  private async handleFailure(
+    attempt: TransactionSplitAttempt,
+    error: unknown,
+    keyProvenance: SplitKeyProvenance,
+  ): Promise<void> {
+    if (error instanceof TransactionSplitValidationError) {
       this.current.set({
         status: 'validation-error',
         attempt,
-        fieldErrors: error.fieldErrors,
+        error,
       });
       return;
     }
 
-    if (isIdempotencyMismatch(error)) {
+    if (error instanceof TransactionSplitIdempotencyMismatchError) {
+      const freshKeyCollision = keyProvenance === 'fresh';
       this.current.set({
         status: 'idempotency-mismatch',
         attempt,
-        message: 'This recovery key belongs to different contribution details. Resolve the original operation first.',
+        freshKeyCollision,
+        message: freshKeyCollision
+          ? 'This new recovery key was already used for different contribution details. Try again with a new key.'
+          : 'This recovery key belongs to different contribution details. Resolve the original operation first.',
       });
       return;
     }
 
-    const failures = definitiveFailures(error);
-    if (failures !== null) {
+    if (error instanceof TransactionSplitRefusalError) {
+      const failures = [...error.failures];
       const refreshed = await this.refreshFacts(attempt);
       this.current.set({
         status: 'refused',
@@ -208,33 +218,4 @@ function copyPayload(payload: TransactionSplitPayload): TransactionSplitPayload 
       acknowledgeTargetOverrun: row.acknowledgeTargetOverrun,
     })),
   };
-}
-
-function isIdempotencyMismatch(error: unknown): error is ApiError {
-  return error instanceof ApiError && error.status === 409 && error.details['reason'] === 'idempotency_mismatch';
-}
-
-function definitiveFailures(error: unknown): TransactionSplitFailure[] | null {
-  if (!(error instanceof ApiError) || error.status !== 409 || error.details['created'] !== false) return null;
-
-  const topLevelReason = error.details['reason'];
-  const rawFailures = error.details['failures'];
-  if (
-    (topLevelReason !== 'split_rejected' && !isDefinitiveReason(topLevelReason)) ||
-    !Array.isArray(rawFailures) ||
-    !rawFailures.every(isTransactionSplitFailure)
-  ) {
-    return null;
-  }
-  return rawFailures;
-}
-
-function isTransactionSplitFailure(value: unknown): value is TransactionSplitFailure {
-  return (
-    value !== null && typeof value === 'object' && isDefinitiveReason((value as Record<string, unknown>)['reason'])
-  );
-}
-
-function isDefinitiveReason(value: unknown): value is TransactionSplitFailureReason {
-  return typeof value === 'string' && DEFINITIVE_REASON_SET.has(value);
 }

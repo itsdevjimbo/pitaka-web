@@ -1,6 +1,10 @@
 import { FieldTree } from '@angular/forms/signals';
 import { ApiError } from '@/app/core/api';
 
+type FieldErrorSource = Error & {
+  readonly fieldErrors: Readonly<Record<string, readonly string[]>>;
+};
+
 /** The form controls a screen can pin a server message onto, by field name. */
 export type ServerErrorControls = Partial<Record<string, FieldTree<unknown>>>;
 
@@ -32,7 +36,7 @@ export type BoundServerError = {
 export function partitionServerError(
   error: unknown,
   controls: ServerErrorControls,
-  fallback: string
+  fallback: string,
 ): { boundErrors: BoundServerError[]; bannerMessage: string | null } {
   if (!(error instanceof ApiError)) {
     return { boundErrors: [], bannerMessage: fallback };
@@ -58,4 +62,39 @@ export function partitionServerError(
     return { boundErrors, bannerMessage: error.message };
   }
   return { boundErrors, bannerMessage: null };
+}
+
+/**
+ * Attribute server validation messages when controls are repeated or dynamic.
+ * Callers supply the exact field paths they can render; unknown paths become a
+ * banner so a server instruction can never disappear.
+ */
+export function partitionServerErrorMessages(
+  error: unknown,
+  acceptedFields: ReadonlySet<string>,
+  fallback: string,
+): { fieldMessages: Readonly<Record<string, readonly string[]>>; bannerMessage: string | null } {
+  if (!isFieldErrorSource(error)) {
+    return { fieldMessages: {}, bannerMessage: fallback };
+  }
+
+  const fieldMessages: Record<string, readonly string[]> = {};
+  const unattributed: string[] = [];
+  for (const [field, messages] of Object.entries(error.fieldErrors)) {
+    if (acceptedFields.has(field)) fieldMessages[field] = messages;
+    else unattributed.push(...messages);
+  }
+
+  if (unattributed.length > 0) return { fieldMessages, bannerMessage: unattributed.join(' ') };
+  if (Object.keys(fieldMessages).length === 0) return { fieldMessages, bannerMessage: error.message };
+  return { fieldMessages, bannerMessage: null };
+}
+
+function isFieldErrorSource(error: unknown): error is FieldErrorSource {
+  return (
+    error instanceof Error &&
+    'fieldErrors' in error &&
+    error.fieldErrors !== null &&
+    typeof error.fieldErrors === 'object'
+  );
 }

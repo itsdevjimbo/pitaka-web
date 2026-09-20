@@ -3,6 +3,12 @@ import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { GoalContributionsService } from '@/app/domains/app/goals';
+import {
+  TransactionSplitFailure,
+  TransactionSplitIdempotencyMismatchError,
+  TransactionSplitRefusalError,
+  TransactionSplitValidationError,
+} from '../data/transaction-split';
 import { TransactionsService } from '../data/transactions.service';
 import { TransactionSplitContextStore } from './transaction-split-context';
 import { TRANSACTION_SPLIT_IDEMPOTENCY_KEY, TransactionSplitRecoveryStore } from './transaction-split-recovery';
@@ -40,19 +46,18 @@ describe('TransactionSplitRecoveryStore', () => {
 
   it('shows every row and shared failure from a definitive atomic refusal, then refreshes facts', async () => {
     const failures = [
-      { reason: 'goal_inactive', rowIndex: 0, goalId: 12, goalName: 'Holiday', currentState: 'Completed' },
-      { reason: 'target_overrun_acknowledgement_required', rowIndex: 1, goalId: 9, currentProgress: 90, target: 100 },
-      { reason: 'account_headroom_exceeded', accountId: 7, availableHeadroom: 25 },
-    ];
-    split.mockReturnValue(
-      throwError(() =>
-        apiError(409, {
-          reason: 'split_rejected',
-          created: false,
-          failures,
-        }),
-      ),
-    );
+      { reason: 'goal_inactive', rowIndex: 0, goalId: 12, goalName: 'Holiday' },
+      {
+        reason: 'target_overrun_acknowledgement_required',
+        rowIndex: 1,
+        goalId: 9,
+        currentProgress: 90,
+        target: 100,
+        proposedProgress: 110,
+      },
+      { reason: 'account_headroom_exceeded' },
+    ] satisfies TransactionSplitFailure[];
+    split.mockReturnValue(throwError(() => new TransactionSplitRefusalError(failures)));
 
     await store.submit(payload());
 
@@ -80,7 +85,7 @@ describe('TransactionSplitRecoveryStore', () => {
     'concurrent_state_changed',
     'target_overrun_acknowledgement_required',
   ] as const)('recognises %s as a definitive structured refusal', async (reason) => {
-    split.mockReturnValue(throwError(() => apiError(409, { reason, created: false, failures: [{ reason }] })));
+    split.mockReturnValue(throwError(() => new TransactionSplitRefusalError([failureFor(reason)])));
 
     await store.submit(payload());
 
@@ -91,7 +96,7 @@ describe('TransactionSplitRecoveryStore', () => {
     split.mockReturnValue(
       throwError(
         () =>
-          new ApiError('Please correct the highlighted fields and try again.', 400, {
+          new TransactionSplitValidationError({
             'contributions[1].amount': ['Use a positive cent-precise amount.'],
             'contributions[0].goalId': ['This Goal is unavailable.'],
             contributionDate: ['Choose a valid date.'],
@@ -105,11 +110,13 @@ describe('TransactionSplitRecoveryStore', () => {
     expect(store.state()).toMatchObject({
       status: 'validation-error',
       attempt: { key: firstKey, payload: payload() },
-      fieldErrors: {
-        'contributions[1].amount': ['Use a positive cent-precise amount.'],
-        'contributions[0].goalId': ['This Goal is unavailable.'],
-        contributionDate: ['Choose a valid date.'],
-        contributions: ['Goal indexes 0 and 2 are duplicates.'],
+      error: {
+        fieldErrors: {
+          'contributions[1].amount': ['Use a positive cent-precise amount.'],
+          'contributions[0].goalId': ['This Goal is unavailable.'],
+          contributionDate: ['Choose a valid date.'],
+          contributions: ['Goal indexes 0 and 2 are duplicates.'],
+        },
       },
     });
     expect(refresh).not.toHaveBeenCalled();
@@ -163,27 +170,45 @@ describe('TransactionSplitRecoveryStore', () => {
     expect(store.state()).toMatchObject({ status: 'uncertain', attempt: { key: firstKey } });
   });
 
-  it('does not interpret idempotency mismatch as failure of the original operation', async () => {
+  it('replaces a freshly generated key collision only after explicit confirmation', async () => {
     split
-      .mockReturnValueOnce(throwError(() => apiError(409, { reason: 'idempotency_mismatch' })))
-      .mockReturnValueOnce(of(success()))
+      .mockReturnValueOnce(throwError(() => new TransactionSplitIdempotencyMismatchError()))
       .mockReturnValueOnce(of(success()));
 
     await store.submit(payload({ contributionDate: '2026-09-21' }));
 
     expect(store.state()).toMatchObject({
       status: 'idempotency-mismatch',
+      freshKeyCollision: true,
       attempt: { key: firstKey, payload: payload({ contributionDate: '2026-09-21' }) },
     });
     expect(store.state()).not.toHaveProperty('message', "We couldn't save your contributions. Nothing was created.");
     expect(await store.submit(payload())).toBe(false);
 
-    await store.resolveMismatch(payload());
-    expect(split).toHaveBeenNthCalledWith(2, payload(), firstKey);
-    expect(store.state()).toMatchObject({ status: 'confirmed', attempt: { key: firstKey, payload: payload() } });
+    await store.retryFreshKeyCollision();
+    expect(split).toHaveBeenNthCalledWith(2, payload({ contributionDate: '2026-09-21' }), secondKey);
+    expect(store.state()).toMatchObject({ status: 'confirmed', attempt: { key: secondKey } });
+  });
 
-    await store.submit(payload({ contributionDate: '2026-09-21' }));
-    expect(split).toHaveBeenNthCalledWith(3, payload({ contributionDate: '2026-09-21' }), secondKey);
+  it('keeps a replay mismatch tied to its original key until the original payload is supplied', async () => {
+    split
+      .mockReturnValueOnce(throwError(() => apiError(503, { reason: 'operation_outcome_unknown' })))
+      .mockReturnValueOnce(throwError(() => new TransactionSplitIdempotencyMismatchError()))
+      .mockReturnValueOnce(of(success()));
+
+    await store.submit(payload());
+    await store.retryUncertain();
+
+    expect(store.state()).toMatchObject({
+      status: 'idempotency-mismatch',
+      freshKeyCollision: false,
+      attempt: { key: firstKey },
+    });
+    expect(await store.retryFreshKeyCollision()).toBe(false);
+
+    await store.resolveMismatch(payload());
+    expect(split).toHaveBeenNthCalledWith(3, payload(), firstKey);
+    expect(store.state()).toMatchObject({ status: 'confirmed', attempt: { key: firstKey } });
   });
 
   it('treats a replay after deletion as historical and a failed current read never resubmits', async () => {
@@ -227,8 +252,11 @@ describe('TransactionSplitRecoveryStore', () => {
   it('uses a new key for changed semantic input only after a definitive resolution', async () => {
     split
       .mockReturnValueOnce(
-        throwError(() =>
-          apiError(409, { reason: 'goal_inactive', created: false, failures: [{ reason: 'goal_inactive' }] }),
+        throwError(
+          () =>
+            new TransactionSplitRefusalError([
+              { reason: 'goal_inactive', rowIndex: 0, goalId: 12, goalName: 'Holiday' },
+            ]),
         ),
       )
       .mockReturnValueOnce(of(success()));
@@ -249,6 +277,16 @@ function payload(overrides: Partial<{ contributionDate: string }> = {}) {
       { goalId: 9, amount: 10, note: '', acknowledgeTargetOverrun: true },
     ],
   };
+}
+
+function failureFor(reason: TransactionSplitFailure['reason']): TransactionSplitFailure {
+  if (reason === 'goal_inactive') {
+    return { reason, rowIndex: 0, goalId: 12, goalName: 'Holiday' };
+  }
+  if (reason === 'target_overrun_acknowledgement_required') {
+    return { reason, rowIndex: 0, goalId: 12, currentProgress: 90, target: 100, proposedProgress: 110 };
+  }
+  return { reason };
 }
 
 function success(overrides: Partial<{ linkedTotal: number; remainingCapacity: number }> = {}) {

@@ -1,6 +1,20 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  Injector,
+  input,
+  output,
+  signal,
+  ViewContainerRef,
+  viewChild,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { RouterLink } from '@angular/router';
@@ -15,6 +29,9 @@ import {
 } from '../data/transaction-removal';
 import { TransactionsService } from '../data/transactions.service';
 import { LinkedContributionPanel } from './linked-contribution-panel';
+import { TransactionSplitContextStore } from './transaction-split-context';
+import { TransactionSplitDialog, TransactionSplitDialogData } from './transaction-split-dialog';
+import { TransactionSplitRecoveryStore } from './transaction-split-recovery';
 
 /** The banner line for a removal that failed with nothing more specific to say. */
 const COULD_NOT_REMOVE = 'Something went wrong removing this transaction. Please try again.';
@@ -124,12 +141,21 @@ export type TransactionRowModel = Transaction & {
     RouterLink,
     RowNotice,
   ],
+  providers: [TransactionSplitContextStore, TransactionSplitRecoveryStore],
   host: {
     class: 'flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800',
   },
 })
 export class TransactionRow {
   private service = inject(TransactionsService);
+  private readonly dialog = inject(MatDialog);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly viewContainerRef = inject(ViewContainerRef);
+  private readonly linkedContributionPanel = viewChild(LinkedContributionPanel);
+  private readonly splitDialogOpen = signal(false);
+  private splitRecovery: TransactionSplitRecoveryStore | null = null;
+  private handledSplitKey: string | null = null;
 
   /** The finished row: domain fields plus resolved Category, headline, and sign. */
   readonly row = input.required<TransactionRowModel>();
@@ -204,6 +230,57 @@ export class TransactionRow {
 
   /** Structured Linked Contributions that must be deleted before this Transaction can be removed. */
   protected readonly removalBlock = signal<LinkedContributionRemovalBlock | null>(null);
+
+  protected readonly contributionActionState = computed(
+    () => this.linkedContributionPanel()?.creationAvailability() ?? { status: 'unchecked' as const, explanation: null },
+  );
+
+  protected checkContributionAvailability(): void {
+    if (this.row().direction === 'income') void this.linkedContributionPanel()?.refresh();
+  }
+
+  protected openContributionDialog(): void {
+    if (this.contributionActionState().status !== 'available') return;
+    const recovery = this.recoveryOwner();
+    recovery.prepareForDialog();
+    this.splitDialogOpen.set(true);
+    this.dialog
+      .open<TransactionSplitDialog, TransactionSplitDialogData, boolean>(TransactionSplitDialog, {
+        data: { transaction: this.row() },
+        viewContainerRef: this.viewContainerRef,
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((created) => {
+        this.splitDialogOpen.set(false);
+        if (created) {
+          const state = recovery.state();
+          if (state.status === 'confirmed') this.handledSplitKey = state.attempt.key;
+          // Fresh read: the created earmarks changed both displayed capacities (ADR 0006).
+          void this.linkedContributionPanel()?.refresh();
+        }
+      });
+  }
+
+  /** Create the row-owned recovery lifetime only when contribution creation is first opened. */
+  private recoveryOwner(): TransactionSplitRecoveryStore {
+    if (this.splitRecovery !== null) return this.splitRecovery;
+
+    const recovery = this.injector.get(TransactionSplitRecoveryStore);
+    this.splitRecovery = recovery;
+    effect(
+      () => {
+        const state = recovery.state();
+        if (state.status === 'confirmed' && !this.splitDialogOpen() && state.attempt.key !== this.handledSplitKey) {
+          this.handledSplitKey = state.attempt.key;
+          // Fresh read: the created earmarks changed both displayed capacities (ADR 0006).
+          void this.linkedContributionPanel()?.refresh();
+        }
+      },
+      { injector: this.injector },
+    );
+    return recovery;
+  }
 
   /** Reveal the inline confirmation. Sends nothing — the balance stays put. */
   protected askRemove(): void {

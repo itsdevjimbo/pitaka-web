@@ -104,10 +104,29 @@
       class="shrink-0"
       aria-label="Transaction actions"
       [matMenuTriggerFor]="rowMenu"
+      (menuOpened)="checkContributionAvailability()"
     >
       <mat-icon svgIcon="ellipsis-vertical" />
     </button>
     <mat-menu #rowMenu>
+      @if (row().direction === 'income') {
+        <button
+          mat-menu-item
+          data-contribution-action
+          [disabled]="contributionActionState().status !== 'available'"
+          (click)="openContributionDialog()"
+        >
+          <mat-icon svgIcon="landmark" />
+          <span class="flex flex-col items-start">
+            <span>Contribute to a Goal</span>
+            @if (contributionActionState().status === 'checking' || contributionActionState().status === 'unchecked') {
+              <span class="text-xs font-normal">Checking current capacity…</span>
+            } @else if (contributionActionState().explanation; as explanation) {
+              <span class="max-w-72 text-xs font-normal whitespace-normal">{{ explanation }}</span>
+            }
+          </span>
+        </button>
+      }
       <button
         mat-menu-item
         (click)="refile.emit()"

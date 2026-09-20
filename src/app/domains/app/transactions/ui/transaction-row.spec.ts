@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -14,6 +15,7 @@ import {
   TransactionHasLinkedContributionsError,
   TransactionRemovalConcurrentStateError,
 } from '../data/transaction-removal';
+import { TransactionSplitResult } from '../data/transaction-split';
 import { TransactionsService } from '../data/transactions.service';
 import { TransactionRow, TransactionRowModel, toAccountRow, toSpanningRow } from './transaction-row';
 
@@ -266,6 +268,7 @@ describe('TransactionRow', () => {
     goalHistory?: GoalContributionsService['list'];
     goal?: GoalsService['get'];
     accounts?: AccountsService['all'];
+    split?: TransactionsService['splitLinkedContributions'];
   };
 
   function renderFixture(
@@ -280,7 +283,14 @@ describe('TransactionRow', () => {
         provideIcons(),
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: TransactionsService, useValue: { remove, linkedContributions } },
+        {
+          provide: TransactionsService,
+          useValue: {
+            remove,
+            linkedContributions,
+            splitLinkedContributions: linked.split ?? (() => of({})),
+          },
+        },
         ContributionDeletionCoordinator,
         {
           provide: GoalContributionsService,
@@ -289,7 +299,23 @@ describe('TransactionRow', () => {
             list: linked.goalHistory ?? (() => of([])),
           },
         },
-        { provide: GoalsService, useValue: { get: linked.goal ?? (() => of({})) } },
+        {
+          provide: GoalsService,
+          useValue: {
+            get: linked.goal ?? (() => of({})),
+            list: () =>
+              of([
+                {
+                  id: 2,
+                  name: 'Emergency fund',
+                  targetAmount: 1000,
+                  targetDate: null,
+                  status: 'Active',
+                  currentAmount: 300,
+                },
+              ]),
+          },
+        },
         { provide: AccountsService, useValue: { all: linked.accounts ?? (() => of([])) } },
       ],
     });
@@ -322,7 +348,14 @@ describe('TransactionRow', () => {
   }
 
   function menuItem(items: HTMLButtonElement[], label: string) {
-    return items.find((b) => (b.textContent ?? '').trim() === label);
+    return items.find((b) => (b.textContent ?? '').includes(label));
+  }
+
+  async function openMenuWithAvailability(fixture: ReturnType<typeof renderFixture>) {
+    openMenu(fixture);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return Array.from(overlay().querySelectorAll<HTMLButtonElement>('button'));
   }
 
   /** A button anywhere in the row host, matched by exact trimmed text. */
@@ -698,6 +731,7 @@ describe('TransactionRow', () => {
       const fixture = renderFixture(toAccountRow(tx(), NAMES, 3));
 
       const items = openMenu(fixture);
+      expect(menuItem(items, 'Contribute to a Goal')).toBeUndefined();
       expect(menuItem(items, 'Refile')).toBeDefined();
       expect(menuItem(items, 'Remove')).toBeDefined();
     });
@@ -707,6 +741,7 @@ describe('TransactionRow', () => {
 
       expect(actionsTrigger(fixture.nativeElement as HTMLElement)).toBeDefined();
       const items = openMenu(fixture);
+      expect(menuItem(items, 'Contribute to a Goal')).toBeDefined();
       expect(menuItem(items, 'Refile')).toBeDefined();
       expect(menuItem(items, 'Remove')).toBeDefined();
     });
@@ -727,14 +762,158 @@ describe('TransactionRow', () => {
       );
 
       expect(actionsTrigger(fixture.nativeElement as HTMLElement)).toBeDefined();
+      expect(menuItem(openMenu(fixture), 'Contribute to a Goal')).toBeUndefined();
     });
 
-    it('offers the same actions on a generated transaction', () => {
-      const fixture = renderFixture(toAccountRow(tx({ generated: true, description: 'Rent' }), NAMES, 3));
+    it('offers contribution creation on generated income', () => {
+      const fixture = renderFixture(
+        toAccountRow(tx({ direction: 'income', categoryId: 2, generated: true, description: 'Salary' }), NAMES, 3),
+      );
 
       const items = openMenu(fixture);
+      expect(menuItem(items, 'Contribute to a Goal')).toBeDefined();
       expect(menuItem(items, 'Refile')).toBeDefined();
       expect(menuItem(items, 'Remove')).toBeDefined();
+    });
+
+    it.each([
+      {
+        snapshot: { ...linkedSnapshot(), remainingCapacity: 0 },
+        explanation: 'This Transaction has no remaining capacity',
+      },
+      {
+        snapshot: {
+          ...linkedSnapshot(),
+          account: { ...linkedSnapshot().account, availableHeadroom: 0 },
+        },
+        explanation: 'This Account has no available headroom',
+      },
+      {
+        snapshot: {
+          ...linkedSnapshot(),
+          account: { ...linkedSnapshot().account, active: false },
+        },
+        explanation: "The Transaction's Account is retired",
+      },
+    ])(
+      'keeps unavailable contribution creation visible and disabled with its reason',
+      async ({ snapshot, explanation }) => {
+        const fixture = renderFixture(
+          toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3),
+          () => of(undefined),
+          () => of(snapshot),
+        );
+
+        const action = menuItem(await openMenuWithAvailability(fixture), 'Contribute to a Goal');
+
+        expect(action).toBeDefined();
+        expect(action?.disabled).toBe(true);
+        expect(action?.textContent).toContain(explanation);
+      },
+    );
+
+    it('keeps the newest capacity when overlapping menu reads finish out of order', async () => {
+      const older = new Subject<TransactionLinkedContributions>();
+      const newer = new Subject<TransactionLinkedContributions>();
+      const linkedRead = vi.fn().mockReturnValueOnce(older).mockReturnValueOnce(newer);
+      const fixture = renderFixture(
+        toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3),
+        () => of(undefined),
+        linkedRead,
+      );
+
+      openMenu(fixture);
+      actionsTrigger(fixture.nativeElement as HTMLElement)?.click();
+      fixture.detectChanges();
+      openMenu(fixture);
+      newer.next({ ...linkedSnapshot(), remainingCapacity: 0 });
+      newer.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      older.next(linkedSnapshot());
+      older.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const action = menuItem(
+        Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')),
+        'Contribute to a Goal',
+      );
+      expect(linkedRead).toHaveBeenCalledTimes(2);
+      expect(action?.disabled).toBe(true);
+      expect(action?.textContent).toContain('This Transaction has no remaining capacity');
+    });
+
+    it('refreshes authoritative Linked Contribution facts after the split dialog confirms', async () => {
+      const linkedRead = vi.fn(() => of(linkedSnapshot()));
+      const fixture = renderFixture(
+        toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3),
+        () => of(undefined),
+        linkedRead,
+      );
+      const closed = new Subject<boolean>();
+      const open = vi.spyOn(TestBed.inject(MatDialog), 'open').mockReturnValue({
+        afterClosed: () => closed.asObservable(),
+      } as never);
+
+      menuItem(await openMenuWithAvailability(fixture), 'Contribute to a Goal')?.click();
+      fixture.detectChanges();
+      expect(open).toHaveBeenCalledOnce();
+      expect(linkedRead).toHaveBeenCalledOnce();
+
+      closed.next(true);
+      closed.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(linkedRead).toHaveBeenCalledTimes(2);
+      expect(linkedRead).toHaveBeenLastCalledWith(1);
+    });
+
+    it('keeps an in-flight split owned by the row after the dialog is dismissed', async () => {
+      const pending = new Subject<TransactionSplitResult>();
+      const linkedRead = vi.fn(() => of(linkedSnapshot()));
+      const fixture = renderFixture(
+        toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3),
+        () => of(undefined),
+        linkedRead,
+        { split: () => pending.asObservable() },
+      );
+      menuItem(await openMenuWithAvailability(fixture), 'Contribute to a Goal')?.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const dialog = overlay();
+      const goal = dialog.querySelector<HTMLSelectElement>('select[aria-label="Contribution 1 Goal"]')!;
+      goal.value = '2';
+      goal.dispatchEvent(new Event('input'));
+      goal.dispatchEvent(new Event('change'));
+      const amount = dialog.querySelector<HTMLInputElement>('input[aria-label="Contribution 1 amount"]')!;
+      amount.value = '10';
+      amount.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      Array.from(dialog.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === 'Create contributions')!
+        .click();
+      fixture.detectChanges();
+      expect(linkedRead).toHaveBeenCalledTimes(2);
+
+      dialog.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(overlay().querySelector('[role="dialog"]')).toBeNull();
+
+      pending.next({
+        transactionId: 1,
+        transactionAmount: 120.5,
+        linkedTotal: 10,
+        remainingCapacity: 110.5,
+        account: linkedSnapshot().account,
+        contributions: [],
+      });
+      pending.complete();
+
+      await vi.waitFor(() => expect(linkedRead).toHaveBeenCalledTimes(4));
+      expect(linkedRead).toHaveBeenLastCalledWith(1);
     });
 
     it('offers no menu at all on a Transfer seen from where it landed', () => {
@@ -887,6 +1066,7 @@ describe('TransactionRow', () => {
       };
       const linkedRead = vi
         .fn()
+        .mockReturnValueOnce(of(oneLinkedContribution))
         .mockReturnValueOnce(of(oneLinkedContribution))
         .mockReturnValueOnce(of(noLinkedContributions));
       const deleteContribution = vi.fn(() => {
