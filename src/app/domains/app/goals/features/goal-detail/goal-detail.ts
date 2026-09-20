@@ -21,7 +21,7 @@ import {
   withAccountNames,
 } from '../../index';
 import { AddContributionDialog } from '../../ui/add-contribution-dialog';
-import { ContributionHistoryRow } from '../../ui/contribution-history-row';
+import { ContributionHistoryRow } from '../../ui/contribution-history-row/contribution-history-row';
 import { EditContributionDialog } from '../../ui/edit-contribution-dialog';
 import { EditGoalDialog } from '../../ui/edit-goal-dialog';
 import { GoalProgress } from '../../ui/goal-progress';
