@@ -11,6 +11,11 @@ existing Prettier configuration and 24 fixture-internals double assertions acros
 
 ## 1. Formatting pass
 
+Tracked in [#251](https://github.com/itsdevjimbo/pitaka-web/issues/251), blocked by
+the component-test migration [#250](https://github.com/itsdevjimbo/pitaka-web/issues/250).
+Formatting legacy specs makes them subject to the zero-warning changed-file gate,
+so resolve their existing warnings before starting the full formatting pass.
+
 Make one formatting-only change across `src/**/*.{ts,html}` using the existing
 Prettier configuration. Keep behavioral edits out of that change so reviewers can
 verify the diff is mechanical. Run the formatter check, full lint, tests, and build.
@@ -19,6 +24,8 @@ Done when the entire source tree passes Prettier. Then add a full-source format
 check in CI; keep the changed-file command useful for local feedback.
 
 ## 2. Component test migrations
+
+Tracked in [#250](https://github.com/itsdevjimbo/pitaka-web/issues/250).
 
 Find candidates with `rg 'componentInstance as unknown as' src` and the lint
 diagnostics. Start with one representative form and one list, then migrate in
@@ -38,6 +45,8 @@ to an error in full-repository lint.
 
 ## 3. Comment and ADR reconciliation
 
+Tracked in [#252](https://github.com/itsdevjimbo/pitaka-web/issues/252).
+
 Start with `TagsService`, `CategoriesService`, and the Tags list's long narratives.
 Retain non-obvious API contracts beside the mapping/error-handling code. Replace
 repeated architectural reasoning with concise links to the authoritative ADR.
@@ -52,6 +61,8 @@ remain discoverable, links resolve, and no comment or ADR incorrectly describes 
 current caching boundary. This is documentation work, not a cache redesign.
 
 ## 4. Domain and asynchronous behavior audit
+
+Tracked in [#253](https://github.com/itsdevjimbo/pitaka-web/issues/253).
 
 Audit each resource domain's `index.ts`, imports, and routes. Cross-domain consumers
 should use public exports; same-domain imports and route assembly retain their
