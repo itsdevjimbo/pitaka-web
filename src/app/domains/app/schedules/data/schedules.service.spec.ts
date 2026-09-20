@@ -259,4 +259,86 @@ describe('SchedulesService', () => {
       expect((error as ApiError).fieldErrors['categoryId']).toEqual(['Choose an active Category.']);
     });
   });
+
+  describe('update', () => {
+    function update(overrides: Partial<Record<string, unknown>> = {}) {
+      return {
+        name: 'Apartment rent',
+        amount: 19000,
+        categoryId: 4,
+        description: 'New lease',
+        lastGeneration: new Date(2027, 5, 30),
+        ...overrides,
+      };
+    }
+
+    it('PUTs only editable fields and maps the updated Schedule', async () => {
+      const result = firstValueFrom(service.update(7, update()));
+
+      const request = http.expectOne(`${BASE_URL}/api/recurring-transactions/7`);
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual({
+        name: 'Apartment rent',
+        amount: 19000,
+        categoryId: 4,
+        description: 'New lease',
+        endDate: '2027-06-30',
+      });
+      request.flush(
+        resource({
+          name: 'Apartment rent',
+          amount: 19000,
+          description: 'New lease',
+          endDate: '2027-06-30',
+          status: 'Completed',
+        }),
+      );
+
+      await expect(result).resolves.toMatchObject({
+        id: 7,
+        name: 'Apartment rent',
+        lastGeneration: new Date(2027, 5, 30),
+        status: 'completed',
+      });
+    });
+
+    it('preserves a date-only value and sends an explicit null when the end is cleared', async () => {
+      const datedResult = firstValueFrom(service.update(7, update({ lastGeneration: new Date(2027, 5, 30, 23, 30) })));
+      const datedRequest = http.expectOne(`${BASE_URL}/api/recurring-transactions/7`);
+      expect(datedRequest.request.body.endDate).toBe('2027-06-30');
+      datedRequest.flush(resource({ endDate: '2027-06-30' }));
+      await datedResult;
+
+      const indefiniteResult = firstValueFrom(service.update(7, update({ lastGeneration: null })));
+      const indefiniteRequest = http.expectOne(`${BASE_URL}/api/recurring-transactions/7`);
+      expect(indefiniteRequest.request.body.endDate).toBeNull();
+      indefiniteRequest.flush(resource({ endDate: null }));
+      await indefiniteResult;
+    });
+
+    it('attributes duplicate names and translates update validation fields', async () => {
+      const duplicateResult = firstValueFrom(service.update(7, update()));
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions/7`)
+        .flush(
+          { detail: 'A recurring transaction with this name already exists.' },
+          { status: 409, statusText: 'Conflict' },
+        );
+      const duplicate = (await duplicateResult.catch((value: unknown) => value)) as ApiError;
+      expect(duplicate.fieldErrors['name']).toEqual(['A Schedule with this name already exists.']);
+
+      const validationResult = firstValueFrom(service.update(7, update()));
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions/7`)
+        .flush(
+          { errors: { EndDate: ['End date must be after start date.'], CategoryId: ['Choose an active Category.'] } },
+          { status: 400, statusText: 'Bad Request' },
+        );
+      const validation = (await validationResult.catch((value: unknown) => value)) as ApiError;
+      expect(validation.fieldErrors).toEqual({
+        lastGeneration: ['End date must be after start date.'],
+        categoryId: ['Choose an active Category.'],
+      });
+    });
+  });
 });

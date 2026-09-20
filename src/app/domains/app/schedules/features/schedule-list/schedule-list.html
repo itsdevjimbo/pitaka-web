@@ -103,6 +103,8 @@
                 <li
                   schedules-schedule-row
                   [row]="row"
+                  [writeDisabled]="refreshing() || stale()"
+                  (edit)="openEditDialog($event)"
                 ></li>
               }
             </ol>

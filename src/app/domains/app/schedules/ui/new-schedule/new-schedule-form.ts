@@ -1,4 +1,3 @@
-import { formatDate } from '@angular/common';
 import { Component, computed, DestroyRef, inject, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField, max, maxLength, min, required, submit, validate } from '@angular/forms/signals';
@@ -23,6 +22,7 @@ import {
   ScheduleFrequency,
   SchedulesService,
 } from '../..';
+import { addCalendarDays, compareCalendarDates, formatCalendarDate } from '../../data/schedule-calendar';
 
 type NewScheduleModel = {
   name: string;
@@ -279,19 +279,8 @@ function firstGenerationMinimum(now = new Date()): Date {
   return addCalendarDays(new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()), 1);
 }
 
-function addCalendarDays(value: Date, count: number): Date {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate() + count);
-}
-
-function compareCalendarDates(left: Date, right: Date): number {
-  return (
-    Date.UTC(left.getFullYear(), left.getMonth(), left.getDate()) -
-    Date.UTC(right.getFullYear(), right.getMonth(), right.getDate())
-  );
-}
-
 function minimumMessage(minimum: Date): string {
-  return `Choose ${formatDate(minimum, 'd MMM y', 'en-US')} or later`;
+  return `Choose ${formatCalendarDate(minimum)} or later`;
 }
 
 function isUnattributedConflict(error: unknown): error is ApiError {

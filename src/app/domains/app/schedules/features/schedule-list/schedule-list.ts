@@ -7,6 +7,7 @@ import { forkJoin } from 'rxjs';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { Schedule, ScheduleStatus, SchedulesService } from '../..';
+import { EditScheduleDialog } from '../../ui/edit-schedule/edit-schedule-dialog';
 import { NewScheduleDialog } from '../../ui/new-schedule/new-schedule-dialog';
 import { ScheduleEmptyState } from '../../ui/schedule-empty-state/schedule-empty-state';
 import {
@@ -134,5 +135,14 @@ export default class ScheduleList {
       .subscribe((created) => {
         if (created) this.load();
       });
+  }
+
+  protected openEditDialog(row: ScheduleRowData): void {
+    if (this.stale() || this.refreshing()) return;
+    const ref = this.dialog.open<EditScheduleDialog, ScheduleRowData, Schedule>(EditScheduleDialog, { data: row });
+    ref
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.load());
   }
 }

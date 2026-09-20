@@ -8,7 +8,8 @@ import { provideIcons } from '@/app/core/icons';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
-import { NewSchedule, Schedule } from '../../data/schedule';
+import { withPinnedTimezone } from '@/testing/timezone';
+import { NewSchedule, Schedule, ScheduleUpdate } from '../../data/schedule';
 import { SchedulesService } from '../../data/schedules.service';
 import ScheduleList from './schedule-list';
 
@@ -57,6 +58,7 @@ describe('ScheduleList', () => {
     list: SchedulesService['list'],
     overrides: {
       create?: SchedulesService['create'];
+      update?: SchedulesService['update'];
       accounts?: Account[];
       categories?: Category[];
       refreshCategories?: CategoriesService['refreshList'];
@@ -77,6 +79,7 @@ describe('ScheduleList', () => {
           useValue: {
             list,
             create: overrides.create ?? (() => of(ALL[0])),
+            update: overrides.update ?? (() => of(ALL[0])),
           },
         },
         { provide: AccountsService, useValue: { all: () => of(accounts) } },
@@ -182,6 +185,21 @@ describe('ScheduleList', () => {
     expect(text()).not.toContain('Next generation:');
   });
 
+  it('offers Edit on Active and Paused cards but not Completed or Cancelled cards', () => {
+    const { fixture } = setup(() => of(ALL));
+    const rowFor = (name: string) =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('li[schedules-schedule-row]'),
+      ).find((row) => (row.textContent ?? '').includes(name))!;
+
+    expect(rowFor('Sooner salary').textContent).toContain('Edit');
+    click(fixture, 'Paused');
+    expect(rowFor('Gym').textContent).toContain('Edit');
+    click(fixture, 'Past');
+    expect(rowFor('Retainer').textContent).not.toContain('Edit');
+    expect(rowFor('Old plan').textContent).not.toContain('Edit');
+  });
+
   it('shows each lifecycle count as a Material badge beside its menu label', () => {
     const { fixture } = setup(() => of(ALL));
     const buttons = Array.from(
@@ -239,6 +257,21 @@ describe('ScheduleList', () => {
     click(fixture, 'Retry');
     expect(text()).toContain('Sooner salary');
     expect(text()).not.toContain('may be out of date');
+  });
+
+  it('disables Edit while the list is stale', () => {
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([ALL[0]]))
+      .mockReturnValueOnce(throwError(() => new ApiError('Offline', 0)));
+    const { fixture } = setup(list as SchedulesService['list']);
+
+    click(fixture, 'Refresh');
+    const edit = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => (button.textContent ?? '').includes('Edit'),
+    )!;
+
+    expect(edit.disabled).toBe(true);
   });
 
   it.each([
@@ -598,6 +631,352 @@ describe('ScheduleList', () => {
       ).filter((button) => (button.textContent ?? '').includes('Create Schedule'));
       expect(createButtons).toHaveLength(2);
       expect(createButtons.every((button) => button.disabled)).toBe(true);
+    });
+  });
+
+  describe('edit, in a dialog', () => {
+    const pinTimezone = withPinnedTimezone();
+
+    function editableSchedule(overrides: Partial<Schedule> = {}) {
+      return schedule({
+        id: 31,
+        name: 'Rent',
+        direction: 'expense',
+        amount: 18500,
+        description: 'Current lease',
+        categoryId: 11,
+        frequency: 'monthly',
+        firstGeneration: new Date(2026, 6, 1),
+        lastGeneration: new Date(2027, 5, 1),
+        nextGeneration: new Date(2026, 9, 1),
+        ...overrides,
+      });
+    }
+
+    it('prefills editable details and presents structural details as fixed', async () => {
+      const editable = editableSchedule();
+      const { fixture, dialog, dialogText } = setup(() => of([editable]));
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Edit Schedule');
+      expect(overlay().querySelector<HTMLInputElement>('#edit-schedule-name')!.value).toBe('Rent');
+      expect(overlay().querySelector<HTMLInputElement>('#edit-schedule-amount')!.value).toBe('18500');
+      expect(overlay().querySelector<HTMLTextAreaElement>('#edit-schedule-description')!.value).toBe('Current lease');
+      expect(overlay().querySelector<HTMLInputElement>('#edit-schedule-last-generation')!.value).toBe('6/1/2027');
+      expect(dialogText()).toContain('BPI Savings');
+      expect(dialogText()).toContain('Expense');
+      expect(dialogText()).toContain('Monthly');
+      expect(dialogText()).toContain('1 Jul 2026');
+      expect(overlay().querySelector('#edit-schedule-account')).toBeNull();
+      expect(overlay().querySelector('#edit-schedule-direction')).toBeNull();
+      expect(overlay().querySelector('#edit-schedule-frequency')).toBeNull();
+      expect(overlay().querySelector('#edit-schedule-first-generation')).toBeNull();
+    });
+
+    it('warns and explicitly saves a shortened end that completes the Schedule', async () => {
+      const editable = editableSchedule();
+      const completed = editableSchedule({
+        name: 'Apartment rent',
+        amount: 19000,
+        categoryId: 12,
+        description: 'New lease',
+        lastGeneration: new Date(2026, 7, 1),
+        status: 'completed',
+      });
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([editable]))
+        .mockReturnValueOnce(of([completed]));
+      const update = vi.fn((_id: number, _value: ScheduleUpdate) => of(completed));
+      const { fixture, dialog, dialogText, text } = setup(list as SchedulesService['list'], {
+        update: update as SchedulesService['update'],
+      });
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+      typeInto('#edit-schedule-name', 'Apartment rent');
+      typeInto('#edit-schedule-amount', '19000');
+      typeInto('#edit-schedule-description', 'New lease');
+      await pickOption(fixture, '#edit-schedule-category', 'Groceries');
+      typeInto('#edit-schedule-last-generation', '2026-08-01');
+      await settle(fixture);
+
+      expect(dialogText()).toContain('This change will complete the Schedule. Existing Transactions won’t change.');
+      expect(overlayButton('Save and complete')).not.toBeNull();
+      overlayButton('Save and complete').click();
+      await settle(fixture);
+
+      expect(update).toHaveBeenCalledWith(31, {
+        name: 'Apartment rent',
+        amount: 19000,
+        categoryId: 12,
+        description: 'New lease',
+        lastGeneration: expect.any(Date),
+      });
+      const submitted = update.mock.calls[0][1].lastGeneration!;
+      expect([submitted.getFullYear(), submitted.getMonth(), submitted.getDate()]).toEqual([2026, 7, 1]);
+      expect(dialog()).toBeNull();
+      expect(list).toHaveBeenCalledTimes(2);
+      click(fixture, 'Past');
+      expect(text()).toContain('Apartment rent');
+      expect(text()).toContain('Completed');
+    });
+
+    it('retains and labels the saved retired Category, allows clearing it, and withholds other retired choices', async () => {
+      const editable = editableSchedule();
+      const categories = [
+        ...CATEGORIES,
+        { id: 13, name: 'Old utilities', kind: 'expense' as const, isActive: false, isDefault: false },
+      ];
+      const update = vi.fn((_id: number, _value: ScheduleUpdate) => of({ ...editable, categoryId: null }));
+      const { fixture } = setup(() => of([editable]), {
+        categories,
+        update: update as SchedulesService['update'],
+      });
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+      overlay().querySelector<HTMLElement>('#edit-schedule-category')!.click();
+      await settle(fixture);
+      const optionLabels = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).map((option) =>
+        (option.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      );
+      expect(optionLabels).toContain('Housing · Retired');
+      expect(optionLabels).toContain('Groceries');
+      expect(optionLabels).not.toContain('Old utilities · Retired');
+
+      const clear = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).find(
+        (option) => (option.textContent ?? '').trim() === 'Uncategorized',
+      )!;
+      clear.click();
+      await settle(fixture);
+      overlayButton('Save changes').click();
+      await settle(fixture);
+
+      expect(update.mock.calls[0][1].categoryId).toBeNull();
+    });
+
+    it('keeps the dialog values and attributes duplicate-name failures', async () => {
+      const editable = editableSchedule();
+      const update = vi.fn(() =>
+        throwError(
+          () =>
+            new ApiError('A Schedule with this name already exists.', 409, {
+              name: ['A Schedule with this name already exists.'],
+            }),
+        ),
+      );
+      const { fixture, dialog, dialogText } = setup(() => of([editable]), {
+        update: update as SchedulesService['update'],
+      });
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+      typeInto('#edit-schedule-name', 'Other rent');
+      typeInto('#edit-schedule-description', 'Keep this text');
+      overlayButton('Save changes').click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('A Schedule with this name already exists.');
+      expect(overlay().querySelector<HTMLInputElement>('#edit-schedule-name')!.value).toBe('Other rent');
+      expect(overlay().querySelector<HTMLTextAreaElement>('#edit-schedule-description')!.value).toBe('Keep this text');
+    });
+
+    it('refreshes and explains an unattributed state conflict while preserving values', async () => {
+      const editable = editableSchedule();
+      const completed = editableSchedule({ status: 'completed' });
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([editable]))
+        .mockReturnValueOnce(of([completed]))
+        .mockReturnValueOnce(of([completed]));
+      const refreshCategories = vi.fn(() => of(CATEGORIES.filter((category) => category.isActive)));
+      const update = vi.fn(() => throwError(() => new ApiError('The Schedule changed.', 409)));
+      const { fixture, dialogText } = setup(list as SchedulesService['list'], {
+        update: update as SchedulesService['update'],
+        refreshCategories,
+      });
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+      typeInto('#edit-schedule-name', 'Keep my edit');
+      overlayButton('Save changes').click();
+      await settle(fixture);
+
+      expect(dialogText()).toContain('Review the refreshed information and try again.');
+      expect(dialogText()).toContain('This Schedule is now Completed.');
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(refreshCategories).toHaveBeenCalledOnce();
+      expect(overlay().querySelector<HTMLInputElement>('#edit-schedule-name')!.value).toBe('Keep my edit');
+      expect(overlayButton('Save changes').disabled).toBe(true);
+
+      pressEscape();
+      await settle(fixture);
+      expect(list).toHaveBeenCalledTimes(3);
+    });
+
+    it('blocks retry when the Schedule is absent from refreshed state after a conflict', async () => {
+      const editable = editableSchedule();
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([editable]))
+        .mockReturnValueOnce(of([]));
+      const update = vi.fn(() => throwError(() => new ApiError('The Schedule changed.', 409)));
+      const { fixture, dialogText } = setup(list as SchedulesService['list'], {
+        update: update as SchedulesService['update'],
+      });
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+      overlayButton('Save changes').click();
+      await settle(fixture);
+
+      expect(dialogText()).toContain('Current Schedule information is unavailable.');
+      expect(overlayButton('Save changes').disabled).toBe(true);
+      expect(update).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+      ['daily', [2026, 8, 1], '9/19/2026', '9/20/2026'],
+      ['weekly', [2026, 8, 1], '9/21/2026', '9/22/2026'],
+      ['monthly', [2026, 0, 31], '9/29/2026', '9/30/2026'],
+      ['yearly', [2024, 1, 29], '2/27/2027', '2/28/2027'],
+    ] as const)(
+      'anchors a paused %s Schedule to First generation when deciding whether the end completes it',
+      async (frequency, firstParts, beforeEligible, onEligible) => {
+        pinTimezone('America/Los_Angeles');
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-09-20T00:30:00.000Z'));
+        try {
+          const firstGeneration = new Date(firstParts[0], firstParts[1], firstParts[2]);
+          const paused = editableSchedule({
+            status: 'paused',
+            frequency,
+            firstGeneration,
+            nextGeneration: new Date(2026, 8, 1),
+          });
+          const { fixture, dialogText } = setup(() => of([paused]));
+          click(fixture, 'Paused');
+          click(fixture, 'Edit');
+          await settle(fixture);
+
+          typeInto('#edit-schedule-last-generation', beforeEligible);
+          await settle(fixture);
+          expect(dialogText()).toContain('This change will complete the Schedule.');
+          expect(overlayButton('Save and complete')).not.toBeNull();
+
+          typeInto('#edit-schedule-last-generation', onEligible);
+          await settle(fixture);
+          expect(dialogText()).not.toContain('This change will complete the Schedule.');
+          expect(overlayButton('Save changes')).not.toBeNull();
+        } finally {
+          vi.useRealTimers();
+        }
+      },
+    );
+
+    it('refreshes Category eligibility after rejection and requires another choice', async () => {
+      const editable = editableSchedule({ categoryId: 11 });
+      const refreshCategories = vi.fn(() =>
+        of([
+          { id: 10, name: 'Salary', kind: 'income' as const, isActive: true, isDefault: false },
+          { id: 14, name: 'Utilities', kind: 'expense' as const, isActive: true, isDefault: false },
+        ]),
+      );
+      const update = vi.fn(() =>
+        throwError(() => new ApiError('Validation failed.', 400, { categoryId: ['Choose an active Category.'] })),
+      );
+      const { fixture, dialogText } = setup(() => of([editable]), {
+        update: update as SchedulesService['update'],
+        refreshCategories,
+      });
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+      await pickOption(fixture, '#edit-schedule-category', 'Groceries');
+      overlayButton('Save changes').click();
+      await settle(fixture);
+
+      expect(dialogText()).toContain('Choose an active Category.');
+      expect(refreshCategories).toHaveBeenCalledOnce();
+      expect(overlayButton('Save changes').disabled).toBe(true);
+      overlay().querySelector<HTMLElement>('#edit-schedule-category')!.click();
+      await settle(fixture);
+      expect(overlay().textContent).not.toContain('Groceries');
+      expect(overlay().textContent).toContain('Utilities');
+    });
+
+    it('validates the earliest Last generation and treats an occurrence on the end as eligible', async () => {
+      const editable = editableSchedule();
+      const { fixture, dialogText } = setup(() => of([editable]));
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+      typeInto('#edit-schedule-last-generation', '2026-07-01');
+      overlay().querySelector<HTMLInputElement>('#edit-schedule-last-generation')!.dispatchEvent(new Event('blur'));
+      await settle(fixture);
+      expect(dialogText()).toContain('Choose 2 Jul 2026 or later');
+
+      typeInto('#edit-schedule-last-generation', '2026-10-01');
+      await settle(fixture);
+      expect(dialogText()).not.toContain('This change will complete the Schedule.');
+      expect(overlayButton('Save changes')).not.toBeNull();
+    });
+
+    it('keeps one update pending and prevents another submission', async () => {
+      const editable = editableSchedule();
+      const pending = new Subject<Schedule>();
+      const update = vi.fn((_id: number, _value: ScheduleUpdate) => pending.asObservable());
+      const { fixture, dialogText } = setup(() => of([editable]), {
+        update: update as SchedulesService['update'],
+      });
+
+      click(fixture, 'Edit');
+      await settle(fixture);
+      const submit = overlayButton('Save changes');
+      submit.click();
+      fixture.detectChanges();
+
+      expect(dialogText()).toContain('Saving…');
+      expect(submit.disabled).toBe(true);
+      submit.click();
+      expect(update).toHaveBeenCalledOnce();
+
+      pending.next(editable);
+      pending.complete();
+      await settle(fixture);
+    });
+
+    it('uses the shared responsive, keyboard-accessible dialog behavior', async () => {
+      const originalWidth = window.innerWidth;
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+      try {
+        const { fixture, dialog } = setup(() => of([editableSchedule()]));
+        const opener = Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+        ).find((button) => (button.textContent ?? '').includes('Edit'))!;
+        opener.focus();
+        opener.click();
+        await settle(fixture);
+
+        expect(dialog()).not.toBeNull();
+        expect(overlay().querySelector('.app-dialog-panel')).not.toBeNull();
+        expect(overlay().contains(document.activeElement)).toBe(true);
+        overlay().querySelector<HTMLElement>('.cdk-overlay-backdrop')!.click();
+        await settle(fixture);
+        expect(dialog()).not.toBeNull();
+
+        pressEscape();
+        await settle(fixture);
+        expect(dialog()).toBeNull();
+        expect(document.activeElement).toBe(opener);
+      } finally {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+      }
     });
   });
 });

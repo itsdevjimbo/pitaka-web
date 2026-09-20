@@ -1,0 +1,188 @@
+<form
+  class="grid gap-x-4 gap-y-3 sm:grid-cols-2"
+  (submit)="save($event)"
+>
+  @if (errorMessage(); as message) {
+    <div
+      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      role="alert"
+    >
+      {{ message }}
+    </div>
+  }
+  @if (optionsFailed()) {
+    <div
+      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      role="alert"
+    >
+      Categories couldn’t be loaded. Close the dialog and try again.
+    </div>
+  }
+  <dl class="grid gap-3 rounded-xl bg-neutral-50 p-4 text-sm sm:col-span-2 sm:grid-cols-2 dark:bg-neutral-900">
+    <div>
+      <dt class="text-xs text-neutral-500">Account</dt>
+      <dd>{{ row().accountName }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-neutral-500">Direction</dt>
+      <dd>{{ currentSchedule().direction === 'income' ? 'Income' : 'Expense' }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-neutral-500">Frequency</dt>
+      <dd>{{ frequencies[currentSchedule().frequency] }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-neutral-500">First generation</dt>
+      <dd>{{ currentSchedule().firstGeneration | date: 'd MMM y' }}</dd>
+    </div>
+  </dl>
+
+  <mat-form-field class="sm:col-span-2">
+    <mat-label>Name</mat-label>
+    <input
+      id="edit-schedule-name"
+      matInput
+      [formField]="scheduleForm.name"
+    />
+    <mat-error>
+      @if (scheduleForm.name().touched() && scheduleForm.name().invalid()) {
+        @for (error of scheduleForm.name().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Amount</mat-label>
+    <span
+      matTextPrefix
+      aria-hidden="true"
+    >
+      ₱&nbsp;
+    </span>
+    <input
+      id="edit-schedule-amount"
+      matInput
+      type="number"
+      step="0.01"
+      inputmode="decimal"
+      [formField]="scheduleForm.amount"
+    />
+    <mat-error>
+      @if (scheduleForm.amount().touched() && scheduleForm.amount().invalid()) {
+        @for (error of scheduleForm.amount().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Category</mat-label>
+    <mat-select
+      id="edit-schedule-category"
+      [formField]="scheduleForm.categoryId"
+      (selectionChange)="eligibilityChanged()"
+    >
+      <mat-option [value]="null">Uncategorized</mat-option>
+      @for (category of categoryOptions(); track category.id) {
+        <mat-option [value]="category.id">
+          {{ category.name }}
+          @if (!category.isActive) {
+            <span class="text-neutral-500 dark:text-neutral-400">· Retired</span>
+          }
+        </mat-option>
+      }
+    </mat-select>
+    <mat-error>
+      @if (scheduleForm.categoryId().touched() && scheduleForm.categoryId().invalid()) {
+        @for (error of scheduleForm.categoryId().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Last generation</mat-label>
+    <input
+      id="edit-schedule-last-generation"
+      matInput
+      [matDatepicker]="lastPicker"
+      [formField]="scheduleForm.lastGeneration"
+    />
+    <mat-datepicker-toggle
+      matIconSuffix
+      [for]="lastPicker"
+    />
+    <mat-datepicker #lastPicker />
+    <mat-hint>Optional. An occurrence on this date is included.</mat-hint>
+    <mat-error>
+      @if (scheduleForm.lastGeneration().touched() && scheduleForm.lastGeneration().invalid()) {
+        @for (error of scheduleForm.lastGeneration().errors(); track error) {
+          {{ error.message }}
+        }
+      }
+    </mat-error>
+  </mat-form-field>
+
+  @if (completesSchedule()) {
+    <div
+      class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:col-span-2 dark:bg-amber-950 dark:text-amber-100"
+      role="status"
+    >
+      This change will complete the Schedule. Existing Transactions won’t change.
+    </div>
+  }
+  @if (conflictRefreshFailed()) {
+    <div
+      class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:col-span-2 dark:bg-amber-950 dark:text-amber-100"
+      role="alert"
+    >
+      Current Schedule information is unavailable. Close the dialog and refresh before trying again.
+    </div>
+  } @else if (!canRetry()) {
+    <div
+      class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:col-span-2 dark:bg-amber-950 dark:text-amber-100"
+      role="alert"
+    >
+      This Schedule is now {{ currentSchedule().status === 'completed' ? 'Completed' : 'Cancelled' }}. Close the dialog
+      to review its current state.
+    </div>
+  }
+
+  <mat-form-field class="sm:col-span-2">
+    <mat-label>Description</mat-label>
+    <textarea
+      id="edit-schedule-description"
+      matInput
+      rows="3"
+      [formField]="scheduleForm.description"
+    ></textarea>
+  </mat-form-field>
+
+  <div class="mt-2 flex items-center justify-end gap-3 sm:col-span-2">
+    <button
+      matButton
+      type="button"
+      (click)="cancel()"
+    >
+      Cancel
+    </button>
+    <button
+      matButton="filled"
+      type="submit"
+      [disabled]="
+        scheduleForm().invalid() ||
+        submitting() ||
+        loadingOptions() ||
+        optionsFailed() ||
+        eligibilityRejected() ||
+        !canRetry()
+      "
+    >
+      {{ submitting() ? 'Saving…' : completesSchedule() ? 'Save and complete' : 'Save changes' }}
+    </button>
+  </div>
+</form>
