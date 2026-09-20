@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatBadgeModule } from '@angular/material/badge';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -37,7 +38,7 @@ const STATUS_VIEW: Record<ScheduleStatus, ScheduleView> = {
 @Component({
   selector: 'schedule-list',
   templateUrl: './schedule-list.html',
-  imports: [DatePipe, MatButtonModule, MatIconModule, PesoPipe],
+  imports: [DatePipe, MatBadgeModule, MatButtonModule, MatIconModule, PesoPipe],
   host: { class: 'flex flex-auto flex-col' },
 })
 export default class ScheduleList {

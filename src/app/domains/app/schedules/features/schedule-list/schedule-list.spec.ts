@@ -182,7 +182,7 @@ describe('ScheduleList', () => {
     expect(text()).not.toContain('Next generation:');
   });
 
-  it('shows each lifecycle count as a badge beside its menu label', () => {
+  it('shows each lifecycle count as a Material badge beside its menu label', () => {
     const { fixture } = setup(() => of(ALL));
     const buttons = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
@@ -190,7 +190,7 @@ describe('ScheduleList', () => {
       ),
     );
 
-    expect(buttons.map((button) => button.querySelector('[data-schedule-count-badge]')?.textContent?.trim())).toEqual([
+    expect(buttons.map((button) => button.querySelector('.mat-badge-content')?.textContent?.trim())).toEqual([
       '2',
       '1',
       '2',
