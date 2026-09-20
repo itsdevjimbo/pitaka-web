@@ -4,11 +4,7 @@ import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
 import { AccountModifiedError } from '@/app/domains/app/accounts';
 import { toGoalCalendarDate, toGoalDateOnly } from './goal-calendar';
-import {
-  GoalContribution,
-  NewGoalContribution,
-  UpdateGoalContribution,
-} from './goal-contribution';
+import { GoalContribution, NewGoalContribution, UpdateGoalContribution } from './goal-contribution';
 
 /** The Contribution resource sent by every Goal-Contributions endpoint. */
 type GoalContributionResource = {
@@ -30,9 +26,7 @@ export class GoalContributionsService {
   /** One Goal's history, read through the Goal-owned endpoint. */
   list(goalId: number): Observable<GoalContribution[]> {
     return this.http
-      .get<GoalContributionResource[]>(
-        `${this.baseUrl}/api/goals/${goalId}/contributions`
-      )
+      .get<GoalContributionResource[]>(`${this.baseUrl}/api/goals/${goalId}/contributions`)
       .pipe(map((resources) => resources.map(toGoalContribution)));
   }
 
@@ -46,33 +40,24 @@ export class GoalContributionsService {
   /** Add an earmark. Only this write can surface the Account concurrency conflict. */
   create(contribution: NewGoalContribution): Observable<GoalContribution> {
     return this.http
-      .post<GoalContributionResource>(
-        `${this.baseUrl}/api/goal-contributions`,
-        {
-          goalId: contribution.goalId,
-          accountId: contribution.accountId,
-          transactionId: contribution.transactionId,
-          amount: contribution.amount,
-          contributionDate: toGoalDateOnly(contribution.contributionDate),
-          note: contribution.note,
-        }
-      )
+      .post<GoalContributionResource>(`${this.baseUrl}/api/goal-contributions`, {
+        goalId: contribution.goalId,
+        accountId: contribution.accountId,
+        transactionId: contribution.transactionId,
+        amount: contribution.amount,
+        contributionDate: toGoalDateOnly(contribution.contributionDate),
+        note: contribution.note,
+      })
       .pipe(
         map(toGoalContribution),
-        catchError((error: unknown) =>
-          throwError(() => asAccountModified(error))
-        )
+        catchError((error: unknown) => throwError(() => asAccountModified(error))),
       );
   }
 
-  /** Correct a Contribution's calendar date and note; amount and Account stay settled. */
-  update(
-    id: number,
-    contribution: UpdateGoalContribution
-  ): Observable<GoalContribution> {
+  /** Correct a Contribution's note; its date and other facts stay settled. */
+  update(id: number, contribution: UpdateGoalContribution): Observable<GoalContribution> {
     return this.http
       .put<GoalContributionResource>(`${this.baseUrl}/api/goal-contributions/${id}`, {
-        contributionDate: toGoalDateOnly(contribution.contributionDate),
         note: contribution.note,
       })
       .pipe(map(toGoalContribution));
@@ -80,26 +65,18 @@ export class GoalContributionsService {
 
   /** Delete one earmark; the Account money itself remains untouched. */
   delete(id: number): Observable<void> {
-    return this.http
-      .delete<void>(`${this.baseUrl}/api/goal-contributions/${id}`)
-      .pipe(map(() => undefined));
+    return this.http.delete<void>(`${this.baseUrl}/api/goal-contributions/${id}`).pipe(map(() => undefined));
   }
 }
 
 function asAccountModified(error: unknown): unknown {
-  if (
-    error instanceof ApiError &&
-    error.status === 409 &&
-    /updated by another request/i.test(error.message)
-  ) {
+  if (error instanceof ApiError && error.status === 409 && /updated by another request/i.test(error.message)) {
     return new AccountModifiedError(error.message);
   }
   return error;
 }
 
-function toGoalContribution(
-  resource: GoalContributionResource
-): GoalContribution {
+function toGoalContribution(resource: GoalContributionResource): GoalContribution {
   return {
     id: resource.id,
     goalId: resource.goalId,

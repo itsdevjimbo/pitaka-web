@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { PesoPipe } from '@/app/core/money';
-import { GoalContributionWithAccountName } from '../data/contribution-account-name';
+import { GoalContributionWithAccountName } from '../../data/contribution-account-name';
 
 /** One readable entry in a Goal's complete Contribution history. */
 @Component({
@@ -14,6 +14,7 @@ import { GoalContributionWithAccountName } from '../data/contribution-account-na
 })
 export class ContributionHistoryRow {
   readonly contribution = input.required<GoalContributionWithAccountName>();
+  readonly pending = input(false);
   readonly edit = output<GoalContributionWithAccountName>();
   readonly delete = output<GoalContributionWithAccountName>();
 }

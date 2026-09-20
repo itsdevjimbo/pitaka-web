@@ -1,8 +1,19 @@
+@let source = contribution().source;
 <div class="flex min-w-0 flex-col gap-y-1">
   <span class="font-medium tabular-nums">{{ contribution().amount | peso }}</span>
   <span class="text-sm text-neutral-600 dark:text-neutral-300">
     {{ contribution().contributionDate | date: 'd MMM y' }} · {{ contribution().accountName || 'Unknown account' }}
   </span>
+  @if (source.kind === 'linked') {
+    <span class="text-sm text-neutral-600 dark:text-neutral-300">
+      Linked from
+      {{ source.transaction?.description || 'Income Transaction #' + source.transactionId }}
+      @if (source.transaction; as transaction) {
+        · {{ transaction.date | date: 'd MMM y' }}
+      }
+      · {{ contribution().accountName || 'Unknown account' }}
+    </span>
+  }
   @if (contribution().note) {
     <span class="text-sm text-neutral-500 dark:text-neutral-400">{{ contribution().note }}</span>
   }
@@ -12,18 +23,21 @@
   matIconButton
   aria-label="Contribution actions"
   [matMenuTriggerFor]="menu"
+  [disabled]="pending()"
 >
   <mat-icon svgIcon="ellipsis-vertical" />
 </button>
 <mat-menu #menu>
   <button
     mat-menu-item
+    [disabled]="pending()"
     (click)="edit.emit(contribution())"
   >
     Edit contribution
   </button>
   <button
     mat-menu-item
+    [disabled]="pending()"
     (click)="delete.emit(contribution())"
   >
     Delete contribution

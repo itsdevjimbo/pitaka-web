@@ -14,14 +14,10 @@
 
   <div class="flex min-w-0 flex-auto flex-col">
     <span class="truncate font-medium">{{ row().headline }}</span>
-    <span
-      class="flex flex-wrap items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400"
-    >
+    <span class="flex flex-wrap items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400">
       <!-- Local time (ADR 0007). A generated transaction carries only a
            wall-clock day, so it shows the date alone. -->
-      <span>{{
-        row().date | date: (row().generated ? 'd MMM y' : 'd MMM y, h:mm a')
-      }}</span>
+      <span>{{ row().date | date: (row().generated ? 'd MMM y' : 'd MMM y, h:mm a') }}</span>
       <span aria-hidden="true">·</span>
       <span>{{ directions[row().direction].label }}</span>
       @if (row().direction !== 'transfer') {
@@ -39,8 +35,9 @@
             <a
               class="font-medium underline hover:no-underline"
               [routerLink]="['/app/accounts', home.id]"
-              >{{ home.name }}</a
             >
+              {{ home.name }}
+            </a>
           </span>
         }
       } @else {
@@ -52,15 +49,17 @@
           <a
             class="font-medium underline hover:no-underline"
             [routerLink]="['/app/accounts', reading.account.id]"
-            >{{ reading.account.name }}</a
           >
+            {{ reading.account.name }}
+          </a>
           @if (reading.transferTo; as dest) {
             <span aria-hidden="true">→</span>
             <a
               class="font-medium underline hover:no-underline"
               [routerLink]="['/app/accounts', dest.id]"
-              >{{ dest.name }}</a
             >
+              {{ dest.name }}
+            </a>
           }
         </span>
       }
@@ -137,6 +136,10 @@
       </span>
     }
   </div>
+}
+
+@if (row().direction === 'income') {
+  <transactions-linked-contribution-panel [transaction]="row()" />
 }
 
 @if (canActOnHere() && confirmingRemove()) {

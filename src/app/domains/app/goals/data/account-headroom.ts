@@ -20,25 +20,30 @@ export type AccountHeadroom = {
  */
 export function accountHeadroom(
   accounts: readonly AccountBalance[],
-  contributions: readonly AccountEarmark[]
+  contributions: readonly AccountEarmark[],
+): AccountHeadroom[] {
+  return signedAccountHeadroom(accounts, contributions).map((account) => ({
+    ...account,
+    availableAmount: Math.max(0, account.availableAmount),
+  }));
+}
+
+/** Project each Account's actual signed headroom from fresh server facts. */
+export function signedAccountHeadroom(
+  accounts: readonly AccountBalance[],
+  contributions: readonly AccountEarmark[],
 ): AccountHeadroom[] {
   const earmarksByAccount = new Map<number, number>();
 
   for (const contribution of contributions) {
     earmarksByAccount.set(
       contribution.accountId,
-      sumPesos([
-        earmarksByAccount.get(contribution.accountId) ?? 0,
-        contribution.amount,
-      ])
+      sumPesos([earmarksByAccount.get(contribution.accountId) ?? 0, contribution.amount]),
     );
   }
 
   return accounts.map((account) => ({
     accountId: account.id,
-    availableAmount: Math.max(
-      0,
-      sumPesos([account.currentBalance, -(earmarksByAccount.get(account.id) ?? 0)])
-    ),
+    availableAmount: sumPesos([account.currentBalance, -(earmarksByAccount.get(account.id) ?? 0)]),
   }));
 }

@@ -1,0 +1,133 @@
+<div class="flex flex-col gap-y-2 pl-12">
+  <button
+    matButton
+    type="button"
+    class="w-fit"
+    (click)="toggle()"
+  >
+    {{ showing() ? 'Hide contributions' : 'Show contributions' }}
+  </button>
+  @if (showing()) {
+    @if (loading()) {
+      <p
+        class="text-sm text-neutral-500 dark:text-neutral-400"
+        role="status"
+      >
+        Loading Linked Contributions…
+      </p>
+    } @else if (errorMessage(); as message) {
+      <app-row-notice [message]="message">
+        <div row-notice-actions>
+          <button
+            matButton
+            type="button"
+            (click)="load()"
+          >
+            Try again
+          </button>
+        </div>
+      </app-row-notice>
+    } @else if (snapshot(); as current) {
+      <p class="text-sm text-neutral-600 dark:text-neutral-300">
+        {{ current.linkedTotal | peso }} earmarked · {{ current.remainingCapacity | peso }} remaining ·
+        {{ current.account.availableHeadroom | peso }} Account headroom
+      </p>
+      @if (refreshedFacts(); as facts) {
+        <p
+          class="text-sm text-neutral-600 dark:text-neutral-300"
+          role="status"
+        >
+          {{ facts.goal.name }} now has {{ facts.goal.currentAmount | peso }} across
+          {{ facts.goalHistory.length }} Contribution{{ facts.goalHistory.length === 1 ? '' : 's' }}.
+        </p>
+      }
+      @if (current.linkedContributions.length) {
+        <ul class="flex flex-col gap-y-2">
+          @for (contribution of current.linkedContributions; track contribution.id) {
+            <li
+              data-linked-contribution
+              class="flex flex-col gap-y-2 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
+            >
+              <div class="flex items-start justify-between gap-x-3">
+                <div class="flex min-w-0 flex-col gap-y-0.5 text-sm">
+                  <a
+                    class="font-medium underline hover:no-underline"
+                    [routerLink]="['/app/goals', contribution.goalId]"
+                  >
+                    {{ contribution.goalName }}
+                  </a>
+                  <span>{{ contribution.amount | peso }} · {{ contribution.contributionDate | date: 'd MMM y' }}</span>
+                  @if (contribution.note) {
+                    <span class="text-neutral-500 dark:text-neutral-400">{{ contribution.note }}</span>
+                  }
+                </div>
+                <button
+                  matButton
+                  type="button"
+                  [disabled]="deletingId() !== null"
+                  (click)="askDelete(contribution)"
+                >
+                  {{ deletingId() === contribution.id ? 'Deleting…' : 'Delete contribution' }}
+                </button>
+              </div>
+              @if (confirmingDelete()?.id === contribution.id) {
+                <div
+                  class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200"
+                  role="alertdialog"
+                  aria-label="Confirm contribution deletion"
+                >
+                  <p>Delete this Contribution? Its earmark will be released; the Account balance will not change.</p>
+                  <div class="flex gap-x-2">
+                    <button
+                      matButton
+                      type="button"
+                      (click)="cancelDelete()"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      matButton="filled"
+                      type="button"
+                      (click)="confirmDelete(contribution)"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="text-sm text-neutral-500 dark:text-neutral-400">No Linked Contributions</p>
+      }
+      @if (deleteFailure(); as failure) {
+        <app-row-notice [message]="failure.message">
+          <div row-notice-actions>
+            <button
+              matButton
+              type="button"
+              [disabled]="deletingId() !== null"
+              (click)="confirmDelete(failure.contribution)"
+            >
+              {{ deletingId() !== null ? 'Deleting…' : 'Retry deletion' }}
+            </button>
+          </div>
+        </app-row-notice>
+      }
+      @if (refreshFailure(); as failure) {
+        <app-row-notice [message]="failure.message">
+          <div row-notice-actions>
+            <button
+              matButton
+              type="button"
+              (click)="refresh(failure.contribution)"
+            >
+              Try refresh again
+            </button>
+          </div>
+        </app-row-notice>
+      }
+    }
+  }
+</div>

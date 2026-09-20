@@ -1,15 +1,8 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import {
-  ApiError,
-  API_BASE_URL,
-  errorInterceptor,
-} from '@/app/core/api';
+import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { AccountModifiedError } from '@/app/domains/app/accounts';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { GoalContributionsService } from './goal-contributions.service';
@@ -61,7 +54,7 @@ describe('Goals data adapters', () => {
         name: 'Holiday',
         targetAmount: 5000,
         targetDate: new Date(2026, 11, 25),
-      })
+      }),
     );
     const request = http.expectOne(`${BASE_URL}/api/goals`);
     expect(request.request.body).toEqual({
@@ -71,7 +64,7 @@ describe('Goals data adapters', () => {
     });
     request.flush(
       { title: 'Conflict', status: 409, detail: 'An goal with this name already exists.' },
-      { status: 409, statusText: 'Conflict' }
+      { status: 409, statusText: 'Conflict' },
     );
 
     const error = await result.catch((reason: unknown) => reason);
@@ -83,14 +76,10 @@ describe('Goals data adapters', () => {
 
   it('uses the Goal-owned history endpoint and keeps it cold', async () => {
     const first = firstValueFrom(contributions.list(8));
-    http
-      .expectOne(`${BASE_URL}/api/goals/8/contributions`)
-      .flush([contributionResource(3)]);
+    http.expectOne(`${BASE_URL}/api/goals/8/contributions`).flush([contributionResource(3)]);
 
     const second = firstValueFrom(contributions.list(8));
-    http
-      .expectOne(`${BASE_URL}/api/goals/8/contributions`)
-      .flush([contributionResource(3)]);
+    http.expectOne(`${BASE_URL}/api/goals/8/contributions`).flush([contributionResource(3)]);
 
     await expect(first).resolves.toEqual([contribution(3)]);
     await expect(second).resolves.toEqual([contribution(3)]);
@@ -111,7 +100,7 @@ describe('Goals data adapters', () => {
         amount: 12.5,
         contributionDate: new Date(2026, 8, 13),
         note: null,
-      })
+      }),
     );
     const createRequest = http.expectOne(`${BASE_URL}/api/goal-contributions`);
     expect(createRequest.request.body).toEqual({
@@ -128,10 +117,24 @@ describe('Goals data adapters', () => {
         status: 409,
         detail: 'The record was updated by another request. Please try again.',
       },
-      { status: 409, statusText: 'Conflict' }
+      { status: 409, statusText: 'Conflict' },
     );
 
     await expect(created).rejects.toBeInstanceOf(AccountModifiedError);
+  });
+
+  it('updates only a Contribution note while its date stays settled', async () => {
+    const updated = firstValueFrom(contributions.update(3, { note: 'Revised note' }));
+    const request = http.expectOne(`${BASE_URL}/api/goal-contributions/3`);
+
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual({ note: 'Revised note' });
+    request.flush({ ...contributionResource(3), note: 'Revised note' });
+
+    await expect(updated).resolves.toEqual({
+      ...contribution(3),
+      note: 'Revised note',
+    });
   });
 });
 
