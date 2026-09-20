@@ -7,9 +7,15 @@ import { forkJoin } from 'rxjs';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { Schedule, ScheduleStatus, SchedulesService } from '../..';
+import { ScheduleLifecycleCoordinator, ScheduleLifecycleEvent } from '../../data/schedule-lifecycle-coordinator';
 import { EditScheduleDialog } from '../../ui/edit-schedule/edit-schedule-dialog';
 import { NewScheduleDialog } from '../../ui/new-schedule/new-schedule-dialog';
 import { ScheduleEmptyState } from '../../ui/schedule-empty-state/schedule-empty-state';
+import {
+  ScheduleLifecycleAction,
+  ScheduleLifecycleDialog,
+  ScheduleLifecycleDialogData,
+} from '../../ui/schedule-lifecycle-dialog/schedule-lifecycle-dialog';
 import {
   ScheduleLifecycleNav,
   ScheduleView,
@@ -34,6 +40,7 @@ export default class ScheduleList {
   private readonly schedulesService = inject(SchedulesService);
   private readonly accountsService = inject(AccountsService);
   private readonly categoriesService = inject(CategoriesService);
+  private readonly lifecycleCoordinator = inject(ScheduleLifecycleCoordinator);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialog = inject(MatDialog);
 
@@ -43,6 +50,8 @@ export default class ScheduleList {
   protected readonly loading = signal(true);
   protected readonly refreshing = signal(false);
   protected readonly loadFailed = signal(false);
+  protected readonly actionMessage = signal<string | null>(null);
+  protected readonly busyScheduleIds = signal<ReadonlySet<number>>(new Set());
 
   /** True after a refresh failure until all three collections refresh successfully. */
   protected readonly stale = signal(false);
@@ -93,10 +102,13 @@ export default class ScheduleList {
   protected readonly empty = computed(() => this.schedules()?.length === 0);
 
   constructor() {
+    this.lifecycleCoordinator.events
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((event) => this.onLifecycleEvent(event));
     this.load();
   }
 
-  protected load(): void {
+  protected load(conflict?: { scheduleId: number; message: string }): void {
     const hasCurrentData = this.schedules() !== null;
     if (hasCurrentData) this.refreshing.set(true);
     else this.loading.set(true);
@@ -116,6 +128,11 @@ export default class ScheduleList {
           this.stale.set(false);
           this.loading.set(false);
           this.refreshing.set(false);
+          if (conflict) {
+            const current = schedules.find((schedule) => schedule.id === conflict.scheduleId);
+            const state = current ? ` It is currently ${current.status}.` : '';
+            this.actionMessage.set(`${conflict.message}${state} Review the refreshed Schedule before trying again.`);
+          } else this.actionMessage.set(null);
         },
         error: () => {
           if (hasCurrentData) this.stale.set(true);
@@ -144,5 +161,34 @@ export default class ScheduleList {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.load());
+  }
+
+  protected openLifecycleDialog(row: ScheduleRowData, action: ScheduleLifecycleAction): void {
+    if (this.stale() || this.refreshing() || (action === 'resume' && row.accountRetired)) return;
+    this.actionMessage.set(null);
+    this.dialog.open<ScheduleLifecycleDialog, ScheduleLifecycleDialogData>(ScheduleLifecycleDialog, {
+      data: {
+        schedule: row.schedule,
+        action,
+      },
+    });
+  }
+
+  private onLifecycleEvent(event: ScheduleLifecycleEvent): void {
+    if (event.kind === 'started') {
+      this.busyScheduleIds.update((ids) => new Set(ids).add(event.scheduleId));
+      this.actionMessage.set(null);
+      return;
+    }
+    this.busyScheduleIds.update((ids) => {
+      const next = new Set(ids);
+      next.delete(event.kind === 'updated' ? event.schedule.id : event.scheduleId);
+      return next;
+    });
+    if (event.kind === 'updated') {
+      this.selectedView.set(STATUS_VIEW[event.schedule.status]);
+      this.load();
+    } else if (event.kind === 'conflict') this.load(event);
+    else this.actionMessage.set(event.message);
   }
 }

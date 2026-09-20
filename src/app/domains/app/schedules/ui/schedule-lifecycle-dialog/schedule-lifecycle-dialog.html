@@ -1,0 +1,31 @@
+<app-dialog-shell [heading]="heading">
+  <p class="text-sm text-neutral-600 dark:text-neutral-300">{{ action.explanation }}</p>
+
+  @if (errorMessage(); as error) {
+    <p
+      class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-100"
+      role="alert"
+    >
+      {{ error }}
+    </p>
+  }
+
+  <div class="mt-6 flex justify-end gap-2">
+    <button
+      matButton
+      type="button"
+      [disabled]="submitting()"
+      (click)="dialogRef.close()"
+    >
+      Cancel
+    </button>
+    <button
+      matButton="filled"
+      type="button"
+      [disabled]="submitting()"
+      (click)="confirm()"
+    >
+      {{ submitting() ? action.pendingLabel : action.verb }}
+    </button>
+  </div>
+</app-dialog-shell>

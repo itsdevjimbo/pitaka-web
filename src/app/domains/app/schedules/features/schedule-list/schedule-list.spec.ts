@@ -59,6 +59,7 @@ describe('ScheduleList', () => {
     overrides: {
       create?: SchedulesService['create'];
       update?: SchedulesService['update'];
+      setStatus?: SchedulesService['setStatus'];
       accounts?: Account[];
       categories?: Category[];
       refreshCategories?: CategoriesService['refreshList'];
@@ -80,6 +81,7 @@ describe('ScheduleList', () => {
             list,
             create: overrides.create ?? (() => of(ALL[0])),
             update: overrides.update ?? (() => of(ALL[0])),
+            setStatus: overrides.setStatus ?? (() => of(ALL[0])),
           },
         },
         { provide: AccountsService, useValue: { all: () => of(accounts) } },
@@ -118,6 +120,15 @@ describe('ScheduleList', () => {
       (candidate.textContent ?? '').includes(label),
     );
     if (!button) throw new Error(`No button labelled "${label}"`);
+    button.click();
+    fixture.detectChanges();
+  }
+
+  function clickExact(fixture: ComponentFixture<ScheduleList>, label: string) {
+    const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (candidate) => (candidate.textContent ?? '').trim() === label,
+    );
+    if (!button) throw new Error(`No button labelled exactly "${label}"`);
     button.click();
     fixture.detectChanges();
   }
@@ -200,6 +211,239 @@ describe('ScheduleList', () => {
     expect(rowFor('Old plan').textContent).not.toContain('Edit');
   });
 
+  it('places card actions after the Schedule details', () => {
+    const { fixture } = setup(() => of(ALL));
+    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('li[schedules-schedule-row]')!;
+    const details = card.querySelector('dl')!;
+    const pause = Array.from(card.querySelectorAll('button')).find(
+      (button) => (button.textContent ?? '').trim() === 'Pause',
+    )!;
+
+    expect(details.compareDocumentPosition(pause)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  describe('pause and resume', () => {
+    it('offers Pause for Active and Resume for Paused and Cancelled Schedules', () => {
+      const { fixture } = setup(() => of(ALL));
+      const rowFor = (name: string) =>
+        Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('li[schedules-schedule-row]'),
+        ).find((row) => (row.textContent ?? '').includes(name))!;
+
+      expect(rowFor('Sooner salary').textContent).toContain('Pause');
+      click(fixture, 'Paused');
+      expect(rowFor('Gym').textContent).toContain('Resume');
+      click(fixture, 'Past');
+      expect(rowFor('Old plan').textContent).toContain('Resume');
+      expect(rowFor('Retainer').textContent).not.toContain('Resume');
+    });
+
+    it('uses the approved confirmation text and cancellation sends no write', async () => {
+      const setStatus = vi.fn(() => of(ALL[0]));
+      const { fixture, dialog, dialogText } = setup(() => of(ALL), {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      clickExact(fixture, 'Pause');
+      await settle(fixture);
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Pause ‘Sooner salary’?');
+      expect(dialogText()).toContain('No Transactions will be generated while paused. You can resume later.');
+      overlayButton('Cancel').click();
+      await settle(fixture);
+      expect(dialog()).toBeNull();
+      expect(setStatus).not.toHaveBeenCalled();
+    });
+
+    it('uses the shared responsive dialog and closes on Escape at phone width', async () => {
+      const originalWidth = window.innerWidth;
+      const setStatus = vi.fn(() => of(ALL[0]));
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+      try {
+        const { fixture, dialog } = setup(() => of(ALL), {
+          setStatus: setStatus as SchedulesService['setStatus'],
+        });
+
+        clickExact(fixture, 'Pause');
+        await settle(fixture);
+        expect(dialog()).not.toBeNull();
+        expect(overlay().querySelector('.app-dialog-panel')).not.toBeNull();
+
+        pressEscape();
+        await settle(fixture);
+        expect(dialog()).toBeNull();
+        expect(setStatus).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+      }
+    });
+
+    it('moves an Active Schedule to Paused after a successful pause', async () => {
+      const paused = schedule({ ...ALL[1], status: 'paused' });
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of(ALL))
+        .mockReturnValueOnce(of([paused]));
+      const setStatus = vi.fn(() => of(paused));
+      const { fixture, text } = setup(list as SchedulesService['list'], {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      clickExact(fixture, 'Pause');
+      await settle(fixture);
+      overlayButton('Pause').click();
+      await settle(fixture);
+
+      expect(setStatus).toHaveBeenCalledWith(2, 'paused');
+      expect(text()).toContain('Sooner salary');
+      expect(text()).toContain('Generation paused');
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps confirmation controls pending, then moves a paused Schedule to Upcoming after success', async () => {
+      const write = new Subject<Schedule>();
+      const resumed = schedule({ ...ALL[2], status: 'active', nextGeneration: new Date(2026, 10, 15) });
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of(ALL))
+        .mockReturnValueOnce(of([ALL[0], ALL[1], resumed, ALL[3], ALL[4]]));
+      const setStatus = vi.fn(() => write);
+      const { fixture, dialog, dialogText, text } = setup(list as SchedulesService['list'], {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      click(fixture, 'Paused');
+      click(fixture, 'Resume');
+      await settle(fixture);
+      expect(dialogText()).toContain('Resume ‘Gym’?');
+      expect(dialogText()).toContain(
+        'Generation resumes on the original cadence. Missed occurrences won’t be generated.',
+      );
+      overlayButton('Resume').click();
+      await settle(fixture);
+      expect(setStatus).toHaveBeenCalledWith(3, 'active');
+      expect(overlayButton('Resuming…').disabled).toBe(true);
+      expect(overlayButton('Cancel').disabled).toBe(true);
+      pressEscape();
+      await settle(fixture);
+      expect(dialog()).toBeNull();
+
+      write.next(resumed);
+      write.complete();
+      await settle(fixture);
+      expect(text()).toContain('Gym');
+      expect(text()).toContain('Next generation: 15 Nov 2026');
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps a dismissed write pending and makes a later failure actionable on the card', async () => {
+      const write = new Subject<Schedule>();
+      const setStatus = vi.fn(() => write);
+      const { fixture, dialog, text } = setup(() => of(ALL), {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      clickExact(fixture, 'Pause');
+      await settle(fixture);
+      overlayButton('Pause').click();
+      await settle(fixture);
+      pressEscape();
+      await settle(fixture);
+      expect(dialog()).toBeNull();
+
+      const pauseButton = () =>
+        Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button')).find(
+          (button) => (button.textContent ?? '').trim() === 'Pause',
+        )!;
+      expect(pauseButton().disabled).toBe(true);
+
+      write.error(new ApiError('Pause failed. Try again.', 500));
+      await settle(fixture);
+      expect(text()).toContain('Pause failed. Try again.');
+      expect(pauseButton().disabled).toBe(false);
+    });
+
+    it('resumes an existing Cancelled Schedule after confirmation', async () => {
+      const resumed = schedule({ ...ALL[4], status: 'active', nextGeneration: new Date(2026, 11, 1) });
+      const setStatus = vi.fn(() => of(resumed));
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of(ALL))
+        .mockReturnValueOnce(of([resumed]));
+      const { fixture, text } = setup(list as SchedulesService['list'], {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      click(fixture, 'Past');
+      click(fixture, 'Resume');
+      await settle(fixture);
+      overlayButton('Resume').click();
+      await settle(fixture);
+
+      expect(setStatus).toHaveBeenCalledWith(5, 'active');
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).toContain('Old plan');
+      expect(text()).toContain('Next generation: 1 Dec 2026');
+    });
+
+    it('disables Resume for a retired Account and explains reactivation', () => {
+      const paused = schedule({ id: 31, accountId: 2, name: 'Old wallet plan', status: 'paused' });
+      const setStatus = vi.fn(() => of(paused));
+      const { fixture, text } = setup(() => of([paused]), {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      click(fixture, 'Paused');
+      const resume = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+      ).find((button) => (button.textContent ?? '').includes('Resume'))!;
+      expect(resume.disabled).toBe(true);
+      expect(text()).toContain('Reactivate this Account before resuming the Schedule.');
+      resume.click();
+      expect(setStatus).not.toHaveBeenCalled();
+    });
+
+    it('keeps a failed request actionable in the confirmation dialog', async () => {
+      const setStatus = vi.fn(() => throwError(() => new ApiError('Pause failed. Try again.', 500)));
+      const { fixture, dialog, dialogText } = setup(() => of(ALL), {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      clickExact(fixture, 'Pause');
+      await settle(fixture);
+      overlayButton('Pause').click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Pause failed. Try again.');
+      expect(overlayButton('Pause').disabled).toBe(false);
+    });
+
+    it('refreshes a state conflict and explains the current state before retry', async () => {
+      const conflict = new ApiError('This Schedule changed in another request.', 409);
+      const changed = schedule({ ...ALL[1], status: 'paused' });
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of(ALL))
+        .mockReturnValueOnce(of([changed]));
+      const setStatus = vi.fn(() => throwError(() => conflict));
+      const { fixture, dialog, text } = setup(list as SchedulesService['list'], {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      clickExact(fixture, 'Pause');
+      await settle(fixture);
+      overlayButton('Pause').click();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).toContain('This Schedule changed in another request.');
+      expect(text()).toContain('It is currently paused.');
+      expect(text()).toContain('Review the refreshed Schedule before trying again.');
+    });
+  });
+
   it('shows each lifecycle count as a Material badge beside its menu label', () => {
     const { fixture } = setup(() => of(ALL));
     const buttons = Array.from(
@@ -272,6 +516,10 @@ describe('ScheduleList', () => {
     )!;
 
     expect(edit.disabled).toBe(true);
+    const pause = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => (button.textContent ?? '').trim() === 'Pause',
+    )!;
+    expect(pause.disabled).toBe(true);
   });
 
   it.each([

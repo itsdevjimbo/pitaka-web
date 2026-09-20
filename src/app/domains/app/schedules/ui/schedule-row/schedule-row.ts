@@ -3,6 +3,7 @@ import { Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { PesoPipe } from '@/app/core/money';
 import { Schedule, SCHEDULE_FREQUENCIES } from '../../data/schedule';
+import { ScheduleLifecycleAction } from '../schedule-lifecycle-dialog/schedule-lifecycle-dialog';
 
 /** The resolved filing information needed to render one Schedule in a list. */
 export type ScheduleRowData = {
@@ -27,11 +28,16 @@ export class ScheduleRow {
   readonly row = input.required<ScheduleRowData>();
   readonly writeDisabled = input(false);
   readonly edit = output<ScheduleRowData>();
+  readonly lifecycle = output<{ row: ScheduleRowData; action: ScheduleLifecycleAction }>();
 
   protected readonly frequencies = SCHEDULE_FREQUENCIES;
 
   protected historyLabel(): string {
     const count = this.row().schedule.generatedTransactionCount;
     return `${count} surviving generated ${count === 1 ? 'Transaction' : 'Transactions'}`;
+  }
+
+  protected request(action: ScheduleLifecycleAction): void {
+    this.lifecycle.emit({ row: this.row(), action });
   }
 }
