@@ -1,0 +1,173 @@
+<div
+  class="brand-prototype"
+  [attr.data-variant]="variant()"
+  [attr.data-dark]="dark()"
+  [class.scheme-dark]="dark()"
+  [class.scheme-light]="!dark()"
+  [style.color-scheme]="dark() ? 'dark' : 'light'"
+>
+  <header class="brand-header">
+    <a
+      class="brand-wordmark"
+      href="/auth/sign-in?variant=A"
+      aria-label="Pitaka branding preview"
+    >
+      <svg
+        class="brand-mark"
+        viewBox="0 0 48 48"
+        fill="none"
+        aria-hidden="true"
+      >
+        <rect
+          x="5"
+          y="9"
+          width="38"
+          height="31"
+          rx="10"
+          fill="currentColor"
+        />
+        <path
+          d="M9 12L26 5C30 3 34 6 34 10V13"
+          stroke="currentColor"
+          stroke-width="4"
+        />
+        <path
+          d="M31 21H43V31H31C25 31 25 21 31 21Z"
+          fill="var(--paper)"
+        />
+        <circle
+          cx="32"
+          cy="26"
+          r="2"
+          fill="currentColor"
+        />
+      </svg>
+      pitaka
+    </a>
+    <span class="brand-header-note">A little clarity. Every day.</span>
+    <label class="brand-appearance">
+      Appearance
+      <select
+        [value]="appearance()"
+        (change)="appearance.set($any($event.target).value)"
+      >
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
+  </header>
+  <main class="brand-layout">
+    <section class="brand-story">
+      <p class="brand-eyebrow">YOUR EVERYDAY MONEY COMPANION</p>
+      @switch (variant()) {
+        @case ('A') {
+          <h1>
+            A little more
+            <br />
+            peace of
+            <em>mind.</em>
+          </h1>
+          <p class="brand-description">
+            Know where your money goes.
+            <br />
+            Make room for what matters.
+          </p>
+        }
+        @case ('B') {
+          <h1>
+            Your money.
+            <br />
+            Your story.
+          </h1>
+          <p class="brand-description">
+            A clearer view of today.
+            <br />
+            A thoughtful start to tomorrow.
+          </p>
+        }
+        @case ('C') {
+          <h1>
+            Small steps.
+            <br />
+            <span>Big possibilities.</span>
+          </h1>
+          <p class="brand-description">
+            Every coffee, every payday, every little goal.
+            <br />
+            It all belongs in your pitaka.
+          </p>
+        }
+      }
+      <div
+        class="brand-demo"
+        aria-label="Illustrative product preview with sample amounts"
+      >
+        <div class="brand-demo-top">
+          <span>YOUR MONTH, AT A GLANCE</span>
+          <span>SEPTEMBER ↗</span>
+        </div>
+        <p class="brand-balance-label">Across your accounts</p>
+        <strong class="brand-balance">
+          ₱48,250
+          <span>.00</span>
+        </strong>
+        <div class="brand-mini-stats">
+          <div>
+            <span>Income</span>
+            <b class="brand-income">+₱32,000</b>
+          </div>
+          <div>
+            <span>Expenses</span>
+            <b class="brand-expense">−₱12,750</b>
+          </div>
+        </div>
+        <div class="brand-goal">
+          <div>
+            <span>✳ &nbsp; A little getaway</span>
+            <b>68%</b>
+          </div>
+          <div class="brand-track"><span></span></div>
+          <small>₱17,000 toward your ₱25,000 goal</small>
+        </div>
+      </div>
+      <p class="brand-caption">
+        A home for everyday money.
+        <span>Made for real life.</span>
+      </p>
+    </section>
+    <section
+      class="brand-signin"
+      aria-label="Sign in"
+    >
+      <ng-content />
+    </section>
+  </main>
+  <footer class="brand-footer">
+    <span>Clarity, at your own pace.</span>
+    <span>TRACK · PLAN · GROW</span>
+  </footer>
+  <aside
+    class="brand-switcher"
+    aria-label="Prototype controls"
+  >
+    <button
+      type="button"
+      aria-label="Previous brand direction"
+      (click)="cycle(-1)"
+    >
+      ←
+    </button>
+    <div aria-live="polite">
+      <strong>{{ variant() }} · {{ names[variant()] }}</strong>
+      <small>Throwaway preview · {{ appearance() }} → {{ dark() ? 'dark' : 'light' }} · sample figures</small>
+    </div>
+    <button
+      type="button"
+      aria-label="Next brand direction"
+      (click)="cycle(1)"
+    >
+      →
+    </button>
+  </aside>
+</div>

@@ -9,6 +9,7 @@
     "lint": "ng lint",
     "ng": "ng",
     "start": "ng serve",
+    "prototype:branding": "ng serve --port 4300 --open /auth/sign-in?variant=A",
     "test": "ng test",
     "watch": "ng build --watch --configuration development",
     "prepare": "husky"

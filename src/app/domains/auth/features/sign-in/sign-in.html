@@ -1,151 +1,153 @@
-<div class="flex flex-auto">
-  <div
-    class="flex flex-auto items-center justify-center bg-white p-4 sm:p-12 dark:bg-neutral-950"
-  >
-    <div class="flex w-full max-w-80 flex-col sm:min-w-80">
-      <!-- Logo -->
-      <img
-        class="w-12"
-        src="/images/logo/logo.svg"
-        alt="Pitaka logo"
-      />
+@if (brandingPreview) {
+  <pitaka-branding-prototype><ng-container *ngTemplateOutlet="signInContent" /></pitaka-branding-prototype>
+} @else {
+  <ng-container *ngTemplateOutlet="signInContent" />
+}
+<ng-template #signInContent>
+  <div class="flex flex-auto">
+    <div
+      [class]="
+        brandingPreview
+          ? 'flex flex-auto items-center justify-center p-4'
+          : 'flex flex-auto items-center justify-center bg-white p-4 sm:p-12 dark:bg-neutral-950'
+      "
+    >
+      <div class="flex w-full max-w-80 flex-col sm:min-w-80">
+        <!-- Logo -->
+        <img
+          class="w-12"
+          src="/images/logo/logo.svg"
+          alt="Pitaka logo"
+        />
 
-      <!-- Title -->
-      <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">
-        Sign in
-      </div>
-      <div class="mt-0.5 flex items-baseline font-medium">
-        <div class="text-neutral-500">New to Pitaka?</div>
-        <a
-          class="ml-1 underline"
-          routerLink="/auth/sign-up"
-        >
-          Sign up
-        </a>
-      </div>
-
-      <!-- Sign in form -->
-      <form
-        class="mt-8"
-        (submit)="signIn($event)"
-      >
-        <!-- Session notice: information, not a failure -->
-        @if (sessionNotice(); as notice) {
-          <div
-            class="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 dark:bg-blue-950 dark:text-blue-200"
-            role="status"
-          >
-            {{ notice }}
-          </div>
-        }
-
-        <!-- Error message -->
-        @if (errorMessage(); as message) {
-          <div
-            class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
-            role="alert"
-          >
-            {{ message }}
-          </div>
-        }
-
-        <!-- Unconfirmed email: the one failure that offers a way out other
-             than trying again (issue #68) -->
-        @if (unconfirmedEmail(); as email) {
-          <auth-resend-confirmation
-            class="mb-4 block"
-            [email]="email"
-          />
-        }
-
-        <div class="flex flex-col gap-y-4">
-          <!-- Email field -->
-          <mat-form-field class="w-full">
-            <mat-label>Email address</mat-label>
-            <input
-              id="email"
-              matInput
-              [formField]="signInForm.email"
-            />
-            <mat-error>
-              @if (
-                signInForm.email().touched() && signInForm.email().invalid()
-              ) {
-                @for (error of signInForm.email().errors(); track error) {
-                  {{ error.message }}
-                }
-              }
-            </mat-error>
-          </mat-form-field>
-
-          <!-- Password field -->
-          <mat-form-field
-            appearance="fill"
-            class="w-full"
-          >
-            <mat-label>Password</mat-label>
-            <input
-              id="password"
-              matInput
-              type="password"
-              [formField]="signInForm.password"
-              #passwordField
-            />
-            <button
-              matIconButton
-              type="button"
-              (click)="
-                passwordField.type === 'password'
-                  ? (passwordField.type = 'text')
-                  : (passwordField.type = 'password')
-              "
-              matSuffix
-            >
-              @if (passwordField.type === 'password') {
-                <mat-icon
-                  class="size-5"
-                  svgIcon="eye"
-                ></mat-icon>
-              }
-              @if (passwordField.type === 'text') {
-                <mat-icon
-                  class="size-5"
-                  svgIcon="eye-off"
-                ></mat-icon>
-              }
-            </button>
-            <mat-error>
-              @if (
-                signInForm.password().touched() &&
-                signInForm.password().invalid()
-              ) {
-                @for (error of signInForm.password().errors(); track error) {
-                  {{ error.message }}
-                }
-              }
-            </mat-error>
-          </mat-form-field>
-
-          <!-- The way out of a password that is not coming back. It sits with
-               the password field, where someone looks the moment theirs fails. -->
+        <!-- Title -->
+        <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">Sign in</div>
+        <div class="mt-0.5 flex items-baseline font-medium">
+          <div class="text-neutral-500">New to Pitaka?</div>
           <a
-            class="-mt-2 self-end text-sm font-medium underline"
-            routerLink="/auth/forgot-password"
+            class="ml-1 underline"
+            routerLink="/auth/sign-up"
           >
-            Forgot password?
+            Sign up
           </a>
         </div>
 
-        <!-- Submit button -->
-        <button
-          type="submit"
-          matButton="filled"
-          class="mt-6 w-full"
-          [disabled]="signInForm().invalid() || submitting()"
+        <!-- Sign in form -->
+        <form
+          class="mt-8"
+          (submit)="signIn($event)"
         >
-          {{ submitting() ? 'Signing in…' : 'Sign in' }}
-        </button>
-      </form>
+          <!-- Session notice: information, not a failure -->
+          @if (sessionNotice(); as notice) {
+            <div
+              class="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 dark:bg-blue-950 dark:text-blue-200"
+              role="status"
+            >
+              {{ notice }}
+            </div>
+          }
+
+          <!-- Error message -->
+          @if (errorMessage(); as message) {
+            <div
+              class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+              role="alert"
+            >
+              {{ message }}
+            </div>
+          }
+
+          <!-- Unconfirmed email: the one failure that offers a way out other
+             than trying again (issue #68) -->
+          @if (unconfirmedEmail(); as email) {
+            <auth-resend-confirmation
+              class="mb-4 block"
+              [email]="email"
+            />
+          }
+
+          <div class="flex flex-col gap-y-4">
+            <!-- Email field -->
+            <mat-form-field class="w-full">
+              <mat-label>Email address</mat-label>
+              <input
+                id="email"
+                matInput
+                [formField]="signInForm.email"
+              />
+              <mat-error>
+                @if (signInForm.email().touched() && signInForm.email().invalid()) {
+                  @for (error of signInForm.email().errors(); track error) {
+                    {{ error.message }}
+                  }
+                }
+              </mat-error>
+            </mat-form-field>
+
+            <!-- Password field -->
+            <mat-form-field
+              appearance="fill"
+              class="w-full"
+            >
+              <mat-label>Password</mat-label>
+              <input
+                id="password"
+                matInput
+                type="password"
+                [formField]="signInForm.password"
+                #passwordField
+              />
+              <button
+                matIconButton
+                type="button"
+                (click)="
+                  passwordField.type === 'password' ? (passwordField.type = 'text') : (passwordField.type = 'password')
+                "
+                matSuffix
+              >
+                @if (passwordField.type === 'password') {
+                  <mat-icon
+                    class="size-5"
+                    svgIcon="eye"
+                  ></mat-icon>
+                }
+                @if (passwordField.type === 'text') {
+                  <mat-icon
+                    class="size-5"
+                    svgIcon="eye-off"
+                  ></mat-icon>
+                }
+              </button>
+              <mat-error>
+                @if (signInForm.password().touched() && signInForm.password().invalid()) {
+                  @for (error of signInForm.password().errors(); track error) {
+                    {{ error.message }}
+                  }
+                }
+              </mat-error>
+            </mat-form-field>
+
+            <!-- The way out of a password that is not coming back. It sits with
+               the password field, where someone looks the moment theirs fails. -->
+            <a
+              class="-mt-2 self-end text-sm font-medium underline"
+              routerLink="/auth/forgot-password"
+            >
+              Forgot password?
+            </a>
+          </div>
+
+          <!-- Submit button -->
+          <button
+            type="submit"
+            matButton="filled"
+            class="mt-6 w-full"
+            [disabled]="signInForm().invalid() || submitting()"
+          >
+            {{ submitting() ? 'Signing in…' : 'Sign in' }}
+          </button>
+        </form>
+      </div>
     </div>
   </div>
-</div>
+</ng-template>
