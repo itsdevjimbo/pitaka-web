@@ -1,8 +1,12 @@
-# Pocket Pop screen layouts — throwaway, first review stage
+# Pocket Pop screen layouts — throwaway review
+
+**Current status:** the user selected **A for Accounts, Transactions and sign-in; B for Account detail and Goal detail**. Open `?variant=selected` (or omit `variant`) to carry those choices between routes. All remaining families now have sketches, documented in [the current stage-two review and coverage matrix](STAGE-TWO.md). Their default A composition is proposed, not approved. This update supersedes the historical first-stage limitations below where a sketch has since been added.
+
+## Historical first-stage record
 
 Question: which concrete composition should carry the approved Pocket Pop identity, navigation and tokens into the app? Three structures are available on existing route shapes with `?variant=A|B|C`.
 
-Decision: **awaiting human review** in [Validate Pocket Pop’s redesigned screens on desktop and mobile](https://github.com/itsdevjimbo/pitaka-web/issues/221). This is the first stage agreed in [navigation and hierarchy](https://github.com/itsdevjimbo/pitaka-web/issues/218#issuecomment-5748355537), not complete screen validation or approval.
+First-stage selection is [recorded on the decision ticket](https://github.com/itsdevjimbo/pitaka-web/issues/221#issuecomment-5748686665). The full decision remains open for remaining-family choices and final layout validation.
 
 ## Run
 

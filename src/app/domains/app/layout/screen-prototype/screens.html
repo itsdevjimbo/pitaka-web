@@ -14,6 +14,12 @@
       <span>Layout study · sample data</span>
       <button
         class="phone-preview-button"
+        (click)="set('variant', 'selected')"
+      >
+        Selected mix
+      </button>
+      <button
+        class="phone-preview-button"
         (click)="phonePreview()"
       >
         390px preview
@@ -29,6 +35,17 @@
           <option value="transactions">Transactions</option>
           <option value="goal">Goal detail</option>
           <option value="signin">Sign-in</option>
+          <option value="budgets">Budgets</option>
+          <option value="goals">Goals</option>
+          <option value="schedules">Schedules</option>
+          <option value="categories">Categories</option>
+          <option value="tags">Tags</option>
+          <option value="profile">Profile</option>
+          <option value="signup">Sign-up</option>
+          <option value="forgot">Forgot password</option>
+          <option value="reset">Reset password</option>
+          <option value="confirm">Confirm email</option>
+          <option value="emailchange">Confirm email change</option>
         </select>
       </label>
       <label>
@@ -41,6 +58,9 @@
           <option value="stress">Crowded + long content</option>
           <option value="empty">Empty</option>
           <option value="retired">Retired / no active Account</option>
+          <option value="error">Error / stale view</option>
+          <option value="invalid">Invalid link</option>
+          <option value="success">Success / target reached</option>
         </select>
       </label>
     </div>
@@ -121,7 +141,7 @@
           </label>
           <a
             href="#"
-            (click)="$event.preventDefault(); notice.set('Recovery screens are in the next review stage.')"
+            (click)="$event.preventDefault(); go('forgot')"
           >
             Forgot password?
           </a>
@@ -136,13 +156,23 @@
           New to Pitaka?
           <a
             href="#"
-            (click)="$event.preventDefault(); notice.set('Sign-up is in the next review stage.')"
+            (click)="$event.preventDefault(); go('signup')"
           >
             Create a profile
           </a>
         </p>
       </section>
     </main>
+  } @else if (isAuth()) {
+    <header class="auth-top">
+      <ng-container *ngTemplateOutlet="logo" />
+      <ng-container *ngTemplateOutlet="appearance" />
+    </header>
+    <auth-review
+      [screen]="screen()"
+      [scenario]="scenario()"
+      (navigate)="go($event)"
+    />
   } @else {
     <div class="app-layout">
       <aside class="sidebar">
@@ -153,7 +183,11 @@
               <p class="nav-group">{{ i === 0 ? 'Day to day' : i === 2 ? 'Plan ahead' : 'Organize' }}</p>
             }
             <button
-              [class.selected]="screen() === item.screen || (screen() === 'account' && item.screen === 'accounts')"
+              [class.selected]="
+                screen() === item.screen ||
+                (screen() === 'account' && item.screen === 'accounts') ||
+                (screen() === 'goal' && item.screen === 'goals')
+              "
               [attr.aria-current]="screen() === item.screen ? 'page' : null"
               (click)="go(item.screen)"
             >
@@ -211,7 +245,7 @@
               @if (screen() === 'goal') {
                 <button
                   class="text-action"
-                  (click)="notice.set('Goals list is in the next review stage.')"
+                  (click)="go('goals')"
                 >
                   ← Goals
                 </button>
@@ -224,7 +258,7 @@
                       ? 'Rainy day fund'
                       : screen() === 'transactions'
                         ? 'Transactions'
-                        : 'Accounts'
+                        : titles[screen()] || 'Accounts'
                 }}
               </h1>
               <p>
@@ -235,11 +269,20 @@
                       ? 'The movements behind your balances.'
                       : screen() === 'account'
                         ? 'Bank account · ' + (scenario() === 'retired' ? 'Retired' : 'Active')
-                        : 'Active · Target date 31 Dec 2026'
+                        : descriptions[screen()] || 'Active · Target date 31 Dec 2026'
                 }}
               </p>
             </div>
             <div class="header-actions">
+              @if (isFamily() && screen() !== 'profile' && screen() !== 'tags' && screen() !== 'categories') {
+                <button
+                  class="primary"
+                  (click)="open('New ' + screen().slice(0, -1), dialog)"
+                  [disabled]="screen() === 'schedules' && scenario() === 'error'"
+                >
+                  ＋ New {{ screen().slice(0, -1) }}
+                </button>
+              }
               @if (screen() === 'accounts') {
                 <button (click)="open('New account', dialog)">＋ New account</button>
               }
@@ -262,6 +305,15 @@
               }
             </div>
           </header>
+          @if (isFamily()) {
+            <family-review
+              [screen]="screen()"
+              [variant]="variant()"
+              [scenario]="scenario()"
+              (navigate)="go($event)"
+              (edit)="open($event, dialog)"
+            />
+          }
 
           @if (screen() === 'accounts') {
             <div class="accounts-composition">
@@ -655,7 +707,9 @@
                       <details class="actions">
                         <summary aria-label="Contribution actions">•••</summary>
                         <div>
-                          <button (click)="open('Edit contribution', dialog)">Edit</button>
+                          <button (click)="open(i === 0 ? 'Edit linked contribution' : 'Edit contribution', dialog)">
+                            Edit
+                          </button>
                           <button
                             (click)="
                               notice.set(
@@ -707,7 +761,11 @@
         >
           @for (item of [navigation[0], navigation[1], navigation[2], navigation[3]]; track item.label) {
             <button
-              [class.selected]="screen() === item.screen || (screen() === 'account' && item.screen === 'accounts')"
+              [class.selected]="
+                screen() === item.screen ||
+                (screen() === 'account' && item.screen === 'accounts') ||
+                (screen() === 'goal' && item.screen === 'goals')
+              "
               (click)="go(item.screen)"
             >
               <span aria-hidden="true">{{ item.icon }}</span>
@@ -752,7 +810,15 @@
         ←
       </button>
       <span>
-        <strong>{{ variant() }} · {{ names[variant()] }}</strong>
+        <strong>
+          {{
+            composition() === 'selected'
+              ? (isFamily() || (isAuth() && screen() !== 'signin') ? 'Proposed · ' : 'Selected · ') + variant()
+              : variant()
+          }}
+          ·
+          {{ names[variant()] }}
+        </strong>
         <small>{{ screen() }} · {{ scenario() }} · {{ dark() ? 'Dark' : 'Light' }}</small>
       </span>
       <button
@@ -854,6 +920,20 @@
             Tags
             <input placeholder="Add a tag" />
           </label>
+        } @else if (editor() === 'Edit linked contribution') {
+          <p>From Monthly salary · ₱15,000.00 · Everyday Bank</p>
+          <p>The amount and Transaction link are fixed. Delete and create another Contribution to change them.</p>
+          <label>
+            Contribution date
+            <input
+              type="date"
+              value="2026-09-20"
+            />
+          </label>
+          <label>
+            Note
+            <textarea rows="2"></textarea>
+          </label>
         } @else if (editor().toLowerCase().includes('contribution')) {
           <p>Earmark money toward Rainy day fund.</p>
           <label>
@@ -883,6 +963,160 @@
             Note
             <textarea rows="2"></textarea>
           </label>
+        } @else if (screen() === 'profile') {
+          @if (editor() === 'Edit name') {
+            <label>
+              Name
+              <input
+                value="Jamie Dela Cruz"
+                required
+              />
+            </label>
+          } @else {
+            <label>
+              Current password
+              <input
+                type="password"
+                autocomplete="current-password"
+                required
+              />
+            </label>
+            @if (editor() === 'Change password') {
+              <label>
+                New password
+                <input
+                  type="password"
+                  autocomplete="new-password"
+                  required
+                />
+              </label>
+              <label>
+                Confirm new password
+                <input
+                  type="password"
+                  autocomplete="new-password"
+                  required
+                />
+              </label>
+            } @else if (editor() === 'Change email') {
+              <label>
+                New email
+                <input
+                  type="email"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+              <p>Your current email stays valid until you confirm the new one.</p>
+            } @else {
+              <p>Send another confirmation link to jamie.new@example.com.</p>
+            }
+          }
+        } @else if (['budgets', 'goals', 'schedules'].includes(screen())) {
+          @if (editor() !== 'Extend schedule') {
+            <label>
+              Name
+              <input required />
+            </label>
+            <label>
+              {{ screen() === 'budgets' ? 'Spending ceiling (₱)' : screen() === 'goals' ? 'Target (₱)' : 'Amount (₱)' }}
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+              />
+            </label>
+          }
+          @if (screen() === 'budgets') {
+            <label>
+              Period
+              <select>
+                <option>Monthly</option>
+                <option>Weekly</option>
+                <option>Quarterly</option>
+                <option>Yearly</option>
+              </select>
+            </label>
+            <label>
+              Category
+              <select>
+                <option>All spending</option>
+                <option>Food</option>
+              </select>
+            </label>
+            <label>
+              Start date
+              <input
+                type="date"
+                value="2026-10-01"
+              />
+            </label>
+          }
+          @if (screen() === 'goals') {
+            <label>
+              Target date (optional)
+              <input type="date" />
+            </label>
+          }
+          @if (screen() === 'schedules') {
+            @if (editor() === 'New schedule') {
+              <label>
+                Direction
+                <select>
+                  <option>Expense</option>
+                  <option>Income</option>
+                </select>
+              </label>
+              <label>
+                Account
+                <select>
+                  <option>Everyday Bank</option>
+                  <option>Cash</option>
+                </select>
+              </label>
+              <label>
+                Frequency
+                <select>
+                  <option>Monthly</option>
+                  <option>Daily</option>
+                  <option>Weekly</option>
+                  <option>Yearly</option>
+                </select>
+              </label>
+              <label>
+                First generation
+                <input
+                  type="date"
+                  value="2026-10-01"
+                />
+              </label>
+            }
+            @if (editor() !== 'Extend schedule') {
+              <label>
+                Category
+                <select>
+                  <option>Housing</option>
+                  <option>Utilities</option>
+                </select>
+              </label>
+            }
+            <label>
+              Last generation (optional, inclusive)
+              <input type="date" />
+            </label>
+            @if (editor() === 'Extend schedule') {
+              <p>
+                Next generation: 1 Oct 2026. Missed occurrences are skipped. Leave the last date blank to continue
+                indefinitely.
+              </p>
+            } @else {
+              <label>
+                Description
+                <textarea rows="2"></textarea>
+              </label>
+            }
+          }
         } @else {
           @if (scenario() === 'empty' || scenario() === 'retired') {
             <p>You need an active Account before recording.</p>

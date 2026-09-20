@@ -1,0 +1,488 @@
+<div
+  class="family-study"
+  [class.family-rail]="variant() === 'B'"
+  [class.family-ledger]="variant() === 'C'"
+>
+  @if (screen() !== 'profile' && screen() !== 'categories') {
+    <section class="family-controls">
+      @if (screen() !== 'tags') {
+        <div
+          class="segmented"
+          aria-label="View"
+        >
+          @for (value of tabs(); track value) {
+            <button
+              [class.selected]="activeTab() === value"
+              [attr.aria-pressed]="activeTab() === value"
+              (click)="tab.set(value)"
+            >
+              {{ value }}
+            </button>
+          }
+        </div>
+      }
+      @if (screen() === 'tags') {
+        <label>
+          Search Tags
+          <input
+            type="search"
+            [value]="search()"
+            (input)="search.set($any($event.target).value)"
+            placeholder="Find by name"
+          />
+        </label>
+      }
+      <p>{{ items().length }} shown{{ screen() === 'schedules' ? ' · Earliest generation first' : '' }}</p>
+      @if (screen() === 'tags') {
+        <form
+          class="inline-add"
+          (submit)="
+            $event.preventDefault(); feedback.set('Tag creation placement previewed. Sample data has not changed.')
+          "
+        >
+          <label>
+            New tag
+            <input
+              placeholder="Add a tag"
+              required
+            />
+          </label>
+          <button class="primary">Add</button>
+        </form>
+      }
+    </section>
+  }
+  <div class="family-results">
+    @if (scenario() === 'error') {
+      <div
+        class="inline-notice"
+        role="status"
+      >
+        <strong>Couldn’t refresh this view.</strong>
+        <p>The last loaded sample data stays visible.</p>
+        <button (click)="feedback.set('Retry placement previewed.')">Try again</button>
+      </div>
+    }
+    @if (screen() === 'budgets' || screen() === 'goals') {
+      <div class="planning-grid">
+        @for (i of items(); track i) {
+          <article class="planning-card panel">
+            <div class="planning-title">
+              <h2>
+                @if (screen() === 'goals') {
+                  <button
+                    class="title-link"
+                    (click)="navigate.emit('goal')"
+                  >
+                    {{ name(i) }}
+                  </button>
+                } @else {
+                  {{ name(i) }}
+                }
+              </h2>
+              <details class="actions">
+                <summary [attr.aria-label]="'Actions for ' + name(i)">•••</summary>
+                <div>
+                  <button (click)="edit.emit(screen() === 'budgets' ? 'Adjust budget' : 'Edit goal')">
+                    {{ screen() === 'budgets' ? 'Adjust' : 'Edit' }}
+                  </button>
+                  @if (screen() === 'goals') {
+                    @if (activeTab() === 'Active') {
+                      @if (i % 3 === 1) {
+                        <button (click)="ask('Mark complete', name(i))">Mark complete</button>
+                      }
+                      <button (click)="ask('Abandon', name(i))">Abandon</button>
+                    } @else {
+                      <button (click)="ask('Mark active', name(i))">Mark active</button>
+                    }
+                  }
+                  <button (click)="ask(screen() === 'budgets' ? 'Remove' : 'Delete', name(i))">
+                    {{ screen() === 'budgets' ? 'Remove' : 'Delete' }}
+                  </button>
+                </div>
+              </details>
+            </div>
+            @if (screen() === 'budgets') {
+              <p>{{ i % 3 === 1 ? 'All spending' : 'Food' }} · Monthly</p>
+              <p>
+                {{
+                  activeTab() === 'Future'
+                    ? 'Starts 1 Oct 2026'
+                    : activeTab() === 'Finished'
+                      ? 'Final cycle · 1–31 Aug 2026'
+                      : 'Current cycle · 1–30 Sep 2026'
+                }}
+              </p>
+              @if (activeTab() !== 'Future') {
+                <div class="planning-amounts">
+                  <div>
+                    <span>Spent</span>
+                    <strong>{{ money(i % 3 === 1 ? 12400 : 6200) }}</strong>
+                  </div>
+                  <div>
+                    <span>Ceiling</span>
+                    <strong>{{ money(10000) }}</strong>
+                  </div>
+                </div>
+                <progress
+                  [value]="i % 3 === 1 ? 100 : 62"
+                  max="100"
+                  aria-label="Budget ceiling used"
+                ></progress>
+                <p [class.over]="i % 3 === 1">
+                  {{
+                    i % 3 === 1
+                      ? '₱2,400.00 over ceiling'
+                      : activeTab() === 'Finished'
+                        ? '₱3,800.00 under ceiling'
+                        : '₱3,800.00 left'
+                  }}
+                </p>
+              } @else {
+                <div class="planning-amounts">
+                  <div>
+                    <span>Ceiling per Cycle</span>
+                    <strong>₱10,000.00</strong>
+                  </div>
+                </div>
+                <p>Spending starts counting when the Budget begins.</p>
+              }
+            } @else {
+              <p>{{ activeTab() }}{{ i % 3 === 2 && activeTab() === 'Active' ? ' · Target date overdue' : '' }}</p>
+              <div class="planning-amounts">
+                <div>
+                  <span>Contributed</span>
+                  <strong>{{ money(i % 3 === 1 ? 52000 : 35000) }}</strong>
+                </div>
+                <div>
+                  <span>Target</span>
+                  <strong>₱50,000.00</strong>
+                </div>
+              </div>
+              <progress
+                [value]="i % 3 === 1 ? 100 : 70"
+                max="100"
+                aria-label="Goal progress"
+              ></progress>
+              <p>{{ i % 3 === 1 ? 'Target reached · ₱2,000.00 over target' : '₱15,000.00 to go' }}</p>
+              <p>
+                {{
+                  activeTab() === 'Active'
+                    ? i % 3 === 2
+                      ? 'Target date 1 Sep 2026'
+                      : 'Target date 31 Dec 2026'
+                    : 'Contributions stay earmarked in your Accounts.'
+                }}
+              </p>
+              <button
+                class="text-action"
+                (click)="navigate.emit('goal')"
+              >
+                View Contributions →
+              </button>
+            }
+          </article>
+        } @empty {
+          <section class="empty panel">
+            <h2>{{ search() ? 'No matches' : 'Nothing in this view yet' }}</h2>
+            <p>
+              {{
+                search()
+                  ? 'Try another name or clear your search.'
+                  : screen() === 'budgets'
+                    ? 'Set a spending ceiling for a future Cycle.'
+                    : 'Give something you are saving toward a place here.'
+              }}
+            </p>
+            <button (click)="search() ? search.set('') : edit.emit(screen() === 'budgets' ? 'New budget' : 'New goal')">
+              {{ search() ? 'Clear search' : screen() === 'budgets' ? 'New budget' : 'New goal' }}
+            </button>
+          </section>
+        }
+      </div>
+    }
+    @if (screen() === 'schedules') {
+      <section class="panel schedule-list">
+        @for (i of items(); track i) {
+          <article class="schedule-row">
+            <div class="schedule-copy">
+              <h2>{{ name(i) }}</h2>
+              <p>{{ i % 3 === 1 ? 'Income · Salary' : 'Expense · Housing' }} · Monthly</p>
+              <p>
+                Everyday Bank{{ scenario() === 'retired' ? ' · Retired Account' : ''
+                }}{{ i % 3 === 2 ? ' · Retired Category' : '' }}
+              </p>
+              <p>
+                {{
+                  activeTab() === 'Upcoming'
+                    ? 'Next generation · 1 Oct 2026'
+                    : activeTab() === 'Paused'
+                      ? 'Paused · No generation until resumed'
+                      : i % 3 === 1
+                        ? 'Cancelled · Can be resumed'
+                        : 'Completed · Last generation 1 Sep 2026'
+                }}
+              </p>
+              @if (scenario() === 'retired') {
+                <p class="over">Generation unavailable while the Account is retired.</p>
+              }
+              <button
+                class="text-action"
+                (click)="navigate.emit('transactions')"
+              >
+                {{ i === 1 ? '0 generated' : i === 2 ? '0 surviving' : '12 generated' }} Transactions →
+              </button>
+            </div>
+            <strong
+              class="row-amount"
+              [attr.data-direction]="i % 3 === 1 ? 'Income' : 'Expense'"
+            >
+              {{ money(i % 3 === 1 ? 48000 : 18000) }}
+            </strong>
+            <details class="actions">
+              <summary [attr.aria-label]="'Actions for ' + name(i)">•••</summary>
+              <div>
+                @if (activeTab() !== 'Past') {
+                  <button
+                    [disabled]="scenario() === 'error'"
+                    (click)="edit.emit('Edit schedule')"
+                  >
+                    Edit
+                  </button>
+                }
+                @if (activeTab() === 'Upcoming') {
+                  <button
+                    [disabled]="scenario() === 'error'"
+                    (click)="ask('Pause', name(i))"
+                  >
+                    Pause
+                  </button>
+                } @else {
+                  <button
+                    [disabled]="scenario() === 'retired' || scenario() === 'error'"
+                    (click)="
+                      activeTab() === 'Past' && i % 3 !== 1 ? edit.emit('Extend schedule') : ask('Resume', name(i))
+                    "
+                  >
+                    {{ activeTab() === 'Past' && i % 3 !== 1 ? 'Extend' : 'Resume' }}
+                  </button>
+                }
+                <button
+                  [disabled]="i !== 1 || scenario() === 'error'"
+                  (click)="ask('Delete', name(i))"
+                >
+                  Delete
+                </button>
+                @if (i !== 1) {
+                  <small>Cannot delete after any Transaction has been generated, even if later removed.</small>
+                }
+              </div>
+            </details>
+          </article>
+        } @empty {
+          <section class="empty">
+            <h2>No Schedules in this view</h2>
+            <p>{{ search() ? 'Try another search.' : 'Create a Schedule to generate regular income or expenses.' }}</p>
+            <button (click)="edit.emit('New schedule')">New schedule</button>
+          </section>
+        }
+      </section>
+    }
+    @if (screen() === 'categories') {
+      <div class="category-panes">
+        @for (direction of ['Expense', 'Income']; track direction) {
+          <section class="panel">
+            <div class="section-heading">
+              <h2>{{ direction }}</h2>
+              <button (click)="edit.emit('New ' + direction.toLowerCase() + ' category')">＋ Add</button>
+            </div>
+            <div class="category-filter">
+              <div
+                class="segmented"
+                [attr.aria-label]="direction + ' Category status'"
+              >
+                @for (value of ['Active', 'Retired', 'All']; track value) {
+                  <button
+                    [class.selected]="categoryStatus()[direction] === value"
+                    [attr.aria-pressed]="categoryStatus()[direction] === value"
+                    (click)="setCategory(direction, 'status', value)"
+                  >
+                    {{ value }}
+                  </button>
+                }
+              </div>
+              <label>
+                Search {{ direction.toLowerCase() }} Categories
+                <input
+                  type="search"
+                  [value]="categorySearch()[direction]"
+                  (input)="setCategory(direction, 'search', $any($event.target).value)"
+                />
+              </label>
+            </div>
+            <p class="pane-count">
+              {{ categoryRows(direction).length }} Categories · {{ categoryStatus()[direction] }}
+            </p>
+            @for (i of categoryRows(direction); track i) {
+              <article class="management-row">
+                <div>
+                  <strong>{{ categoryName(direction, i) }}</strong>
+                  <p>
+                    {{
+                      i === 0
+                        ? 'Default · Read-only'
+                        : categoryStatus()[direction] === 'Retired'
+                          ? 'Retired'
+                          : 'Your Category'
+                    }}
+                  </p>
+                </div>
+                @if (i !== 0) {
+                  <details class="actions">
+                    <summary aria-label="Category actions">•••</summary>
+                    <div>
+                      <button (click)="edit.emit('Rename category')">Rename</button>
+                      <button
+                        (click)="
+                          ask(
+                            categoryStatus()[direction] === 'Retired' ? 'Reactivate' : 'Retire',
+                            categoryName(direction, i)
+                          )
+                        "
+                      >
+                        {{ categoryStatus()[direction] === 'Retired' ? 'Reactivate' : 'Retire' }}
+                      </button>
+                      <button (click)="ask('Delete', categoryName(direction, i))">Delete</button>
+                    </div>
+                  </details>
+                }
+              </article>
+            } @empty {
+              <div class="empty">
+                <p>No matching {{ direction.toLowerCase() }} Categories.</p>
+              </div>
+            }
+          </section>
+        }
+      </div>
+    }
+    @if (screen() === 'tags') {
+      <section class="panel">
+        @for (i of items(); track i) {
+          <article class="management-row">
+            <div>
+              @if (renamingTag() === i) {
+                <label>
+                  Tag name
+                  <input
+                    [value]="name(i)"
+                    (keydown.enter)="finishRename()"
+                    (keydown.escape)="renamingTag.set(null)"
+                    (blur)="renamingTag() === i && finishRename()"
+                  />
+                </label>
+                <small>Enter or blur saves; Escape cancels.</small>
+              } @else {
+                <strong>{{ name(i) }}</strong>
+              }
+            </div>
+            <div class="inline-row-actions">
+              <button (click)="renamingTag.set(i)">Rename</button>
+              <button (click)="ask('Delete tag', name(i))">Delete</button>
+            </div>
+          </article>
+        } @empty {
+          <div class="empty">
+            <h2>{{ search() ? 'No matching Tags' : 'No Tags yet' }}</h2>
+            <p>Add a tag above to organize Transactions across Categories.</p>
+          </div>
+        }
+      </section>
+    }
+    @if (screen() === 'profile') {
+      <div class="profile-grid">
+        <section class="panel profile-section">
+          <span
+            class="profile-avatar"
+            aria-hidden="true"
+          >
+            JD
+          </span>
+          <h2>Identity</h2>
+          <strong>{{ scenario() === 'stress' ? 'Jamie Maria Dela Cruz Villanueva Santos' : 'Jamie Dela Cruz' }}</strong>
+          <p class="long-value">
+            {{ scenario() === 'stress' ? 'jamie.delacruz.household-and-personal@example.com' : 'jamie@example.com' }}
+          </p>
+          <button (click)="edit.emit('Edit name')">Edit name</button>
+        </section>
+        <div class="profile-security">
+          <section class="panel profile-section">
+            <h2>Email address</h2>
+            <p>Your current email stays valid until you confirm a new one.</p>
+            @if (pendingEmail()) {
+              <div class="inline-notice">
+                <strong>Pending email change</strong>
+                <p class="long-value">Confirmation sent to jamie.new@example.com.</p>
+                <div class="inline-row-actions">
+                  <button (click)="edit.emit('Send another confirmation link')">Send another link</button>
+                  <button (click)="edit.emit('Change email')">Choose another address</button>
+                  <button (click)="ask('Cancel pending email change', '')">Cancel change</button>
+                </div>
+              </div>
+            } @else {
+              <button (click)="edit.emit('Change email')">Change email</button>
+            }
+            <button
+              class="text-action"
+              (click)="pendingEmail.set(!pendingEmail())"
+            >
+              Preview {{ pendingEmail() ? 'no pending request' : 'pending request' }}
+            </button>
+          </section>
+          <section class="panel profile-section">
+            <h2>Password</h2>
+            <p>Use a unique password for your Profile.</p>
+            <button (click)="edit.emit('Change password')">Change password</button>
+          </section>
+        </div>
+      </div>
+    }
+    @if (confirmation()) {
+      <section
+        class="inline-confirm"
+        role="alertdialog"
+        aria-labelledby="confirmation-title"
+      >
+        <h2 id="confirmation-title">{{ confirmation() }}</h2>
+        <p>
+          {{
+            screen() === 'tags'
+              ? 'Deleting this Tag removes it from every Transaction. This cannot be undone.'
+              : screen() === 'goals'
+                ? 'Abandoning blocks new Contributions until marked active. Deleting releases all earmarks; money remains in Accounts.'
+                : screen() === 'profile'
+                  ? 'The confirmation link will no longer work. Your current email remains valid.'
+                  : 'This is the placement of the existing confirmation, outside the editor.'
+          }}
+        </p>
+        <div class="inline-row-actions">
+          <button (click)="confirmation.set('')">Cancel</button>
+          <button
+            class="primary"
+            (click)="confirm()"
+          >
+            Confirm (preview)
+          </button>
+        </div>
+      </section>
+    }
+    @if (feedback()) {
+      <p
+        class="inline-notice"
+        role="status"
+      >
+        {{ feedback() }}
+      </p>
+    }
+  </div>
+</div>

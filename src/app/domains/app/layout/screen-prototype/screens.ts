@@ -1,10 +1,12 @@
 import { Component, computed, HostListener, inject, isDevMode, signal } from '@angular/core';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import FamilyReview from './family-review';
+import AuthReview from './auth-review';
 
 @Component({
   selector: 'screen-prototype',
-  imports: [DecimalPipe, NgTemplateOutlet, RouterLink],
+  imports: [DecimalPipe, NgTemplateOutlet, RouterLink, FamilyReview, AuthReview],
   templateUrl: './screens.html',
 })
 export default class ScreenPrototype {
@@ -12,6 +14,7 @@ export default class ScreenPrototype {
   readonly route = inject(ActivatedRoute);
   readonly review = isDevMode();
   readonly variant = signal('A');
+  readonly composition = signal('selected');
   readonly scheme = signal('system');
   readonly osDark = signal(matchMedia('(prefers-color-scheme: dark)').matches);
   readonly dark = computed(() => this.scheme() === 'dark' || (this.scheme() === 'system' && this.osDark()));
@@ -35,12 +38,44 @@ export default class ScreenPrototype {
     transactions: '/app/transactions',
     goal: '/app/goals/rainy-day',
     signin: '/auth/sign-in',
+    budgets: '/app/budgets',
+    goals: '/app/goals',
+    schedules: '/app/schedules',
+    categories: '/app/categories',
+    tags: '/app/tags',
+    profile: '/app/profile',
+    signup: '/auth/sign-up',
+    forgot: '/auth/forgot-password',
+    reset: '/auth/reset-password',
+    confirm: '/auth/confirm-email',
+    emailchange: '/auth/confirm-email-change',
   };
+  readonly titles: Record<string, string> = {
+    budgets: 'Budgets',
+    goals: 'Goals',
+    schedules: 'Schedules',
+    categories: 'Categories',
+    tags: 'Tags',
+    profile: 'Profile',
+  };
+  readonly descriptions: Record<string, string> = {
+    budgets: 'Keep this Cycle’s spending in view.',
+    goals: 'Make room for what matters.',
+    schedules: 'See what will be generated next.',
+    categories: 'How your income and expenses are filed.',
+    tags: 'Find connections across Transactions.',
+    profile: 'Your identity, email, and password.',
+  };
+  readonly isAuth = computed(() =>
+    ['signin', 'signup', 'forgot', 'reset', 'confirm', 'emailchange'].includes(this.screen()),
+  );
+  readonly isFamily = computed(() => Object.hasOwn(this.titles, this.screen()));
+  readonly selectedVariant = computed(() => (['account', 'goal'].includes(this.screen()) ? 'B' : 'A'));
   readonly navigation = [
     { label: 'Accounts', screen: 'accounts', icon: '▣' },
     { label: 'Transactions', screen: 'transactions', icon: '⇄' },
     { label: 'Budgets', screen: 'budgets', icon: '◷' },
-    { label: 'Goals', screen: 'goal', icon: '◎' },
+    { label: 'Goals', screen: 'goals', icon: '◎' },
     { label: 'Schedules', screen: 'schedules', icon: '▦' },
     { label: 'Categories', screen: 'categories', icon: '⊞' },
     { label: 'Tags', screen: 'tags', icon: '◇' },
@@ -175,24 +210,15 @@ export default class ScreenPrototype {
   });
   constructor() {
     this.route.queryParamMap.subscribe((q) => {
-      this.variant.set(['A', 'B', 'C'].includes(q.get('variant') || '') ? q.get('variant')! : 'A');
       this.scheme.set(q.get('scheme') || 'system');
       this.scenario.set(q.get('case') || 'everyday');
       this.accountStatus.set(q.get('status') || (q.get('case') === 'retired' ? 'Retired' : 'Active'));
       this.search.set(q.get('search') || '');
       this.direction.set(q.get('direction') || 'All');
       const path = this.router.url.split('?')[0];
-      this.screen.set(
-        path.startsWith('/auth')
-          ? 'signin'
-          : path.startsWith('/app/goals/')
-            ? 'goal'
-            : path.startsWith('/app/accounts/')
-              ? 'account'
-              : path.endsWith('transactions')
-                ? 'transactions'
-                : 'accounts',
-      );
+      this.screen.set(Object.entries(this.paths).find(([, value]) => value === path)?.[0] || 'accounts');
+      this.composition.set(q.get('variant') || 'selected');
+      this.variant.set(['A', 'B', 'C'].includes(this.composition()) ? this.composition() : this.selectedVariant());
     });
     const media = matchMedia('(prefers-color-scheme: dark)');
     media.addEventListener('change', (e) => this.osDark.set(e.matches));
@@ -215,7 +241,7 @@ export default class ScreenPrototype {
       return;
     }
     this.router.navigate([this.paths[screen]], {
-      queryParams: { variant: this.variant(), scheme: this.scheme(), case: this.scenario() },
+      queryParams: { variant: this.composition(), scheme: this.scheme(), case: this.scenario() },
     });
   }
   cycle(offset: number) {

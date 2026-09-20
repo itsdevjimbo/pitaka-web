@@ -13,10 +13,11 @@ import ScreenPrototype from './screens';
     @if (phone) {
       <div class="phone-review">
         <header>
-          390px viewport · layout study
+          {{ frameWidth }}px viewport · layout study
           <a [href]="fullUrl">Open full width</a>
         </header>
         <iframe
+          [style.width.px]="frameWidth"
           [src]="frameUrl"
           title="Pocket Pop phone layout"
         ></iframe>
@@ -27,7 +28,8 @@ import ScreenPrototype from './screens';
   `,
 })
 class PrototypeRoot {
-  readonly phone = new URLSearchParams(location.search).get('width') === 'phone';
+  readonly phone = ['phone', '320'].includes(new URLSearchParams(location.search).get('width') || '');
+  readonly frameWidth = new URLSearchParams(location.search).get('width') === '320' ? 320 : 390;
   readonly fullUrl = (() => {
     const u = new URL(location.href);
     u.searchParams.delete('width');

@@ -1,0 +1,196 @@
+<main
+  id="main"
+  class="auth-layout"
+  [class.compact-auth]="screen() !== 'signup'"
+>
+  @if (screen() === 'signup') {
+    <section class="welcome">
+      <span class="eyebrow">A little clarity, every day.</span>
+      <h1>Room for your everyday.</h1>
+      <p>Keep your Accounts, spending, and plans together.</p>
+      <div
+        class="pocket-art"
+        aria-hidden="true"
+      >
+        <svg viewBox="0 0 48 48"><path d="M11 42V10H26Q40 10 40 24Q40 36 26 36H11 M11 18Q24 29 38 18" /></svg>
+      </div>
+    </section>
+  }
+  <section class="auth-form">
+    @if (scenario() === 'invalid' && ['reset', 'confirm', 'emailchange'].includes(screen())) {
+      <h1>This link is no longer valid</h1>
+      <p>
+        {{
+          screen() === 'emailchange'
+            ? 'Return to Profile to request another email change.'
+            : 'Request a new link to continue.'
+        }}
+      </p>
+      @if (screen() === 'emailchange') {
+        <button
+          class="primary"
+          (click)="navigate.emit('profile')"
+        >
+          Go to Profile
+        </button>
+        <button
+          class="text-action"
+          (click)="navigate.emit('signin')"
+        >
+          Sign in instead
+        </button>
+      } @else {
+        <form (submit)="submit($event)">
+          <label>
+            Email
+            <input
+              type="email"
+              autocomplete="email"
+              required
+            />
+          </label>
+          <button class="primary">{{ screen() === 'reset' ? 'Send reset link' : 'Send confirmation link' }}</button>
+          @if (sent()) {
+            <p role="status">If a link can be sent, you’ll receive an email shortly.</p>
+          }
+        </form>
+      }
+    } @else if (screen() === 'signup' && sent()) {
+      <h1>Check your inbox</h1>
+      <p>
+        We sent a confirmation link to
+        <strong class="long-value">{{ email() }}</strong>
+        .
+      </p>
+      <p>Confirm your email before signing in.</p>
+      <button (click)="sent.set(false)">Preview form again</button>
+      <button
+        class="text-action"
+        (click)="navigate.emit('signin')"
+      >
+        Go to sign-in
+      </button>
+    } @else if (screen() === 'confirm') {
+      @if (scenario() === 'success') {
+        <h1>Email confirmed</h1>
+        <p>You can now sign in to Pitaka.</p>
+        <button
+          class="primary"
+          (click)="navigate.emit('signin')"
+        >
+          Continue to sign-in
+        </button>
+      } @else {
+        <h1>Confirming your email</h1>
+        <p role="status">Checking the link…</p>
+        <p class="fixture-note">
+          Automatic link redemption; this static state uses sample data. Choose Success or Invalid link above to inspect
+          the result.
+        </p>
+      }
+    } @else if (sent() && ['reset', 'emailchange'].includes(screen())) {
+      <h1>{{ screen() === 'reset' ? 'Password changed' : 'Email changed' }}</h1>
+      <p>
+        {{ screen() === 'reset' ? 'Sign in with your new password.' : 'Your Profile now uses the new email address.' }}
+      </p>
+      <button
+        class="primary"
+        (click)="navigate.emit(screen() === 'reset' ? 'signin' : 'profile')"
+      >
+        {{ screen() === 'reset' ? 'Go to sign-in' : 'Go to Profile' }}
+      </button>
+    } @else {
+      <h1>{{ authTitle() }}</h1>
+      <p>
+        {{
+          screen() === 'signup'
+            ? 'Start with your name, email, and password.'
+            : screen() === 'forgot'
+              ? 'We’ll send a link to reset your password.'
+              : screen() === 'reset'
+                ? 'Choose a unique password for your Profile.'
+                : 'Confirm that you want to use the new email address for your Profile.'
+        }}
+      </p>
+      @if (scenario() === 'error') {
+        <div
+          class="inline-notice"
+          role="alert"
+        >
+          Couldn’t complete this request. Your input is still here. Try again.
+        </div>
+      }
+      @if (screen() === 'emailchange') {
+        <div class="auth-actions">
+          <button
+            class="primary"
+            (click)="sent.set(true)"
+          >
+            Confirm change
+          </button>
+          <button (click)="navigate.emit('profile')">Not now</button>
+        </div>
+      } @else {
+        <form (submit)="submit($event)">
+          @if (screen() === 'signup') {
+            <label>
+              Name
+              <input
+                autocomplete="name"
+                required
+              />
+            </label>
+          }
+          @if (screen() !== 'reset') {
+            <label>
+              Email
+              <input
+                type="email"
+                autocomplete="email"
+                [value]="email()"
+                (input)="email.set($any($event.target).value)"
+                required
+              />
+            </label>
+          }
+          @if (screen() === 'signup' || screen() === 'reset') {
+            <label>
+              {{ screen() === 'reset' ? 'New password' : 'Password' }}
+              <input
+                [type]="reveal() ? 'text' : 'password'"
+                autocomplete="new-password"
+                required
+              />
+            </label>
+            <button
+              type="button"
+              class="text-action"
+              [attr.aria-pressed]="reveal()"
+              (click)="reveal.set(!reveal())"
+            >
+              {{ reveal() ? 'Hide password' : 'Show password' }}
+            </button>
+          }
+          <button class="primary">
+            {{
+              screen() === 'signup'
+                ? 'Create my profile'
+                : screen() === 'forgot'
+                  ? 'Send reset link'
+                  : 'Set new password'
+            }}
+          </button>
+          @if (sent() && screen() === 'forgot') {
+            <p role="status">If a Profile uses that email address, you’ll receive a reset link shortly.</p>
+          }
+        </form>
+      }
+    }
+    <button
+      class="text-action"
+      (click)="navigate.emit('signin')"
+    >
+      Back to sign-in
+    </button>
+  </section>
+</main>
