@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { map, Observable } from 'rxjs';
+import { catchError, map, Observable, throwError } from 'rxjs';
 import { API_BASE_URL } from '@/app/core/api';
 import { toRequestDateBounds } from './date-range-bounds';
 import { TransactionLinkedContribution, TransactionLinkedContributions } from './linked-contribution';
@@ -14,6 +14,7 @@ import {
   TransactionDirection,
   TransactionSearchResult,
 } from './transaction';
+import { toTransactionRemovalError } from './transaction-removal';
 import { TransactionSplitPayload, TransactionSplitResult } from './transaction-split';
 
 /**
@@ -303,18 +304,23 @@ export class TransactionsService {
    * other and stays removed: the Schedule's next-run date has already advanced,
    * so nothing regenerates it.
    *
-   * Landmine for the goals slice, invisible today: the API also deletes any Goal
-   * contribution attached to this Transaction, silently. Goals are not built
-   * yet, so nothing surfaces here and there is nothing to do — but a
-   * contribution is destroyed, and the goals slice will have to reckon with a
-   * removal reaching into its data when it lands.
+   * A Transaction with Linked Contributions is not removed. The API returns
+   * every blocking Contribution and Goal identity; this adapter validates the
+   * structured Transaction identity and raises a typed refusal for the row to
+   * explain. A concurrent-state refusal is also raised as its own typed failure
+   * so the row can keep the Transaction visible and offer another explicit
+   * attempt. Neither refusal reports successful removal.
    *
    * Failures arrive already normalised: a 404 or 403 means the Transaction is
    * gone or was never the person's, collapsed to one not-found line; anything
-   * else is a form-level `ApiError` the caller shows and leaves the row put.
+   * other unrecognised failure remains a form-level `ApiError` the caller shows
+   * while leaving the row in place.
    */
   remove(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/api/transactions/${id}`).pipe(map(() => undefined));
+    return this.http.delete<void>(`${this.baseUrl}/api/transactions/${id}`).pipe(
+      map(() => undefined),
+      catchError((error: unknown) => throwError(() => toTransactionRemovalError(error, id))),
+    );
   }
 }
 

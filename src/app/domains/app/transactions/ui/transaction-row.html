@@ -191,3 +191,39 @@
     </div>
   </app-row-notice>
 }
+
+@if (canActOnHere() && removalBlock(); as block) {
+  <app-row-notice [message]="block.message">
+    <div
+      row-notice-actions
+      class="flex flex-col gap-y-1"
+      [attr.data-transaction-id]="block.transactionId"
+    >
+      <ul class="flex flex-col gap-y-1">
+        @for (goal of block.goals; track goal.id) {
+          <li>
+            <a
+              class="font-medium underline hover:no-underline"
+              [routerLink]="['/app/goals', goal.id]"
+            >
+              {{ goal.name }}
+            </a>
+            <span aria-hidden="true">·</span>
+            @for (contributionId of goal.contributionIds; track contributionId; let last = $last) {
+              <span>Contribution #{{ contributionId }}{{ last ? '' : ', ' }}</span>
+            }
+          </li>
+        }
+      </ul>
+      <button
+        matButton
+        type="button"
+        class="self-start"
+        [disabled]="removing()"
+        (click)="confirmRemove()"
+      >
+        {{ removing() ? 'Removing…' : 'Try again' }}
+      </button>
+    </div>
+  </app-row-notice>
+}
