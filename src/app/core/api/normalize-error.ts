@@ -9,8 +9,7 @@ const VALIDATION_MESSAGE = 'Please correct the highlighted fields and try again.
  * bounces someone to sign-in. Exported so the sentence lives in one place
  * rather than being written twice.
  */
-export const SESSION_ENDED_MESSAGE =
-  'Your session has ended. Please sign in again.';
+export const SESSION_ENDED_MESSAGE = 'Your session has ended. Please sign in again.';
 
 /**
  * One honest "not found" for both 404 and 403, so the app never leaks whether
@@ -18,11 +17,9 @@ export const SESSION_ENDED_MESSAGE =
  * the row is real — precisely what must not reach the screen — so this wording
  * stands in for both.
  */
-const NOT_FOUND_MESSAGE =
-  "We couldn't find that. It may have been deleted, or it may not be yours.";
+const NOT_FOUND_MESSAGE = "We couldn't find that. It may have been deleted, or it may not be yours.";
 
-const CONNECTIVITY_MESSAGE =
-  'Could not reach the server. Check your connection and try again.';
+const CONNECTIVITY_MESSAGE = 'Could not reach the server. Check your connection and try again.';
 
 const BODYLESS_MESSAGE =
   'The request was rejected. A value may be missing, out of range, or in the ' +
@@ -67,10 +64,7 @@ export function normalizeHttpError(response: HttpErrorResponse): ApiError {
   // bodyless 400 and the bare-string login body get, so it stays diagnosable.
   if (status === 404 || status === 403) {
     if (body !== null && body !== undefined && body !== '') {
-      logServerText(
-        response.url,
-        typeof body === 'string' ? body : JSON.stringify(body)
-      );
+      logServerText(response.url, typeof body === 'string' ? body : JSON.stringify(body));
     }
     return new ApiError(NOT_FOUND_MESSAGE, status);
   }
@@ -90,25 +84,23 @@ export function normalizeHttpError(response: HttpErrorResponse): ApiError {
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>;
     if (record['errors'] && typeof record['errors'] === 'object') {
-      const fieldErrors = camelCaseFieldErrors(
-        record['errors'] as Record<string, unknown>
-      );
+      const fieldErrors = camelCaseFieldErrors(record['errors'] as Record<string, unknown>);
       return new ApiError(VALIDATION_MESSAGE, status, fieldErrors);
     }
 
     // ProblemDetails: a human-readable `detail` specific to this occurrence.
     if (typeof record['detail'] === 'string' && record['detail'].length > 0) {
-      return new ApiError(record['detail'], status);
+      return new ApiError(record['detail'], status, {}, problemDetailsExtensions(record));
     }
+
+    return new ApiError(fallbackMessage(status), status, {}, problemDetailsExtensions(record));
   }
 
   // A bodyless 400 (ten call sites in the API, ADR 0002). Never attributed to a
   // field — a wrong red outline is worse than none; logged with its endpoint so
   // it can be justified as a server-side fix later.
   if (status === 400) {
-    console.warn(
-      `[api] bodyless 400 from ${response.url ?? 'unknown endpoint'}`
-    );
+    console.warn(`[api] bodyless 400 from ${response.url ?? 'unknown endpoint'}`);
     return new ApiError(BODYLESS_MESSAGE, status);
   }
 
@@ -117,9 +109,7 @@ export function normalizeHttpError(response: HttpErrorResponse): ApiError {
 
 /** Keep an undisplayable server body diagnosable without putting it on screen. */
 function logServerText(url: string | null, text: string): void {
-  console.warn(
-    `[api] undisplayable body from ${url ?? 'unknown endpoint'}: ${text}`
-  );
+  console.warn(`[api] undisplayable body from ${url ?? 'unknown endpoint'}: ${text}`);
 }
 
 /**
@@ -127,12 +117,7 @@ function logServerText(url: string | null, text: string): void {
  * `{ error: SyntaxError, text: string }`. Recover the raw text when it does.
  */
 function unwrapBody(error: unknown): unknown {
-  if (
-    error &&
-    typeof error === 'object' &&
-    'error' in error &&
-    'text' in error
-  ) {
+  if (error && typeof error === 'object' && 'error' in error && 'text' in error) {
     const wrapper = error as { error: unknown; text: unknown };
     if (wrapper.error instanceof Error && typeof wrapper.text === 'string') {
       return wrapper.text;
@@ -141,14 +126,10 @@ function unwrapBody(error: unknown): unknown {
   return error;
 }
 
-function camelCaseFieldErrors(
-  errors: Record<string, unknown>
-): Record<string, string[]> {
+function camelCaseFieldErrors(errors: Record<string, unknown>): Record<string, string[]> {
   const result: Record<string, string[]> = {};
   for (const [key, value] of Object.entries(errors)) {
-    const messages = Array.isArray(value)
-      ? value.map(String)
-      : [String(value)];
+    const messages = Array.isArray(value) ? value.map(String) : [String(value)];
     result[camelCaseKey(key)] = messages;
   }
   return result;
@@ -160,10 +141,15 @@ function camelCaseFieldErrors(
  */
 function camelCaseKey(key: string): string {
   const stripped = key.replace(/^\$\.?/, '');
-  if (stripped.length === 0) {
-    return stripped;
-  }
-  return stripped.charAt(0).toLowerCase() + stripped.slice(1);
+  return stripped.replace(/(^|\.)([A-Z])/g, (_match, separator: string, letter: string) => {
+    return separator + letter.toLowerCase();
+  });
+}
+
+/** Drop display-oriented RFC fields while retaining contract extensions. */
+function problemDetailsExtensions(record: Record<string, unknown>): Record<string, unknown> {
+  const { type: _type, title: _title, status: _status, detail: _detail, instance: _instance, ...extensions } = record;
+  return extensions;
 }
 
 function fallbackMessage(status: number): string {

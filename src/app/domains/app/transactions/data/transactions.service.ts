@@ -14,6 +14,7 @@ import {
   TransactionDirection,
   TransactionSearchResult,
 } from './transaction';
+import { TransactionSplitPayload, TransactionSplitResult } from './transaction-split';
 
 /**
  * Wire shape of one Transaction from the API. `GET /api/accounts/:id/
@@ -61,6 +62,12 @@ type TransactionLinkedContributionsResource = Omit<TransactionLinkedContribution
   linkedContributions: LinkedContributionResource[];
 };
 
+type TransactionSplitResultResource = Omit<TransactionSplitResult, 'contributions'> & {
+  contributions: (Omit<TransactionSplitResult['contributions'][number], 'contributionDate'> & {
+    contributionDate: string;
+  })[];
+};
+
 /**
  * The hand-written resource service over the API's Transactions endpoints (ADR
  * 0002). It reads one Account's list, records a new Transaction, refiles an
@@ -101,6 +108,32 @@ export class TransactionsService {
         map((resource) => ({
           ...resource,
           linkedContributions: resource.linkedContributions.map(toLinkedContribution),
+        })),
+      );
+  }
+
+  /**
+   * Attempt one atomic split with a caller-owned durable key. This adapter does
+   * no retrying: only the recovery coordinator may explicitly replay the exact
+   * same semantic payload with the same key.
+   */
+  splitLinkedContributions(
+    payload: TransactionSplitPayload,
+    idempotencyKey: string,
+  ): Observable<TransactionSplitResult> {
+    return this.http
+      .post<TransactionSplitResultResource>(
+        `${this.baseUrl}/api/transactions/${payload.transactionId}/linked-contributions`,
+        {
+          contributionDate: payload.contributionDate,
+          contributions: payload.contributions.map((row) => ({ ...row })),
+        },
+        { headers: { 'Idempotency-Key': idempotencyKey } },
+      )
+      .pipe(
+        map((resource) => ({
+          ...resource,
+          contributions: resource.contributions.map(toCreatedSplitContribution),
         })),
       );
   }
@@ -330,4 +363,11 @@ function toLinkedContribution(resource: LinkedContributionResource): Transaction
     ...resource,
     contributionDate: new Date(year, month - 1, day),
   };
+}
+
+function toCreatedSplitContribution(
+  resource: TransactionSplitResultResource['contributions'][number],
+): TransactionSplitResult['contributions'][number] {
+  const [year, month, day] = resource.contributionDate.split('-').map((part) => Number(part));
+  return { ...resource, contributionDate: new Date(year, month - 1, day) };
 }

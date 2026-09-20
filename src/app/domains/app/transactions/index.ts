@@ -17,6 +17,12 @@ export type {
   TransactionLinkedContribution,
   TransactionLinkedContributions,
 } from './data/linked-contribution';
+export type {
+  CreatedTransactionSplitContribution,
+  TransactionSplitPayload,
+  TransactionSplitResult,
+  TransactionSplitRow,
+} from './data/transaction-split';
 export type { RecordTransactionDialogData } from './ui/record-transaction-dialog';
 export type { RefileTransactionDialogData } from './ui/refile-transaction-dialog';
 export { TransactionsService } from './data/transactions.service';
@@ -24,6 +30,12 @@ export { scheduleHistoryQueryParams } from './data/transaction-criteria-params';
 export { RecordTransactionDialog } from './ui/record-transaction-dialog';
 export { RefileTransactionDialog } from './ui/refile-transaction-dialog';
 export { TransactionSplitContextStore } from './ui/transaction-split-context';
+export {
+  REFUSED_SPLIT_MESSAGE,
+  TRANSACTION_SPLIT_IDEMPOTENCY_KEY,
+  TransactionSplitRecoveryStore,
+  UNCERTAIN_SPLIT_MESSAGE,
+} from './ui/transaction-split-recovery';
 export type {
   TransactionSplitAvailability,
   TransactionSplitContext,
@@ -31,5 +43,11 @@ export type {
   TransactionSplitHistoryContext,
   TransactionSplitUnavailableReason,
 } from './ui/transaction-split-context';
+export type {
+  TransactionSplitAttempt,
+  TransactionSplitFailure,
+  TransactionSplitFailureReason,
+  TransactionSplitRecoveryState,
+} from './ui/transaction-split-recovery';
 export { TransactionRow, toAccountRow, toSpanningRow } from './ui/transaction-row';
 export type { TransactionRowModel, TransactionRowReading } from './ui/transaction-row';

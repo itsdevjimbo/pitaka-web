@@ -12,12 +12,7 @@ import { normalizeHttpError } from './normalize-error';
  * Every one must collapse to a single `ApiError`.
  */
 describe('normalizeHttpError', () => {
-  const response = (init: {
-    status?: number;
-    statusText?: string;
-    url?: string;
-    error?: unknown;
-  }): HttpErrorResponse =>
+  const response = (init: { status?: number; statusText?: string; url?: string; error?: unknown }): HttpErrorResponse =>
     new HttpErrorResponse({
       url: `${BASE_URL}/api/auth/login`,
       status: 400,
@@ -35,13 +30,53 @@ describe('normalizeHttpError', () => {
           status: 409,
           detail: 'A user with this email already exists.',
         },
-      })
+      }),
     );
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.message).toBe('A user with this email already exists.');
     expect(error.status).toBe(409);
     expect(error.fieldErrors).toEqual({});
+  });
+
+  it('retains structured ProblemDetails extensions for reason-based recovery', () => {
+    const error = normalizeHttpError(
+      response({
+        status: 409,
+        error: {
+          title: 'Conflict',
+          status: 409,
+          detail: 'This prose may change.',
+          reason: 'split_rejected',
+          created: false,
+          failures: [
+            { reason: 'goal_inactive', rowIndex: 1, goalId: 9 },
+            { reason: 'account_inactive', accountId: 4 },
+          ],
+        },
+      }),
+    );
+
+    expect(error.details).toEqual({
+      reason: 'split_rejected',
+      created: false,
+      failures: [
+        { reason: 'goal_inactive', rowIndex: 1, goalId: 9 },
+        { reason: 'account_inactive', accountId: 4 },
+      ],
+    });
+  });
+
+  it('retains structured extensions even when ProblemDetails omits detail', () => {
+    const error = normalizeHttpError(
+      response({
+        status: 503,
+        error: { status: 503, reason: 'operation_outcome_unknown' },
+      }),
+    );
+
+    expect(error.details).toEqual({ reason: 'operation_outcome_unknown' });
+    expect(error.message).not.toContain('operation_outcome_unknown');
   });
 
   it('turns a ValidationProblemDetails body into field errors with camelCased keys', () => {
@@ -56,7 +91,7 @@ describe('normalizeHttpError', () => {
             Password: ['The Password must be at least 8 characters.'],
           },
         },
-      })
+      }),
     );
 
     expect(error).toBeInstanceOf(ApiError);
@@ -65,9 +100,7 @@ describe('normalizeHttpError', () => {
       password: ['The Password must be at least 8 characters.'],
     });
     // The friendly form-level message wins over the server's raw `title`.
-    expect(error.message).toBe(
-      'Please correct the highlighted fields and try again.'
-    );
+    expect(error.message).toBe('Please correct the highlighted fields and try again.');
   });
 
   it('strips a leading JSON path segment from validation keys', () => {
@@ -75,25 +108,40 @@ describe('normalizeHttpError', () => {
       response({
         status: 400,
         error: { errors: { '$.email': ['Invalid.'] } },
-      })
+      }),
     );
 
     expect(error.fieldErrors).toEqual({ email: ['Invalid.'] });
   });
 
+  it('camel-cases every property in an indexed validation path', () => {
+    const error = normalizeHttpError(
+      response({
+        status: 400,
+        error: {
+          errors: {
+            'Contributions[1].Amount': ['Use a positive cent-precise amount.'],
+            ContributionDate: ['Choose a valid date.'],
+          },
+        },
+      }),
+    );
+
+    expect(error.fieldErrors).toEqual({
+      'contributions[1].amount': ['Use a positive cent-precise amount.'],
+      contributionDate: ['Choose a valid date.'],
+    });
+  });
+
   it('turns a bodyless 400 into a form-level message with no field errors and logs it', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    const error = normalizeHttpError(
-      response({ status: 400, error: null, url: `${BASE_URL}/api/accounts` })
-    );
+    const error = normalizeHttpError(response({ status: 400, error: null, url: `${BASE_URL}/api/accounts` }));
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.fieldErrors).toEqual({});
     expect(error.message).not.toMatch(/\{|\}|undefined/);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining(`${BASE_URL}/api/accounts`)
-    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`${BASE_URL}/api/accounts`));
 
     warn.mockRestore();
   });
@@ -101,9 +149,7 @@ describe('normalizeHttpError', () => {
   it('turns the bare-string login failure into an ApiError without surfacing the server text', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    const error = normalizeHttpError(
-      response({ status: 401, error: 'Invalid email or password.' })
-    );
+    const error = normalizeHttpError(response({ status: 401, error: 'Invalid email or password.' }));
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(401);
@@ -111,9 +157,7 @@ describe('normalizeHttpError', () => {
     // The wording for this one is `AuthService`'s, since only it knows a 401
     // here means "wrong pair" rather than "session ended".
     expect(error.message).not.toBe('Invalid email or password.');
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid email or password.')
-    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Invalid email or password.'));
 
     warn.mockRestore();
   });
@@ -125,13 +169,11 @@ describe('normalizeHttpError', () => {
       response({
         status: 401,
         error: { error: new SyntaxError('Unexpected token'), text: 'Invalid email or password.' },
-      })
+      }),
     );
 
     // Recognised as the bare-string shape rather than an opaque object.
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid email or password.')
-    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Invalid email or password.'));
 
     warn.mockRestore();
   });
@@ -159,14 +201,12 @@ describe('normalizeHttpError', () => {
         status: 404,
         error: null,
         url: `${BASE_URL}/api/accounts/42`,
-      })
+      }),
     );
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(404);
-    expect(error.message).toBe(
-      "We couldn't find that. It may have been deleted, or it may not be yours."
-    );
+    expect(error.message).toBe("We couldn't find that. It may have been deleted, or it may not be yours.");
     expect(error.fieldErrors).toEqual({});
   });
 
@@ -182,26 +222,22 @@ describe('normalizeHttpError', () => {
           status: 403,
           detail: 'Transaction 7 belongs to another user.',
         },
-      })
+      }),
     );
 
     expect(error.status).toBe(403);
-    expect(error.message).toBe(
-      "We couldn't find that. It may have been deleted, or it may not be yours."
-    );
+    expect(error.message).toBe("We couldn't find that. It may have been deleted, or it may not be yours.");
     // The server's own text confirms the row exists — it must not be displayed,
     // only logged so it stays diagnosable.
     expect(error.message).not.toContain('another user');
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('another user')
-    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('another user'));
 
     warn.mockRestore();
   });
 
   it('turns a transport failure into a connectivity message, not a status-0 one', () => {
     const error = normalizeHttpError(
-      response({ status: 0, statusText: 'Unknown Error', error: new ProgressEvent('error') })
+      response({ status: 0, statusText: 'Unknown Error', error: new ProgressEvent('error') }),
     );
 
     expect(error).toBeInstanceOf(ApiError);
