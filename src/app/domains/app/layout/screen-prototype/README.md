@@ -1,6 +1,6 @@
 # Pocket Pop screen layouts — throwaway review
 
-**Current status:** the user selected **A for Accounts, Transactions and sign-in; B for Account detail and Goal detail**. Open `?variant=selected` (or omit `variant`) to carry those choices between routes. All remaining families now have sketches, documented in [the current stage-two review and coverage matrix](STAGE-TWO.md). Their default A composition is proposed, not approved. This update supersedes the historical first-stage limitations below where a sketch has since been added.
+**Current status:** the user selected **A for Accounts, Transactions, Schedules, Categories, Tags, Profile and sign-in; B for Account detail and Goal detail; compact, full-width card grids for Budgets and Goals list**. Sign-up inherits A; recovery and confirmation use compact centered cards. Sidebar headings and the phone More panel are approved. Open `?variant=selected` (or omit `variant`) to carry this mix between routes. Explicit A/B/C URLs retain the original comparisons. The compact planning revision needs visual feedback; final layout validation is still open. See [the current stage-two review and coverage matrix](STAGE-TWO.md). This update supersedes historical first-stage limitations below where a sketch has since been added.
 
 ## Historical first-stage record
 

@@ -2,6 +2,7 @@
   class="pp"
   [attr.data-dark]="dark()"
   [attr.data-variant]="variant()"
+  [class.compact-planning]="composition() === 'selected' && ['budgets', 'goals'].includes(screen())"
 >
   <a
     class="skip"
@@ -813,11 +814,17 @@
         <strong>
           {{
             composition() === 'selected'
-              ? (isFamily() || (isAuth() && screen() !== 'signin') ? 'Proposed · ' : 'Selected · ') + variant()
+              ? ['budgets', 'goals'].includes(screen())
+                ? 'Selected · Compact cards'
+                : 'Selected · ' + variant()
               : variant()
           }}
           ·
-          {{ names[variant()] }}
+          {{
+            composition() === 'selected' && ['budgets', 'goals'].includes(screen())
+              ? 'Full-width grid'
+              : names[variant()]
+          }}
         </strong>
         <small>{{ screen() }} · {{ scenario() }} · {{ dark() ? 'Dark' : 'Light' }}</small>
       </span>
