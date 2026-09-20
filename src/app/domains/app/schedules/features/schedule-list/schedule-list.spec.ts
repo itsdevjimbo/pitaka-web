@@ -182,6 +182,21 @@ describe('ScheduleList', () => {
     expect(text()).not.toContain('Next generation:');
   });
 
+  it('shows each lifecycle count as a badge beside its menu label', () => {
+    const { fixture } = setup(() => of(ALL));
+    const buttons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        'nav[aria-label="Schedule lifecycle"] button',
+      ),
+    );
+
+    expect(buttons.map((button) => button.querySelector('[data-schedule-count-badge]')?.textContent?.trim())).toEqual([
+      '2',
+      '1',
+      '2',
+    ]);
+  });
+
   it('warns about a retired Account and labels a retired Category', () => {
     const retired = schedule({ accountId: 2, categoryId: 11, direction: 'expense' });
     const { text } = setup(() => of([retired]));

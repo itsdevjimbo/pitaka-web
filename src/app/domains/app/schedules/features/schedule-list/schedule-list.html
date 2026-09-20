@@ -119,7 +119,12 @@
               (click)="selectedView.set(view.id)"
             >
               <span>{{ view.label }}</span>
-              <span class="tabular-nums">{{ counts()[view.id] }}</span>
+              <span
+                data-schedule-count-badge
+                class="min-w-6 rounded-full bg-neutral-200 px-1.5 py-0.5 text-center text-xs font-semibold text-neutral-700 tabular-nums dark:bg-neutral-700 dark:text-neutral-100"
+              >
+                {{ counts()[view.id] }}
+              </span>
             </button>
           }
         </nav>
