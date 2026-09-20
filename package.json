@@ -8,10 +8,14 @@
     "build": "ng build",
     "lint": "ng lint",
     "ng": "ng",
+    "prepare": "husky",
+    "prototype:tokens": "ng serve --port 4320",
     "start": "ng serve",
     "test": "ng test",
-    "watch": "ng build --watch --configuration development",
-    "prepare": "husky"
+    "watch": "ng build --watch --configuration development"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,html}": "prettier --write"
   },
   "dependencies": {
     "@angular/aria": "22.1.1",
@@ -60,8 +64,5 @@
   },
   "engines": {
     "node": ">=24.0.0"
-  },
-  "lint-staged": {
-    "src/**/*.{ts,html}": "prettier --write"
   }
 }

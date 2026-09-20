@@ -1,0 +1,439 @@
+<div
+  class="pp"
+  [attr.data-dark]="dark()"
+  [class.pp-phone]="narrow()"
+  [style.color-scheme]="dark() ? 'dark' : 'light'"
+>
+  <div class="pp-review">
+    <strong>
+      POCKET POP
+      <span>/ token study</span>
+    </strong>
+    <div class="pp-tools">
+      <label>
+        Appearance
+        <select
+          [value]="appearance()"
+          (change)="set('scheme', $any($event.target).value)"
+        >
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label>
+        Canvas
+        <select
+          [value]="narrow() ? 'phone' : 'wide'"
+          (change)="set('width', $any($event.target).value)"
+        >
+          <option value="wide">Full width</option>
+          <option value="phone">390px phone</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div class="pp-viewport">
+    <header class="pp-header">
+      <div class="pp-logo">
+        <svg
+          viewBox="0 0 48 48"
+          aria-hidden="true"
+        >
+          <path d="M11 42V10H26Q40 10 40 24Q40 36 26 36H11 M11 18Q24 29 38 18" />
+        </svg>
+        <b>Pitaka</b>
+      </div>
+      <span class="pp-muted">{{ dark() ? 'Dark' : 'Light' }} · {{ names[variant()] || 'Components' }}</span>
+    </header>
+    <main>
+      @if (variant() === 'A') {
+        <div class="pp-page-heading">
+          <div>
+            <p class="pp-eyebrow">THE EVERYDAY DETAILS</p>
+            <h1>A little color. A lot of clarity.</h1>
+            <p class="pp-muted">One visual language for your everyday money.</p>
+          </div>
+          <button
+            matButton="filled"
+            (click)="previewDialog.showModal()"
+          >
+            Preview dialog
+          </button>
+        </div>
+        <div class="pp-grid">
+          <section class="pp-card">
+            <p class="pp-eyebrow">01 / TYPE & MONEY</p>
+            <h2>Everyday Bank</h2>
+            <p class="pp-muted">Account balance</p>
+            <p class="pp-balance">₱128,450.75</p>
+            <p class="pp-muted pp-small">Including ₱25,000.00 earmarked toward Goals</p>
+            <div class="pp-divider"></div>
+            <div class="pp-mini-row">
+              <span>
+                Income
+                <small>Salary</small>
+              </span>
+              <strong class="pp-income">+₱48,000.00</strong>
+            </div>
+            <div class="pp-mini-row">
+              <span>
+                Expense
+                <small>Groceries</small>
+              </span>
+              <strong class="pp-expense">−₱2,840.75</strong>
+            </div>
+            <div class="pp-mini-row">
+              <span>
+                Transfer
+                <small>To Cash</small>
+              </span>
+              <strong class="pp-transfer">−₱2,000.00</strong>
+            </div>
+            <div class="pp-mini-row">
+              <span>
+                Overdrawn Account
+                <small>Neutral balance</small>
+              </span>
+              <strong>−₱1,250.00</strong>
+            </div>
+          </section>
+          <section class="pp-card">
+            <p class="pp-eyebrow">02 / ACTIONS & SELECTION</p>
+            <h2>Clear next steps</h2>
+            <p class="pp-muted">Tab through the controls to inspect focus.</p>
+            <div class="pp-actions">
+              <button
+                matButton="filled"
+                (click)="notice.set('Preview only · nothing was recorded')"
+              >
+                Record transaction
+              </button>
+              <button
+                matButton="outlined"
+                (click)="notice.set('Secondary action preview')"
+              >
+                Cancel
+              </button>
+              <button
+                matButton="text"
+                (click)="notice.set('Text action preview')"
+              >
+                View history
+              </button>
+            </div>
+            <div class="pp-actions">
+              <button
+                matButton="filled"
+                disabled
+              >
+                Unavailable
+              </button>
+              <button
+                matButton="outlined"
+                class="pp-danger"
+                (click)="previewDialog.showModal()"
+              >
+                Remove transaction
+              </button>
+            </div>
+            <div class="pp-state-strip">
+              <span class="pp-state-button">Default</span>
+              <span class="pp-state-button pp-hover">Hover</span>
+              <span class="pp-state-button pp-pressed">Pressed</span>
+            </div>
+            <div class="pp-actions">
+              <button
+                class="pp-chip pp-selected"
+                aria-pressed="true"
+                (click)="notice.set('Selected chip preview')"
+              >
+                ✓ This month
+              </button>
+              <button
+                class="pp-chip"
+                aria-pressed="false"
+                (click)="notice.set('Unselected chip preview')"
+              >
+                Last month
+              </button>
+            </div>
+            <mat-checkbox [checked]="true">Include retired Accounts</mat-checkbox>
+            <p>
+              <a
+                href="#token-reference"
+                (click)="$event.preventDefault(); tokenReference.open = true; tokenReference.scrollIntoView()"
+              >
+                View token reference
+              </a>
+            </p>
+          </section>
+          <section class="pp-card">
+            <p class="pp-eyebrow">03 / FORM FIELDS</p>
+            <h2>Comfortable to fill in</h2>
+            <mat-form-field>
+              <mat-label>Account name</mat-label>
+              <input
+                matInput
+                value="Everyday Bank"
+              />
+              <mat-hint>16px input · 14px label</mat-hint>
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>Amount</mat-label>
+              <input
+                matInput
+                [formControl]="error"
+                placeholder="₱0.00"
+              />
+              <mat-error>Enter an amount greater than zero.</mat-error>
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>Unavailable field</mat-label>
+              <input
+                matInput
+                disabled
+                value="Everyday Bank"
+              />
+            </mat-form-field>
+          </section>
+          <section class="pp-card">
+            <p class="pp-eyebrow">04 / FEEDBACK & LAYERS</p>
+            <h2>Meaning stays explicit</h2>
+            <p class="pp-message pp-success">✓ Transaction recorded.</p>
+            <p class="pp-message pp-warning">! This Budget is nearing its ceiling.</p>
+            <p class="pp-message pp-error">! Couldn’t record the Transaction. Try again.</p>
+            <p class="pp-message pp-info">i This Account is retired. Its history is still available.</p>
+            <div class="pp-menu-wrap">
+              <button
+                matButton="outlined"
+                [attr.aria-expanded]="menuOpen()"
+                (click)="menuOpen.set(!menuOpen())"
+              >
+                Preview raised surface ▾
+              </button>
+              @if (menuOpen()) {
+                <div class="pp-menu">
+                  <b>Raised surface</b>
+                  <p class="pp-muted">Menus and dialogs share this surface.</p>
+                  <button
+                    matButton="text"
+                    (click)="menuOpen.set(false)"
+                  >
+                    Close preview
+                  </button>
+                </div>
+              }
+            </div>
+          </section>
+        </div>
+      } @else if (variant() === 'B') {
+        <div class="pp-ledger-layout">
+          <aside class="pp-side">
+            <p class="pp-eyebrow">ACCOUNTS</p>
+            <div class="pp-side-item pp-selected">
+              Everyday Bank
+              <span>Selected</span>
+            </div>
+            <div class="pp-side-item">
+              Cash
+              <span>₱2,450.00</span>
+            </div>
+            <div class="pp-side-item">
+              Travel savings
+              <span>₱25,000.00</span>
+            </div>
+            <p class="pp-small pp-muted">Context specimen; navigation layout remains with screen validation.</p>
+          </aside>
+          <div>
+            <div class="pp-page-heading">
+              <div>
+                <p class="pp-eyebrow">ACCOUNT</p>
+                <h1>Everyday Bank</h1>
+                <p class="pp-muted">A long Account name can wrap without hiding its balance.</p>
+              </div>
+              <button
+                matButton="filled"
+                (click)="notice.set('Preview only · nothing was recorded')"
+              >
+                Record
+              </button>
+            </div>
+            <section class="pp-account-summary">
+              <div>
+                <p class="pp-muted">Balance</p>
+                <p class="pp-balance">₱128,450.75</p>
+              </div>
+              <div>
+                <p class="pp-muted">Earmarked</p>
+                <strong>₱25,000.00</strong>
+              </div>
+              <div>
+                <p class="pp-muted">Available</p>
+                <strong>₱103,450.75</strong>
+              </div>
+            </section>
+            <section class="pp-card pp-ledger">
+              <div class="pp-ledger-top">
+                <h2>Transactions</h2>
+                <button
+                  class="pp-chip pp-selected"
+                  aria-pressed="true"
+                >
+                  ✓ This month
+                </button>
+              </div>
+              @for (row of rows; track row.name) {
+                <div class="pp-transaction">
+                  <div>
+                    <strong>{{ row.name }}</strong>
+                    <small>{{ row.detail }}</small>
+                  </div>
+                  <strong [class]="'pp-' + row.direction">{{ row.amount }}</strong>
+                </div>
+              }
+            </section>
+            <section class="pp-long">
+              <span class="pp-muted">Large balance specimen</span>
+              <strong>₱12,345,678,901.23</strong>
+            </section>
+          </div>
+        </div>
+      } @else {
+        <div class="pp-welcome-layout">
+          <section class="pp-welcome">
+            <p class="pp-eyebrow">WELCOME BACK</p>
+            <h1>
+              Make room
+              <br />
+              for what matters.
+            </h1>
+            <p>Your everyday money, a little clearer.</p>
+            <div class="pp-pocket">
+              <p>Everyday Bank</p>
+              <p class="pp-balance">₱128,450.75</p>
+              <span>Account balance</span>
+            </div>
+            <p class="pp-small pp-muted">Illustrative welcome copy</p>
+          </section>
+          <section class="pp-card pp-signin">
+            <h2>Sign in</h2>
+            <p class="pp-muted">Good to see you again.</p>
+            <mat-form-field>
+              <mat-label>Email address</mat-label>
+              <input
+                matInput
+                type="email"
+                placeholder="you@example.com"
+              />
+            </mat-form-field>
+            <mat-form-field>
+              <mat-label>Password</mat-label>
+              <input
+                matInput
+                type="password"
+                value="pocket-pop"
+              />
+            </mat-form-field>
+            <p>
+              <a
+                href="#"
+                (click)="$event.preventDefault(); notice.set('Password recovery link preview')"
+              >
+                Forgot password?
+              </a>
+            </p>
+            <button
+              matButton="filled"
+              (click)="notice.set('Preview only · no sign-in request was sent')"
+            >
+              Sign in
+            </button>
+            <p class="pp-small pp-muted">Sample controls · no sign-in request is sent</p>
+          </section>
+        </div>
+      }
+      <details
+        #tokenReference
+        id="token-reference"
+        class="pp-reference"
+      >
+        <summary>Token reference & current preview state</summary>
+        <p>
+          Variant {{ variant() }} · preference {{ appearance() }} · resolved {{ dark() ? 'Dark' : 'Light' }} ·
+          {{ narrow() ? '390px' : 'responsive' }} canvas
+        </p>
+        <p>Outfit 750 headings · Geist 400 body / 600 labels / 650 amounts · tabular amounts</p>
+        <p>Body 14/22 · input 16/24 · caption 12/18 · section 20/26 · page 28–32/1.15 · hero 40–56/1.05</p>
+        <p>
+          4px spacing unit · card 20px corners · dialog 24px · control 12px · chips full · primary controls at least
+          44px high
+        </p>
+        <p>
+          Primary seed #304BC6 · Light step 600 · Dark step 200 (#BBC0F5). Handpicked surfaces; financial colors
+          independent.
+        </p>
+        <div class="pp-swatches">
+          @for (swatch of swatches; track swatch) {
+            <div>
+              <span [style.background]="'var(--pp-' + swatch + ')'"></span>
+              {{ swatch }}
+            </div>
+          }
+        </div>
+        <p>
+          Contrast measurements and Material mapping are captured with the source. This is a color and type specimen,
+          not a complete accessibility audit.
+        </p>
+      </details>
+    </main>
+  </div>
+  <div
+    class="pp-live"
+    role="status"
+  >
+    {{ notice() }}
+  </div>
+  <nav
+    class="pp-switcher"
+    aria-label="Prototype views"
+  >
+    <button
+      (click)="cycle(-1)"
+      aria-label="Previous view"
+    >
+      ←
+    </button>
+    <span>{{ variant() }} · {{ names[variant()] }}</span>
+    <button
+      (click)="cycle(1)"
+      aria-label="Next view"
+    >
+      →
+    </button>
+  </nav>
+  <dialog
+    #previewDialog
+    class="pp-dialog"
+  >
+    <p class="pp-eyebrow">DIALOG SPECIMEN</p>
+    <h2>Remove transaction?</h2>
+    <p>This removes the Transaction and reverses its effect on the Account balance.</p>
+    <p class="pp-muted">Preview only. No financial data changes.</p>
+    <div class="pp-actions">
+      <button
+        matButton="outlined"
+        (click)="previewDialog.close()"
+      >
+        Cancel
+      </button>
+      <button
+        matButton="filled"
+        class="pp-danger-filled"
+        (click)="previewDialog.close(); notice.set('Preview closed · nothing was removed')"
+      >
+        Remove transaction
+      </button>
+    </div>
+  </dialog>
+</div>
