@@ -27,6 +27,12 @@
             "styles": ["src/styles/styles.css"]
           },
           "configurations": {
+            "screen-prototype": {
+              "browser": "src/app/domains/app/layout/screen-prototype/main.ts",
+              "styles": ["src/app/domains/app/layout/screen-prototype/screens.css"],
+              "optimization": false,
+              "sourceMap": true
+            },
             "production": {
               "fileReplacements": [
                 {
@@ -60,6 +66,9 @@
             "port": 4200
           },
           "configurations": {
+            "screen-prototype": {
+              "buildTarget": "pitaka:build:screen-prototype"
+            },
             "production": {
               "buildTarget": "pitaka:build:production"
             },

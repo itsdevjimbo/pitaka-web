@@ -1,0 +1,924 @@
+<div
+  class="pp"
+  [attr.data-dark]="dark()"
+  [attr.data-variant]="variant()"
+>
+  <a
+    class="skip"
+    [href]="router.url.split('#')[0] + '#main'"
+  >
+    Skip to content
+  </a>
+  @if (review) {
+    <div class="review-strip">
+      <span>Layout study · sample data</span>
+      <button
+        class="phone-preview-button"
+        (click)="phonePreview()"
+      >
+        390px preview
+      </button>
+      <label>
+        Screen
+        <select
+          [value]="screen()"
+          (change)="go($any($event.target).value)"
+        >
+          <option value="accounts">Accounts</option>
+          <option value="account">Account detail</option>
+          <option value="transactions">Transactions</option>
+          <option value="goal">Goal detail</option>
+          <option value="signin">Sign-in</option>
+        </select>
+      </label>
+      <label>
+        Case
+        <select
+          [value]="scenario()"
+          (change)="set('case', $any($event.target).value)"
+        >
+          <option value="everyday">Everyday</option>
+          <option value="stress">Crowded + long content</option>
+          <option value="empty">Empty</option>
+          <option value="retired">Retired / no active Account</option>
+        </select>
+      </label>
+    </div>
+  }
+
+  <ng-template #logo>
+    <span class="brand">
+      <svg
+        viewBox="0 0 48 48"
+        aria-hidden="true"
+      >
+        <path d="M11 42V10H26Q40 10 40 24Q40 36 26 36H11 M11 18Q24 29 38 18" />
+      </svg>
+      Pitaka
+    </span>
+  </ng-template>
+  <ng-template #appearance>
+    <label class="appearance">
+      Appearance
+      <select
+        [value]="scheme()"
+        (change)="set('scheme', $any($event.target).value)"
+      >
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
+  </ng-template>
+
+  @if (screen() === 'signin') {
+    <header class="auth-top">
+      <ng-container *ngTemplateOutlet="logo" />
+      <ng-container *ngTemplateOutlet="appearance" />
+    </header>
+    <main
+      id="main"
+      class="auth-layout"
+      [class.auth-framed]="variant() === 'B'"
+      [class.auth-editorial]="variant() === 'C'"
+    >
+      <section class="welcome">
+        <span class="eyebrow">A little clarity, every day.</span>
+        <h1>
+          Your money.
+          <br />
+          Your next move.
+        </h1>
+        <p>See where things stand and make room for what matters to you.</p>
+        <div
+          class="pocket-art"
+          aria-hidden="true"
+        >
+          <svg viewBox="0 0 48 48"><path d="M11 42V10H26Q40 10 40 24Q40 36 26 36H11 M11 18Q24 29 38 18" /></svg>
+        </div>
+        <p class="welcome-foot">A place for the everyday.</p>
+      </section>
+      <section class="auth-form">
+        <h2>Welcome back</h2>
+        <p>Sign in to Pitaka.</p>
+        <form (submit)="save($event, dialog)">
+          <label>
+            Email
+            <input
+              type="email"
+              autocomplete="email"
+              placeholder="you@example.com"
+              required
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </label>
+          <a
+            href="#"
+            (click)="$event.preventDefault(); notice.set('Recovery screens are in the next review stage.')"
+          >
+            Forgot password?
+          </a>
+          <button
+            class="primary"
+            type="submit"
+          >
+            Sign in
+          </button>
+        </form>
+        <p>
+          New to Pitaka?
+          <a
+            href="#"
+            (click)="$event.preventDefault(); notice.set('Sign-up is in the next review stage.')"
+          >
+            Create a profile
+          </a>
+        </p>
+      </section>
+    </main>
+  } @else {
+    <div class="app-layout">
+      <aside class="sidebar">
+        <ng-container *ngTemplateOutlet="logo" />
+        <nav aria-label="Main navigation">
+          @for (item of navigation; track item.label; let i = $index) {
+            @if (i === 0 || i === 2 || i === 5) {
+              <p class="nav-group">{{ i === 0 ? 'Day to day' : i === 2 ? 'Plan ahead' : 'Organize' }}</p>
+            }
+            <button
+              [class.selected]="screen() === item.screen || (screen() === 'account' && item.screen === 'accounts')"
+              [attr.aria-current]="screen() === item.screen ? 'page' : null"
+              (click)="go(item.screen)"
+            >
+              <span aria-hidden="true">{{ item.icon }}</span>
+              {{ item.label }}
+            </button>
+          }
+        </nav>
+        <div class="sidebar-foot">
+          <button
+            (click)="userMenu.set(!userMenu())"
+            [attr.aria-expanded]="userMenu()"
+          >
+            JD
+            <span>Jamie Dela Cruz</span>
+            ⌄
+          </button>
+          <small>Your everyday, in view.</small>
+        </div>
+      </aside>
+      <div class="workspace">
+        <header class="mobile-top">
+          <ng-container *ngTemplateOutlet="logo" />
+          <button
+            aria-label="Profile and appearance"
+            (click)="userMenu.set(!userMenu())"
+          >
+            JD
+          </button>
+        </header>
+        @if (userMenu()) {
+          <section
+            class="user-menu"
+            aria-label="User controls"
+          >
+            <button (click)="go('profile')">Profile</button>
+            <ng-container *ngTemplateOutlet="appearance" />
+            <button (click)="go('signin')">Sign out (preview)</button>
+          </section>
+        }
+        <main
+          id="main"
+          class="content"
+        >
+          <header class="page-header">
+            <div>
+              @if (screen() === 'account') {
+                <a
+                  [routerLink]="paths['accounts']"
+                  queryParamsHandling="preserve"
+                >
+                  ← Accounts
+                </a>
+              }
+              @if (screen() === 'goal') {
+                <button
+                  class="text-action"
+                  (click)="notice.set('Goals list is in the next review stage.')"
+                >
+                  ← Goals
+                </button>
+              }
+              <h1>
+                {{
+                  screen() === 'account'
+                    ? accountName()
+                    : screen() === 'goal'
+                      ? 'Rainy day fund'
+                      : screen() === 'transactions'
+                        ? 'Transactions'
+                        : 'Accounts'
+                }}
+              </h1>
+              <p>
+                {{
+                  screen() === 'accounts'
+                    ? 'Where your money sits.'
+                    : screen() === 'transactions'
+                      ? 'The movements behind your balances.'
+                      : screen() === 'account'
+                        ? 'Bank account · ' + (scenario() === 'retired' ? 'Retired' : 'Active')
+                        : 'Active · Target date 31 Dec 2026'
+                }}
+              </p>
+            </div>
+            <div class="header-actions">
+              @if (screen() === 'accounts') {
+                <button (click)="open('New account', dialog)">＋ New account</button>
+              }
+              @if (canRecord()) {
+                <button
+                  class="primary desktop-record"
+                  (click)="record(dialog)"
+                >
+                  ＋ Record transaction
+                </button>
+              }
+              @if (screen() === 'goal') {
+                <button (click)="open('Edit goal', dialog)">Edit goal</button>
+                <button
+                  class="primary"
+                  (click)="open('Add contribution', dialog)"
+                >
+                  ＋ Add contribution
+                </button>
+              }
+            </div>
+          </header>
+
+          @if (screen() === 'accounts') {
+            <div class="accounts-composition">
+              <section class="balance-summary">
+                <span>{{ accountStatus() === 'All' ? 'Total balance' : accountStatus() + ' Accounts balance' }}</span>
+                <strong class="balance">₱{{ total() | number: '1.2-2' }}</strong>
+                <p>{{ visibleAccounts().length }} Accounts in this view</p>
+                <div
+                  class="summary-decoration"
+                  aria-hidden="true"
+                >
+                  ↗
+                </div>
+              </section>
+              <section class="account-workspace">
+                <div class="section-toolbar">
+                  <div
+                    class="segmented"
+                    aria-label="Account status"
+                  >
+                    @for (status of ['Active', 'Retired', 'All']; track status) {
+                      <button
+                        [class.selected]="accountStatus() === status"
+                        [attr.aria-pressed]="accountStatus() === status"
+                        (click)="set('status', status)"
+                      >
+                        {{ status }}
+                      </button>
+                    }
+                  </div>
+                  <label>
+                    Type
+                    <select
+                      (change)="
+                        notice.set(
+                          'Account type filtering remains available in the final layout; this first study varies status and data density.'
+                        )
+                      "
+                    >
+                      <option>All types</option>
+                      <option>Bank account</option>
+                      <option>Cash</option>
+                      <option>Wallet</option>
+                      <option>Investment</option>
+                    </select>
+                  </label>
+                </div>
+                @if (!visibleAccounts().length) {
+                  <section class="empty">
+                    <span
+                      class="empty-mark"
+                      aria-hidden="true"
+                    >
+                      ▣
+                    </span>
+                    <h2>{{ accounts().length ? 'No Accounts match' : 'Make room for your first Account' }}</h2>
+                    <p>
+                      {{
+                        accounts().length
+                          ? 'Try another status to find an Account.'
+                          : 'Add cash, a bank account, a wallet, or an investment to get started.'
+                      }}
+                    </p>
+                    <button
+                      class="primary"
+                      (click)="accounts().length ? set('status', 'All') : open('New account', dialog)"
+                    >
+                      {{ accounts().length ? 'Show all Accounts' : 'New account' }}
+                    </button>
+                  </section>
+                }
+                <div class="account-collection">
+                  @for (account of visibleAccounts(); track account.name) {
+                    <article class="account-card">
+                      <div
+                        class="account-icon"
+                        aria-hidden="true"
+                      >
+                        {{ account.kind === 'Cash' ? '◈' : '▣' }}
+                      </div>
+                      <div class="account-copy">
+                        <a
+                          class="account-title"
+                          [routerLink]="paths['account']"
+                          queryParamsHandling="preserve"
+                        >
+                          {{ account.name }}
+                        </a>
+                        <p>{{ account.kind }}{{ account.retired ? ' · Retired' : '' }}</p>
+                      </div>
+                      <strong class="account-amount">{{ money(account.balance) }}</strong>
+                      <details class="actions">
+                        <summary [attr.aria-label]="'Actions for ' + account.name">•••</summary>
+                        <div>
+                          <button (click)="open('Rename account', dialog)">Rename</button>
+                          <button
+                            (click)="
+                              notice.set('Lifecycle confirmation placement will be reviewed with the remaining states.')
+                            "
+                          >
+                            {{ account.retired ? 'Reactivate' : 'Retire' }}
+                          </button>
+                          <button
+                            (click)="
+                              notice.set(
+                                'Delete confirmation stays outside the editor. Complete states follow in the next decision.'
+                              )
+                            "
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </details>
+                    </article>
+                  }
+                </div>
+              </section>
+            </div>
+          }
+
+          @if (screen() === 'account' || screen() === 'transactions') {
+            <div
+              class="history-composition"
+              [class.with-summary]="screen() === 'account'"
+            >
+              @if (screen() === 'account') {
+                <section class="balance-summary">
+                  <span>Account balance</span>
+                  <strong class="balance">
+                    {{ accountBalance() < 0 ? '−' : '' }}₱{{
+                      (accountBalance() < 0 ? -accountBalance() : accountBalance()) | number: '1.2-2'
+                    }}
+                  </strong>
+                  <p>
+                    {{
+                      scenario() === 'retired'
+                        ? 'Retired · History stays available.'
+                        : 'Your recorded money in this Account.'
+                    }}
+                  </p>
+                  @if (scenario() === 'retired') {
+                    <p>
+                      No new Transactions can be recorded.
+                      <a
+                        [routerLink]="paths['accounts']"
+                        queryParamsHandling="preserve"
+                      >
+                        Manage Accounts
+                      </a>
+                    </p>
+                  }
+                </section>
+              }
+              <section class="history-workspace panel">
+                <div class="section-heading">
+                  <h2>{{ screen() === 'account' ? 'Transaction history' : 'Your Transactions' }}</h2>
+                  <span>{{ rows().length }} shown</span>
+                </div>
+                @if (screen() === 'transactions') {
+                  <div class="filter-toolbar">
+                    <label class="search">
+                      Search notes
+                      <input
+                        type="search"
+                        placeholder="Search your history"
+                        [value]="search()"
+                        (input)="set('search', $any($event.target).value)"
+                      />
+                    </label>
+                    <button
+                      [attr.aria-expanded]="filters()"
+                      (click)="filters.set(!filters())"
+                    >
+                      Filters{{ direction() === 'All' ? '' : ' · 1' }}
+                    </button>
+                  </div>
+                  @if (filters()) {
+                    <div class="filter-fields">
+                      <label>
+                        Direction
+                        <select
+                          [value]="direction()"
+                          (change)="set('direction', $any($event.target).value)"
+                        >
+                          <option>All</option>
+                          <option>Income</option>
+                          <option>Expense</option>
+                          <option>Transfer</option>
+                        </select>
+                      </label>
+                      <label>
+                        Account
+                        <select>
+                          <option>All Accounts</option>
+                          <option>Everyday Bank</option>
+                          <option>Cash</option>
+                          <option>Old payroll · Retired</option>
+                        </select>
+                      </label>
+                      <label>
+                        Category
+                        <select>
+                          <option>All Categories</option>
+                          <option>Food</option>
+                          <option>Salary</option>
+                        </select>
+                      </label>
+                      <label>
+                        From
+                        <input type="date" />
+                      </label>
+                      <label>
+                        To
+                        <input type="date" />
+                      </label>
+                      <small>Direction and search work in this fixture. Other controls show layout only.</small>
+                    </div>
+                  }
+                  @if (search() || direction() !== 'All') {
+                    <div class="active-filters">
+                      <span>
+                        {{ direction() === 'All' ? 'All directions' : direction()
+                        }}{{ search() ? ' · ' + search() : '' }}
+                      </span>
+                      <button (click)="set('search', ''); set('direction', 'All')">Clear filters</button>
+                    </div>
+                  }
+                }
+                <div class="ledger-labels">
+                  <span>Transaction / context</span>
+                  <span>Amount</span>
+                  <span>Actions</span>
+                </div>
+                @for (row of rows(); track $index) {
+                  <article class="transaction-row">
+                    <span
+                      class="direction-icon"
+                      [attr.data-direction]="row.direction"
+                      aria-hidden="true"
+                    >
+                      {{ row.direction === 'Income' ? '↙' : row.direction === 'Expense' ? '↗' : '⇄' }}
+                    </span>
+                    <div class="transaction-copy">
+                      <strong>{{ rowTitle(row) }}</strong>
+                      <p>{{ row.date }} · {{ row.direction }}{{ row.category ? ' · ' + row.category : '' }}</p>
+                      <p>
+                        {{
+                          row.direction === 'Transfer'
+                            ? screen() === 'account'
+                              ? row.account === 'Everyday Bank'
+                                ? 'Leaving this Account'
+                                : 'Arriving in this Account'
+                              : 'Between your Accounts'
+                            : screen() === 'account'
+                              ? accountName()
+                              : row.account
+                        }}
+                      </p>
+                      <p class="note">
+                        {{
+                          scenario() === 'stress'
+                            ? row.note +
+                              ' — a longer note with useful context for shared household expenses and reimbursements.'
+                            : row.note
+                        }}
+                        @if (row.tags) {
+                          <span class="tag">{{ row.tags }}</span>
+                        }
+                      </p>
+                    </div>
+                    <strong
+                      class="row-amount"
+                      [attr.data-direction]="row.direction"
+                    >
+                      {{ sign(row) }}₱{{ row.amount | number: '1.2-2' }}
+                    </strong>
+                    @if (screen() === 'account' && row.direction === 'Transfer' && row.account !== 'Everyday Bank') {
+                      <span class="row-actions">
+                        <button
+                          class="text-action"
+                          (click)="
+                            notice.set(
+                              'Transfer actions belong to the originating Account. This row is read-only here.'
+                            )
+                          "
+                        >
+                          View source
+                        </button>
+                      </span>
+                    } @else {
+                      <details class="actions">
+                        <summary [attr.aria-label]="'Actions for ' + row.name">•••</summary>
+                        <div>
+                          <button (click)="open('Refile transaction', dialog)">Refile</button>
+                          <button
+                            (click)="
+                              notice.set('Remove confirmation stays outside the editor. No sample money was changed.')
+                            "
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </details>
+                    }
+                  </article>
+                } @empty {
+                  <div class="empty">
+                    <h2>
+                      {{ search() || direction() !== 'All' ? 'No matching Transactions' : 'No Transactions yet' }}
+                    </h2>
+                    <p>
+                      {{
+                        search() || direction() !== 'All'
+                          ? 'Try another search or clear the filters.'
+                          : 'Your recorded history will appear here.'
+                      }}
+                    </p>
+                  </div>
+                }
+                @if (rows().length && screen() === 'transactions') {
+                  <footer class="list-footer">
+                    <span>
+                      {{ loaded() ? 'All sample Transactions shown' : 'Showing ' + rows().length + ' of 18' }}
+                    </span>
+                    @if (!loaded() && scenario() !== 'stress') {
+                      <button (click)="loaded.set(true)">Load more</button>
+                    }
+                  </footer>
+                }
+              </section>
+            </div>
+          }
+
+          @if (screen() === 'goal') {
+            <div class="goal-composition">
+              <section class="balance-summary goal-summary">
+                <span>Earmarked toward your Goal</span>
+                <strong class="balance">₱{{ scenario() === 'empty' ? '0.00' : '35,000.00' }}</strong>
+                <p>of ₱50,000.00 target</p>
+                <progress
+                  [value]="scenario() === 'empty' ? 0 : 70"
+                  max="100"
+                  aria-label="Goal progress"
+                ></progress>
+                <div class="split">
+                  <strong>{{ scenario() === 'empty' ? '0%' : '70%' }}</strong>
+                  <span>₱{{ scenario() === 'empty' ? '50,000' : '15,000' }} remaining</span>
+                </div>
+                <p class="explanation">Contributions earmark money already in your Accounts. They do not move it.</p>
+              </section>
+              <section class="panel contributions">
+                <div class="section-heading">
+                  <h2>Contributions</h2>
+                  <span>{{ scenario() === 'empty' ? '0' : '3' }} total</span>
+                </div>
+                @if (scenario() === 'empty') {
+                  <section class="empty">
+                    <h2>A start for your rainy day fund</h2>
+                    <p>Add a Contribution from an active Account.</p>
+                    <button
+                      class="primary"
+                      (click)="open('Add contribution', dialog)"
+                    >
+                      Add contribution
+                    </button>
+                  </section>
+                } @else {
+                  @for (amount of [15000, 12500, 7500]; track amount; let i = $index) {
+                    <article class="contribution-row">
+                      <div>
+                        <strong>
+                          {{
+                            scenario() === 'stress'
+                              ? 'Family emergency savings and long-term household expenses'
+                              : i === 2
+                                ? 'Travel fund'
+                                : 'Everyday Bank'
+                          }}
+                        </strong>
+                        <p>{{ 20 - i * 5 }} Sep 2026 · {{ i === 0 ? 'Linked Contribution' : 'Contribution' }}</p>
+                        @if (i === 0) {
+                          <a
+                            href="#"
+                            (click)="$event.preventDefault(); go('transactions')"
+                          >
+                            From Monthly salary
+                          </a>
+                        }
+                      </div>
+                      <strong class="row-amount">₱{{ amount | number: '1.2-2' }}</strong>
+                      <details class="actions">
+                        <summary aria-label="Contribution actions">•••</summary>
+                        <div>
+                          <button (click)="open('Edit contribution', dialog)">Edit</button>
+                          <button
+                            (click)="
+                              notice.set(
+                                'Deleting a Contribution releases its earmark; it does not change Account money. Confirmation review follows.'
+                              )
+                            "
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </details>
+                    </article>
+                  }
+                }
+              </section>
+            </div>
+          }
+        </main>
+        @if (more()) {
+          <section
+            class="more-panel"
+            aria-label="More destinations"
+          >
+            <div class="section-heading">
+              <h2>More</h2>
+              <button (click)="more.set(false)">Close</button>
+            </div>
+            @for (item of ['Schedules', 'Categories', 'Tags', 'Profile']; track item) {
+              <button (click)="go(item.toLowerCase())">
+                {{ item }}
+                <span>→</span>
+              </button>
+            }
+            <ng-container *ngTemplateOutlet="appearance" />
+            <button (click)="go('signin')">Sign out (preview)</button>
+          </section>
+        }
+        @if (canRecord() && !editor()) {
+          <button
+            class="primary record-fab"
+            (click)="record(dialog)"
+          >
+            ＋ Record
+          </button>
+        }
+        <nav
+          class="bottom-nav"
+          aria-label="Main navigation"
+        >
+          @for (item of [navigation[0], navigation[1], navigation[2], navigation[3]]; track item.label) {
+            <button
+              [class.selected]="screen() === item.screen || (screen() === 'account' && item.screen === 'accounts')"
+              (click)="go(item.screen)"
+            >
+              <span aria-hidden="true">{{ item.icon }}</span>
+              {{ item.label }}
+            </button>
+          }
+          <button
+            [class.selected]="more()"
+            [attr.aria-expanded]="more()"
+            (click)="more.set(!more())"
+          >
+            <span aria-hidden="true">•••</span>
+            More
+          </button>
+        </nav>
+      </div>
+    </div>
+  }
+  @if (notice()) {
+    <div
+      role="status"
+      class="notice"
+    >
+      <span>{{ notice() }}</span>
+      <button
+        aria-label="Dismiss notice"
+        (click)="notice.set('')"
+      >
+        ×
+      </button>
+    </div>
+  }
+  @if (review) {
+    <aside
+      class="prototype-switcher"
+      aria-label="Prototype variants"
+    >
+      <button
+        aria-label="Previous layout"
+        (click)="cycle(-1)"
+      >
+        ←
+      </button>
+      <span>
+        <strong>{{ variant() }} · {{ names[variant()] }}</strong>
+        <small>{{ screen() }} · {{ scenario() }} · {{ dark() ? 'Dark' : 'Light' }}</small>
+      </span>
+      <button
+        aria-label="Next layout"
+        (click)="cycle(1)"
+      >
+        →
+      </button>
+      <select
+        aria-label="Review appearance"
+        [value]="scheme()"
+        (change)="set('scheme', $any($event.target).value)"
+      >
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </aside>
+  }
+
+  <dialog
+    #dialog
+    (cancel)="editor.set('')"
+    aria-labelledby="editor-title"
+  >
+    <div class="dialog-heading">
+      <h2 id="editor-title">{{ editor() }}</h2>
+      <button
+        aria-label="Close editor"
+        (click)="close(dialog)"
+      >
+        ×
+      </button>
+    </div>
+    @if (editor() === 'Choose an Account') {
+      <p>Where is this Transaction recorded?</p>
+      <div class="account-choices">
+        @for (account of accounts(); track account.name) {
+          @if (!account.retired) {
+            <button (click)="selectedAccount.set(account.name); editor.set('Record transaction')">
+              <span>{{ account.name }}</span>
+              <strong>{{ money(account.balance) }}</strong>
+            </button>
+          }
+        }
+      </div>
+      <button (click)="close(dialog)">Cancel</button>
+    } @else {
+      <form (submit)="save($event, dialog)">
+        @if (editor() === 'Record transaction' || editor() === 'Refile transaction') {
+          <p class="account-context">{{ selectedAccount() || accountName() }}</p>
+          @if (editor() === 'Record transaction') {
+            <label>
+              Direction
+              <select
+                [value]="formDirection()"
+                (change)="formDirection.set($any($event.target).value)"
+              >
+                <option>Expense</option>
+                <option>Income</option>
+                <option>Transfer</option>
+              </select>
+            </label>
+            <label>
+              Amount (₱)
+              <input
+                inputmode="decimal"
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="0.00"
+                required
+              />
+            </label>
+          }
+          <label>
+            {{
+              formDirection() === 'Transfer' && editor() === 'Record transaction' ? 'Destination Account' : 'Category'
+            }}
+            <select>
+              <option>
+                {{ formDirection() === 'Transfer' && editor() === 'Record transaction' ? 'Cash' : 'Food' }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Date
+            <input
+              type="date"
+              value="2026-09-20"
+              required
+            />
+          </label>
+          <label>
+            Note
+            <textarea rows="2"></textarea>
+          </label>
+          <label>
+            Tags
+            <input placeholder="Add a tag" />
+          </label>
+        } @else if (editor().toLowerCase().includes('contribution')) {
+          <p>Earmark money toward Rainy day fund.</p>
+          <label>
+            Account
+            <select>
+              <option>Everyday Bank · available ₱33,200.50</option>
+              <option>Travel fund · available ₱7,900.00</option>
+            </select>
+          </label>
+          <label>
+            Amount (₱)
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+            />
+          </label>
+          <label>
+            Contribution date
+            <input
+              type="date"
+              value="2026-09-20"
+            />
+          </label>
+          <label>
+            Note
+            <textarea rows="2"></textarea>
+          </label>
+        } @else {
+          @if (scenario() === 'empty' || scenario() === 'retired') {
+            <p>You need an active Account before recording.</p>
+          }
+          <label>
+            Name
+            <input required />
+          </label>
+          @if (editor() === 'New account') {
+            <label>
+              Account type
+              <select>
+                <option>Bank account</option>
+                <option>Cash</option>
+                <option>Wallet</option>
+                <option>Investment</option>
+              </select>
+            </label>
+          }
+        }
+        <p class="fixture-note">Layout preview · actions do not save financial data.</p>
+        <footer class="dialog-footer">
+          <button
+            type="button"
+            (click)="close(dialog)"
+          >
+            Cancel
+          </button>
+          <button
+            class="primary"
+            type="submit"
+          >
+            {{ editor() === 'Record transaction' ? 'Record' : 'Save' }}
+          </button>
+        </footer>
+      </form>
+    }
+  </dialog>
+</div>
