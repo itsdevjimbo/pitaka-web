@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { API_BASE_URL } from '@/app/core/api';
 import { toRequestDateBounds } from './date-range-bounds';
+import { TransactionLinkedContribution, TransactionLinkedContributions } from './linked-contribution';
 import { toOffsetTimestamp } from './offset-timestamp';
 import { parseTransactionDate } from './parse-transaction-date';
 import {
@@ -50,6 +51,16 @@ type TransactionPageResource = {
   totalCount: number;
 };
 
+/** Wire row in the authoritative Linked Contribution history. */
+type LinkedContributionResource = Omit<TransactionLinkedContribution, 'contributionDate'> & {
+  contributionDate: string;
+};
+
+/** Wire snapshot returned by the Transaction-owned authoritative read. */
+type TransactionLinkedContributionsResource = Omit<TransactionLinkedContributions, 'linkedContributions'> & {
+  linkedContributions: LinkedContributionResource[];
+};
+
 /**
  * The hand-written resource service over the API's Transactions endpoints (ADR
  * 0002). It reads one Account's list, records a new Transaction, refiles an
@@ -71,10 +82,27 @@ export class TransactionsService {
    */
   list(accountId: number): Observable<Transaction[]> {
     return this.http
-      .get<TransactionResource[]>(
-        `${this.baseUrl}/api/accounts/${accountId}/transactions`
-      )
+      .get<TransactionResource[]>(`${this.baseUrl}/api/accounts/${accountId}/transactions`)
       .pipe(map((resources) => resources.map(toTransaction)));
+  }
+
+  /**
+   * Current Linked Contribution history and capacity for one Transaction.
+   * The response is one server-coherent snapshot. It stays readable when the
+   * Account or Goals are no longer eligible for new links, and signed capacity
+   * facts pass through unchanged.
+   */
+  linkedContributions(transactionId: number): Observable<TransactionLinkedContributions> {
+    return this.http
+      .get<TransactionLinkedContributionsResource>(
+        `${this.baseUrl}/api/transactions/${transactionId}/linked-contributions`,
+      )
+      .pipe(
+        map((resource) => ({
+          ...resource,
+          linkedContributions: resource.linkedContributions.map(toLinkedContribution),
+        })),
+      );
   }
 
   /**
@@ -114,10 +142,7 @@ export class TransactionsService {
    *
    * Failures arrive already normalised to `ApiError` by the interceptor.
    */
-  search(
-    criteria: TransactionCriteria,
-    page: number
-  ): Observable<TransactionSearchResult> {
+  search(criteria: TransactionCriteria, page: number): Observable<TransactionSearchResult> {
     let params = new HttpParams().set('page', page);
 
     if (criteria.accountId !== undefined) {
@@ -137,10 +162,7 @@ export class TransactionsService {
     // `YYYY-MM-DD`: `to` becomes the API's exclusive bound, and an inverted
     // range collapses to nothing here rather than reaching the API as a 400
     // (`date-range-bounds.ts`, #65).
-    const dateBounds = toRequestDateBounds(
-      criteria.from ?? null,
-      criteria.to ?? null
-    );
+    const dateBounds = toRequestDateBounds(criteria.from ?? null, criteria.to ?? null);
     if (dateBounds.from !== undefined) {
       params = params.set('from', dateBounds.from);
     }
@@ -156,7 +178,7 @@ export class TransactionsService {
         map((envelope) => ({
           transactions: envelope.data.map(toTransaction),
           totalCount: envelope.totalCount,
-        }))
+        })),
       );
   }
 
@@ -188,9 +210,7 @@ export class TransactionsService {
         amount: transaction.amount,
         categoryId: isTransfer ? null : transaction.categoryId,
         transactionDate: toOffsetTimestamp(transaction.date),
-        transferToAccountId: isTransfer
-          ? transaction.transferToAccountId
-          : null,
+        transferToAccountId: isTransfer ? transaction.transferToAccountId : null,
         tagIds: [...transaction.tagIds],
       })
       .pipe(map(toTransaction));
@@ -217,22 +237,16 @@ export class TransactionsService {
    * Failures arrive already normalised — a bodyless rejection becomes a
    * form-level `ApiError` with an empty field map.
    */
-  refile(
-    transaction: Transaction,
-    correction: RefileTransaction
-  ): Observable<Transaction> {
+  refile(transaction: Transaction, correction: RefileTransaction): Observable<Transaction> {
     const isTransfer = transaction.direction === 'transfer';
 
     return this.http
-      .put<TransactionResource>(
-        `${this.baseUrl}/api/transactions/${transaction.id}`,
-        {
-          transactionDate: toOffsetTimestamp(correction.date),
-          categoryId: isTransfer ? null : correction.categoryId,
-          description: correction.description,
-          tagIds: [...correction.tagIds],
-        }
-      )
+      .put<TransactionResource>(`${this.baseUrl}/api/transactions/${transaction.id}`, {
+        transactionDate: toOffsetTimestamp(correction.date),
+        categoryId: isTransfer ? null : correction.categoryId,
+        description: correction.description,
+        tagIds: [...correction.tagIds],
+      })
       .pipe(map(toTransaction));
   }
 
@@ -261,9 +275,7 @@ export class TransactionsService {
    * else is a form-level `ApiError` the caller shows and leaves the row put.
    */
   remove(id: number): Observable<void> {
-    return this.http
-      .delete<void>(`${this.baseUrl}/api/transactions/${id}`)
-      .pipe(map(() => undefined));
+    return this.http.delete<void>(`${this.baseUrl}/api/transactions/${id}`).pipe(map(() => undefined));
   }
 }
 
@@ -301,5 +313,15 @@ function toTransaction(resource: TransactionResource): Transaction {
     generated,
     description: resource.description,
     tags: resource.tags.map((tag) => ({ id: tag.id, name: tag.name })),
+  };
+}
+
+/** Lift the API's date-only string without letting UTC shift its calendar day. */
+function toLinkedContribution(resource: LinkedContributionResource): TransactionLinkedContribution {
+  const [year, month, day] = resource.contributionDate.split('-').map((part) => Number(part));
+
+  return {
+    ...resource,
+    contributionDate: new Date(year, month - 1, day),
   };
 }
