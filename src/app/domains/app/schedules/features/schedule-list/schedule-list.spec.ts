@@ -61,6 +61,7 @@ describe('ScheduleList', () => {
       update?: SchedulesService['update'];
       setStatus?: SchedulesService['setStatus'];
       extend?: SchedulesService['extend'];
+      delete?: SchedulesService['delete'];
       accounts?: Account[];
       categories?: Category[];
       refreshCategories?: CategoriesService['refreshList'];
@@ -84,6 +85,7 @@ describe('ScheduleList', () => {
             update: overrides.update ?? (() => of(ALL[0])),
             setStatus: overrides.setStatus ?? (() => of(ALL[0])),
             extend: overrides.extend ?? (() => of(ALL[0])),
+            delete: overrides.delete ?? (() => of(undefined)),
           },
         },
         { provide: AccountsService, useValue: { all: () => of(accounts) } },
@@ -443,6 +445,233 @@ describe('ScheduleList', () => {
       expect(text()).toContain('This Schedule changed in another request.');
       expect(text()).toContain('It is currently paused.');
       expect(text()).toContain('Review the refreshed Schedule before trying again.');
+    });
+  });
+
+  describe('delete an unused Schedule', () => {
+    const UNUSED = schedule({
+      id: 51,
+      name: 'Unused allowance',
+      generatedTransactionCount: 0,
+      canDelete: true,
+    });
+    const NO_LONGER_DELETABLE = schedule({ ...UNUSED, canDelete: false });
+
+    it('confirms with the Schedule name and cancellation leaves it unchanged', async () => {
+      const deleteSchedule = vi.fn(() => of(undefined));
+      const { fixture, text } = setup(() => of([UNUSED]), {
+        delete: deleteSchedule as SchedulesService['delete'],
+      });
+
+      const opener = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+      ).find((button) => button.textContent?.trim() === 'Delete')!;
+      opener.focus();
+      opener.click();
+      fixture.detectChanges();
+      await settle(fixture);
+
+      const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]');
+      expect(confirmation).not.toBeNull();
+      expect(confirmation!.textContent).toContain('Delete ‘Unused allowance’?');
+      expect(confirmation!.textContent).toContain('This permanently deletes this Schedule.');
+      expect(document.activeElement?.textContent?.trim()).toBe('Cancel');
+
+      clickExact(fixture, 'Cancel');
+      await settle(fixture);
+
+      expect((fixture.nativeElement as HTMLElement).querySelector('[role="alertdialog"]')).toBeNull();
+      expect(document.activeElement?.textContent?.trim()).toBe('Delete');
+      expect(text()).toContain('Unused allowance');
+      expect(deleteSchedule).not.toHaveBeenCalled();
+    });
+
+    it('keeps the accessible confirmation usable at phone width', async () => {
+      const originalWidth = window.innerWidth;
+      const deleteSchedule = vi.fn(() => of(undefined));
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+      try {
+        const { fixture } = setup(() => of([UNUSED]), {
+          delete: deleteSchedule as SchedulesService['delete'],
+        });
+
+        clickExact(fixture, 'Delete');
+        await settle(fixture);
+        const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]');
+        expect(confirmation).not.toBeNull();
+        expect(confirmation!.querySelectorAll('button').length).toBe(2);
+
+        clickExact(fixture, 'Cancel');
+        expect((fixture.nativeElement as HTMLElement).querySelector('[role="alertdialog"]')).toBeNull();
+        expect(deleteSchedule).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+      }
+    });
+
+    it('uses canDelete instead of surviving history to determine eligibility', () => {
+      const neverUsed = schedule({
+        id: 51,
+        name: 'Never used',
+        generatedTransactionCount: 0,
+        canDelete: true,
+      });
+      const historyRemoved = schedule({ ...NO_LONGER_DELETABLE, id: 52, name: 'History removed' });
+      const { fixture } = setup(() => of([neverUsed, historyRemoved]));
+
+      const rows = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('li[schedules-schedule-row]'),
+      );
+      const neverUsedRow = rows.find((row) => row.textContent?.includes('Never used'))!;
+      const historyRemovedRow = rows.find((row) => row.textContent?.includes('History removed'))!;
+      const deleteButton = (row: HTMLElement) =>
+        Array.from(row.querySelectorAll<HTMLButtonElement>('button')).find(
+          (button) => button.textContent?.trim() === 'Delete',
+        )!;
+
+      expect(neverUsedRow.textContent).toContain('0 surviving generated Transactions');
+      expect(deleteButton(neverUsedRow).disabled).toBe(false);
+      expect(historyRemovedRow.textContent).toContain('0 surviving generated Transactions');
+      expect(deleteButton(historyRemovedRow).disabled).toBe(true);
+      expect(historyRemovedRow.textContent).toContain(
+        'This Schedule can’t be deleted because it has generated a Transaction.',
+      );
+    });
+
+    it('keeps submitted controls pending, then closes and refreshes after deletion', async () => {
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([UNUSED]))
+        .mockReturnValueOnce(of([]));
+      const pending = new Subject<void>();
+      const deleteSchedule = vi.fn(() => pending);
+      const { fixture, text } = setup(list as SchedulesService['list'], {
+        delete: deleteSchedule as SchedulesService['delete'],
+      });
+
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+
+      expect(deleteSchedule).toHaveBeenCalledWith(51);
+      const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]')!;
+      expect(confirmation.textContent).toContain('Deleting…');
+      const confirmationButtons = confirmation.querySelectorAll<HTMLButtonElement>('button');
+      expect(Array.from(confirmationButtons).every((button) => button.disabled)).toBe(true);
+      const rowButtons = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        'li[schedules-schedule-row] button',
+      );
+      expect(Array.from(rowButtons).every((button) => button.disabled)).toBe(true);
+
+      pending.next();
+      pending.complete();
+      await settle(fixture);
+
+      expect((fixture.nativeElement as HTMLElement).querySelector('[role="alertdialog"]')).toBeNull();
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).not.toContain('Unused allowance');
+      expect(text()).toContain('No Schedules yet');
+    });
+
+    it('keeps a failed deletion actionable in the confirmation dialog', async () => {
+      const deleteSchedule = vi.fn(() => throwError(() => new ApiError('Deletion failed. Try again.', 500)));
+      const { fixture, text } = setup(() => of([UNUSED]), {
+        delete: deleteSchedule as SchedulesService['delete'],
+      });
+
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+
+      const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]');
+      expect(confirmation).not.toBeNull();
+      expect(confirmation!.textContent).toContain('Deletion failed. Try again.');
+      expect(
+        Array.from(confirmation!.querySelectorAll<HTMLButtonElement>('button')).find(
+          (button) => button.textContent?.trim() === 'Delete',
+        )!.disabled,
+      ).toBe(false);
+      expect(text()).toContain('Unused allowance');
+    });
+
+    it('refreshes a deletion conflict and explains the authoritative server state', async () => {
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([UNUSED]))
+        .mockReturnValueOnce(of([NO_LONGER_DELETABLE]));
+      const deleteSchedule = vi.fn(() =>
+        throwError(() => new ApiError('This Schedule has generated a Transaction and cannot be deleted.', 409)),
+      );
+      const { fixture, text } = setup(list as SchedulesService['list'], {
+        delete: deleteSchedule as SchedulesService['delete'],
+      });
+
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+
+      expect((fixture.nativeElement as HTMLElement).querySelector('[role="alertdialog"]')).toBeNull();
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).toContain('Unused allowance');
+      expect(text()).toContain('This Schedule has generated a Transaction and cannot be deleted.');
+      expect(text()).toContain('Review the refreshed Schedule before trying again.');
+      expect(text()).toContain('This Schedule can’t be deleted because it has generated a Transaction.');
+    });
+
+    it('disables an open deletion confirmation when list information becomes stale', async () => {
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([UNUSED]))
+        .mockReturnValueOnce(throwError(() => new ApiError('Offline', 0)));
+      const deleteSchedule = vi.fn(() => of(undefined));
+      const { fixture } = setup(list as SchedulesService['list'], {
+        delete: deleteSchedule as SchedulesService['delete'],
+      });
+
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+      click(fixture, 'Refresh');
+      await settle(fixture);
+      const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]')!;
+      const deleteButton = Array.from(confirmation.querySelectorAll<HTMLButtonElement>('button')).find(
+        (button) => button.textContent?.trim() === 'Delete',
+      )!;
+
+      expect(deleteButton.disabled).toBe(true);
+      deleteButton.click();
+      await settle(fixture);
+      expect((fixture.nativeElement as HTMLElement).querySelector('[role="alertdialog"]')).not.toBeNull();
+      expect(deleteSchedule).not.toHaveBeenCalled();
+    });
+
+    it('explains revoked deletion eligibility while confirmation is open', async () => {
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([UNUSED]))
+        .mockReturnValueOnce(of([NO_LONGER_DELETABLE]));
+      const deleteSchedule = vi.fn(() => of(undefined));
+      const { fixture } = setup(list as SchedulesService['list'], {
+        delete: deleteSchedule as SchedulesService['delete'],
+      });
+
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+      click(fixture, 'Refresh');
+      await settle(fixture);
+
+      const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]')!;
+      const deleteButton = Array.from(confirmation.querySelectorAll<HTMLButtonElement>('button')).find(
+        (button) => button.textContent?.trim() === 'Delete',
+      )!;
+      expect(deleteButton.disabled).toBe(true);
+      expect(confirmation.textContent).toContain(
+        'This Schedule can’t be deleted because it has generated a Transaction.',
+      );
+      deleteButton.click();
+      expect(deleteSchedule).not.toHaveBeenCalled();
     });
   });
 

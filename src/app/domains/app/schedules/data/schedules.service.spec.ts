@@ -388,6 +388,34 @@ describe('SchedulesService', () => {
     });
   });
 
+  describe('delete', () => {
+    it('DELETEs the Schedule through the recurring-transaction endpoint', async () => {
+      const result = firstValueFrom(service.delete(7));
+
+      const request = http.expectOne(`${BASE_URL}/api/recurring-transactions/7`);
+      expect(request.request.method).toBe('DELETE');
+      request.flush(null);
+
+      await expect(result).resolves.toBeNull();
+    });
+
+    it('normalizes a rejected deletion for current-state recovery', async () => {
+      const result = firstValueFrom(service.delete(7));
+
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions/7`)
+        .flush(
+          { detail: 'The recurring transaction has generated a transaction and cannot be deleted.' },
+          { status: 409, statusText: 'Conflict' },
+        );
+
+      const error = await result.catch((value: unknown) => value);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(409);
+      expect((error as ApiError).message).toBe('The Schedule has generated a transaction and cannot be deleted.');
+    });
+  });
+
   describe('extend', () => {
     it('POSTs a finite Last generation to the single atomic extension endpoint', async () => {
       const result = firstValueFrom(service.extend(7, new Date(2027, 5, 30, 23, 30)));

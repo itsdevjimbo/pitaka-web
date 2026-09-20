@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Schedule } from '../../data/schedule';
+import { SchedulesService } from '../../data/schedules.service';
 import { ScheduleRow, ScheduleRowData } from './schedule-row';
 
 const SCHEDULE: Schedule = {
@@ -24,7 +25,7 @@ describe('ScheduleRow', () => {
   function setup(overrides: Partial<ScheduleRowData> = {}): ComponentFixture<ScheduleRow> {
     TestBed.configureTestingModule({
       imports: [ScheduleRow],
-      providers: [provideRouter([])],
+      providers: [provideRouter([]), { provide: SchedulesService, useValue: { delete: vi.fn() } }],
     });
     const fixture = TestBed.createComponent(ScheduleRow);
     fixture.componentRef.setInput('row', {

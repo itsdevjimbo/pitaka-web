@@ -139,6 +139,13 @@ export class SchedulesService {
         catchError((error: unknown) => throwError(() => toScheduleError(error))),
       );
   }
+
+  /** Permanently delete a Schedule that has never generated a Transaction. */
+  delete(id: number): Observable<void> {
+    return this.http
+      .delete<void>(`${this.baseUrl}/api/recurring-transactions/${id}`)
+      .pipe(catchError((error: unknown) => throwError(() => toScheduleError(error))));
+  }
 }
 
 function toSchedule(resource: RecurringTransactionResource): Schedule {

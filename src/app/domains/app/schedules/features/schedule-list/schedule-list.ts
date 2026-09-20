@@ -198,4 +198,14 @@ export default class ScheduleList {
     } else if (event.kind === 'conflict') this.load(event);
     else this.actionMessage.set(event.message);
   }
+
+  protected onScheduleDeleted(): void {
+    this.actionMessage.set(null);
+    this.load();
+  }
+
+  protected onDeleteConflict(conflict: { scheduleId: number; message: string }): void {
+    this.actionMessage.set(null);
+    this.load(conflict);
+  }
 }

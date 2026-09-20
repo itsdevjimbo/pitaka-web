@@ -115,6 +115,8 @@
                   [writeDisabled]="refreshing() || stale() || busyScheduleIds().has(row.schedule.id)"
                   (edit)="openEditDialog($event)"
                   (extend)="openExtendDialog($event)"
+                  (deleted)="onScheduleDeleted()"
+                  (deleteConflict)="onDeleteConflict($event)"
                   (lifecycle)="openLifecycleDialog($event.row, $event.action)"
                 ></li>
               }
