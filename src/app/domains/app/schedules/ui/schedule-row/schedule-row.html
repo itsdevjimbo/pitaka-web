@@ -36,17 +36,48 @@
       {{ frequencies[row().schedule.frequency] }}
     </p>
   </div>
-  @if (row().schedule.status === 'active' || row().schedule.status === 'paused') {
-    <button
-      matButton="outlined"
-      type="button"
-      [disabled]="writeDisabled()"
-      (click)="edit.emit(row())"
-    >
-      Edit
-    </button>
-  }
+  <div class="flex flex-wrap justify-end gap-2">
+    @if (row().schedule.status === 'active') {
+      <button
+        matButton="outlined"
+        type="button"
+        [disabled]="writeDisabled()"
+        (click)="request('pause')"
+      >
+        Pause
+      </button>
+    } @else if (row().schedule.status === 'paused' || row().schedule.status === 'cancelled') {
+      <button
+        matButton="outlined"
+        type="button"
+        [disabled]="writeDisabled() || row().accountRetired"
+        [attr.aria-describedby]="row().accountRetired ? 'resume-blocked-' + row().schedule.id : null"
+        (click)="request('resume')"
+      >
+        Resume
+      </button>
+    }
+    @if (row().schedule.status === 'active' || row().schedule.status === 'paused') {
+      <button
+        matButton="outlined"
+        type="button"
+        [disabled]="writeDisabled()"
+        (click)="edit.emit(row())"
+      >
+        Edit
+      </button>
+    }
+  </div>
 </div>
+
+@if (row().accountRetired && (row().schedule.status === 'paused' || row().schedule.status === 'cancelled')) {
+  <p
+    [id]="'resume-blocked-' + row().schedule.id"
+    class="mt-3 text-sm text-amber-800 dark:text-amber-200"
+  >
+    Reactivate this Account before resuming the Schedule.
+  </p>
+}
 
 <dl class="mt-4 grid gap-3 border-t border-neutral-200 pt-3 text-sm sm:grid-cols-2 dark:border-neutral-800">
   <div>

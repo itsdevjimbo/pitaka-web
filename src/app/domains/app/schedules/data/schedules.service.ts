@@ -56,6 +56,10 @@ const API_FREQUENCY: Record<ScheduleFrequency, RecurringTransactionResource['fre
   monthly: 'Monthly',
   yearly: 'Yearly',
 };
+const API_STATUS: Record<'active' | 'paused', 'Active' | 'Paused'> = {
+  active: 'Active',
+  paused: 'Paused',
+};
 const API_FIELD_TO_PRODUCT_FIELD: Readonly<Record<string, string>> = {
   type: 'direction',
   startDate: 'firstGeneration',
@@ -111,6 +115,18 @@ export class SchedulesService {
         catchError((error: unknown) => throwError(() => toScheduleError(error))),
       );
   }
+
+  /** Pause or resume generation while preserving the Schedule and its generated Transactions. */
+  setStatus(id: number, status: 'active' | 'paused'): Observable<Schedule> {
+    return this.http
+      .patch<RecurringTransactionResource>(`${this.baseUrl}/api/recurring-transactions/${id}/status`, {
+        status: API_STATUS[status],
+      })
+      .pipe(
+        map(toSchedule),
+        catchError((error: unknown) => throwError(() => toScheduleError(error))),
+      );
+  }
 }
 
 function toSchedule(resource: RecurringTransactionResource): Schedule {
@@ -158,9 +174,14 @@ function toScheduleError(error: unknown, schedule?: NewSchedule): unknown {
   const fieldErrors: Record<string, readonly string[]> = {};
   for (const [field, messages] of Object.entries(error.fieldErrors)) {
     const productField = API_FIELD_TO_PRODUCT_FIELD[field] ?? field;
-    fieldErrors[productField] = schedule ? scheduleFieldErrors(productField, messages, schedule) : messages;
+    const translated = schedule ? scheduleFieldErrors(productField, messages, schedule) : messages;
+    fieldErrors[productField] = translated.map(toProductMessage);
   }
-  return new ApiError(error.message, error.status, fieldErrors);
+  return new ApiError(toProductMessage(error.message), error.status, fieldErrors);
+}
+
+function toProductMessage(message: string): string {
+  return message.replace(/\brecurring transaction\b/gi, 'Schedule');
 }
 
 function scheduleFieldErrors(field: string, messages: readonly string[], schedule: NewSchedule): readonly string[] {

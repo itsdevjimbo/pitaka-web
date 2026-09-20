@@ -341,4 +341,50 @@ describe('SchedulesService', () => {
       });
     });
   });
+
+  describe('lifecycle', () => {
+    it('PATCHes Paused to suspend generation and maps the updated Schedule', async () => {
+      const result = firstValueFrom(service.setStatus(7, 'paused'));
+
+      const request = http.expectOne(`${BASE_URL}/api/recurring-transactions/7/status`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({ status: 'Paused' });
+      request.flush(resource({ status: 'Paused' }));
+
+      await expect(result).resolves.toMatchObject({ id: 7, status: 'paused' });
+    });
+
+    it('PATCHes Active to resume a Paused or Cancelled Schedule', async () => {
+      const result = firstValueFrom(service.setStatus(7, 'active'));
+
+      const request = http.expectOne(`${BASE_URL}/api/recurring-transactions/7/status`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({ status: 'Active' });
+      request.flush(resource({ status: 'Active', nextRunDate: '2026-11-01' }));
+
+      await expect(result).resolves.toMatchObject({
+        id: 7,
+        status: 'active',
+        nextGeneration: new Date(2026, 10, 1),
+      });
+    });
+
+    it('normalizes a lifecycle conflict for current-state recovery', async () => {
+      const result = firstValueFrom(service.setStatus(7, 'active'));
+
+      http
+        .expectOne(`${BASE_URL}/api/recurring-transactions/7/status`)
+        .flush(
+          { detail: 'Account is retired. Reactivate the Account before resuming this recurring transaction.' },
+          { status: 409, statusText: 'Conflict' },
+        );
+
+      const error = await result.catch((value: unknown) => value);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(409);
+      expect((error as ApiError).message).toBe(
+        'Account is retired. Reactivate the Account before resuming this Schedule.',
+      );
+    });
+  });
 });
