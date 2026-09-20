@@ -10,6 +10,18 @@ export type ScheduleLifecycleEvent =
   | { kind: 'conflict'; scheduleId: number; message: string }
   | { kind: 'failed'; scheduleId: number; message: string };
 
+export type ScheduleLifecycleFailure = Pick<
+  Extract<ScheduleLifecycleEvent, { kind: 'conflict' | 'failed' }>,
+  'kind' | 'message'
+>;
+
+export function toScheduleLifecycleFailure(error: unknown): ScheduleLifecycleFailure {
+  return {
+    kind: error instanceof ApiError && error.status === 409 ? 'conflict' : 'failed',
+    message: error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+  };
+}
+
 /** Keeps lifecycle writes observable after their confirmation dialog is dismissed. */
 @Injectable({ providedIn: 'root' })
 export class ScheduleLifecycleCoordinator {
@@ -26,11 +38,9 @@ export class ScheduleLifecycleCoordinator {
     request.subscribe({
       next: (schedule) => this.eventSubject.next({ kind: 'updated', schedule }),
       error: (error: unknown) => {
-        const message = error instanceof ApiError ? error.message : 'Something went wrong. Please try again.';
         this.eventSubject.next({
-          kind: error instanceof ApiError && error.status === 409 ? 'conflict' : 'failed',
           scheduleId,
-          message,
+          ...toScheduleLifecycleFailure(error),
         });
       },
     });

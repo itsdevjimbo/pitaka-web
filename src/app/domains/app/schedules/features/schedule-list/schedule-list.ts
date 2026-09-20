@@ -15,7 +15,6 @@ import {
   ScheduleLifecycleAction,
   ScheduleLifecycleDialog,
   ScheduleLifecycleDialogData,
-  ScheduleLifecycleDialogResult,
 } from '../../ui/schedule-lifecycle-dialog/schedule-lifecycle-dialog';
 import {
   ScheduleLifecycleNav,
@@ -167,15 +166,12 @@ export default class ScheduleList {
   protected openLifecycleDialog(row: ScheduleRowData, action: ScheduleLifecycleAction): void {
     if (this.stale() || this.refreshing() || (action === 'resume' && row.accountRetired)) return;
     this.actionMessage.set(null);
-    this.dialog.open<ScheduleLifecycleDialog, ScheduleLifecycleDialogData, ScheduleLifecycleDialogResult>(
-      ScheduleLifecycleDialog,
-      {
-        data: {
-          schedule: row.schedule,
-          action,
-        },
+    this.dialog.open<ScheduleLifecycleDialog, ScheduleLifecycleDialogData>(ScheduleLifecycleDialog, {
+      data: {
+        schedule: row.schedule,
+        action,
       },
-    );
+    });
   }
 
   private onLifecycleEvent(event: ScheduleLifecycleEvent): void {
