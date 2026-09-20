@@ -6,12 +6,20 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "ng build",
+    "check:changed": "node scripts/check-changed.mjs",
     "lint": "ng lint",
     "ng": "ng",
+    "prepare": "husky",
     "start": "ng serve",
     "test": "ng test",
-    "watch": "ng build --watch --configuration development",
-    "prepare": "husky"
+    "test:standards": "node --test scripts/check-changed.test.mjs",
+    "watch": "ng build --watch --configuration development"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,html}": [
+      "prettier --write",
+      "eslint --max-warnings 0"
+    ]
   },
   "dependencies": {
     "@angular/aria": "22.1.1",
@@ -60,8 +68,5 @@
   },
   "engines": {
     "node": ">=24.0.0"
-  },
-  "lint-staged": {
-    "src/**/*.{ts,html}": "prettier --write"
   }
 }

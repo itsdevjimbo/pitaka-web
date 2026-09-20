@@ -2,6 +2,9 @@
 
 Angular client for the Pitaka expense tracker. The API is a separate .NET repo.
 
+Before changing or reviewing code, read [the coding standards](docs/standards.md).
+When planning repository cleanup, use [the standards cleanup plan](docs/standards-cleanup.md).
+
 ## Agent skills
 
 ### Issue tracker

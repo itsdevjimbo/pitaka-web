@@ -101,7 +101,7 @@ export default defineConfig(
       '@typescript-eslint/no-unused-vars': 'off',
 
       // Prefer "type" over "interface" for type definitions
-      '@typescript-eslint/consistent-type-definitions': ['warn', 'type'],
+      '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
 
       // Angular
       '@angular-eslint/component-selector': [
@@ -129,16 +129,24 @@ export default defineConfig(
   // HTML
   {
     files: ['**/*.html'],
-    extends: [
-      angular.configs.templateRecommended,
-      angular.configs.templateAccessibility,
-    ],
+    extends: [angular.configs.templateRecommended, angular.configs.templateAccessibility],
   },
 
   // Test files
   {
     files: ['**/*.spec.ts'],
     rules: {
+      // Existing tests migrate through docs/standards-cleanup.md. Changed-file
+      // checks reject warnings; a justified exception uses a line-level disable.
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector:
+            'TSAsExpression[expression.type="TSAsExpression"][expression.typeAnnotation.type="TSUnknownKeyword"][expression.expression.type="MemberExpression"][expression.expression.property.name="componentInstance"]',
+          message:
+            'Test rendered behavior instead of casting componentInstance through unknown. Explain a narrow exception with a line-level disable; see docs/standards.md.',
+        },
+      ],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
@@ -146,5 +154,5 @@ export default defineConfig(
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
     },
-  }
+  },
 );
