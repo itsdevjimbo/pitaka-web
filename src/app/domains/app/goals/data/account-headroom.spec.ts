@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountHeadroom } from './account-headroom';
+import { accountHeadroom, signedAccountHeadroom } from './account-headroom';
 
 describe('accountHeadroom', () => {
   it('subtracts pooled earmarks from each Account balance and clamps an over-earmarked Account to zero', () => {
@@ -15,8 +15,8 @@ describe('accountHeadroom', () => {
           { accountId: 1, amount: 80 },
           { accountId: 2, amount: 20 },
           { accountId: 99, amount: 500 },
-        ]
-      )
+        ],
+      ),
     ).toEqual([
       { accountId: 1, availableAmount: 0 },
       { accountId: 2, availableAmount: 30 },
@@ -31,8 +31,14 @@ describe('accountHeadroom', () => {
         [
           { accountId: 1, amount: 0.1 },
           { accountId: 1, amount: 0.2 },
-        ]
-      )
+        ],
+      ),
     ).toEqual([{ accountId: 1, availableAmount: 0.7 }]);
+  });
+
+  it('preserves negative headroom when displaying the actual Account fact', () => {
+    expect(signedAccountHeadroom([{ id: 1, currentBalance: 100 }], [{ accountId: 1, amount: 125 }])).toEqual([
+      { accountId: 1, availableAmount: -25 },
+    ]);
   });
 });

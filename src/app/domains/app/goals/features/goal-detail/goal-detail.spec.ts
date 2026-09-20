@@ -61,6 +61,7 @@ describe('GoalDetail', () => {
       accounts?: AccountsService['all'];
       transactions?: TransactionsService['list'];
       linked?: TransactionsService['linkedContributions'];
+      allContributions?: GoalContributionsService['all'];
       deleteContribution?: GoalContributionsService['delete'];
       id?: string;
     } = {},
@@ -70,6 +71,7 @@ describe('GoalDetail', () => {
     const accounts = over.accounts ?? (() => of([ACCOUNT]));
     const transactions = over.transactions ?? (() => of<Transaction[]>([]));
     const linked = over.linked ?? (() => of({} as never));
+    const allContributions = over.allContributions ?? (() => of<GoalContribution[]>([]));
     const deleteContribution = over.deleteContribution ?? (() => of(undefined));
 
     TestBed.configureTestingModule({
@@ -80,7 +82,7 @@ describe('GoalDetail', () => {
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: GoalsService, useValue: { get } },
-        { provide: GoalContributionsService, useValue: { list, delete: deleteContribution } },
+        { provide: GoalContributionsService, useValue: { list, all: allContributions, delete: deleteContribution } },
         { provide: AccountsService, useValue: { all: accounts } },
         { provide: TransactionsService, useValue: { list: transactions, linkedContributions: linked } },
       ],
@@ -174,65 +176,68 @@ describe('GoalDetail', () => {
     expect(text()).not.toContain('Add contribution');
   });
 
-  it('keeps linked history deletable for a Completed Goal and retired Account, then refreshes its source capacity', () => {
-    const item = contribution({ transactionId: 42 });
-    const list = vi
-      .fn()
-      .mockReturnValueOnce(of([item]))
-      .mockReturnValueOnce(of([]));
-    const remove = vi.fn(() => of(undefined));
-    const linked = vi.fn(() =>
-      of({
-        transactionId: 42,
-        transactionAmount: 1200,
-        linkedTotal: 0,
-        remainingCapacity: 1200,
-        account: {
-          id: 8,
-          name: 'Everyday cash',
-          currentBalance: 50000,
-          earmarkedTotal: 0,
-          availableHeadroom: 50000,
-          active: false,
-        },
-        linkedContributions: [],
-      }),
-    );
-    const { fixture, cmp, text } = setup({
-      get: () => of({ ...GOAL, status: 'Completed' }),
-      list,
-      accounts: () => of([{ ...ACCOUNT, isActive: false }]),
-      transactions: () =>
-        of([
-          {
-            id: 42,
-            amount: 1200,
-            direction: 'income',
-            accountId: 8,
-            transferToAccountId: null,
-            date: new Date(2026, 8, 10),
-            categoryId: 2,
-            generated: false,
-            description: 'Salary',
-            tags: [],
+  it.each(['Completed', 'Abandoned'] as const)(
+    'keeps linked history deletable for an %s Goal and retired Account, then refreshes its source capacity',
+    (status) => {
+      const item = contribution({ transactionId: 42 });
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([item]))
+        .mockReturnValueOnce(of([]));
+      const remove = vi.fn(() => of(undefined));
+      const linked = vi.fn(() =>
+        of({
+          transactionId: 42,
+          transactionAmount: 1200,
+          linkedTotal: 0,
+          remainingCapacity: 1200,
+          account: {
+            id: 8,
+            name: 'Everyday cash',
+            currentBalance: 50000,
+            earmarkedTotal: 0,
+            availableHeadroom: 50000,
+            active: false,
           },
-        ]),
-      linked: linked as unknown as TransactionsService['linkedContributions'],
-      deleteContribution: remove,
-    });
+          linkedContributions: [],
+        }),
+      );
+      const { fixture, cmp, text } = setup({
+        get: () => of({ ...GOAL, status }),
+        list,
+        accounts: () => of([{ ...ACCOUNT, isActive: false }]),
+        transactions: () =>
+          of([
+            {
+              id: 42,
+              amount: 1200,
+              direction: 'income',
+              accountId: 8,
+              transferToAccountId: null,
+              date: new Date(2026, 8, 10),
+              categoryId: 2,
+              generated: false,
+              description: 'Salary',
+              tags: [],
+            },
+          ]),
+        linked: linked as unknown as TransactionsService['linkedContributions'],
+        deleteContribution: remove,
+      });
 
-    expect(text()).toContain('Linked from Salary');
-    expect(text()).toContain('Completed');
-    const displayed = cmp.history()![0];
-    cmp.askContributionDelete(displayed);
-    cmp.confirmContributionDelete();
-    fixture.detectChanges();
+      expect(text()).toContain('Linked from Salary');
+      expect(text()).toContain(status);
+      const displayed = cmp.history()![0];
+      cmp.askContributionDelete(displayed);
+      cmp.confirmContributionDelete();
+      fixture.detectChanges();
 
-    expect(remove).toHaveBeenCalledWith(item.id);
-    expect(linked).toHaveBeenCalledWith(42);
-    expect(cmp.history()).toEqual([]);
-    expect(text()).toContain('Completed');
-  });
+      expect(remove).toHaveBeenCalledWith(item.id);
+      expect(linked).toHaveBeenCalledWith(42);
+      expect(cmp.history()).toEqual([]);
+      expect(text()).toContain(status);
+    },
+  );
 
   it('keeps an ordinary Contribution visible and pending until 204, then refreshes Goal progress and Account headroom', () => {
     const item = contribution();
@@ -243,9 +248,11 @@ describe('GoalDetail', () => {
     const pending = new Subject<void>();
     const remove = vi.fn(() => pending.asObservable());
     const accounts = vi.fn(() => of([ACCOUNT]));
-    const { fixture, cmp } = setup({
+    const allContributions = vi.fn(() => of([contribution({ id: 2, amount: 51000 })]));
+    const { fixture, cmp, text } = setup({
       list,
       accounts,
+      allContributions,
       deleteContribution: remove,
     });
 
@@ -263,6 +270,8 @@ describe('GoalDetail', () => {
     expect(cmp.deletingContributionId()).toBeNull();
     expect(cmp.history()).toEqual([]);
     expect(accounts).toHaveBeenCalledTimes(2);
+    expect(allContributions).toHaveBeenCalledOnce();
+    expect(text()).toContain(`${formatPeso(-1000)} remains available in ${ACCOUNT.name}`);
   });
 
   it('treats an initial deletion 404 as stale history and refreshes the ordinary row away', () => {
@@ -280,6 +289,38 @@ describe('GoalDetail', () => {
     cmp.confirmContributionDelete();
     fixture.detectChanges();
 
+    expect(cmp.history()).toEqual([]);
+  });
+
+  it('keeps an ordinary row after an ambiguous failure until retrying confirms absence', () => {
+    const item = contribution();
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([item]))
+      .mockReturnValueOnce(of([]));
+    let attempts = 0;
+    const remove = vi.fn(() => {
+      attempts += 1;
+      return throwError(() =>
+        attempts === 1 ? new ApiError('The request timed out.', 504) : new ApiError('Missing', 404),
+      );
+    });
+    const { fixture, cmp, text } = setup({ list, deleteContribution: remove });
+
+    cmp.askContributionDelete(cmp.history()![0]);
+    cmp.confirmContributionDelete();
+    fixture.detectChanges();
+
+    expect(cmp.history()).toHaveLength(1);
+    expect(text()).toContain('The request timed out.');
+
+    const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Try again',
+    );
+    retry?.click();
+    fixture.detectChanges();
+
+    expect(remove).toHaveBeenCalledTimes(2);
     expect(cmp.history()).toEqual([]);
   });
 

@@ -189,6 +189,14 @@
           {{ source.account.availableHeadroom | peso }} remains available in {{ source.account.name }}.
         </p>
       }
+      @if (ordinaryAccountHeadroom(); as account) {
+        <p
+          class="text-sm text-neutral-600 dark:text-neutral-300"
+          role="status"
+        >
+          {{ account.availableAmount | peso }} remains available in {{ account.accountName }}.
+        </p>
+      }
     </header>
 
     <section

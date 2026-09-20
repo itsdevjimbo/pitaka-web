@@ -7,7 +7,7 @@ export { GoalsService } from './data/goals.service';
 export { GoalContributionsService } from './data/goal-contributions.service';
 export { ContributionDeletionCoordinator } from './data/contribution-deletion';
 export type { ContributionDeletionResult } from './data/contribution-deletion';
-export { accountHeadroom } from './data/account-headroom';
+export { accountHeadroom, signedAccountHeadroom } from './data/account-headroom';
 export type { AccountHeadroom } from './data/account-headroom';
 export { withAccountNames } from './data/contribution-account-name';
 export type { GoalContributionSource, GoalContributionWithAccountName } from './data/contribution-account-name';

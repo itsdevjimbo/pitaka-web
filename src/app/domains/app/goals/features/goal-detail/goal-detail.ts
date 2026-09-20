@@ -17,6 +17,7 @@ import {
   GoalContributionWithAccountName,
   GoalContributionsService,
   GoalsService,
+  signedAccountHeadroom,
   withAccountNames,
 } from '../../index';
 import { AddContributionDialog } from '../../ui/add-contribution-dialog';
@@ -70,6 +71,7 @@ export default class GoalDetail implements OnInit {
   protected readonly confirmingContributionDelete = signal<GoalContributionWithAccountName | null>(null);
   protected readonly deletingContributionId = signal<number | null>(null);
   protected readonly linkedSourceSnapshot = signal<TransactionLinkedContributions | null>(null);
+  protected readonly ordinaryAccountHeadroom = signal<{ accountName: string; availableAmount: number } | null>(null);
 
   ngOnInit(): void {
     this.load();
@@ -157,7 +159,7 @@ export default class GoalDetail implements OnInit {
         next: () => {
           this.deletingContributionId.set(null);
           this.confirmingContributionDelete.set(null);
-          this.refreshContributionFacts(contribution.transactionId);
+          this.refreshContributionFacts(contribution);
         },
         error: (error) => {
           this.deletingContributionId.set(null);
@@ -266,7 +268,7 @@ export default class GoalDetail implements OnInit {
     if (result === 'missing') this.load();
   }
   /** Reconcile every server-derived Goal fact after a Contribution write without hiding the last readable screen. */
-  private refreshContributionFacts(transactionId: number | null = null): void {
+  private refreshContributionFacts(deleted: GoalContributionWithAccountName | null = null): void {
     const goal = this.goal();
     if (!goal) {
       this.load();
@@ -274,19 +276,30 @@ export default class GoalDetail implements OnInit {
     }
     forkJoin({
       facts: this.readContributionFacts(goal.id),
-      transaction: transactionId === null ? of(null) : this.transactions.linkedContributions(transactionId),
+      transaction:
+        deleted?.transactionId == null ? of(null) : this.transactions.linkedContributions(deleted.transactionId),
+      pooledContributions: deleted && deleted.transactionId === null ? this.contributions.all() : of(null),
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: ({ facts: { goal: freshGoal, contributions, accounts, sourceTransactions }, transaction }) => {
+        next: ({
+          facts: { goal: freshGoal, contributions, accounts, sourceTransactions },
+          transaction,
+          pooledContributions,
+        }) => {
           this.goal.set(freshGoal);
           this.linkedSourceSnapshot.set(transaction);
+          this.ordinaryAccountHeadroom.set(
+            deleted && pooledContributions
+              ? ordinaryDeletionHeadroom(deleted.accountId, accounts, pooledContributions)
+              : null,
+          );
           this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
         },
         error: () =>
           this.notice.set({
             message: 'The Contribution changed but the latest Goal details could not be loaded.',
-            retry: () => this.refreshContributionFacts(transactionId),
+            retry: () => this.refreshContributionFacts(deleted),
           }),
       });
   }
@@ -312,6 +325,19 @@ export default class GoalDetail implements OnInit {
       }),
     );
   }
+}
+
+function ordinaryDeletionHeadroom(
+  accountId: number,
+  accounts: readonly { id: number; name: string; currentBalance: number }[],
+  contributions: readonly { accountId: number; amount: number }[],
+): { accountName: string; availableAmount: number } | null {
+  const account = accounts.find((candidate) => candidate.id === accountId);
+  if (!account) return null;
+  const headroom = signedAccountHeadroom(accounts, contributions).find(
+    (candidate) => candidate.accountId === accountId,
+  );
+  return headroom ? { accountName: account.name, availableAmount: headroom.availableAmount } : null;
 }
 
 function byNewestContribution(left: GoalContributionWithAccountName, right: GoalContributionWithAccountName): number {
