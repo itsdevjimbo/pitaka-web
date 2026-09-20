@@ -10,6 +10,10 @@ import { ContributionDeletionCoordinator, GoalContributionsService, GoalsService
 import { withOverlayContainer } from '@/testing/overlay';
 import { TransactionLinkedContributions } from '../data/linked-contribution';
 import { Transaction } from '../data/transaction';
+import {
+  TransactionHasLinkedContributionsError,
+  TransactionRemovalConcurrentStateError,
+} from '../data/transaction-removal';
 import { TransactionsService } from '../data/transactions.service';
 import { TransactionRow, TransactionRowModel, toAccountRow, toSpanningRow } from './transaction-row';
 
@@ -324,6 +328,15 @@ describe('TransactionRow', () => {
   /** A button anywhere in the row host, matched by exact trimmed text. */
   function rowButton(host: HTMLElement, label: string) {
     return Array.from(host.querySelectorAll('button')).find((b) => (b.textContent ?? '').trim() === label);
+  }
+
+  /** Confirm one explicit Transaction removal through the public row controls. */
+  async function attemptRemoval(fixture: ReturnType<typeof renderFixture>) {
+    menuItem(openMenu(fixture), 'Remove')?.click();
+    fixture.detectChanges();
+    rowButton(fixture.nativeElement as HTMLElement, 'Remove')?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
   }
 
   it('progressively reveals every Linked Contribution, including repeated Goals', async () => {
@@ -756,6 +769,162 @@ describe('TransactionRow', () => {
   });
 
   describe('removing from the row', () => {
+    it('explains a Linked Contribution refusal while every existing row stays visible and unchanged', async () => {
+      const snapshot = linkedSnapshot();
+      const visibleLinkedContributions: TransactionLinkedContributions = {
+        ...snapshot,
+        linkedTotal: 450,
+        remainingCapacity: 50,
+        linkedContributions: [
+          ...snapshot.linkedContributions,
+          {
+            id: 93,
+            goalId: 8,
+            goalName: 'New laptop',
+            accountId: 3,
+            transactionId: 42,
+            amount: 150,
+            contributionDate: new Date(2026, 8, 17),
+            note: 'Third slice',
+          },
+        ],
+      };
+      const remove = vi.fn(() =>
+        throwError(
+          () =>
+            new TransactionHasLinkedContributionsError(7, [
+              { contributionId: 91, goalId: 2, goalName: 'Emergency fund' },
+              { contributionId: 92, goalId: 2, goalName: 'Emergency fund' },
+              { contributionId: 93, goalId: 8, goalName: 'New laptop' },
+            ]),
+        ),
+      );
+      const fixture = renderFixture(
+        toAccountRow(tx({ id: 7, direction: 'income', description: 'Payday' }), NAMES, 3),
+        remove as unknown as TransactionsService['remove'],
+        () => of(visibleLinkedContributions),
+      );
+      const removed: unknown[] = [];
+      fixture.componentInstance.removed.subscribe(() => removed.push('removed'));
+      const host = fixture.nativeElement as HTMLElement;
+
+      rowButton(host, 'Show contributions')?.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const contributionsBefore = Array.from(host.querySelectorAll('[data-linked-contribution]')).map(
+        (row) => row.textContent,
+      );
+
+      await attemptRemoval(fixture);
+
+      const alert = host.querySelector('[role="alert"]');
+      expect(host.textContent).toContain(
+        'This Transaction contributes to: Emergency fund, New laptop. Delete those Linked Contributions before removing it.',
+      );
+      expect(host.textContent).toContain('Contribution #91');
+      expect(host.textContent).toContain('Contribution #92');
+      expect(host.textContent).toContain('Contribution #93');
+      expect(
+        Array.from(alert?.querySelectorAll('a') ?? []).map((link) => [
+          (link.textContent ?? '').trim(),
+          link.getAttribute('href'),
+        ]),
+      ).toEqual([
+        ['Emergency fund', '/app/goals/2'],
+        ['New laptop', '/app/goals/8'],
+      ]);
+      expect(host.textContent).toContain('Payday');
+      expect(Array.from(host.querySelectorAll('[data-linked-contribution]')).map((row) => row.textContent)).toEqual(
+        contributionsBefore,
+      );
+      expect(removed).toEqual([]);
+      expect(rowButton(host, 'Try again')).toBeDefined();
+    });
+
+    it('keeps a concurrent-state refusal actionable and never reports successful removal', async () => {
+      const remove = vi.fn(() => throwError(() => new TransactionRemovalConcurrentStateError()));
+      const fixture = renderFixture(
+        toAccountRow(tx({ id: 7, description: 'Payday' }), NAMES, 3),
+        remove as unknown as TransactionsService['remove'],
+      );
+      const removed: unknown[] = [];
+      fixture.componentInstance.removed.subscribe(() => removed.push('removed'));
+
+      await attemptRemoval(fixture);
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+        'The Transaction changed while removal was being checked. Review it and try again.',
+      );
+      expect(rowButton(host, 'Try again')).toBeDefined();
+      expect(host.textContent).toContain('Payday');
+      expect(removed).toEqual([]);
+    });
+
+    it('removes successfully after the last Linked Contribution has been deleted', async () => {
+      let linkedContributionDeleted = false;
+      const remove = vi.fn(() =>
+        linkedContributionDeleted
+          ? of(undefined)
+          : throwError(
+              () =>
+                new TransactionHasLinkedContributionsError(7, [
+                  { contributionId: 91, goalId: 2, goalName: 'Emergency fund' },
+                ]),
+            ),
+      );
+      const oneLinkedContribution = {
+        ...linkedSnapshot(),
+        linkedTotal: 150,
+        remainingCapacity: 350,
+        linkedContributions: [linkedSnapshot().linkedContributions[0]],
+      };
+      const noLinkedContributions = {
+        ...oneLinkedContribution,
+        linkedTotal: 0,
+        remainingCapacity: 500,
+        linkedContributions: [],
+      };
+      const linkedRead = vi
+        .fn()
+        .mockReturnValueOnce(of(oneLinkedContribution))
+        .mockReturnValueOnce(of(noLinkedContributions));
+      const deleteContribution = vi.fn(() => {
+        linkedContributionDeleted = true;
+        return of(undefined);
+      });
+      const fixture = renderFixture(
+        toAccountRow(tx({ id: 7, direction: 'income', description: 'Payday' }), NAMES, 3),
+        remove as unknown as TransactionsService['remove'],
+        linkedRead,
+        { deleteContribution },
+      );
+      const removed: unknown[] = [];
+      fixture.componentInstance.removed.subscribe(() => removed.push('removed'));
+      const host = fixture.nativeElement as HTMLElement;
+
+      rowButton(host, 'Show contributions')?.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      await attemptRemoval(fixture);
+      expect(removed).toEqual([]);
+
+      rowButton(host, 'Delete contribution')?.click();
+      fixture.detectChanges();
+      rowButton(host, 'Delete')?.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(deleteContribution).toHaveBeenCalledWith(91);
+      expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(0);
+
+      rowButton(host, 'Try again')?.click();
+      await fixture.whenStable();
+
+      expect(remove).toHaveBeenCalledTimes(2);
+      expect(removed).toEqual(['removed']);
+    });
+
     it('asks for confirmation on the row, the Transaction still visible, and sends nothing yet', () => {
       const remove = vi.fn(() => of(undefined));
       const fixture = renderFixture(

@@ -9,11 +9,31 @@ import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
 import { Transaction, TRANSACTION_DIRECTIONS } from '../data/transaction';
+import {
+  TransactionHasLinkedContributionsError,
+  TransactionRemovalConcurrentStateError,
+} from '../data/transaction-removal';
 import { TransactionsService } from '../data/transactions.service';
 import { LinkedContributionPanel } from './linked-contribution-panel';
 
 /** The banner line for a removal that failed with nothing more specific to say. */
 const COULD_NOT_REMOVE = 'Something went wrong removing this transaction. Please try again.';
+
+const CONCURRENT_REMOVE_REFUSAL = 'The Transaction changed while removal was being checked. Review it and try again.';
+
+/** A Goal named by a source-removal refusal, with every blocking Contribution. */
+type BlockingGoal = {
+  id: number;
+  name: string;
+  contributionIds: number[];
+};
+
+/** The complete, validated source-removal refusal rendered by the row. */
+type LinkedContributionRemovalBlock = {
+  transactionId: number;
+  goals: BlockingGoal[];
+  message: string;
+};
 
 /** Shown for an income or expense the person never filed under a Category. */
 const NO_CATEGORY = 'Uncategorised';
@@ -182,9 +202,13 @@ export class TransactionRow {
    */
   protected readonly removeError = signal<string | null>(null);
 
+  /** Structured Linked Contributions that must be deleted before this Transaction can be removed. */
+  protected readonly removalBlock = signal<LinkedContributionRemovalBlock | null>(null);
+
   /** Reveal the inline confirmation. Sends nothing — the balance stays put. */
   protected askRemove(): void {
     this.removeError.set(null);
+    this.removalBlock.set(null);
     this.confirmingRemove.set(true);
   }
 
@@ -206,16 +230,56 @@ export class TransactionRow {
     this.removing.set(true);
     this.confirmingRemove.set(false);
     this.removeError.set(null);
+    this.removalBlock.set(null);
 
     try {
       await firstValueFrom(this.service.remove(this.row().id));
       this.removed.emit();
     } catch (error) {
-      this.removeError.set(error instanceof ApiError ? error.message : COULD_NOT_REMOVE);
+      if (error instanceof TransactionHasLinkedContributionsError) {
+        this.removalBlock.set(linkedContributionRemovalBlock(error));
+      } else {
+        this.removeError.set(removalFailureMessage(error));
+      }
     } finally {
       this.removing.set(false);
     }
   }
+}
+
+function removalFailureMessage(error: unknown): string {
+  if (error instanceof TransactionRemovalConcurrentStateError) {
+    return CONCURRENT_REMOVE_REFUSAL;
+  }
+  return error instanceof ApiError ? error.message : COULD_NOT_REMOVE;
+}
+
+/**
+ * Group repeated Linked Contributions under one Goal navigation link while
+ * retaining every Contribution identity returned by the data boundary.
+ */
+function linkedContributionRemovalBlock(error: TransactionHasLinkedContributionsError): LinkedContributionRemovalBlock {
+  const goals = new Map<number, BlockingGoal>();
+  for (const value of error.linkedContributions) {
+    const goal = goals.get(value.goalId);
+    if (goal) {
+      goal.contributionIds.push(value.contributionId);
+    } else {
+      goals.set(value.goalId, {
+        id: value.goalId,
+        name: value.goalName,
+        contributionIds: [value.contributionId],
+      });
+    }
+  }
+
+  const groupedGoals = [...goals.values()];
+  const names = groupedGoals.map((goal) => goal.name).join(', ');
+  return {
+    transactionId: error.transactionId,
+    goals: groupedGoals,
+    message: `This Transaction contributes to: ${names}. Delete those Linked Contributions before removing it.`,
+  };
 }
 
 /**

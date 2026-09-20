@@ -8,6 +8,10 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { withPinnedTimezone } from '@/testing/timezone';
+import {
+  TransactionHasLinkedContributionsError,
+  TransactionRemovalConcurrentStateError,
+} from './transaction-removal';
 import { TransactionsService } from './transactions.service';
 
 /** One Transaction row shaped the way the API sends it, with sane defaults. */
@@ -576,6 +580,74 @@ describe('TransactionsService', () => {
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).status).toBe(500);
       expect((error as ApiError).message.length).toBeGreaterThan(0);
+    });
+
+    it('maps every structured Linked Contribution removal blocker to the domain refusal', async () => {
+      const result = firstValueFrom(service.remove(42));
+
+      http.expectOne(`${BASE_URL}/api/transactions/42`).flush(
+        {
+          title: 'Conflict',
+          status: 409,
+          reason: 'transaction_has_linked_contributions',
+          transactionId: 42,
+          linkedContributions: [
+            { contributionId: 91, goalId: 2, goalName: 'Emergency fund' },
+            { contributionId: 92, goalId: 2, goalName: 'Emergency fund' },
+            { contributionId: 93, goalId: 8, goalName: 'New laptop' },
+          ],
+        },
+        { status: 409, statusText: 'Conflict' },
+      );
+
+      const error = await result.catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(TransactionHasLinkedContributionsError);
+      expect(error).toMatchObject({
+        transactionId: 42,
+        linkedContributions: [
+          { contributionId: 91, goalId: 2, goalName: 'Emergency fund' },
+          { contributionId: 92, goalId: 2, goalName: 'Emergency fund' },
+          { contributionId: 93, goalId: 8, goalName: 'New laptop' },
+        ],
+      });
+    });
+
+    it('maps a concurrent-state removal refusal to an actionable domain failure', async () => {
+      const result = firstValueFrom(service.remove(42));
+
+      http.expectOne(`${BASE_URL}/api/transactions/42`).flush(
+        {
+          title: 'Conflict',
+          status: 409,
+          reason: 'concurrent_state_changed',
+          transactionId: 42,
+        },
+        { status: 409, statusText: 'Conflict' },
+      );
+
+      const error = await result.catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(TransactionRemovalConcurrentStateError);
+    });
+
+    it('does not attach Linked Contribution facts for a mismatched structured Transaction ID', async () => {
+      const result = firstValueFrom(service.remove(42));
+
+      http.expectOne(`${BASE_URL}/api/transactions/42`).flush(
+        {
+          title: 'Conflict',
+          status: 409,
+          reason: 'transaction_has_linked_contributions',
+          transactionId: 99,
+          linkedContributions: [
+            { contributionId: 91, goalId: 2, goalName: 'Emergency fund' },
+          ],
+        },
+        { status: 409, statusText: 'Conflict' },
+      );
+
+      const error = await result.catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).not.toBeInstanceOf(TransactionHasLinkedContributionsError);
     });
   });
 
