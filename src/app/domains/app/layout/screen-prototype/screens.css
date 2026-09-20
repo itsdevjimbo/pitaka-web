@@ -54,6 +54,46 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.goal-heading {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.goal-statuses {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.goal-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.5;
+  background: var(--surface);
+}
+.goal-reached {
+  color: var(--income);
+}
+.goal-over {
+  color: var(--transfer);
+  background: var(--soft);
+}
+.goal-overdue,
+.goal-date-overdue {
+  color: var(--expense);
+  font-weight: 650;
+}
+.goal-progress {
+  color: var(--muted);
+}
+.goal-funding-summary {
+  font-weight: 600;
+}
 .title-link {
   border: 0;
   padding: 0;

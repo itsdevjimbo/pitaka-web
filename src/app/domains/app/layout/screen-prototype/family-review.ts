@@ -44,7 +44,9 @@ export default class FamilyReview {
           : ['Active', 'Retired', 'All'],
   );
   readonly activeTab = computed(() => (this.tabs().includes(this.tab()) ? this.tab() : this.tabs()[0]));
-  readonly count = computed(() => (this.scenario() === 'empty' ? 0 : this.scenario() === 'stress' ? 9 : 3));
+  readonly count = computed(() =>
+    this.scenario() === 'empty' ? 0 : this.scenario() === 'stress' ? 9 : this.screen() === 'goals' ? 4 : 3,
+  );
   readonly items = computed(() =>
     Array.from({ length: this.count() }, (_, i) => i).filter((i) =>
       this.name(i).toLowerCase().includes(this.search().toLowerCase()),
@@ -53,18 +55,26 @@ export default class FamilyReview {
   name(i: number): string {
     const names: Record<string, string[]> = {
       budgets: ['Groceries and household supplies', 'All spending', 'Meals out'],
-      goals: ['Rainy day fund', 'Trip to Kyoto', 'A new laptop'],
+      goals: ['Rainy day fund', 'Trip to Kyoto', 'A new laptop', 'Home improvements'],
       schedules: ['Monthly rent', 'Salary', 'Home internet'],
       categories: ['Food', 'Transport', 'Utilities'],
       tags: ['Home', 'Work', 'Reimbursable'],
     };
+    const familyNames = names[this.screen()] || ['Item'];
     return (
-      (names[this.screen()] || ['Item'])[i % 3] +
+      familyNames[i % familyNames.length] +
       (this.scenario() === 'stress' ? ` — family and long-term plans ${i + 1}` : '')
     );
   }
   money(value: number) {
     return `₱${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  goalAmount(i: number) {
+    return [50000, 52000, 35000, 35000][i % 4];
+  }
+  goalOverdue(i: number) {
+    // Match existing behavior: an Active Goal's date can be overdue even when funded.
+    return this.activeTab() === 'Active' && (i % 4 === 2 || i === 8);
   }
   ask(action: string, name: string) {
     this.confirmation.set(`${action} ${name}?`);

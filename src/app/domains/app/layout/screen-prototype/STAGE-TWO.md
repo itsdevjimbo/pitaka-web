@@ -4,6 +4,8 @@ The user chose A for Accounts, Transactions, Schedules, Categories, Tags, Profil
 
 The user clarified that the previous compact A-style card grid was not what they meant. That revision is superseded. Selected Budgets and Goals now resolve to C; only their content max-width cap and auto-centering are removed. C's card structure, typography, spacing and phone stacking remain unchanged. Explicit A/B/C retain their original structures for comparison.
 
+The user subsequently confirmed the full-width C layout, but found reached, over-target and overdue Goals hard to distinguish. The revised Goal rows add visible icon-and-text badges directly below the name: **Target reached** (exact target, income/success color), **Over target · amount** (neutral, not an expense/error), **In progress**, and an independent **Target overdue** warning. Funding percentage and the dated overdue label reinforce the distinction. The existing Active/Completed/Abandoned lifecycle remains separate; funding does not auto-complete a Goal. As in the current application, an Active Goal with a past target date can be both funded and overdue. Everyday fixtures now show all four funding/date examples; the crowded fixture also shows reached plus overdue together. This status treatment is proposed for visual feedback; the underlying C composition is confirmed.
+
 Run `npm run prototype:screens`. Open <http://localhost:4321/app/budgets?variant=selected&scheme=light>. The top selector now reaches every agreed screen family. The sample-data cases include ordinary, crowded, empty, retired Account, error, invalid link and success, with cases applied only where meaningful. Add `width=phone` for a 390px iframe or `width=320` for a 320px iframe; both use real viewport media queries. These do not substitute for all browser zoom and assistive-technology checks.
 
 ## Current composition map
@@ -35,6 +37,7 @@ A uses horizontal controls and cards or compact lists as appropriate. B moves pl
 
 - Standalone development compilation passes. Real application/session/production entry points stay unchanged.
 - Corrected C revision: visually inspected Light Budgets and Dark Goals on desktop; both preserve C's existing rows and fill the workspace. Narrow-layout revalidation remains outstanding.
+- Goal-status revision: Angular build passes; inspected Light desktop Goals and Dark 320px long-name Goals, scrolling to verify reached, over-target and overdue badge wrapping. Color is reinforced with explicit labels and icons. Narrow Goals retain C's stacking without horizontal clipping in the inspected cases. These checks are not a complete accessibility audit.
 - Historical check of the superseded compact A-style grid: Light Budgets and Dark Goals on desktop, plus Dark Goals with long names at 320px. This does not validate the corrected C layout.
 - Wide Light Budgets A inspected visually. A 320px Dark Profile with long name/email and pending-email actions inspected at top and lower sections. A 320px Light invalid-reset-link recovery card inspected visually.
 - Narrow Profile review exposed crowded phone destination labels; grid columns now give Transactions extra width with 12px labels.

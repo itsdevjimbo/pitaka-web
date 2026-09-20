@@ -68,18 +68,49 @@
         @for (i of items(); track i) {
           <article class="planning-card panel">
             <div class="planning-title">
-              <h2>
-                @if (screen() === 'goals') {
-                  <button
-                    class="title-link"
-                    (click)="navigate.emit('goal')"
+              @if (screen() === 'goals') {
+                <div class="goal-heading">
+                  <h2>
+                    <button
+                      class="title-link"
+                      (click)="navigate.emit('goal')"
+                    >
+                      {{ name(i) }}
+                    </button>
+                  </h2>
+                  <div
+                    class="goal-statuses"
+                    aria-label="Goal funding and date status"
                   >
-                    {{ name(i) }}
-                  </button>
-                } @else {
+                    @if (goalAmount(i) > 50000) {
+                      <span class="goal-badge goal-over">
+                        <span aria-hidden="true">↑</span>
+                        Over target · {{ money(goalAmount(i) - 50000) }}
+                      </span>
+                    } @else if (goalAmount(i) === 50000) {
+                      <span class="goal-badge goal-reached">
+                        <span aria-hidden="true">✓</span>
+                        Target reached
+                      </span>
+                    } @else {
+                      <span class="goal-badge goal-progress">
+                        <span aria-hidden="true">◔</span>
+                        In progress
+                      </span>
+                    }
+                    @if (goalOverdue(i)) {
+                      <span class="goal-badge goal-overdue">
+                        <span aria-hidden="true">!</span>
+                        Target overdue
+                      </span>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <h2>
                   {{ name(i) }}
-                }
-              </h2>
+                </h2>
+              }
               <details class="actions">
                 <summary [attr.aria-label]="'Actions for ' + name(i)">•••</summary>
                 <div>
@@ -88,7 +119,7 @@
                   </button>
                   @if (screen() === 'goals') {
                     @if (activeTab() === 'Active') {
-                      @if (i % 3 === 1) {
+                      @if (goalAmount(i) >= 50000) {
                         <button (click)="ask('Mark complete', name(i))">Mark complete</button>
                       }
                       <button (click)="ask('Abandon', name(i))">Abandon</button>
@@ -148,11 +179,11 @@
                 <p>Spending starts counting when the Budget begins.</p>
               }
             } @else {
-              <p>{{ activeTab() }}{{ i % 3 === 2 && activeTab() === 'Active' ? ' · Target date overdue' : '' }}</p>
+              <p>{{ activeTab() }} Goal</p>
               <div class="planning-amounts">
                 <div>
                   <span>Contributed</span>
-                  <strong>{{ money(i % 3 === 1 ? 52000 : 35000) }}</strong>
+                  <strong>{{ money(goalAmount(i)) }}</strong>
                 </div>
                 <div>
                   <span>Target</span>
@@ -160,16 +191,25 @@
                 </div>
               </div>
               <progress
-                [value]="i % 3 === 1 ? 100 : 70"
+                [value]="goalAmount(i) / 500"
                 max="100"
-                aria-label="Goal progress"
+                [attr.aria-label]="name(i) + ': ' + goalAmount(i) / 500 + '% of target'"
               ></progress>
-              <p>{{ i % 3 === 1 ? 'Target reached · ₱2,000.00 over target' : '₱15,000.00 to go' }}</p>
-              <p>
+              <p class="goal-funding-summary">
+                {{ goalAmount(i) / 500 }}% funded ·
+                {{
+                  goalAmount(i) > 50000
+                    ? money(goalAmount(i) - 50000) + ' over target'
+                    : goalAmount(i) === 50000
+                      ? 'Target reached'
+                      : money(50000 - goalAmount(i)) + ' to go'
+                }}
+              </p>
+              <p [class.goal-date-overdue]="goalOverdue(i)">
                 {{
                   activeTab() === 'Active'
-                    ? i % 3 === 2
-                      ? 'Target date 1 Sep 2026'
+                    ? goalOverdue(i)
+                      ? 'Target overdue · 1 Sep 2026'
                       : 'Target date 31 Dec 2026'
                     : 'Contributions stay earmarked in your Accounts.'
                 }}
