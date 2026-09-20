@@ -140,6 +140,9 @@ export class TransactionsFilterBar {
   /** Every Category the person has, flat, retired ones included and marked. */
   readonly categories = input<readonly FilterCategoryOption[]>([]);
 
+  /** Name resolved for the URL-backed Schedule criterion, when one is active. */
+  readonly scheduleName = input<string>();
+
   /**
    * The active criteria, two-way. The page holds the source of truth and reacts
    * to a change; this component only reads it into the controls and writes an
@@ -231,6 +234,11 @@ export class TransactionsFilterBar {
 
   protected setCategory(value: number | null): void {
     this.patch('categoryId', value);
+  }
+
+  /** Broaden generated history back beyond its originating Schedule. */
+  protected removeSchedule(): void {
+    this.patch('scheduleId', null);
   }
 
   /** The start of the date range — an inclusive calendar day, or unset. */

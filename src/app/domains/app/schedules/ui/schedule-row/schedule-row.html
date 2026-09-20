@@ -52,7 +52,16 @@
   </div>
   <div>
     <dt class="text-xs text-neutral-400">History</dt>
-    <dd>{{ historyLabel() }}</dd>
+    <dd>
+      <a
+        matButton
+        [routerLink]="['/app/transactions']"
+        [queryParams]="historyQueryParams(row().schedule.id, row().schedule.name)"
+        [attr.aria-label]="'View generated Transactions for ' + row().schedule.name"
+      >
+        {{ historyLabel() }}
+      </a>
+    </dd>
   </div>
 </dl>
 

@@ -1,7 +1,9 @@
 import { DatePipe } from '@angular/common';
 import { Component, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { RouterLink } from '@angular/router';
 import { PesoPipe } from '@/app/core/money';
+import { scheduleHistoryQueryParams } from '@/app/domains/app/transactions';
 import { Schedule, SCHEDULE_FREQUENCIES } from '../../data/schedule';
 import { ScheduleLifecycleAction } from '../schedule-lifecycle-dialog/schedule-lifecycle-dialog';
 
@@ -18,7 +20,7 @@ export type ScheduleRowData = {
 @Component({
   selector: 'li[schedules-schedule-row]',
   templateUrl: './schedule-row.html',
-  imports: [DatePipe, MatButtonModule, PesoPipe],
+  imports: [DatePipe, MatButtonModule, PesoPipe, RouterLink],
   host: {
     class:
       'relative mb-6 block rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs last:mb-0 dark:border-neutral-800 dark:bg-neutral-950',
@@ -32,6 +34,7 @@ export class ScheduleRow {
   readonly lifecycle = output<{ row: ScheduleRowData; action: ScheduleLifecycleAction }>();
 
   protected readonly frequencies = SCHEDULE_FREQUENCIES;
+  protected readonly historyQueryParams = scheduleHistoryQueryParams;
 
   protected historyLabel(): string {
     const count = this.row().schedule.generatedTransactionCount;

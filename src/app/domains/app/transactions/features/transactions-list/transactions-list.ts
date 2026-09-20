@@ -17,6 +17,7 @@ import {
 import {
   criteriaFromQueryParams,
   criteriaToQueryParams,
+  scheduleNameFromQueryParams,
   sameCriteria,
 } from '../../data/transaction-criteria-params';
 import { TransactionsService } from '../../data/transactions.service';
@@ -193,6 +194,11 @@ export default class TransactionsList {
     criteriaFromQueryParams(this.route.snapshot.queryParamMap)
   );
 
+  /** Name carried beside a Schedule id so stale history links stay readable on reload. */
+  private readonly linkedScheduleName = signal<string | undefined>(
+    scheduleNameFromQueryParams(this.route.snapshot.queryParamMap)
+  );
+
   /** True while a filter-change read is in flight — the busy affordance over the kept rows. */
   protected readonly filtering = signal(false);
 
@@ -208,6 +214,12 @@ export default class TransactionsList {
   protected readonly categoryOptions = signal<readonly FilterCategoryOption[]>(
     []
   );
+
+  /** The readable name carried beside the active Schedule criterion. */
+  protected readonly scheduleName = computed(() => {
+    const id = this.criteria().scheduleId;
+    return id === undefined ? undefined : (this.linkedScheduleName() ?? 'Unknown Schedule');
+  });
 
   /**
    * Set when the re-read after a refile or remove fails. Unlike a failed first
@@ -275,7 +287,15 @@ export default class TransactionsList {
    * A distinct state from the nothing-recorded one, offering Clear filters.
    */
   protected readonly matchedNothing = computed(
-    () => this.isEmpty() && this.hasActiveCriteria()
+    () => this.isEmpty() && this.hasActiveCriteria() && !this.emptyScheduleHistory()
+  );
+
+  /** A Schedule-scoped search with no surviving generated Transactions. */
+  protected readonly emptyScheduleHistory = computed(
+    () =>
+      this.isEmpty() &&
+      this.criteria().scheduleId !== undefined &&
+      activeCriteriaCount(this.criteria()) === 1
   );
 
   /** Whether a page of rows is still unshown — gates the *Load more* control. */
@@ -358,9 +378,10 @@ export default class TransactionsList {
    * resetting to page 1 on a filter change has nothing to strip.
    */
   protected applyCriteria(criteria: TransactionCriteria): void {
+    const queryParams = criteriaToQueryParams(criteria, this.linkedScheduleName());
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: criteriaToQueryParams(criteria),
+      queryParams,
       replaceUrl: true,
     });
   }
@@ -378,6 +399,7 @@ export default class TransactionsList {
    * redundant read.
    */
   private onUrlCriteriaChange(params: ParamMap): void {
+    this.linkedScheduleName.set(scheduleNameFromQueryParams(params));
     const next = criteriaFromQueryParams(params);
     if (sameCriteria(next, this.criteria())) {
       return;

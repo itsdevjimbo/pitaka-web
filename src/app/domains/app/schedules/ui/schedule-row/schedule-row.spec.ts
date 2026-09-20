@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { Schedule } from '../../data/schedule';
 import { ScheduleRow, ScheduleRowData } from './schedule-row';
 
@@ -21,7 +22,10 @@ const SCHEDULE: Schedule = {
 
 describe('ScheduleRow', () => {
   function setup(overrides: Partial<ScheduleRowData> = {}): ComponentFixture<ScheduleRow> {
-    TestBed.configureTestingModule({ imports: [ScheduleRow] });
+    TestBed.configureTestingModule({
+      imports: [ScheduleRow],
+      providers: [provideRouter([])],
+    });
     const fixture = TestBed.createComponent(ScheduleRow);
     fixture.componentRef.setInput('row', {
       schedule: SCHEDULE,
@@ -45,6 +49,19 @@ describe('ScheduleRow', () => {
     expect(text).toContain('Monthly');
     expect(text).toContain('Everyday cash · Housing');
     expect(text).toContain('1 surviving generated Transaction');
+  });
+
+  it('opens surviving history with only the URL-backed Schedule criterion, even at zero', () => {
+    const fixture = setup({
+      schedule: { ...SCHEDULE, id: 12, generatedTransactionCount: 0 },
+    });
+    const link = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>(
+      'a[aria-label="View generated Transactions for Rent"]'
+    );
+
+    expect(link).not.toBeNull();
+    expect(link!.textContent).toContain('0 surviving generated Transactions');
+    expect(link!.getAttribute('href')).toBe('/app/transactions?schedule=12&scheduleName=Rent');
   });
 
   it('explains why an active Schedule filed to a retired Account is blocked', () => {

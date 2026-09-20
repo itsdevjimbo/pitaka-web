@@ -622,6 +622,22 @@ describe('TransactionsService', () => {
       await result;
     });
 
+    it('maps the product Schedule criterion to recurringTransactionId', async () => {
+      const result = firstValueFrom(service.search({ scheduleId: 12 }, 1));
+
+      const request = http.expectOne(
+        (req) => req.url === `${BASE_URL}/api/transactions`
+      );
+      expect(request.request.params.keys().sort()).toEqual([
+        'page',
+        'recurringTransactionId',
+      ]);
+      expect(request.request.params.get('recurringTransactionId')).toBe('12');
+
+      request.flush(envelope());
+      await result;
+    });
+
     it('serialises every axis when all three are set', async () => {
       const result = firstValueFrom(
         service.search(

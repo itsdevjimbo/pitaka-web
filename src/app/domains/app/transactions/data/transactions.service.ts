@@ -129,6 +129,9 @@ export class TransactionsService {
    * API matches it case-insensitively as a substring of the note alone; this
    * adapter does no matching and no re-shaping.
    *
+   * `scheduleId` stays in product vocabulary above this boundary and becomes
+   * the API's `recurringTransactionId` query parameter here.
+   *
    * A Transfer arrives once: the un-scoped list filters on the Profile alone,
    * unlike `GET /api/accounts/:id/transactions`, which yields a Transfer to
    * both its Accounts. Narrowing by `accountId` still matches a Transfer on
@@ -150,6 +153,9 @@ export class TransactionsService {
     }
     if (criteria.categoryId !== undefined) {
       params = params.set('categoryId', criteria.categoryId);
+    }
+    if (criteria.scheduleId !== undefined) {
+      params = params.set('recurringTransactionId', criteria.scheduleId);
     }
     if (criteria.direction !== undefined) {
       params = params.set('type', API_TYPE[criteria.direction]);
