@@ -1,11 +1,14 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { ActivatedRoute, convertToParamMap, ParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
+import { CategoriesService } from '@/app/domains/app/categories';
+import { TagsService } from '@/app/domains/app/tags';
+import { type Transaction, TransactionsService } from '@/app/domains/app/transactions';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Account } from '../../data/account';
 import { AccountDeleteBlockedError, AccountModifiedError } from '../../data/account-errors';
@@ -46,6 +49,7 @@ describe('AccountList', () => {
       imports: [AccountList],
       providers: [
         provideIcons(),
+        provideNativeDateAdapter(),
         provideRouter([]),
         provideDialogDefaults(),
         {
@@ -60,6 +64,9 @@ describe('AccountList', () => {
           },
         },
         { provide: AccountsService, useValue: { all, ...overrides } },
+        { provide: TransactionsService, useValue: { record: () => of({} as Transaction) } },
+        { provide: CategoriesService, useValue: { list: () => of([]) } },
+        { provide: TagsService, useValue: { all: () => of([]) } },
       ],
     });
 
@@ -86,7 +93,9 @@ describe('AccountList', () => {
   }
 
   async function chooseRowAction(fixture: ComponentFixture<AccountList>, accountName: string, action: string) {
-    row(fixture, accountName).querySelector<HTMLButtonElement>('button[aria-label="Account actions"]')!.click();
+    row(fixture, accountName)
+      .querySelector<HTMLButtonElement>(`button[aria-label="Actions for ${accountName}"]`)!
+      .click();
     await settle(fixture);
     overlayButton(action).click();
     await settle(fixture);
@@ -127,6 +136,11 @@ describe('AccountList', () => {
     fixture.detectChanges();
   }
 
+  async function openRecordAccountPicker(fixture: ComponentFixture<AccountList>) {
+    clickButton(fixture, 'Record transaction');
+    await settle(fixture);
+  }
+
   /** Find a button by its text, anywhere in the open overlay. */
   function overlayButton(label: string): HTMLButtonElement {
     const button = Array.from(overlay().querySelectorAll('button')).find((element) =>
@@ -145,7 +159,7 @@ describe('AccountList', () => {
       throw new Error(`No overlay input matching "${selector}"`);
     }
     input.value = value;
-    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   /**
@@ -254,6 +268,86 @@ describe('AccountList', () => {
     expect(text()).toContain('Add your first account');
   });
 
+  it('starts recording by asking for an active Account explicitly', async () => {
+    const { fixture, dialogText } = setup(() => of([CASH, BANK, OLD_WALLET]));
+
+    await openRecordAccountPicker(fixture);
+
+    expect(dialogText()).toContain('Choose an account');
+    overlay().querySelector<HTMLElement>('mat-select')!.click();
+    await settle(fixture);
+    const options = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).map((option) =>
+      (option.textContent ?? '').trim(),
+    );
+    expect(options).toEqual(['Cash on hand', 'BPI Savings']);
+  });
+
+  it('opens the existing recording form only after the person chooses an Account', async () => {
+    const { fixture, dialogText } = setup(() => of([CASH, BANK, OLD_WALLET]));
+
+    await openRecordAccountPicker(fixture);
+    overlay().querySelector<HTMLElement>('mat-select')!.click();
+    await settle(fixture);
+    const bank = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).find(
+      (option) => (option.textContent ?? '').trim() === 'BPI Savings',
+    );
+    if (!bank) {
+      throw new Error('Expected BPI Savings in the Account picker');
+    }
+    bank.click();
+    await settle(fixture);
+    overlayButton('Continue').click();
+    await settle(fixture);
+
+    expect(dialogText()).toContain('Record a transaction');
+    expect(overlay().querySelector('#transaction-amount')).not.toBeNull();
+  });
+
+  it('explains when recording has no eligible Account and offers New account', async () => {
+    const { fixture, dialogText } = setup(() => of([OLD_WALLET]));
+
+    await openRecordAccountPicker(fixture);
+
+    expect(dialogText()).toContain('You need an active Account before you can record a Transaction.');
+    expect(dialogText()).toContain('New account');
+
+    overlayButton('New account').click();
+    await settle(fixture);
+
+    expect(dialogText()).toContain('New account');
+    expect(dialogText()).toContain('Name');
+    expect(
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).some((button) =>
+        button.textContent?.includes('Record'),
+      ),
+    ).toBe(false);
+  });
+
+  it('retains loaded figures but blocks balance-dependent changes after a failed refresh', () => {
+    const filtered = new Subject<Account[]>();
+    const routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({}));
+    const list = vi
+      .fn()
+      .mockReturnValueOnce(of([CASH, BANK]))
+      .mockReturnValueOnce(filtered);
+    const { fixture, text } = setup(() => of([CASH, BANK]), { list }, routeParams);
+
+    routeParams.next(convertToParamMap({ status: 'retired' }));
+    filtered.error(new Error('offline'));
+    fixture.detectChanges();
+
+    expect(text()).toContain('Couldn’t refresh. These figures may be out of date');
+    expect(text()).toContain(formatPeso(10000));
+    const record = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Record transaction'),
+    );
+    const accountActions = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[aria-label="Actions for Cash on hand"]',
+    );
+    expect(record?.disabled).toBe(true);
+    expect(accountActions?.disabled).toBe(true);
+  });
+
   it('returns to the true-empty state after deleting the final Account', async () => {
     const all = vi
       .fn()
@@ -291,6 +385,16 @@ describe('AccountList', () => {
     fixture.detectChanges();
     expect(text()).toContain('Cash on hand');
     expect(text()).toContain('Total across active accounts');
+    expect(
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('Record transaction'),
+      )?.disabled,
+    ).toBe(true);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        'button[aria-label="Actions for Cash on hand"]',
+      )?.disabled,
+    ).toBe(true);
 
     routeParams.next(convertToParamMap({ status: 'all' }));
     retired.next([OLD_WALLET]);
@@ -319,9 +423,9 @@ describe('AccountList', () => {
 
     expect(text()).toContain('Cash on hand');
     expect(text()).toContain('Total across active accounts');
-    expect(text()).toContain('Offline');
+    expect(text()).toContain('Couldn’t refresh. These figures may be out of date');
 
-    clickButton(fixture, 'Try again');
+    clickButton(fixture, 'Retry');
 
     expect(list).toHaveBeenLastCalledWith({ isActive: false });
     expect(text()).toContain('Old GCash');
@@ -340,7 +444,7 @@ describe('AccountList', () => {
 
     expect(text()).toContain('Could not reach the server.');
 
-    clickButton(fixture, 'Try again');
+    clickButton(fixture, 'Retry');
 
     expect(list).toHaveBeenCalledTimes(2);
     expect(text()).not.toContain('Could not reach the server.');
@@ -371,15 +475,16 @@ describe('AccountList', () => {
 
     it('opens the new-account form in a dialog from the heading, without reflowing the list', async () => {
       const { fixture, text, dialog, dialogText } = setup(() => of([CASH, BANK]));
-      const before = text();
 
       await openAddDialog(fixture);
 
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('New account');
       expect(dialogText()).toContain('Name');
-      // The list behind the dialog is untouched.
-      expect(text()).toContain(before);
+      expect(text()).toContain('Cash on hand');
+      expect(text()).toContain('BPI Savings');
+      expect(text()).toContain(formatPeso(10000));
+      expect(text()).not.toContain('Record transaction');
     });
 
     it('opens the same dialog from the empty state', async () => {
@@ -622,6 +727,24 @@ describe('AccountList', () => {
       expect(rename).not.toHaveBeenCalled();
     });
 
+    it('asks before Cancel discards a changed name', async () => {
+      const rename = vi.fn();
+      const { fixture, dialog, dialogText } = setup(() => of([CASH]), {
+        rename: rename as unknown as AccountsService['rename'],
+      });
+
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
+      typeInto('#rename-account-name', 'Everyday cash');
+      await settle(fixture);
+      overlayButton('Cancel').click();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Discard changes?');
+      expect((document.activeElement as HTMLElement | null)?.textContent).toContain('Keep editing');
+      expect(rename).not.toHaveBeenCalled();
+    });
+
     it('on a successful rename, closes the dialog and the new name shows everywhere, after a re-read', async () => {
       let attempt = 0;
       const list = vi.fn(() => {
@@ -730,6 +853,7 @@ describe('AccountList', () => {
 
       expect(text()).toContain('This can’t be undone');
       expect(remove).not.toHaveBeenCalled();
+      expect((document.activeElement as HTMLElement | null)?.textContent).toContain('Cancel');
 
       const confirm = Array.from(row(fixture, 'Cash on hand').querySelectorAll('button')).find(
         (button) => button.textContent?.trim() === 'Delete',
@@ -753,8 +877,39 @@ describe('AccountList', () => {
       await confirmDelete(fixture, 'Cash on hand');
 
       expect(list).toHaveBeenCalledTimes(2);
-      expect(text()).not.toContain('Cash on hand');
+      expect((fixture.nativeElement as HTMLElement).querySelector('#account-link-1')).toBeNull();
       expect(text()).toContain(formatPeso(8500));
+      expect((document.activeElement as HTMLElement | null)?.getAttribute('aria-label')).toBe(
+        'Actions for BPI Savings',
+      );
+    });
+
+    it('restores focus after deletion even when the fresh read fails', async () => {
+      const remove = vi.fn(() => of(undefined));
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([CASH, BANK]))
+        .mockReturnValueOnce(throwError(() => new Error('offline')));
+      const { fixture, text } = setup(list as unknown as AccountsService['all'], { remove });
+
+      await confirmDelete(fixture, 'Cash on hand');
+
+      expect(text()).toContain('Saved, but couldn’t refresh');
+      expect((document.activeElement as HTMLElement | null)?.textContent?.trim()).toBe('BPI Savings');
+    });
+
+    it('distinguishes a successful write whose fresh read fails', async () => {
+      const setActive = vi.fn(() => of({ ...CASH, isActive: false }));
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([CASH]))
+        .mockReturnValueOnce(throwError(() => new Error('offline')));
+      const { fixture, text } = setup(list as unknown as AccountsService['all'], { setActive });
+
+      await chooseRowAction(fixture, 'Cash on hand', 'Retire');
+
+      expect(text()).toContain('Saved, but couldn’t refresh');
+      expect(text()).toContain('Cash on hand');
     });
 
     it('explains a delete refused for Transaction history and points at retiring', async () => {

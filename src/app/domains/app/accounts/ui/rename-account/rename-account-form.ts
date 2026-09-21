@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Account, ACCOUNT_NAME_MAX } from '../../data/account';
 import { AccountModifiedError } from '../../data/account-errors';
 import { AccountsService } from '../../data/accounts.service';
@@ -37,6 +37,8 @@ export class RenameAccountForm {
   // Outputs
   readonly renamed = output<Account>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   // State
   protected readonly model = linkedSignal<{ name: string }>(() => ({
@@ -60,10 +62,12 @@ export class RenameAccountForm {
 
   save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.renameForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
 
         try {
@@ -89,9 +93,14 @@ export class RenameAccountForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.renameForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected cancel(): void {

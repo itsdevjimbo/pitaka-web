@@ -63,13 +63,14 @@ import { User } from './ui/user';
         <!-- Content -->
         <main
           id="app-main"
-          class="flex flex-col lg:min-h-0 lg:flex-auto lg:overflow-auto print:overflow-visible"
+          class="flex flex-col lg:min-h-0 lg:flex-auto lg:overflow-auto print:overflow-visible print:pb-0!"
+          [class.pb-20]="isMobile()"
         >
           <router-outlet />
         </main>
 
         @if (isMobile()) {
-          <app-phone-navigation class="sticky bottom-0 z-40 block print:hidden" />
+          <app-phone-navigation class="fixed inset-x-0 bottom-0 z-40 block print:hidden" />
         }
       </mat-sidenav-content>
     </mat-sidenav-container>

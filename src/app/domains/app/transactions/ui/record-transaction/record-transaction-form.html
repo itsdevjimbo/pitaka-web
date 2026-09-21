@@ -1,6 +1,7 @@
 <form
   class="flex flex-col gap-y-4"
   (submit)="save($event)"
+  (input)="dirtyChange.emit(true)"
 >
   <!-- Failed record with nothing to pin to a field -->
   @if (errorMessage(); as message) {
@@ -17,6 +18,7 @@
     class="w-full"
     aria-label="Direction"
     [formField]="recordForm.direction"
+    (change)="dirtyChange.emit(true)"
   >
     @for (option of directionOptions; track option.value) {
       <mat-button-toggle [value]="option.value">
@@ -103,7 +105,10 @@
          excludes the Account in view and every retired one (ADR 0010). -->
     <mat-form-field class="w-full">
       <mat-label>To account</mat-label>
-      <mat-select [formField]="recordForm.transferToAccountId">
+      <mat-select
+        [formField]="recordForm.transferToAccountId"
+        (selectionChange)="dirtyChange.emit(true)"
+      >
         @for (option of destinationOptions(); track option.id) {
           <mat-option [value]="option.id">{{ option.name }}</mat-option>
         }
@@ -120,7 +125,10 @@
     <!-- Category: only those of the chosen direction (ADR 0010) -->
     <mat-form-field class="w-full">
       <mat-label>Category</mat-label>
-      <mat-select [formField]="recordForm.categoryId">
+      <mat-select
+        [formField]="recordForm.categoryId"
+        (selectionChange)="dirtyChange.emit(true)"
+      >
         @for (option of categoryOptions(); track option.id) {
           <mat-option [value]="option.id">{{ option.name }}</mat-option>
         }
@@ -149,7 +157,7 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="recordForm().invalid() || submitting()"
+      [disabled]="submitting()"
     >
       {{ submitting() ? 'Recording…' : 'Record' }}
     </button>

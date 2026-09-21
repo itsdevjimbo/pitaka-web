@@ -22,7 +22,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
             class="size-5"
             [svgIcon]="item.icon"
           />
-          <span>{{ item.label }}</span>
+          <span class="leading-tight min-w-0 text-center break-all">{{ item.label }}</span>
         </a>
       }
       <button
@@ -34,7 +34,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
           class="size-5"
           svgIcon="ellipsis"
         />
-        <span>More</span>
+        <span class="leading-tight min-w-0 text-center break-all">More</span>
       </button>
     </nav>
     <mat-menu
