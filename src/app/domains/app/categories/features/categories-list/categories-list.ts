@@ -20,11 +20,10 @@ const REFRESH_FAILED = 'Your change was saved, but this list may be out of date.
  * cannot bury Income below the fold. Each {@link CategoryPane} owns its own
  * count, search, Active/Retired/All switch, Add button and rows.
  *
- * The screen reads **cold** — `readAll()`, whole-set and cache-bypassing — and
- * invalidates the shared Categories cache through every write without ever
- * consulting it: one direction of dependency, not two (ADR 0017). Every
- * successful write in a pane re-reads the whole set here, so a rename re-sorts
- * and a retire sinks or hides in one place.
+ * The screen reads the whole set cold through `readAll()` and re-reads after
+ * every successful write; cache ownership is documented in ADR 0017. Keeping
+ * that refresh here makes a rename re-sort and a retire sink or hide in one
+ * place.
  *
  * A failed first load is screen-level: one read, one failure, one retry, with
  * the panes withheld — repeating an identical error beside itself would imply

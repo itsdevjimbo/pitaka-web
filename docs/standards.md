@@ -93,10 +93,11 @@ Use the domain's existing date conversion helper.
 Read balance-bearing data freshly and reconcile balance-changing writes with a
 server read, following [ADR 0006](adr/0006-never-render-a-balance-from-cache.md).
 Do not infer a new balance by arithmetic on a remembered figure. The existing
-Category and Tag label caches invalidate inside their services after writes and
-discard failed fetches. Their reference-data behavior does not authorize caching
-financial figures. ADR 0017's Categories-only wording needs reconciliation with
-the existing Tag implementation; that documentation work is in the cleanup plan.
+Category reference and Tag autocomplete caches invalidate inside their services
+after writes and discard failed fetches. Their boundaries and distinct rationales
+are recorded in
+[ADR 0017](adr/0017-cache-categories-and-invalidate-on-write.md); neither
+authorizes caching financial figures.
 
 Use the shared money helpers. Distinguish instants from calendar days before parsing
 or formatting dates: Transaction date behavior is specified in

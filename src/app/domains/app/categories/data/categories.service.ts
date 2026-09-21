@@ -21,25 +21,11 @@ type CategoryResource = {
 };
 
 /**
- * The hand-written resource service over the API's Categories endpoints (ADR
- * 0002). It holds the one collection this client caches across navigations, and
- * reads it four ways — the reader a call site picks *is* its filtering rule, so
- * no call site is trusted to remember which set it wants (ADR 0017).
- *
- * Categories are reference data: a small, slow-changing set whose names label
- * Transactions across many screens. So the collection is fetched once,
- * multicast, and replayed to every later reader — a screen showing a hundred
- * Transaction rows resolves their names from one request, not one per row.
- * Unlike an Account's balance, which is a figure the person acts on and is
- * therefore re-read on every entry and never held (ADR 0006), a Category name is
- * a label that only has to be current — so correctness is bought with
- * **invalidation** rather than coldness: every write drops the cache from inside
- * this service, and the next reader re-fetches. A successful fetch is kept for
- * the session; a failed one is discarded, so a caller that offers a retry
- * actually re-fetches.
- *
- * Failures arrive already normalised to `ApiError` by the interceptor. The two
- * `409`s these endpoints can raise are re-filed here at the seam.
+ * Hand-written adapter for the Categories endpoints (ADR 0002). Its readers
+ * encode their filtering rules and share one reference-data cache except for
+ * `readAll()`; `refreshList()` explicitly invalidates it. The full invalidation
+ * and failure behavior is in ADR 0017. Endpoint-specific `409`s are re-filed
+ * here from normalised `ApiError`s.
  */
 @Injectable({ providedIn: 'root' })
 export class CategoriesService {
@@ -110,10 +96,7 @@ export class CategoriesService {
   }
 
   /**
-   * Create a Category of the pane's `kind`. On success the created row comes
-   * back and the cache is dropped, so the next reader re-fetches — the created
-   * row is not patched in, because `POST` returns the bare resource and
-   * reconstructing the collection from a fragment is what ADR 0006 forbids.
+   * Create a Category of the pane's `kind`; `POST` returns the created row.
    *
    * This endpoint's only `409` means the name is already taken — per person,
    * across both kinds, ignoring Pitaka-supplied names. That is a fact about the
@@ -136,9 +119,8 @@ export class CategoriesService {
 
   /**
    * Rename a Category. The kind is settled at creation and `PUT` will not move
-   * it, so only the name goes. On success the whole row comes back and the cache
-   * is dropped. The `409` here means the same thing it does on {@link create} —
-   * duplicate name — and is re-filed the same way, as a `name` field error.
+   * it, so only the name goes. The `409` means the same thing it does on
+   * {@link create}: duplicate name, re-filed as a `name` field error.
    */
   rename(id: number, name: string): Observable<Category> {
     return this.http.put<CategoryResource>(`${this.baseUrl}/api/categories/${id}`, { name }).pipe(
@@ -152,9 +134,8 @@ export class CategoriesService {
    * Retire a Category (`isActive: false`) or bring it back (`isActive: true`).
    * Retiring never erases the Category or the Transactions filed under it — it
    * stops being offered when filing (see {@link list}) while staying offered
-   * when finding. On success the updated row comes back and the cache is
-   * dropped. This endpoint cannot `409`: there is no duplicate-name check and no
-   * optimistic-concurrency rejection anywhere on Categories (ADR 0017), so no
+   * when finding. This endpoint cannot `409`: there is no duplicate-name check
+   * and no optimistic-concurrency rejection anywhere on Categories (ADR 0017), so no
    * `catchError` — a failure passes straight through as the interceptor's
    * `ApiError`.
    */
@@ -170,9 +151,9 @@ export class CategoriesService {
   }
 
   /**
-   * Delete a Category. On success (`204`, no body) the cache is dropped. The
-   * `409` here means something still files under or narrows to it — a
-   * Transaction, a Budget, or a Schedule; the API returns one undifferentiated
+   * Delete a Category (`204`, no body). A `409` means something still files
+   * under or narrows to it — a Transaction, a Budget, or a Schedule; the API
+   * returns one undifferentiated
    * string and cannot say which — re-filed as a {@link CategoryInUseError} the
    * caller words as a dead end with *Retire* as the way out.
    */
