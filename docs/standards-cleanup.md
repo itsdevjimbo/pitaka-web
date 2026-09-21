@@ -78,23 +78,31 @@ application suite (985 tests), and the production build.
 
 Tracked in [#253](https://github.com/itsdevjimbo/pitaka-web/issues/253).
 
-Audit each resource domain's `index.ts`, imports, and routes. Cross-domain consumers
-should use public exports; same-domain imports and route assembly retain their
-intentional direct paths. Keep routed features out of resource barrels.
+Inspection is complete in the
+[domain-boundary and asynchronous-ownership audit](research/standards-audit.md).
+It accounts for every resource domain, Profile, authentication/session, and
+layout/shared coordination with file-and-line evidence. The audit confirms the
+route-assembly and same-domain direct-import exceptions, the narrow Category and
+Tag reference caches, fresh financial reads, and the deliberate surviving-write
+owners for Schedule lifecycle changes and Transaction splits.
 
-Review overlapping reads and writes separately: destruction cleanup, superseded
-reads, dialog-dismissal behavior, and reconciliation of financial figures. Treat a
-surviving write coordinator as a deliberate lifetime to verify, not an automatic
-subscription leak. Add behavior tests only where an actual gap or defect is found.
+Remediation remains open and separate from the audit. The report records bounded
+follow-up scopes for internal import deviations, dismissible dialog writes whose
+results can lose their screen reconciliation, unsequenced refreshes that can apply
+an older response last, Profile email reconciliation ordering, and component-owned
+read observers that outlive their destroyed UI owners. Each runtime scope includes
+a concrete behavior test; routed Profile, authentication, ordinary
+Transaction-removal, and Linked Contribution-deletion navigation lifetimes remain
+explicit product decisions rather than guessed cancellation changes.
 
-Done when exceptions are explicit, any discovered fixes pass focused behavior
-tests, and domain batches pass normal checks. Keep those fixes separate from the
-formatting and comment changes.
+Do not mark those follow-ups complete from the inspection alone. Land runtime
+fixes separately with their focused behavior tests and normal repository checks.
 
 ## Completion
 
-The cleanup is complete when fixture-cast diagnostics are resolved or individually
-justified, documentation agrees with the implemented boundaries, and every resource
-domain has been audited. Full-source formatting now passes and is enforced in CI.
-Record completed batches and their verification here as they land; do not mark a
-batch complete from a search count alone.
+The repository-wide inspection is complete: fixture-cast diagnostics are resolved,
+documentation agrees with the intended boundaries, and every resource domain has
+been audited. Full-source formatting passes and is enforced in CI. The runtime and
+import remediations linked from section 4 remain separate follow-up work; record
+completed batches and their verification here as they land, and do not mark a batch
+complete from a search count alone.
