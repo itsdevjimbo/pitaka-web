@@ -58,11 +58,8 @@ type RowNoticeState = { id: number; message: string; retry: () => void };
  * into and no detail route. The screen owns its count, search, inline add field
  * and rows directly.
  *
- * It reads **cold** — `TagsService.readAll()`, whole-set and cache-bypassing —
- * and re-reads after every successful write (a flat row with no derived field
- * makes this cheap). Its writes invalidate the shared cache the transaction-form
- * autocomplete reads, but it never reads through that cache itself: one
- * direction of dependency, not two (#139).
+ * It reads the whole set cold through `TagsService.readAll()` and re-reads after
+ * every successful write; cache ownership is documented in ADR 0017.
  *
  * Three acts, not five — there is no retire on the wire. **Create** is an inline
  * field at the top, not a dialog, because Tags arrive in bursts; on success it

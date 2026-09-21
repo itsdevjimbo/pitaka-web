@@ -60,18 +60,19 @@ to an error in full-repository lint.
 
 Tracked in [#252](https://github.com/itsdevjimbo/pitaka-web/issues/252).
 
-Start with `TagsService`, `CategoriesService`, and the Tags list's long narratives.
-Retain non-obvious API contracts beside the mapping/error-handling code. Replace
-repeated architectural reasoning with concise links to the authoritative ADR.
+Completed in #252. ADR 0017 now owns the rationale and boundaries for the Category
+label/filter cache and the Tag autocomplete cache, including invalidation, failed
+reads and writes, and cold management readers. ADR 0006 remains authoritative for
+financial freshness and no broader caching exception was introduced.
 
-Reconcile ADR 0017's claim that Categories are the only cached collection with
-TagsService's deliberate autocomplete cache. Record the actual distinction and
-invalidation behavior; preserve ADR 0006's financial freshness requirement. Check
-historical ADR descriptions against their amendments before shortening comments.
+Repeated service and management-screen narratives were replaced with concise ADR
+references while API shapes, error meanings, filtering rules, and refresh behavior
+remain beside their implementations. Source, service specs, and ADR history were
+checked without changing runtime behavior.
 
-Done when architectural reasons have one authoritative home, useful contract facts
-remain discoverable, links resolve, and no comment or ADR incorrectly describes the
-current caching boundary. This is documentation work, not a cache redesign.
+Verification: changed-file checks, the Category and Tag service suites (48 tests),
+full-source formatting, full lint, the standards enforcement suite, the full
+application suite (985 tests), and the production build.
 
 ## 4. Domain and asynchronous behavior audit
 
