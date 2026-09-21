@@ -174,10 +174,11 @@ default branch. Missing or invalid Git history fails the check rather than silen
 skipping it.
 
 Fixture-internals casts are errors in full-repository lint. A necessary access must
-carry the narrow, reviewed exception described above. The full formatting pass
-remains a separate cleanup task. Changes to checks themselves should run
-`npm run test:standards`; behavior changes should run the affected tests and the
-normal repository checks.
+carry the narrow, reviewed exception described above. CI checks the full source
+tree with `npm run check:format`; use the same command before submitting changes
+that touch source formatting. Changes to checks themselves should run the standards
+enforcement suite with `npm run test:standards`; behavior changes should run the
+affected tests and the normal repository checks.
 
 Reviewers also check domain boundaries, request lifetimes, financial freshness,
 test intent, and comment usefulness. Those judgments are not guaranteed by lint.
