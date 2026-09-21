@@ -101,3 +101,18 @@ Everything else this ADR settles is unchanged and now covers Category create:
 destructive inside the dialog, a re-read after the successful write (#107,
 ADR 0017 — the screen re-reads cold rather than reconciling a returned figure),
 and `withOverlayContainer()` in the specs.
+
+## Amendment (2026-09-21): changed and pending editors do not close immediately
+
+The original statement that Escape may discard a half-typed form is superseded.
+An untouched editor still closes immediately. Once an editor changes, Escape,
+Cancel, and the close control ask the person to **Keep editing** or **Discard
+changes**, with initial focus on the safe action. While a save is pending,
+ordinary dismissal is blocked and the dialog explains why. A successful save
+may still close its editor directly.
+
+`DialogShell` owns this policy so the close control and restored Escape behavior
+cannot drift apart. Editors report only whether they are changed or pending;
+they continue to own validation and writes. Session expiry is the deliberate
+exception: `Session` closes protected overlays immediately, clears private
+state, and sign-in explains that unsaved work was discarded.

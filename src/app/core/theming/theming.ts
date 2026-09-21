@@ -1,5 +1,5 @@
 import { DOCUMENT, isPlatformServer } from '@angular/common';
-import { computed, effect, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
+import { computed, DestroyRef, effect, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
 import { LocalStorage } from '@/app/core/local-storage/local-storage';
 import { Media } from '@/app/core/media/media';
 import { TonalPalette } from '@/app/core/theming/palette';
@@ -10,6 +10,7 @@ import { THEME_CONFIG } from './provider';
 export class Theming {
   // Dependencies
   private document = inject(DOCUMENT);
+  private destroyRef = inject(DestroyRef);
   private isServer = isPlatformServer(inject(PLATFORM_ID));
   private localStorage = inject(LocalStorage);
   private media = inject(Media);
@@ -22,15 +23,18 @@ export class Theming {
     primary: this.themeConfig.primary,
     error: this.themeConfig.error,
   });
-  scheme = signal<Scheme>((this.localStorage.getItem('scheme') as Scheme) || this.themeConfig.scheme);
+  private readonly _scheme = signal<Scheme>(this.readScheme());
+  readonly scheme = this._scheme.asReadonly();
+  readonly persistenceNotice = signal<string | null>(null);
   theme = computed<Theme>(() => this.generateTheme(this.colors()));
 
-  isDark = computed(() => this.scheme() === 'dark' || (this.scheme() === 'system' && this.prefersDarkMode));
+  isDark = computed(() => this.scheme() === 'dark' || (this.scheme() === 'system' && this.prefersDarkMode()));
   isLight = computed(() => !this.isDark());
 
   // DOM
   private rootEl = this.document.documentElement;
   private themeStyleEl = this.document.createElement('style');
+  private noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     // Append the themeStyleEl to the DOM
@@ -45,22 +49,56 @@ export class Theming {
         return;
       }
 
-      const scheme = this.scheme();
-      const prefersDarkMode = this.prefersDarkMode();
-
-      // Figure out if the scheme is 'dark'
-      const isDark = scheme === 'dark' || (scheme === 'system' && prefersDarkMode);
+      const isDark = this.isDark();
 
       // Add the 'dark' or 'light' class to the html element
       this.rootEl.classList.toggle('scheme-dark', isDark);
       this.rootEl.classList.toggle('scheme-light', !isDark);
+    });
 
-      // Store the scheme in local storage
-      this.localStorage.setItem('scheme', scheme);
+    if (!this.isServer) {
+      const view = this.document.defaultView;
+      const synchronize = (event: StorageEvent) => {
+        if (event.key === 'scheme') {
+          this._scheme.set(this.validScheme(event.newValue) ?? 'system');
+          this.persistenceNotice.set(null);
+        }
+      };
+      view?.addEventListener('storage', synchronize);
+      this.destroyRef.onDestroy(() => view?.removeEventListener('storage', synchronize));
+    }
+    this.destroyRef.onDestroy(() => {
+      if (this.noticeTimer !== null) {
+        clearTimeout(this.noticeTimer);
+      }
     });
 
     // Generate the theme for the first time
     this.generateTheme(this.themeConfig);
+  }
+
+  /** Apply a person's explicit browser preference and persist it when storage is available. */
+  setScheme(scheme: Scheme): void {
+    this._scheme.set(scheme);
+    this.persistenceNotice.set(null);
+    try {
+      this.localStorage.setItem('scheme', scheme);
+    } catch {
+      this.persistenceNotice.set('Applies in this tab; couldn’t save');
+      this.noticeTimer = setTimeout(() => this.persistenceNotice.set(null), 5000);
+    }
+  }
+
+  private readScheme(): Scheme {
+    try {
+      return this.validScheme(this.localStorage.getItem('scheme')) ?? this.themeConfig.scheme;
+    } catch {
+      return this.themeConfig.scheme;
+    }
+  }
+
+  private validScheme(value: string | null): Scheme | null {
+    return value === 'system' || value === 'light' || value === 'dark' ? value : null;
   }
 
   /**

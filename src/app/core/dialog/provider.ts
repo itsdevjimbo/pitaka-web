@@ -14,9 +14,12 @@ export const APP_DIALOG_PANEL_CLASS = 'app-dialog-panel';
  * the dialog behaves. See ADR 0013.
  *
  * `disableClose` is on because the backdrop must be inert — a stray click
- * outside a half-typed form must not discard it. It also silences Escape, which
- * must keep working, so `DialogShell` re-enables Escape on the dialog's own key
- * events; every dialog picks that up by rendering the shell.
+ * outside a half-typed form must not discard it. Navigation also leaves the
+ * editor mounted, so browser history cannot silently throw its state away. It
+ * also silences Escape, which must keep working, so `DialogShell` re-enables
+ * Escape on the dialog's own key events; every dialog picks that up by rendering
+ * the shell. Initial focus skips shell controls and lands on the first editable
+ * field.
  */
 export const provideDialogDefaults = (): EnvironmentProviders =>
   makeEnvironmentProviders([
@@ -27,10 +30,12 @@ export const provideDialogDefaults = (): EnvironmentProviders =>
       // `new MatDialogConfig()` here and fields like `role` fall to `undefined`.
       useValue: Object.assign(new MatDialogConfig(), {
         disableClose: true,
+        closeOnNavigation: false,
         panelClass: APP_DIALOG_PANEL_CLASS,
         width: '100%',
         maxWidth: '32rem',
-        autoFocus: 'first-tabbable',
+        autoFocus:
+          'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [role="combobox"], [contenteditable="true"]',
         restoreFocus: true,
       } satisfies Partial<MatDialogConfig>),
     },

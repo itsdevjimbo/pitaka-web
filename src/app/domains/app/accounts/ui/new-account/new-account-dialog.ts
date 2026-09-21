@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal, viewChild } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
 import { Account } from '../../data/account';
@@ -15,14 +15,23 @@ import { NewAccountForm } from './new-account-form';
   selector: 'accounts-new-account-dialog',
   imports: [DialogShell, NewAccountForm],
   template: `
-    <app-dialog-shell heading="New account">
+    <app-dialog-shell
+      heading="New account"
+      [dirty]="dirty()"
+      [pending]="pending()"
+    >
       <accounts-new-account-form
         (created)="dialogRef.close($event)"
-        (cancelled)="dialogRef.close()"
+        (cancelled)="shell().requestClose()"
+        (dirtyChange)="dirty.set($event)"
+        (pendingChange)="pending.set($event)"
       />
     </app-dialog-shell>
   `,
 })
 export class NewAccountDialog {
   protected readonly dialogRef = inject<MatDialogRef<NewAccountDialog, Account>>(MatDialogRef);
+  protected readonly dirty = signal(false);
+  protected readonly pending = signal(false);
+  protected readonly shell = viewChild.required(DialogShell);
 }

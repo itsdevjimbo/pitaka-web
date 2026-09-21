@@ -1,4 +1,5 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -23,6 +24,7 @@ export class Session {
   private auth = inject(AuthService);
   private storage = inject(LocalStorage);
   private router = inject(Router);
+  private dialogs = inject(MatDialog);
 
   // State
   private readonly _token = signal<string | null>(this.storage.getItem(TOKEN_KEY));
@@ -110,6 +112,7 @@ export class Session {
    */
   expire(): void {
     if (this.teardown()) {
+      this.dialogs.closeAll();
       this.router.navigate(...signInRedirect(this.router.url, { reason: 'session-expired' }));
     }
   }

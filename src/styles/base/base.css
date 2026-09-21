@@ -2,6 +2,14 @@
 /* Base styles                                                                */
 /* -------------------------------------------------------------------------- */
 @layer base {
+  html.scheme-light {
+    color-scheme: light;
+  }
+
+  html.scheme-dark {
+    color-scheme: dark;
+  }
+
   /* Enable keyword support for size interpolation */
   :root {
     interpolate-size: allow-keywords;
@@ -15,7 +23,6 @@
     flex: 1 1 auto;
     min-height: 100%;
     width: 100%;
-    overflow-x: clip;
   }
 
   /* Ensure routed component always fills the remaining vertical space */
@@ -38,26 +45,46 @@
     );
   }
 
-  /* Disable focus outline by default */
-  *:focus {
-    outline: none;
-  }
-
-  /* Show focus outline only for heuristically determined focus. Ignores
-     programmatic focus determined by the Angular CDK Focus Monitor. This allows
-     to control the focus styles precisely by using the Focus Monitor. */
+  /* A scheme-aware ring remains visible without clipping the control edge. */
   *:focus-visible:not(.cdk-program-focused),
   .cdk-keyboard-focused {
-    outline: var(--color-primary-600) solid 2px;
-    outline-offset: 0.125rem; /* 2px */
+    outline: light-dark(var(--color-primary-600), var(--color-primary-200)) solid 3px;
+    outline-offset: 0.1875rem;
   }
 
   /* Base colors */
   body {
-    background-color: light-dark(
-      var(--color-neutral-100),
-      var(--color-neutral-950)
-    );
-    color: light-dark(var(--color-neutral-950), var(--color-white));
+    background-color: var(--color-canvas);
+    color: var(--color-text);
+  }
+
+  a {
+    color: light-dark(var(--color-primary-600), var(--color-primary-200));
+    text-decoration-color: currentColor;
+  }
+
+  button,
+  [role='button'],
+  a,
+  input,
+  select,
+  textarea {
+    min-block-size: 2.75rem;
+  }
+
+  ::selection {
+    color: light-dark(#ffffff, #12172f);
+    background: light-dark(var(--color-primary-600), var(--color-primary-200));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

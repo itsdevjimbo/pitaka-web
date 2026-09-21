@@ -15,6 +15,42 @@ import { DialogShell } from './dialog-shell';
 })
 class Host {}
 
+@Component({
+  imports: [DialogShell],
+  template: `
+    <app-dialog-shell
+      heading="Rename account"
+      [dirty]="true"
+    >
+      <p>changed form</p>
+    </app-dialog-shell>
+  `,
+})
+class DirtyHost {}
+
+@Component({
+  imports: [DialogShell],
+  template: `
+    <app-dialog-shell heading="Rename account">
+      <form class="ng-dirty"><input /></form>
+    </app-dialog-shell>
+  `,
+})
+class NativeDirtyHost {}
+
+@Component({
+  imports: [DialogShell],
+  template: `
+    <app-dialog-shell
+      heading="Rename account"
+      [pending]="true"
+    >
+      <p>saving form</p>
+    </app-dialog-shell>
+  `,
+})
+class PendingHost {}
+
 describe('DialogShell', () => {
   const keydown = new Subject<KeyboardEvent>();
   let close: ReturnType<typeof vi.fn>;
@@ -38,6 +74,23 @@ describe('DialogShell', () => {
       fixture,
       host: fixture.nativeElement as HTMLElement,
     };
+  }
+
+  function setupHost(component: typeof DirtyHost | typeof NativeDirtyHost | typeof PendingHost) {
+    close = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [component],
+      providers: [
+        provideIcons(),
+        {
+          provide: MatDialogRef,
+          useValue: { close, keydownEvents: () => keydown.asObservable() },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(component);
+    fixture.detectChanges();
+    return { fixture, host: fixture.nativeElement as HTMLElement };
   }
 
   it('shows the heading it was given and the content projected into it', () => {
@@ -77,5 +130,40 @@ describe('DialogShell', () => {
     keydown.next(new KeyboardEvent('keydown', { key: 'Enter' }));
 
     expect(close).not.toHaveBeenCalled();
+  });
+
+  it('asks before discarding a changed editor and initially focuses Keep editing', async () => {
+    const { fixture, host } = setupHost(DirtyHost);
+
+    host.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(close).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Discard changes?');
+    const keepEditing = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Keep editing',
+    );
+    expect(document.activeElement).toBe(keepEditing);
+  });
+
+  it('recognizes Angular dirty forms without per-dialog wiring', () => {
+    const { fixture, host } = setupHost(NativeDirtyHost);
+
+    host.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
+    fixture.detectChanges();
+
+    expect(close).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Discard changes?');
+  });
+
+  it('blocks ordinary dismissal while an editor is saving', () => {
+    const { fixture, host } = setupHost(PendingHost);
+
+    keydown.next(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+
+    expect(close).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Saving in progress');
   });
 });

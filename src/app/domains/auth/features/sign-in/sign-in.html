@@ -1,17 +1,39 @@
 <div class="flex flex-auto">
-  <div class="flex flex-auto items-center justify-center bg-white p-4 sm:p-12 dark:bg-neutral-950">
+  <aside class="hidden w-1/2 flex-col justify-between bg-soft p-12 lg:flex">
+    <img
+      class="w-40 dark:hidden"
+      src="/images/logo/logo-text.svg"
+      alt="Pitaka"
+    />
+    <img
+      class="hidden w-40 dark:block"
+      src="/images/logo/logo-text-on-dark.svg"
+      alt="Pitaka"
+    />
+    <div class="max-w-lg">
+      <p class="leading-tight font-display text-5xl text-text">Small steps. Big possibilities.</p>
+      <p class="mt-4 text-lg text-secondary">Your everyday money, a little clearer.</p>
+    </div>
+    <p class="text-sm text-secondary">Personal expense tracking, at your pace.</p>
+  </aside>
+  <div class="flex flex-auto items-center justify-center bg-surface p-4 sm:p-12">
     <div class="flex w-full max-w-80 flex-col sm:min-w-80">
       <!-- Logo -->
       <img
-        class="w-12"
+        class="w-12 dark:hidden"
         src="/images/logo/logo.svg"
-        alt="Pitaka logo"
+        alt="Pitaka"
+      />
+      <img
+        class="hidden w-12 dark:block"
+        src="/images/logo/logo-on-dark.svg"
+        alt="Pitaka"
       />
 
       <!-- Title -->
-      <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">Sign in</div>
+      <h1 class="leading-tight mt-8 text-4xl">Sign in</h1>
       <div class="mt-0.5 flex items-baseline font-medium">
-        <div class="text-neutral-500">New to Pitaka?</div>
+        <div class="text-secondary">New to Pitaka?</div>
         <a
           class="ml-1 underline"
           routerLink="/auth/sign-up"
@@ -38,7 +60,7 @@
         <!-- Error message -->
         @if (errorMessage(); as message) {
           <div
-            class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+            class="bg-error-container text-error mb-4 rounded-lg px-4 py-3 text-sm font-medium"
             role="alert"
           >
             {{ message }}
@@ -130,7 +152,7 @@
           type="submit"
           matButton="filled"
           class="mt-6 w-full"
-          [disabled]="signInForm().invalid() || submitting()"
+          [disabled]="submitting()"
         >
           {{ submitting() ? 'Signing in…' : 'Sign in' }}
         </button>

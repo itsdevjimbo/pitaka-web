@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Pitaka</title>
+  <rect width="512" height="512" rx="120" fill="#304BC6" />
+  <path d="M128 424V96h152c84 0 136 58 136 142 0 75-55 126-136 126H128m0-188c88 75 180 75 276 0" fill="none" stroke="#FFFFFF" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

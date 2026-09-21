@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, RouterOutlet } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -9,6 +10,7 @@ import { API_BASE_URL } from '@/app/core/api';
 import { AuthService } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
+import { Theming } from '@/app/core/theming';
 import { AccountsService } from '@/app/domains/app/accounts';
 import { AppLayout } from '@/app/domains/app/layout/layout';
 import { TEST_API_BASE_URL } from '@/testing/api-base-url';
@@ -33,6 +35,10 @@ describe('the auth area routes', () => {
         provideHttpClientTesting(),
         provideIcons(),
         { provide: API_BASE_URL, useValue: TEST_API_BASE_URL },
+        {
+          provide: Theming,
+          useValue: { scheme: signal('system'), persistenceNotice: signal(null), setScheme: vi.fn() },
+        },
         {
           provide: Session,
           useValue: {

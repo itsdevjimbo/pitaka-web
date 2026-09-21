@@ -13,10 +13,7 @@
 /* Utilities: `text-income`, `bg-expense/10`, `text-transfer`, …              */
 /* -------------------------------------------------------------------------- */
 @theme {
-  --color-income: light-dark(var(--color-emerald-700), var(--color-emerald-400));
-  --color-expense: light-dark(var(--color-red-700), var(--color-red-400));
-  --color-transfer: light-dark(
-    var(--color-neutral-600),
-    var(--color-neutral-300)
-  );
+  --color-income: light-dark(#047454, #34d399);
+  --color-expense: light-dark(#b91c1c, #ff8585);
+  --color-transfer: light-dark(#525252, #d4d4d4);
 }

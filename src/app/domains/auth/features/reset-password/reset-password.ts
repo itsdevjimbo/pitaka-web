@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService, ResetLinkRejectedError } from '@/app/core/auth';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Session } from '@/app/core/session';
 import { passwordRules } from '../../password-rules';
 import { DeadLink } from '../../ui/dead-link/dead-link';
@@ -79,6 +79,7 @@ export default class AuthResetPassword {
 
   resetPassword(event: Event) {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.resetForm, {
       action: async () => {
@@ -127,6 +128,10 @@ export default class AuthResetPassword {
         return undefined;
       },
     });
+
+    if (this.resetForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   /** The controls a server-blamed field can bind onto — just the new password. */

@@ -5,7 +5,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Account, ACCOUNT_NAME_MAX, ACCOUNT_TYPES, AccountType, NewAccount } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
 
@@ -49,6 +49,8 @@ export class NewAccountForm {
   // Outputs
   readonly created = output<Account>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   // State
   protected readonly typeOptions = TYPE_OPTIONS;
@@ -83,10 +85,12 @@ export class NewAccountForm {
 
   save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.accountForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
 
         try {
@@ -116,9 +120,14 @@ export class NewAccountForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.accountForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected cancel(): void {

@@ -38,9 +38,10 @@ const EMAIL_CHANGED_MESSAGE = 'Email address changed. Sign in with your new addr
 
 /** The line shown after a reset link has just set a new password (issue #71). */
 const PASSWORD_RESET_MESSAGE = 'Your password was changed. Sign in with your new password.';
+const SESSION_EXPIRED_MESSAGE = `${SESSION_ENDED_MESSAGE} Unsaved changes were discarded.`;
 
 const REASON_MESSAGES: Record<SignInReason, string> = {
-  'session-expired': SESSION_ENDED_MESSAGE,
+  'session-expired': SESSION_EXPIRED_MESSAGE,
   'email-confirmed': EMAIL_CONFIRMED_MESSAGE,
   'email-changed': EMAIL_CHANGED_MESSAGE,
   'password-reset': PASSWORD_RESET_MESSAGE,

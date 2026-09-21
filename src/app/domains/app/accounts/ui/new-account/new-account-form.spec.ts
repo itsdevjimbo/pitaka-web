@@ -78,6 +78,24 @@ describe('NewAccountForm', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('keeps invalid Submit enabled, reveals errors, and focuses the first invalid field', async () => {
+    const create = vi.fn();
+    const { fixture } = setup(create as unknown as AccountsService['create']);
+    const submitButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Add account',
+    );
+    if (!submitButton) {
+      throw new Error('No Add account button');
+    }
+
+    expect(submitButton.disabled).toBe(false);
+    await submit(fixture);
+
+    expect(text(fixture)).toContain('You must enter a name');
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#account-name'));
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('blocks a submission with no type chosen and never calls the service', async () => {
     const create = vi.fn();
     const { fixture } = setup(create as unknown as AccountsService['create']);

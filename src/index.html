@@ -21,11 +21,18 @@
     <!-- Favicon -->
     <link
       rel="icon"
-      type="image/png"
-      href="favicon.png"
+      type="image/svg+xml"
+      href="favicon.svg"
     />
 
     <!-- Preload fonts -->
+    <link
+      rel="preload"
+      href="/fonts/identity/outfit.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
     <link
       rel="preload"
       href="/fonts/geist/Geist.woff2"
@@ -58,7 +65,7 @@
   <body>
     <!-- prettier-ignore -->
     <script>
-      !function(){try{const e=document.documentElement.classList;e.remove("scheme-dark","scheme-light");const c=localStorage.getItem("scheme"),t=window.matchMedia("(prefers-color-scheme: dark)").matches,s="dark"===c||"system"===c&&t?"scheme-dark":"scheme-light";e.add(s)}catch(e){}}();
+      !function(){const e=document.documentElement.classList;let c="system";try{const s=localStorage.getItem("scheme");if(s==="system"||s==="light"||s==="dark")c=s}catch{}let t=!1;try{t=window.matchMedia("(prefers-color-scheme: dark)").matches}catch{}e.remove("scheme-dark","scheme-light");e.add(c==="dark"||c==="system"&&t?"scheme-dark":"scheme-light")}();
     </script>
 
     <app-root></app-root>

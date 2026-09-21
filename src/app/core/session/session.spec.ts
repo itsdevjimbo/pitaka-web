@@ -1,6 +1,7 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { LocalStorage } from '@/app/core/local-storage';
@@ -23,10 +24,12 @@ describe('Session', () => {
   let http: HttpTestingController;
   let router: { url: string; navigate: ReturnType<typeof vi.fn> };
   let storage: ReturnType<typeof fakeStorage>;
+  let dialogs: { closeAll: ReturnType<typeof vi.fn> };
 
   function configure(seed: Record<string, string> = {}) {
     storage = fakeStorage(seed);
     router = { url: '/accounts', navigate: vi.fn() };
+    dialogs = { closeAll: vi.fn() };
 
     TestBed.configureTestingModule({
       providers: [
@@ -35,6 +38,7 @@ describe('Session', () => {
         { provide: API_BASE_URL, useValue: BASE_URL },
         { provide: LocalStorage, useValue: storage },
         { provide: Router, useValue: router },
+        { provide: MatDialog, useValue: dialogs },
       ],
     });
 
@@ -167,6 +171,7 @@ describe('Session', () => {
     expect(session.isAuthenticated()).toBe(false);
     expect(session.profile()).toBeNull();
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
+    expect(dialogs.closeAll).toHaveBeenCalledOnce();
     expect(router.navigate).toHaveBeenCalledWith(['/auth/sign-in'], {
       queryParams: { returnUrl: '/accounts', reason: 'session-expired' },
     });

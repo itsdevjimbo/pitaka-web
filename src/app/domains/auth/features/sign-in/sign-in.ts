@@ -6,7 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EmailNotConfirmedError } from '@/app/core/auth';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { APP_HOME_ROUTE, reasonMessage, safeReturnUrl, Session, SIGN_IN_REASON_PARAM } from '@/app/core/session';
 import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation/resend-confirmation';
 
@@ -81,6 +81,7 @@ export default class AuthSignIn {
 
   signIn(event: Event) {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.signInForm, {
       action: async () => {
@@ -123,6 +124,10 @@ export default class AuthSignIn {
         return undefined;
       },
     });
+
+    if (this.signInForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   /**
