@@ -8,11 +8,6 @@ import { Theming } from '@/app/core/theming';
 import { withOverlayContainer } from '@/testing/overlay';
 import { User } from './user';
 
-/** The slice of the component the tests reach into. */
-type UserInternals = {
-  signOut(): void;
-};
-
 describe('User', () => {
   const ada: Profile = { id: 7, name: 'Ada Lovelace', email: 'ada@example.com', pendingEmail: null };
   const overlay = withOverlayContainer();
@@ -35,7 +30,6 @@ describe('User', () => {
 
     return {
       fixture,
-      cmp: fixture.componentInstance as unknown as UserInternals,
       signOut,
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
     };
@@ -63,10 +57,16 @@ describe('User', () => {
     expect(profileIndex).toBeLessThan(appearanceIndex);
   });
 
-  it('signs out through the session rather than just linking to sign-in', () => {
-    const { cmp, signOut } = setup();
+  it('signs out through the session rather than just linking to sign-in', async () => {
+    const { fixture, signOut } = setup();
 
-    cmp.signOut();
+    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    await fixture.whenStable();
+    const button = Array.from(overlay().querySelectorAll('button')).find(
+      (candidate) => candidate.textContent?.trim() === 'Sign out',
+    );
+    if (!button) throw new Error('No Sign out button');
+    button.click();
 
     expect(signOut).toHaveBeenCalledTimes(1);
   });

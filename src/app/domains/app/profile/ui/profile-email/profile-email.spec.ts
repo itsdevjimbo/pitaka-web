@@ -7,13 +7,6 @@ import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import { ProfileEmail } from './profile-email';
 
-type ProfileEmailInternals = {
-  model: ReturnType<typeof signal<{ newEmail: string; currentPassword: string }>>;
-  beginRequest(): void;
-  send(event: Event): void;
-  successMessage: () => string | null;
-};
-
 const ADA: Profile = {
   id: 7,
   name: 'Ada Lovelace',
@@ -22,6 +15,31 @@ const ADA: Profile = {
 };
 
 describe('ProfileEmail', () => {
+  function click(fixture: { nativeElement: HTMLElement }, label: string) {
+    const button = Array.from(fixture.nativeElement.querySelectorAll('button')).find(
+      (candidate) => candidate.textContent?.trim() === label,
+    );
+    if (!button) throw new Error(`No button labelled "${label}"`);
+    button.click();
+  }
+
+  function enter(fixture: { nativeElement: HTMLElement }, selector: string, value: string) {
+    const input = fixture.nativeElement.querySelector(selector) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  async function submit(fixture: {
+    nativeElement: HTMLElement;
+    whenStable: () => Promise<unknown>;
+    detectChanges: () => void;
+  }) {
+    fixture.nativeElement.querySelector('form')?.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
   it('opens a password-gated editor focused on the new address', async () => {
     TestBed.configureTestingModule({
       imports: [ProfileEmail],
@@ -42,9 +60,7 @@ describe('ProfileEmail', () => {
     await fixture.whenStable();
 
     expect(fixture.nativeElement.textContent).toContain('New email address');
-    expect(document.activeElement).toBe(
-      fixture.nativeElement.querySelector('#new-email-address')
-    );
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#new-email-address'));
   });
 
   it('reconciles the no-content request from the live Profile read', async () => {
@@ -60,18 +76,17 @@ describe('ProfileEmail', () => {
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
-    const cmp = fixture.componentInstance as unknown as ProfileEmailInternals;
     fixture.detectChanges();
 
-    cmp.beginRequest();
-    cmp.model.set({ newEmail: ' new@example.com ', currentPassword: 'secret12' });
-    cmp.send(new Event('submit'));
-    await fixture.whenStable();
-    await fixture.whenStable();
+    click(fixture, 'Change email');
+    fixture.detectChanges();
+    enter(fixture, '#new-email-address', ' new@example.com ');
+    enter(fixture, 'input[type="password"]', 'secret12');
+    await submit(fixture);
 
     expect(requestEmailChange).toHaveBeenCalledWith('new@example.com', 'secret12');
     expect(applyProfileUpdate).toHaveBeenCalledWith(refreshed);
-    expect(cmp.successMessage()).toBe('Confirmation email sent to new@example.com');
+    expect(fixture.nativeElement.textContent).toContain('Confirmation email sent to new@example.com');
   });
 
   it('keeps an address-in-use conflict distinct and attached to the new address', async () => {
@@ -82,8 +97,7 @@ describe('ProfileEmail', () => {
         {
           provide: AuthService,
           useValue: {
-            requestEmailChange: () =>
-              throwError(() => new ApiError('Conflict', 409)),
+            requestEmailChange: () => throwError(() => new ApiError('Conflict', 409)),
             me: () => of(ADA),
           },
         },
@@ -91,17 +105,16 @@ describe('ProfileEmail', () => {
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
-    const cmp = fixture.componentInstance as unknown as ProfileEmailInternals;
     fixture.detectChanges();
 
-    cmp.beginRequest();
-    cmp.model.set({ newEmail: 'taken@example.com', currentPassword: 'secret12' });
-    cmp.send(new Event('submit'));
-    await fixture.whenStable();
+    click(fixture, 'Change email');
     fixture.detectChanges();
+    enter(fixture, '#new-email-address', 'taken@example.com');
+    enter(fixture, 'input[type="password"]', 'secret12');
+    await submit(fixture);
 
     expect(fixture.nativeElement.textContent).toContain(
-      'That email address is already in use. Choose a different address.'
+      'That email address is already in use. Choose a different address.',
     );
   });
 });

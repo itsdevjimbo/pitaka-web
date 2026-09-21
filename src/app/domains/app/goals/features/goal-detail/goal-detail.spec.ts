@@ -7,21 +7,9 @@ import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { Transaction, TransactionsService } from '@/app/domains/app/transactions';
-import {
-  Goal,
-  GoalContribution,
-  GoalContributionsService,
-  GoalContributionWithAccountName,
-  GoalsService,
-} from '../../index';
+import { withOverlayContainer } from '@/testing/overlay';
+import { Goal, GoalContribution, GoalContributionsService, GoalsService } from '../../index';
 import GoalDetail from './goal-detail';
-
-type GoalDetailInternals = {
-  history(): readonly GoalContributionWithAccountName[] | null;
-  deletingContributionId(): number | null;
-  askContributionDelete(contribution: GoalContributionWithAccountName): void;
-  confirmContributionDelete(): void;
-};
 
 const GOAL: Goal = {
   id: 3,
@@ -54,6 +42,7 @@ function contribution(over: Partial<GoalContribution> = {}): GoalContribution {
 }
 
 describe('GoalDetail', () => {
+  const overlay = withOverlayContainer();
   function setup(
     over: {
       get?: GoalsService['get'];
@@ -93,7 +82,6 @@ describe('GoalDetail', () => {
     fixture.detectChanges();
     return {
       fixture,
-      cmp: fixture.componentInstance as unknown as GoalDetailInternals,
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
     };
   }
@@ -102,6 +90,31 @@ describe('GoalDetail', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
+  }
+
+  async function askToDeleteContribution(fixture: ComponentFixture<GoalDetail>) {
+    const action = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Contribution actions"]',
+    );
+    if (!action) throw new Error('No Contribution actions button');
+    action.click();
+    await settle(fixture);
+    const menuDelete = Array.from(overlay().querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Delete contribution',
+    );
+    if (!menuDelete) throw new Error('No Contribution Delete menu item');
+    menuDelete.click();
+    await settle(fixture);
+  }
+
+  async function confirmContributionDelete(fixture: ComponentFixture<GoalDetail>) {
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]');
+    const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent?.trim() === 'Delete',
+    );
+    if (!confirm) throw new Error('No Contribution delete confirmation');
+    confirm.click();
+    await settle(fixture);
   }
 
   it('shows first-entry loading until the Goal, history, and Accounts are fresh', async () => {
@@ -178,7 +191,7 @@ describe('GoalDetail', () => {
 
   it.each(['Completed', 'Abandoned'] as const)(
     'keeps linked history deletable for an %s Goal and retired Account, then refreshes its source capacity',
-    (status) => {
+    async (status) => {
       const item = contribution({ transactionId: 42 });
       const list = vi
         .fn()
@@ -202,7 +215,7 @@ describe('GoalDetail', () => {
           linkedContributions: [],
         }),
       );
-      const { fixture, cmp, text } = setup({
+      const { fixture, text } = setup({
         get: () => of({ ...GOAL, status }),
         list,
         accounts: () => of([{ ...ACCOUNT, isActive: false }]),
@@ -227,19 +240,17 @@ describe('GoalDetail', () => {
 
       expect(text()).toContain('Linked from Salary');
       expect(text()).toContain(status);
-      const displayed = cmp.history()![0];
-      cmp.askContributionDelete(displayed);
-      cmp.confirmContributionDelete();
-      fixture.detectChanges();
+      await askToDeleteContribution(fixture);
+      await confirmContributionDelete(fixture);
 
       expect(remove).toHaveBeenCalledWith(item.id);
       expect(linked).toHaveBeenCalledWith(42);
-      expect(cmp.history()).toEqual([]);
+      expect(text()).toContain('No Contributions');
       expect(text()).toContain(status);
     },
   );
 
-  it('keeps an ordinary Contribution visible and pending until 204, then refreshes Goal progress and Account headroom', () => {
+  it('keeps an ordinary Contribution visible and pending until 204, then refreshes Goal progress and Account headroom', async () => {
     const item = contribution();
     const list = vi
       .fn()
@@ -249,50 +260,51 @@ describe('GoalDetail', () => {
     const remove = vi.fn(() => pending.asObservable());
     const accounts = vi.fn(() => of([ACCOUNT]));
     const allContributions = vi.fn(() => of([contribution({ id: 2, amount: 51000 })]));
-    const { fixture, cmp, text } = setup({
+    const { fixture, text } = setup({
       list,
       accounts,
       allContributions,
       deleteContribution: remove,
     });
 
-    cmp.askContributionDelete(cmp.history()![0]);
-    cmp.confirmContributionDelete();
+    await askToDeleteContribution(fixture);
+    const confirm = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]')!;
+    Array.from(confirm.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Delete')!
+      .click();
     fixture.detectChanges();
-    expect(cmp.deletingContributionId()).toBe(item.id);
-    expect(cmp.history()).toHaveLength(1);
+    expect(text()).toContain('Deleting…');
+    expect(text()).toContain(formatPeso(item.amount));
 
     pending.next();
     pending.complete();
     fixture.detectChanges();
 
     expect(remove).toHaveBeenCalledWith(item.id);
-    expect(cmp.deletingContributionId()).toBeNull();
-    expect(cmp.history()).toEqual([]);
+    expect(text()).toContain('No Contributions yet');
     expect(accounts).toHaveBeenCalledTimes(2);
     expect(allContributions).toHaveBeenCalledOnce();
     expect(text()).toContain(`${formatPeso(-1000)} remains available in ${ACCOUNT.name}`);
   });
 
-  it('treats an initial deletion 404 as stale history and refreshes the ordinary row away', () => {
+  it('treats an initial deletion 404 as stale history and refreshes the ordinary row away', async () => {
     const item = contribution();
     const list = vi
       .fn()
       .mockReturnValueOnce(of([item]))
       .mockReturnValueOnce(of([]));
-    const { fixture, cmp } = setup({
+    const { fixture, text } = setup({
       list,
       deleteContribution: () => throwError(() => new ApiError('Missing', 404)),
     });
 
-    cmp.askContributionDelete(cmp.history()![0]);
-    cmp.confirmContributionDelete();
-    fixture.detectChanges();
+    await askToDeleteContribution(fixture);
+    await confirmContributionDelete(fixture);
 
-    expect(cmp.history()).toEqual([]);
+    expect(text()).toContain('No Contributions yet');
   });
 
-  it('keeps an ordinary row after an ambiguous failure until retrying confirms absence', () => {
+  it('keeps an ordinary row after an ambiguous failure until retrying confirms absence', async () => {
     const item = contribution();
     const list = vi
       .fn()
@@ -305,13 +317,12 @@ describe('GoalDetail', () => {
         attempts === 1 ? new ApiError('The request timed out.', 504) : new ApiError('Missing', 404),
       );
     });
-    const { fixture, cmp, text } = setup({ list, deleteContribution: remove });
+    const { fixture, text } = setup({ list, deleteContribution: remove });
 
-    cmp.askContributionDelete(cmp.history()![0]);
-    cmp.confirmContributionDelete();
-    fixture.detectChanges();
+    await askToDeleteContribution(fixture);
+    await confirmContributionDelete(fixture);
 
-    expect(cmp.history()).toHaveLength(1);
+    expect(text()).toContain(formatPeso(item.amount));
     expect(text()).toContain('The request timed out.');
 
     const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
@@ -321,7 +332,7 @@ describe('GoalDetail', () => {
     fixture.detectChanges();
 
     expect(remove).toHaveBeenCalledTimes(2);
-    expect(cmp.history()).toEqual([]);
+    expect(text()).toContain('No Contributions yet');
   });
 
   it('short-circuits an invalid id to not-found without making requests', () => {

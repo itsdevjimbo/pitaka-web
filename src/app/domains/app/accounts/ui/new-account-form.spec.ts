@@ -1,34 +1,14 @@
-import { OutputEmitterRef, WritableSignal } from '@angular/core';
+import { OverlayContainer } from '@angular/cdk/overlay';
+import { ComponentFixture } from '@angular/core/testing';
 import { TestBed } from '@angular/core/testing';
-import { FieldTree } from '@angular/forms/signals';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
-import { Account, ACCOUNT_NAME_MAX, AccountType } from '../data/account';
+import { Account, ACCOUNT_NAME_MAX } from '../data/account';
 import { AccountsService } from '../data/accounts.service';
 import { NewAccountForm } from './new-account-form';
 
-/** The slice of the component the tests reach into. */
-type NewAccountInternals = {
-  model: WritableSignal<{
-    name: string;
-    type: AccountType | '';
-    initialBalance: number;
-  }>;
-  accountForm: {
-    name: FieldTree<string>;
-    type: FieldTree<AccountType | ''>;
-    initialBalance: FieldTree<number>;
-  };
-  errorMessage: () => string | null;
-  created: OutputEmitterRef<Account>;
-  cancelled: OutputEmitterRef<void>;
-  save(event: Event): void;
-  cancel(): void;
-};
-
-const COULD_NOT_CREATE =
-  'Something went wrong creating your account. Please try again.';
+const COULD_NOT_CREATE = 'Something went wrong creating your account. Please try again.';
 
 const CREATED: Account = {
   id: 12,
@@ -42,107 +22,106 @@ describe('NewAccountForm', () => {
   function setup(create: AccountsService['create']) {
     TestBed.configureTestingModule({
       imports: [NewAccountForm],
-      providers: [
-        provideIcons(),
-        { provide: AccountsService, useValue: { create } },
-      ],
+      providers: [provideIcons(), { provide: AccountsService, useValue: { create } }],
     });
 
     const fixture = TestBed.createComponent(NewAccountForm);
-    const cmp = fixture.componentInstance as unknown as NewAccountInternals;
     fixture.detectChanges();
-    return { fixture, cmp };
+    return { fixture };
   }
 
-  async function submitAndSettle(
-    fixture: { whenStable: () => Promise<unknown> },
-    cmp: NewAccountInternals
-  ) {
-    cmp.save(new Event('submit'));
+  async function settle(fixture: ComponentFixture<NewAccountForm>) {
+    fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
   }
 
-  function messagesOn(field: FieldTree<unknown>) {
-    return field()
-      .errors()
-      .map((error) => error.message);
+  function input(fixture: ComponentFixture<NewAccountForm>, selector: string, value: string) {
+    const element = fixture.nativeElement.querySelector(selector) as HTMLInputElement;
+    element.value = value;
+    element.dispatchEvent(new Event('input'));
+  }
+
+  async function chooseType(fixture: ComponentFixture<NewAccountForm>, label: string) {
+    (fixture.nativeElement.querySelector('mat-select') as HTMLElement).click();
+    await settle(fixture);
+    const overlay = TestBed.inject(OverlayContainer).getContainerElement();
+    const option = Array.from(overlay.querySelectorAll<HTMLElement>('mat-option')).find(
+      (candidate) => candidate.textContent?.trim() === label,
+    );
+    if (!option) throw new Error(`No Account type option labelled "${label}"`);
+    option.click();
+    await settle(fixture);
+  }
+
+  async function submit(fixture: ComponentFixture<NewAccountForm>) {
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await settle(fixture);
+  }
+
+  function text(fixture: ComponentFixture<NewAccountForm>) {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
   }
 
   it('blocks a submission with no name and never calls the service', async () => {
     const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as AccountsService['create']
-    );
+    const { fixture } = setup(create as unknown as AccountsService['create']);
 
-    cmp.model.set({ name: '', type: 'Cash', initialBalance: 0 });
-    await submitAndSettle(fixture, cmp);
+    await chooseType(fixture, 'Cash');
+    await submit(fixture);
 
-    expect(messagesOn(cmp.accountForm.name)).toContain('You must enter a name');
+    expect(text(fixture)).toContain('You must enter a name');
     expect(create).not.toHaveBeenCalled();
   });
 
   it('blocks a submission with no type chosen and never calls the service', async () => {
     const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as AccountsService['create']
-    );
+    const { fixture } = setup(create as unknown as AccountsService['create']);
 
-    cmp.model.set({ name: 'Everyday cash', type: '', initialBalance: 0 });
-    await submitAndSettle(fixture, cmp);
+    input(fixture, '#account-name', 'Everyday cash');
+    await submit(fixture);
 
-    expect(messagesOn(cmp.accountForm.type)).toContain('You must choose a type');
+    expect(text(fixture)).toContain('You must choose a type');
     expect(create).not.toHaveBeenCalled();
   });
 
   it('blocks a submission with a negative starting balance and never calls the service', async () => {
     const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as AccountsService['create']
-    );
+    const { fixture } = setup(create as unknown as AccountsService['create']);
 
-    cmp.model.set({ name: 'Everyday cash', type: 'Cash', initialBalance: -1 });
-    await submitAndSettle(fixture, cmp);
+    input(fixture, '#account-name', 'Everyday cash');
+    input(fixture, '#account-initial-balance', '-1');
+    await chooseType(fixture, 'Cash');
+    await submit(fixture);
 
-    expect(messagesOn(cmp.accountForm.initialBalance)).toContain(
-      'The starting balance cannot be negative'
-    );
+    expect(text(fixture)).toContain('The starting balance cannot be negative');
     expect(create).not.toHaveBeenCalled();
   });
 
   it('refuses a name over the maximum length with the length message', async () => {
     const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as AccountsService['create']
-    );
+    const { fixture } = setup(create as unknown as AccountsService['create']);
 
-    cmp.model.set({
-      name: 'x'.repeat(ACCOUNT_NAME_MAX + 1),
-      type: 'Cash',
-      initialBalance: 0,
-    });
-    await submitAndSettle(fixture, cmp);
+    input(fixture, '#account-name', 'x'.repeat(ACCOUNT_NAME_MAX + 1));
+    await chooseType(fixture, 'Cash');
+    await submit(fixture);
 
-    expect(messagesOn(cmp.accountForm.name)).toContain(
-      `The name must be ${ACCOUNT_NAME_MAX} characters or fewer`
-    );
+    expect(text(fixture)).toContain(`The name must be ${ACCOUNT_NAME_MAX} characters or fewer`);
     expect(create).not.toHaveBeenCalled();
   });
 
   it('sends the trimmed name, the chosen type, and the starting balance, and emits the created Account', async () => {
     const create = vi.fn((_account) => of(CREATED));
-    const { fixture, cmp } = setup(
-      create as unknown as AccountsService['create']
-    );
+    const { fixture } = setup(create as unknown as AccountsService['create']);
     const emitted: Account[] = [];
-    cmp.created.subscribe((account) => emitted.push(account));
+    fixture.componentInstance.created.subscribe((account) => emitted.push(account));
 
-    cmp.model.set({
-      name: '  Petty cash  ',
-      type: 'Cash',
-      initialBalance: 250,
-    });
-    await submitAndSettle(fixture, cmp);
+    input(fixture, '#account-name', '  Petty cash  ');
+    input(fixture, '#account-initial-balance', '250');
+    await chooseType(fixture, 'Cash');
+    await submit(fixture);
 
     expect(create).toHaveBeenCalledWith({
       name: 'Petty cash',
@@ -150,21 +129,18 @@ describe('NewAccountForm', () => {
       initialBalance: 250,
     });
     expect(emitted).toEqual([CREATED]);
-    expect(cmp.errorMessage()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('accepts a starting balance of zero (ADR 0005)', async () => {
-    const create = vi.fn((_account) =>
-      of({ ...CREATED, name: 'New wallet', type: 'Wallet', currentBalance: 0 })
-    );
-    const { fixture, cmp } = setup(
-      create as unknown as AccountsService['create']
-    );
+    const create = vi.fn((_account) => of({ ...CREATED, name: 'New wallet', type: 'Wallet', currentBalance: 0 }));
+    const { fixture } = setup(create as unknown as AccountsService['create']);
     const emitted: Account[] = [];
-    cmp.created.subscribe((account) => emitted.push(account));
+    fixture.componentInstance.created.subscribe((account) => emitted.push(account));
 
-    cmp.model.set({ name: 'New wallet', type: 'Wallet', initialBalance: 0 });
-    await submitAndSettle(fixture, cmp);
+    input(fixture, '#account-name', 'New wallet');
+    await chooseType(fixture, 'Wallet');
+    await submit(fixture);
 
     expect(create).toHaveBeenCalledWith({
       name: 'New wallet',
@@ -172,62 +148,64 @@ describe('NewAccountForm', () => {
       initialBalance: 0,
     });
     expect(emitted).toHaveLength(1);
-    expect(cmp.errorMessage()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('binds a duplicate-name conflict onto the name control and leaves the banner empty', async () => {
-    const { fixture, cmp } = setup(() =>
+    const { fixture } = setup(() =>
       throwError(
         () =>
           new ApiError('An account with this name already exists.', 409, {
             name: ['An account with this name already exists.'],
-          })
-      )
+          }),
+      ),
     );
 
-    cmp.model.set({ name: 'Savings', type: 'Bank', initialBalance: 0 });
-    await submitAndSettle(fixture, cmp);
+    input(fixture, '#account-name', 'Savings');
+    await chooseType(fixture, 'Bank');
+    await submit(fixture);
 
-    expect(messagesOn(cmp.accountForm.name)).toContain(
-      'An account with this name already exists.'
-    );
-    expect(cmp.errorMessage()).toBeNull();
+    expect(text(fixture)).toContain('An account with this name already exists.');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('shows the "could not create" banner for a failure it cannot pin to a field, and binds nothing', async () => {
-    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
+    const { fixture } = setup(() => throwError(() => new Error('offline')));
 
-    cmp.model.set({ name: 'Brokerage', type: 'Investment', initialBalance: 0 });
-    await submitAndSettle(fixture, cmp);
+    input(fixture, '#account-name', 'Brokerage');
+    await chooseType(fixture, 'Investment');
+    await submit(fixture);
 
-    expect(cmp.errorMessage()).toBe(COULD_NOT_CREATE);
-    expect(cmp.accountForm.name().errors()).toEqual([]);
-    expect(cmp.accountForm.type().errors()).toEqual([]);
-    expect(cmp.accountForm.initialBalance().errors()).toEqual([]);
+    expect(text(fixture)).toContain(COULD_NOT_CREATE);
+    expect(text(fixture)).not.toContain('You must enter a name');
+    expect(text(fixture)).not.toContain('You must choose a type');
+    expect((fixture.nativeElement.querySelector('#account-name') as HTMLInputElement).value).toBe('Brokerage');
   });
 
   it('clears the banner as soon as a field is edited after a failed submit', async () => {
-    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
+    const { fixture } = setup(() => throwError(() => new Error('offline')));
 
-    cmp.model.set({ name: 'Brokerage', type: 'Investment', initialBalance: 0 });
-    await submitAndSettle(fixture, cmp);
-    expect(cmp.errorMessage()).toBe(COULD_NOT_CREATE);
+    input(fixture, '#account-name', 'Brokerage');
+    await chooseType(fixture, 'Investment');
+    await submit(fixture);
+    expect(text(fixture)).toContain(COULD_NOT_CREATE);
 
-    cmp.model.update((model) => ({ ...model, name: 'Brokerage account' }));
+    input(fixture, '#account-name', 'Brokerage account');
+    fixture.detectChanges();
 
-    expect(cmp.errorMessage()).toBeNull();
+    expect(text(fixture)).not.toContain(COULD_NOT_CREATE);
   });
 
   it('sends exactly one request when submitted twice in a row', async () => {
     const inFlight = new Subject<Account>();
     const create = vi.fn(() => inFlight.asObservable());
-    const { fixture, cmp } = setup(
-      create as unknown as AccountsService['create']
-    );
+    const { fixture } = setup(create as unknown as AccountsService['create']);
 
-    cmp.model.set({ name: 'Petty cash', type: 'Cash', initialBalance: 0 });
-    cmp.save(new Event('submit'));
-    cmp.save(new Event('submit'));
+    input(fixture, '#account-name', 'Petty cash');
+    await chooseType(fixture, 'Cash');
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    form.dispatchEvent(new Event('submit'));
+    form.dispatchEvent(new Event('submit'));
     await fixture.whenStable();
 
     expect(create).toHaveBeenCalledTimes(1);
@@ -235,11 +213,15 @@ describe('NewAccountForm', () => {
 
   it('emits cancelled without touching the service', () => {
     const create = vi.fn();
-    const { cmp } = setup(create as unknown as AccountsService['create']);
+    const { fixture } = setup(create as unknown as AccountsService['create']);
     const emitted: unknown[] = [];
-    cmp.cancelled.subscribe(() => emitted.push('cancelled'));
+    fixture.componentInstance.cancelled.subscribe(() => emitted.push('cancelled'));
 
-    cmp.cancel();
+    const cancel = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Cancel',
+    );
+    if (!cancel) throw new Error('No Cancel button');
+    cancel.click();
 
     expect(emitted).toEqual(['cancelled']);
     expect(create).not.toHaveBeenCalled();

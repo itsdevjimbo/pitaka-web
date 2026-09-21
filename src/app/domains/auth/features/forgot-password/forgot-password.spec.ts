@@ -1,18 +1,8 @@
-import { WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { FieldTree } from '@angular/forms/signals';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
 import AuthForgotPassword, { RESET_LINK_REASSURANCE } from './forgot-password';
-
-/** The slice of the component the tests reach into. */
-type ForgotPasswordInternals = {
-  forgotPasswordFormModel: WritableSignal<{ email: string }>;
-  forgotPasswordForm: { email: FieldTree<string> };
-  hasAsked: () => boolean;
-  askForLink(event: Event): void;
-};
 
 /**
  * The screen's seam. What matters here is not that a request went out — the
@@ -22,32 +12,29 @@ type ForgotPasswordInternals = {
  * uninformative as the server).
  */
 describe('AuthForgotPassword', () => {
-  function setup(
-    forgotPassword: AuthService['forgotPassword'] = () => of(undefined),
-    email = 'ada@example.com'
-  ) {
+  function setup(forgotPassword: AuthService['forgotPassword'] = () => of(undefined), email = 'ada@example.com') {
     TestBed.configureTestingModule({
       imports: [AuthForgotPassword],
-      providers: [
-        provideRouter([]),
-        { provide: AuthService, useValue: { forgotPassword } },
-      ],
+      providers: [provideRouter([]), { provide: AuthService, useValue: { forgotPassword } }],
     });
 
     const fixture = TestBed.createComponent(AuthForgotPassword);
-    const cmp = fixture.componentInstance as unknown as ForgotPasswordInternals;
-    cmp.forgotPasswordFormModel.set({ email });
     fixture.detectChanges();
-    return { fixture, cmp };
+    enterEmail(fixture, email);
+    return { fixture };
   }
 
-  async function submitAndSettle(
-    fixture: { whenStable: () => Promise<unknown>; detectChanges: () => void },
-    cmp: ForgotPasswordInternals
-  ) {
-    cmp.askForLink(new Event('submit'));
+  async function submitAndSettle(fixture: ComponentFixture<AuthForgotPassword>) {
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
     await fixture.whenStable();
     await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  function enterEmail(fixture: ComponentFixture<AuthForgotPassword>, value: string) {
+    const input = fixture.nativeElement.querySelector('#email') as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
   }
 
@@ -57,28 +44,25 @@ describe('AuthForgotPassword', () => {
 
   it('asks for a link for the address that was typed', async () => {
     const forgotPassword = vi.fn(() => of(undefined));
-    const { fixture, cmp } = setup(forgotPassword);
+    const { fixture } = setup(forgotPassword);
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(forgotPassword).toHaveBeenCalledWith('ada@example.com');
   });
 
   it('swaps in place to the one fixed line, keeping the typed address in view', async () => {
-    const { fixture, cmp } = setup();
+    const { fixture } = setup();
 
     expect(text(fixture)).not.toContain(RESET_LINK_REASSURANCE);
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
-    expect(cmp.hasAsked()).toBe(true);
     expect(text(fixture)).toContain(RESET_LINK_REASSURANCE);
     // The form is still there: re-submitting it is this screen's resend, and
     // the address the person typed has not gone anywhere.
-    expect(cmp.forgotPasswordFormModel().email).toBe('ada@example.com');
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('#email')
-    ).not.toBeNull();
+    expect((fixture.nativeElement.querySelector('#email') as HTMLInputElement).value).toBe('ada@example.com');
+    expect((fixture.nativeElement as HTMLElement).querySelector('#email')).not.toBeNull();
   });
 
   /**
@@ -88,14 +72,10 @@ describe('AuthForgotPassword', () => {
    * is that the guard changes nothing the person can see.
    */
   it('says the same line when the ask fails outright', async () => {
-    const error = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
-    const { fixture, cmp } = setup(() =>
-      throwError(() => new Error('network down'))
-    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { fixture } = setup(() => throwError(() => new Error('network down')));
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(text(fixture)).toContain(RESET_LINK_REASSURANCE);
     error.mockRestore();
@@ -103,25 +83,23 @@ describe('AuthForgotPassword', () => {
 
   /** A second ask is a second answer: the line does not linger over a new address. */
   it('clears the line when the address is edited, so a re-submit reads as a new ask', async () => {
-    const { fixture, cmp } = setup();
+    const { fixture } = setup();
 
-    await submitAndSettle(fixture, cmp);
-    expect(cmp.hasAsked()).toBe(true);
+    await submitAndSettle(fixture);
+    expect(text(fixture)).toContain(RESET_LINK_REASSURANCE);
 
-    cmp.forgotPasswordFormModel.set({ email: 'ada@example.org' });
-    fixture.detectChanges();
+    enterEmail(fixture, 'ada@example.org');
 
-    expect(cmp.hasAsked()).toBe(false);
     expect(text(fixture)).not.toContain(RESET_LINK_REASSURANCE);
   });
 
   it('does not ask on an address that is not one', async () => {
     const forgotPassword = vi.fn(() => of(undefined));
-    const { fixture, cmp } = setup(forgotPassword, 'not-an-email');
+    const { fixture } = setup(forgotPassword, 'not-an-email');
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(forgotPassword).not.toHaveBeenCalled();
-    expect(cmp.hasAsked()).toBe(false);
+    expect(text(fixture)).not.toContain(RESET_LINK_REASSURANCE);
   });
 });

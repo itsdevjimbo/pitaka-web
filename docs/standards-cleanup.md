@@ -27,6 +27,16 @@ check in CI; keep the changed-file command useful for local feedback.
 
 Tracked in [#250](https://github.com/itsdevjimbo/pitaka-web/issues/250).
 
+Completed in #250 across Accounts, Categories, Tags, Budgets, Goals,
+Transactions, Profile, Layout, and authentication. All inventoried casts were
+replaced with rendered interactions or public component outputs, with no lint
+exceptions remaining. The repository rule is now enforced as an error.
+
+Validation for #250 includes the focused domain suites, the standards enforcement
+suite, changed-file checks against `origin/main`, full-repository lint, and the
+production build. The application suite was run in domain batches to keep each
+browser test process bounded.
+
 Find candidates with `rg 'componentInstance as unknown as' src` and the lint
 diagnostics. Start with one representative form and one list, then migrate in
 domain-sized batches: Accounts, Categories, Tags, Budgets, Goals, Transactions,
@@ -40,7 +50,7 @@ than disabling a whole file or weakening production visibility.
 
 Done for each batch when it preserves the prior behavioral scenarios, passes the
 affected suites and changed-file checks, and introduces no undocumented internal
-access. Once all warnings are resolved or justified, promote the fixture-cast rule
+access. Once all diagnostics are resolved or justified, promote the fixture-cast rule
 to an error in full-repository lint.
 
 ## 3. Comment and ADR reconciliation
@@ -79,7 +89,7 @@ formatting and comment changes.
 
 ## Completion
 
-The cleanup is complete when full-source formatting passes, fixture-cast warnings
+The cleanup is complete when full-source formatting passes, fixture-cast diagnostics
 are resolved or individually justified, documentation agrees with the implemented
 boundaries, and every resource domain has been audited. Record completed batches
 and their verification here as they land; do not mark a batch complete from a

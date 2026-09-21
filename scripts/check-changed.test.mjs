@@ -92,7 +92,7 @@ test('push comparisons catch reverted files when the new tip is an ancestor of t
   assert.deepEqual(changedSourceFiles(cwd, previousTip, 'main', true), ['src/existing.ts']);
 });
 
-test('warns on fixture internals casts, permits DOM casts and accepts a documented line exception', async () => {
+test('rejects fixture internals casts, permits DOM casts and accepts a documented line exception', async () => {
   const eslint = new ESLint({
     overrideConfig: { languageOptions: { parserOptions: { projectService: false } } },
   });
@@ -102,7 +102,7 @@ test('warns on fixture internals casts, permits DOM casts and accepts a document
   const cast = 'const cmp = fixture.componentInstance as unknown as Internals;';
   const messages = await lint(cast);
   assert.equal(messages.length, 1);
-  assert.equal(messages[0].severity, 1);
+  assert.equal(messages[0].severity, 2);
   assert.deepEqual(await lint('const element = fixture.nativeElement as HTMLElement;'), []);
   assert.deepEqual(
     await lint(

@@ -1,27 +1,14 @@
-import { WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { FieldTree } from '@angular/forms/signals';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
+import { of } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, EmailNotConfirmedError } from '@/app/core/auth';
 import { Session } from '@/app/core/session';
 import AuthSignIn from './sign-in';
 
-/** The slice of the component the tests reach into. */
-type SignInInternals = {
-  signInFormModel: WritableSignal<{ email: string; password: string }>;
-  signInForm: { email: FieldTree<string>; password: FieldTree<string> };
-  errorMessage: () => string | null;
-  sessionNotice: () => string | null;
-  unconfirmedEmail: () => string | null;
-  signIn(event: Event): void;
-};
-
 describe('AuthSignIn', () => {
-  function setup(
-    signIn: () => Promise<void>,
-    queryParams: Record<string, string> = {}
-  ) {
+  function setup(signIn: () => Promise<void>, queryParams: Record<string, string> = {}) {
+    const resendConfirmation = vi.fn(() => of(undefined));
     TestBed.configureTestingModule({
       imports: [AuthSignIn],
       providers: [
@@ -29,7 +16,7 @@ describe('AuthSignIn', () => {
         { provide: Session, useValue: { signIn } },
         // Only reached by the resend control on the unconfirmed-email state;
         // stubbed so its host doesn't need a real HTTP setup.
-        { provide: AuthService, useValue: { resendConfirmation: vi.fn() } },
+        { provide: AuthService, useValue: { resendConfirmation } },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -44,246 +31,213 @@ describe('AuthSignIn', () => {
     });
 
     const router = TestBed.inject(Router);
-    const navigateByUrl = vi
-      .spyOn(router, 'navigateByUrl')
-      .mockResolvedValue(true);
+    const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
 
     const fixture = TestBed.createComponent(AuthSignIn);
-    const cmp = fixture.componentInstance as unknown as SignInInternals;
-    cmp.signInFormModel.set({
-      email: 'nobody@example.com',
-      password: 'secret1!',
-    });
     fixture.detectChanges();
-    return { fixture, cmp, navigateByUrl };
+    enter(fixture, '#email', 'nobody@example.com');
+    enter(fixture, '#password', 'secret1!');
+    return { fixture, navigateByUrl, resendConfirmation };
   }
 
   /** Drive a submit to completion. */
-  async function submitAndSettle(fixture: { whenStable: () => Promise<unknown> }, cmp: SignInInternals) {
-    cmp.signIn(new Event('submit'));
+  async function submitAndSettle(fixture: ComponentFixture<AuthSignIn>) {
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
     await fixture.whenStable();
+    fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  function enter(fixture: ComponentFixture<AuthSignIn>, selector: string, value: string) {
+    const input = fixture.nativeElement.querySelector(selector) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function text(fixture: ComponentFixture<AuthSignIn>) {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
   }
 
   it('binds server-blamed fields onto the matching form controls', async () => {
-    const { fixture, cmp } = setup(() =>
+    const { fixture } = setup(() =>
       Promise.reject(
-        new ApiError(
-          'Please correct the highlighted fields and try again.',
-          400,
-          { email: ['That email is not registered.'] }
-        )
-      )
+        new ApiError('Please correct the highlighted fields and try again.', 400, {
+          email: ['That email is not registered.'],
+        }),
+      ),
     );
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
-    const messages = cmp.signInForm
-      .email()
-      .errors()
-      .map((error) => error.message);
-    expect(messages).toContain('That email is not registered.');
-    expect(cmp.errorMessage()).toBeNull();
+    expect(text(fixture)).toContain('That email is not registered.');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('shows a wrong-credentials failure as one form-level message, not a field error', async () => {
-    const { fixture, cmp } = setup(() =>
-      Promise.reject(
-        new ApiError('That email and password do not match. Please try again.', 401)
-      )
+    const { fixture } = setup(() =>
+      Promise.reject(new ApiError('That email and password do not match. Please try again.', 401)),
     );
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
-    expect(cmp.signInForm.email().errors()).toEqual([]);
     // The adapter already produced the display message; the component surfaces
     // it as-is rather than re-branching on the 401 (ADR 0002).
-    expect(cmp.errorMessage()).toBe(
-      'That email and password do not match. Please try again.'
-    );
+    expect(text(fixture)).toContain('That email and password do not match. Please try again.');
     // The other auth failure that must never carry the resend affordance.
-    expect(cmp.unconfirmedEmail()).toBeNull();
+    expect(fixture.nativeElement.querySelector('auth-resend-confirmation')).toBeNull();
   });
 
   it('shows a locked-out failure as one form-level message, not a field error', async () => {
-    const { fixture, cmp } = setup(() =>
-      Promise.reject(
-        new ApiError(
-          'Too many failed attempts. Please wait a few minutes and try again.',
-          423
-        )
-      )
+    const { fixture } = setup(() =>
+      Promise.reject(new ApiError('Too many failed attempts. Please wait a few minutes and try again.', 423)),
     );
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
-    expect(cmp.signInForm.email().errors()).toEqual([]);
-    expect(cmp.errorMessage()).toBe(
-      'Too many failed attempts. Please wait a few minutes and try again.'
-    );
+    expect(text(fixture)).toContain('Too many failed attempts. Please wait a few minutes and try again.');
     // The one auth failure that should never carry the resend affordance.
-    expect(cmp.unconfirmedEmail()).toBeNull();
+    expect(fixture.nativeElement.querySelector('auth-resend-confirmation')).toBeNull();
   });
 
   it('offers the resend control on an unconfirmed-email failure, seeded with the typed address', async () => {
-    const { fixture, cmp } = setup(() =>
-      Promise.reject(new EmailNotConfirmedError('nobody@example.com'))
+    const { fixture, resendConfirmation } = setup(() =>
+      Promise.reject(new EmailNotConfirmedError('nobody@example.com')),
     );
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
-    expect(cmp.unconfirmedEmail()).toBe('nobody@example.com');
-    expect(cmp.errorMessage()).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('auth-resend-confirmation')).not.toBeNull();
+    const resend = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Resend confirmation email'),
+    );
+    if (!resend) throw new Error('No resend confirmation button');
+    resend.click();
+    await fixture.whenStable();
+    expect(resendConfirmation).toHaveBeenCalledWith('nobody@example.com');
     // Never a suggestion the password was right.
-    expect(cmp.errorMessage()).not.toMatch(/password/i);
-    expect(cmp.signInForm.email().errors()).toEqual([]);
+    expect((fixture.nativeElement.querySelector('[role="alert"]') as HTMLElement).textContent).not.toMatch(/password/i);
   });
 
   it('clears the resend affordance as soon as the person edits the form', async () => {
-    const { fixture, cmp } = setup(() =>
-      Promise.reject(new EmailNotConfirmedError('nobody@example.com'))
-    );
+    const { fixture } = setup(() => Promise.reject(new EmailNotConfirmedError('nobody@example.com')));
 
-    await submitAndSettle(fixture, cmp);
-    expect(cmp.unconfirmedEmail()).not.toBeNull();
+    await submitAndSettle(fixture);
+    expect(fixture.nativeElement.querySelector('auth-resend-confirmation')).not.toBeNull();
 
-    cmp.signInFormModel.set({
-      email: 'nobody@example.com',
-      password: 'secret2!',
-    });
+    enter(fixture, '#password', 'secret2!');
 
-    expect(cmp.unconfirmedEmail()).toBeNull();
+    expect(fixture.nativeElement.querySelector('auth-resend-confirmation')).toBeNull();
   });
 
   it('navigates to the app on a successful sign-in', async () => {
     const signIn = vi.fn().mockResolvedValue(undefined);
-    const { fixture, cmp, navigateByUrl } = setup(signIn);
+    const { fixture, navigateByUrl } = setup(signIn);
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(signIn).toHaveBeenCalledWith({
       email: 'nobody@example.com',
       password: 'secret1!',
     });
     expect(navigateByUrl).toHaveBeenCalledWith('/app');
-    expect(cmp.errorMessage()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('does not report a post-sign-in navigation failure as a sign-in failure', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const signIn = vi.fn().mockResolvedValue(undefined);
-    const { fixture, cmp, navigateByUrl } = setup(signIn);
+    const { fixture, navigateByUrl } = setup(signIn);
     navigateByUrl.mockRejectedValueOnce(new Error('router boom'));
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(signIn).toHaveBeenCalled();
-    expect(cmp.errorMessage()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
     expect(error).toHaveBeenCalled();
 
     error.mockRestore();
   });
 
   it('returns to where the person was headed when a safe returnUrl was remembered', async () => {
-    const { fixture, cmp, navigateByUrl } = setup(
-      () => Promise.resolve(),
-      { returnUrl: '/app/accounts/42' }
-    );
+    const { fixture, navigateByUrl } = setup(() => Promise.resolve(), { returnUrl: '/app/accounts/42' });
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(navigateByUrl).toHaveBeenCalledWith('/app/accounts/42');
   });
 
   it('ignores a hostile returnUrl and lands on the app home', async () => {
-    const { fixture, cmp, navigateByUrl } = setup(
-      () => Promise.resolve(),
-      { returnUrl: '//evil.example' }
-    );
+    const { fixture, navigateByUrl } = setup(() => Promise.resolve(), { returnUrl: '//evil.example' });
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(navigateByUrl).toHaveBeenCalledWith('/app');
   });
 
   it('surfaces a server-blamed field this form has no control for', async () => {
-    const { fixture, cmp } = setup(() =>
+    const { fixture } = setup(() =>
       Promise.reject(
         new ApiError('Please correct the highlighted fields and try again.', 400, {
           tenantCode: ['That workspace is not accepting sign-ins.'],
-        })
-      )
+        }),
+      ),
     );
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     // Nothing to highlight, so the banner must carry the message rather than
     // telling the person to correct highlights that do not exist.
-    expect(cmp.signInForm.email().errors()).toEqual([]);
-    expect(cmp.errorMessage()).toBe(
-      'That workspace is not accepting sign-ins.'
-    );
+    expect(text(fixture)).toContain('That workspace is not accepting sign-ins.');
   });
 
   it('shows a session-ended notice when the lapse marker is on the query string', () => {
-    const { cmp } = setup(() => Promise.resolve(), {
+    const { fixture } = setup(() => Promise.resolve(), {
       returnUrl: '/app/accounts',
       reason: 'session-expired',
     });
 
-    expect(cmp.sessionNotice()).toBe(
-      'Your session has ended. Please sign in again.'
-    );
+    expect(text(fixture)).toContain('Your session has ended. Please sign in again.');
   });
 
   it('shows no notice for a bare returnUrl with no lapse marker', () => {
-    const { cmp } = setup(() => Promise.resolve(), {
+    const { fixture } = setup(() => Promise.resolve(), {
       returnUrl: '/app/accounts',
     });
 
-    expect(cmp.sessionNotice()).toBeNull();
+    expect(text(fixture)).not.toContain('Your session has ended. Please sign in again.');
   });
 
   it('shows no notice for an unrecognised reason value', () => {
-    const { cmp } = setup(() => Promise.resolve(), { reason: 'expired' });
+    const { fixture } = setup(() => Promise.resolve(), { reason: 'expired' });
 
-    expect(cmp.sessionNotice()).toBeNull();
+    expect(text(fixture)).not.toContain('Your session has ended. Please sign in again.');
   });
 
   it('dismisses the session notice on a sign-in attempt so banners never stack', async () => {
-    const { fixture, cmp } = setup(
-      () =>
-        Promise.reject(
-          new ApiError(
-            'That email and password do not match. Please try again.',
-            401
-          )
-        ),
-      { returnUrl: '/app/accounts', reason: 'session-expired' }
+    const { fixture } = setup(
+      () => Promise.reject(new ApiError('That email and password do not match. Please try again.', 401)),
+      { returnUrl: '/app/accounts', reason: 'session-expired' },
     );
-    expect(cmp.sessionNotice()).not.toBeNull();
+    expect(text(fixture)).toContain('Your session has ended. Please sign in again.');
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
-    expect(cmp.sessionNotice()).toBeNull();
-    expect(cmp.errorMessage()).not.toBeNull();
+    expect(text(fixture)).not.toContain('Your session has ended. Please sign in again.');
+    expect(text(fixture)).toContain('That email and password do not match. Please try again.');
   });
 
   it('clears the banner as soon as the person edits the form', async () => {
-    const { fixture, cmp } = setup(() =>
-      Promise.reject(
-        new ApiError('That email and password do not match. Please try again.', 401)
-      )
+    const { fixture } = setup(() =>
+      Promise.reject(new ApiError('That email and password do not match. Please try again.', 401)),
     );
 
-    await submitAndSettle(fixture, cmp);
-    expect(cmp.errorMessage()).not.toBeNull();
+    await submitAndSettle(fixture);
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
 
-    cmp.signInFormModel.set({
-      email: 'nobody@example.com',
-      password: 'secret2!',
-    });
+    enter(fixture, '#password', 'secret2!');
 
-    expect(cmp.errorMessage()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 });
