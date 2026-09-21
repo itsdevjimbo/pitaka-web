@@ -14,70 +14,8 @@ export type RecordAccountDialogResult = Account | 'new-account';
 
 @Component({
   selector: 'accounts-record-account-dialog',
+  templateUrl: './record-account.dialog.html',
   imports: [DialogShell, MatButtonModule, MatFormFieldModule, MatSelectModule],
-  template: `
-    <app-dialog-shell heading="Record a transaction">
-      @if (data.accounts.length === 0) {
-        <div class="grid gap-4">
-          <div>
-            <h3 class="font-display text-xl">An active Account is needed</h3>
-            <p class="mt-2 text-secondary">You need an active Account before you can record a Transaction.</p>
-          </div>
-          <div class="flex flex-wrap justify-end gap-3">
-            <button
-              matButton
-              type="button"
-              (click)="dialogRef.close()"
-            >
-              Cancel
-            </button>
-            <button
-              matButton="filled"
-              type="button"
-              (click)="dialogRef.close('new-account')"
-            >
-              New account
-            </button>
-          </div>
-        </div>
-      } @else {
-        <div class="grid gap-5">
-          <div>
-            <h3 class="font-display text-xl">Choose an account</h3>
-            <p class="mt-2 text-secondary">The Transaction will be recorded against this Account.</p>
-          </div>
-          <mat-form-field class="w-full">
-            <mat-label>Account</mat-label>
-            <mat-select
-              [value]="selectedId()"
-              (selectionChange)="selectedId.set($event.value)"
-            >
-              @for (account of data.accounts; track account.id) {
-                <mat-option [value]="account.id">{{ account.name }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-          <div class="flex justify-end gap-3">
-            <button
-              matButton
-              type="button"
-              (click)="dialogRef.close()"
-            >
-              Cancel
-            </button>
-            <button
-              matButton="filled"
-              type="button"
-              [disabled]="selectedId() === null"
-              (click)="continue()"
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      }
-    </app-dialog-shell>
-  `,
 })
 export class RecordAccountDialog {
   protected readonly dialogRef = inject<MatDialogRef<RecordAccountDialog, RecordAccountDialogResult>>(MatDialogRef);
