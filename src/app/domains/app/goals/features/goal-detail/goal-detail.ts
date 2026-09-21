@@ -20,11 +20,11 @@ import {
   signedAccountHeadroom,
   withAccountNames,
 } from '../../index';
-import { AddContributionDialog } from '../../ui/add-contribution-dialog';
+import { AddContributionDialog } from '../../ui/contribution-editor/add-contribution-dialog';
+import { EditContributionDialog } from '../../ui/contribution-editor/edit-contribution-dialog';
 import { ContributionHistoryRow } from '../../ui/contribution-history-row/contribution-history-row';
-import { EditContributionDialog } from '../../ui/edit-contribution-dialog';
-import { EditGoalDialog } from '../../ui/edit-goal-dialog';
-import { GoalProgress } from '../../ui/goal-progress';
+import { EditGoalDialog } from '../../ui/goal-editor/edit-goal-dialog';
+import { GoalProgress } from '../../ui/goal-progress/goal-progress';
 
 const LOAD_FAILED = 'Something went wrong loading this Goal. Please try again.';
 
@@ -115,7 +115,9 @@ export default class GoalDetail implements OnInit {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
-        if (saved) this.load();
+        if (saved) {
+          this.load();
+        }
       });
   }
   protected openAdd(goal: Goal): void {
@@ -128,7 +130,9 @@ export default class GoalDetail implements OnInit {
   }
   protected openContributionEdit(contribution: GoalContributionWithAccountName): void {
     const goal = this.goal();
-    if (!goal) return;
+    if (!goal) {
+      return;
+    }
     this.clearPrompts();
     this.dialog
       .open<
@@ -149,7 +153,9 @@ export default class GoalDetail implements OnInit {
   }
   protected confirmContributionDelete(): void {
     const contribution = this.confirmingContributionDelete();
-    if (!contribution || this.deletingContributionId() !== null) return;
+    if (!contribution || this.deletingContributionId() !== null) {
+      return;
+    }
     this.notice.set(null);
     this.deletingContributionId.set(contribution.id);
     this.contributionDeletion
@@ -184,7 +190,9 @@ export default class GoalDetail implements OnInit {
   }
   protected askDelete(): void {
     const goal = this.goal();
-    if (!goal) return;
+    if (!goal) {
+      return;
+    }
     this.notice.set(null);
     this.confirmingAbandon.set(false);
     this.contributions
@@ -200,7 +208,9 @@ export default class GoalDetail implements OnInit {
   }
   protected setStatus(status: Goal['status']): void {
     const goal = this.goal();
-    if (!goal) return;
+    if (!goal) {
+      return;
+    }
     this.clearPrompts();
     this.write(
       this.goals.setStatus(goal.id, status),
@@ -213,7 +223,9 @@ export default class GoalDetail implements OnInit {
   }
   protected confirmDelete(): void {
     const goal = this.goal();
-    if (!goal) return;
+    if (!goal) {
+      return;
+    }
     this.clearPrompts();
     this.write(
       this.goals.delete(goal.id),
@@ -265,7 +277,9 @@ export default class GoalDetail implements OnInit {
       this.load();
       return;
     }
-    if (result === 'missing') this.load();
+    if (result === 'missing') {
+      this.load();
+    }
   }
   /** Reconcile every server-derived Goal fact after a Contribution write without hiding the last readable screen. */
   private refreshContributionFacts(deleted: GoalContributionWithAccountName | null = null): void {
@@ -333,7 +347,9 @@ function ordinaryDeletionHeadroom(
   contributions: readonly { accountId: number; amount: number }[],
 ): { accountName: string; availableAmount: number } | null {
   const account = accounts.find((candidate) => candidate.id === accountId);
-  if (!account) return null;
+  if (!account) {
+    return null;
+  }
   const headroom = signedAccountHeadroom(accounts, contributions).find(
     (candidate) => candidate.accountId === accountId,
   );

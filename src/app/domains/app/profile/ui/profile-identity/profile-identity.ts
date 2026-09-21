@@ -63,7 +63,9 @@ export class ProfileIdentity {
 
   protected beginNameEdit(): void {
     const profile = this.profile();
-    if (profile === null) return;
+    if (profile === null) {
+      return;
+    }
 
     this.nameModel.set({ name: profile.name });
     this.errorMessage.set(null);
@@ -78,7 +80,9 @@ export class ProfileIdentity {
       action: async () => {
         const profile = this.profile();
         const name = this.nameModel().name.trim();
-        if (profile === null || name === profile.name) return undefined;
+        if (profile === null || name === profile.name) {
+          return undefined;
+        }
 
         this.submitting.set(true);
         this.errorMessage.set(null);
@@ -99,7 +103,9 @@ export class ProfileIdentity {
             this.nameForm().markAsTouched();
             this.focusAfterRender(this.nameInput);
           }
-          if (bannerMessage !== null) this.errorMessage.set(bannerMessage);
+          if (bannerMessage !== null) {
+            this.errorMessage.set(bannerMessage);
+          }
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
@@ -109,7 +115,9 @@ export class ProfileIdentity {
   }
 
   protected cancelNameEdit(): void {
-    if (this.submitting()) return;
+    if (this.submitting()) {
+      return;
+    }
     this.editingName.set(false);
     this.errorMessage.set(null);
     this.focusAfterRender(this.editNameAction);
@@ -124,7 +132,9 @@ export class ProfileIdentity {
       afterNextRender(() => {
         const element = target()?.nativeElement;
         element?.focus();
-        if (select && element instanceof HTMLInputElement) element.select();
+        if (select && element instanceof HTMLInputElement) {
+          element.select();
+        }
       }),
     );
   }

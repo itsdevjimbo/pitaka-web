@@ -123,7 +123,9 @@ describe('ScheduleList', () => {
     const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((candidate) =>
       (candidate.textContent ?? '').includes(label),
     );
-    if (!button) throw new Error(`No button labelled "${label}"`);
+    if (!button) {
+      throw new Error(`No button labelled "${label}"`);
+    }
     button.click();
     fixture.detectChanges();
   }
@@ -132,7 +134,9 @@ describe('ScheduleList', () => {
     const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
       (candidate) => (candidate.textContent ?? '').trim() === label,
     );
-    if (!button) throw new Error(`No button labelled exactly "${label}"`);
+    if (!button) {
+      throw new Error(`No button labelled exactly "${label}"`);
+    }
     button.click();
     fixture.detectChanges();
   }
@@ -141,13 +145,17 @@ describe('ScheduleList', () => {
     const button = Array.from(overlay().querySelectorAll('button')).find((candidate) =>
       (candidate.textContent ?? '').includes(label),
     );
-    if (!button) throw new Error(`No overlay button labelled "${label}"`);
+    if (!button) {
+      throw new Error(`No overlay button labelled "${label}"`);
+    }
     return button;
   }
 
   function typeInto(selector: string, value: string) {
     const input = overlay().querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
-    if (!input) throw new Error(`No overlay input matching "${selector}"`);
+    if (!input) {
+      throw new Error(`No overlay input matching "${selector}"`);
+    }
     input.value = value;
     input.dispatchEvent(new Event('input'));
   }
@@ -158,7 +166,9 @@ describe('ScheduleList', () => {
     const option = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).find(
       (candidate) => (candidate.textContent ?? '').trim() === optionText,
     );
-    if (!option) throw new Error(`No option "${optionText}"`);
+    if (!option) {
+      throw new Error(`No option "${optionText}"`);
+    }
     option.click();
     await settle(fixture);
   }

@@ -79,7 +79,9 @@ describe('AccountList', () => {
     const item = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('li')).find((candidate) =>
       candidate.textContent?.includes(accountName),
     );
-    if (!item) throw new Error(`No Account row named "${accountName}"`);
+    if (!item) {
+      throw new Error(`No Account row named "${accountName}"`);
+    }
     return item;
   }
 
@@ -95,7 +97,9 @@ describe('AccountList', () => {
     const confirm = Array.from(row(fixture, accountName).querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Delete',
     );
-    if (!confirm) throw new Error('No delete confirmation button');
+    if (!confirm) {
+      throw new Error('No delete confirmation button');
+    }
     confirm.click();
     await settle(fixture);
   }
@@ -730,7 +734,9 @@ describe('AccountList', () => {
       const confirm = Array.from(row(fixture, 'Cash on hand').querySelectorAll('button')).find(
         (button) => button.textContent?.trim() === 'Delete',
       );
-      if (!confirm) throw new Error('No delete confirmation button');
+      if (!confirm) {
+        throw new Error('No delete confirmation button');
+      }
       confirm.click();
       expect(remove).toHaveBeenCalledWith(1);
     });

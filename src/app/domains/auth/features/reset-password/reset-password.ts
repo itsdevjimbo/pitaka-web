@@ -10,7 +10,7 @@ import { AuthService, ResetLinkRejectedError } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Session } from '@/app/core/session';
 import { passwordRules } from '../../password-rules';
-import { DeadLink } from '../../ui/dead-link';
+import { DeadLink } from '../../ui/dead-link/dead-link';
 
 /** The banner line for a reset that failed before it could be attributed to the field. */
 const COULD_NOT_RESET = 'Something went wrong resetting your password. Please try again.';

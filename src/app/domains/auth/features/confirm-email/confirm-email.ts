@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
 import { APP_HOME_ROUTE, reasonQueryParams, Session, SIGN_IN_ROUTE } from '@/app/core/session';
-import { DeadLink } from '../../ui/dead-link';
+import { DeadLink } from '../../ui/dead-link/dead-link';
 
 /**
  * The screen a confirmation email links to (ADR 0015). Reads `userId` and

@@ -14,7 +14,7 @@ import { provideFakeMedia } from '@/testing/media';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Transaction, TransactionCriteria, TransactionSearchResult } from '../../data/transaction';
 import { TransactionsService } from '../../data/transactions.service';
-import { TransactionRow } from '../../ui/transaction-row';
+import { TransactionRow } from '../../ui/transaction-row/transaction-row';
 import { TransactionsFilterBar } from './transactions-filter-bar';
 import TransactionsList from './transactions-list';
 
@@ -137,12 +137,16 @@ describe('TransactionsList', () => {
       cmp: {
         onRemoved: () => {
           const row = fixture.debugElement.query(By.directive(TransactionRow));
-          if (!row) throw new Error('No rendered Transaction row');
+          if (!row) {
+            throw new Error('No rendered Transaction row');
+          }
           (row.componentInstance as TransactionRow).removed.emit();
         },
         applyCriteria: (criteria: TransactionCriteria) => {
           const bar = fixture.debugElement.query(By.directive(TransactionsFilterBar));
-          if (!bar) throw new Error('No rendered Transactions filter bar');
+          if (!bar) {
+            throw new Error('No rendered Transactions filter bar');
+          }
           (bar.componentInstance as TransactionsFilterBar).criteria.set(criteria);
         },
       },

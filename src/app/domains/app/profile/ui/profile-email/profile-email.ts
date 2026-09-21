@@ -52,19 +52,28 @@ export class ProfileEmail {
     disabled(form.newEmail, { when: () => this.submitting() });
     disabled(form.currentPassword, { when: () => this.submitting() });
     validate(form.newEmail, (context) => {
-      if (this.mode() === 'resend') return undefined;
+      if (this.mode() === 'resend') {
+        return undefined;
+      }
       const value = context.value().trim();
-      if (!value) return { kind: 'required', message: 'Enter an email address' };
-      if (value.length > EMAIL_MAX)
+      if (!value) {
+        return { kind: 'required', message: 'Enter an email address' };
+      }
+      if (value.length > EMAIL_MAX) {
         return { kind: 'maxLength', message: `The email address must be ${EMAIL_MAX} characters or fewer` };
-      if (!/^\S+@\S+\.\S+$/.test(value)) return { kind: 'email', message: 'Enter a valid email address' };
-      if (value.toLocaleLowerCase() === this.profile()?.email.toLocaleLowerCase())
+      }
+      if (!/^\S+@\S+\.\S+$/.test(value)) {
+        return { kind: 'email', message: 'Enter a valid email address' };
+      }
+      if (value.toLocaleLowerCase() === this.profile()?.email.toLocaleLowerCase()) {
         return { kind: 'unchanged', message: 'This is already your email address' };
-      if (value.toLocaleLowerCase() === this.pendingEmail()?.toLocaleLowerCase())
+      }
+      if (value.toLocaleLowerCase() === this.pendingEmail()?.toLocaleLowerCase()) {
         return {
           kind: 'pending',
           message: 'This address is already awaiting confirmation. Use Send another link instead.',
         };
+      }
       return undefined;
     });
     validate(form.currentPassword, (context) =>
@@ -93,7 +102,9 @@ export class ProfileEmail {
   }
 
   protected close(): void {
-    if (this.submitting()) return;
+    if (this.submitting()) {
+      return;
+    }
     this.mode.set('closed');
     this.model.set({ newEmail: '', currentPassword: '' });
     this.errorMessage.set(null);
@@ -106,7 +117,9 @@ export class ProfileEmail {
   }
 
   protected cancelChange(): void {
-    if (this.submitting()) return;
+    if (this.submitting()) {
+      return;
+    }
     this.submitting.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -130,7 +143,9 @@ export class ProfileEmail {
     const isResend = this.mode() === 'resend';
     const pending = this.pendingEmail();
     const newEmail = isResend ? pending : this.model().newEmail.trim();
-    if (!newEmail) return undefined;
+    if (!newEmail) {
+      return undefined;
+    }
 
     this.submitting.set(true);
     this.errorMessage.set(null);

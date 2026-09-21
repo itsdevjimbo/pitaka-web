@@ -28,11 +28,15 @@ export default class AuthConfirmEmailChange implements OnInit {
     const params = this.route.snapshot.queryParamMap;
     this.userId = parseUserId(params.get('userId'));
     this.token = params.get('token');
-    if (this.userId === null || !this.token) this.state.set('invalid');
+    if (this.userId === null || !this.token) {
+      this.state.set('invalid');
+    }
   }
 
   protected async confirm(): Promise<void> {
-    if (this.submitted || this.userId === null || this.token === null) return;
+    if (this.submitted || this.userId === null || this.token === null) {
+      return;
+    }
     this.submitted = true;
     this.state.set('confirming');
     try {
@@ -94,7 +98,9 @@ export default class AuthConfirmEmailChange implements OnInit {
 }
 
 function parseUserId(raw: string | null): number | null {
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   const userId = Number(raw);
   return Number.isInteger(userId) ? userId : null;
 }

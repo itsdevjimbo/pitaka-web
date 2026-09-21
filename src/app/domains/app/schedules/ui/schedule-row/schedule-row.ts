@@ -59,21 +59,27 @@ export class ScheduleRow {
   }
 
   protected askDelete(): void {
-    if (this.writeDisabled() || !this.row().schedule.canDelete) return;
+    if (this.writeDisabled() || !this.row().schedule.canDelete) {
+      return;
+    }
     this.deleteError.set(null);
     this.confirmingDelete.set(true);
     queueMicrotask(() => this.deleteCancel()?.focus());
   }
 
   protected cancelDelete(): void {
-    if (this.deleting()) return;
+    if (this.deleting()) {
+      return;
+    }
     this.confirmingDelete.set(false);
     this.deleteError.set(null);
     queueMicrotask(() => this.deleteTrigger()?.focus());
   }
 
   protected confirmDelete(): void {
-    if (this.deleting() || this.writeDisabled() || !this.row().schedule.canDelete) return;
+    if (this.deleting() || this.writeDisabled() || !this.row().schedule.canDelete) {
+      return;
+    }
     const scheduleId = this.row().schedule.id;
     this.deleting.set(true);
     this.deleteError.set(null);
@@ -92,7 +98,9 @@ export class ScheduleRow {
           if (failure.kind === 'conflict') {
             this.confirmingDelete.set(false);
             this.deleteConflict.emit({ scheduleId, message: failure.message });
-          } else this.deleteError.set(failure.message);
+          } else {
+            this.deleteError.set(failure.message);
+          }
         },
       });
   }

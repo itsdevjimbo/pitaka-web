@@ -16,8 +16,11 @@ import {
   sameCriteria,
 } from '../../data/transaction-criteria-params';
 import { TransactionsService } from '../../data/transactions.service';
-import { RefileTransactionDialog, RefileTransactionDialogData } from '../../ui/refile-transaction-dialog';
-import { TransactionRow, TransactionRowModel, toSpanningRow } from '../../ui/transaction-row';
+import {
+  RefileTransactionDialog,
+  RefileTransactionDialogData,
+} from '../../ui/refile-transaction/refile-transaction-dialog';
+import { TransactionRow, TransactionRowModel, toSpanningRow } from '../../ui/transaction-row/transaction-row';
 import { FilterAccountOption, FilterCategoryOption, TransactionsFilterBar } from './transactions-filter-bar';
 
 const LOAD_FAILED = 'Something went wrong loading your transactions. Please try again.';

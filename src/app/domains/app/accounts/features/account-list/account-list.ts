@@ -16,8 +16,8 @@ import { Account, AccountCriteria, ACCOUNT_TYPES } from '../../data/account';
 import { criteriaFromQueryParams, criteriaToQueryParams, sameCriteria } from '../../data/account-criteria-params';
 import { AccountDeleteBlockedError, AccountModifiedError } from '../../data/account-errors';
 import { AccountsService } from '../../data/accounts.service';
-import { NewAccountDialog } from '../../ui/new-account-dialog';
-import { RenameAccountDialog } from '../../ui/rename-account-dialog';
+import { NewAccountDialog } from '../../ui/new-account/new-account-dialog';
+import { RenameAccountDialog } from '../../ui/rename-account/rename-account-dialog';
 
 const LOAD_FAILED = 'Something went wrong loading your accounts. Please try again.';
 const FILTER_FAILED = 'Something went wrong applying those filters. Please try again.';
@@ -92,7 +92,9 @@ export default class AccountList {
       const next = criteriaFromQueryParams(params);
       if (!sameCriteria(next, this.criteria())) {
         this.criteria.set(next);
-        if (this.ownsAccounts() === true) this.readCriteria(next);
+        if (this.ownsAccounts() === true) {
+          this.readCriteria(next);
+        }
       }
     });
     this.load();
@@ -148,14 +150,18 @@ export default class AccountList {
         next: (accounts) => {
           this.displayedCriteria.set(criteria);
           this.accounts.set(accounts);
-          if (accounts.length === 0) this.checkWhetherProfileOwnsAccounts();
+          if (accounts.length === 0) {
+            this.checkWhetherProfileOwnsAccounts();
+          }
           this.loading.set(false);
           this.filtering.set(false);
         },
         error: (error: unknown) => {
-          if (initial && this.accounts() === null)
+          if (initial && this.accounts() === null) {
             this.errorMessage.set(error instanceof ApiError ? error.message : LOAD_FAILED);
-          else this.filterError.set(error instanceof ApiError ? error.message : FILTER_FAILED);
+          } else {
+            this.filterError.set(error instanceof ApiError ? error.message : FILTER_FAILED);
+          }
           this.loading.set(false);
           this.filtering.set(false);
         },
@@ -190,14 +196,18 @@ export default class AccountList {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((result) => {
-        if (result) handle(result);
+        if (result) {
+          handle(result);
+        }
       });
   }
   private onCreated(account: Account): void {
     this.ownsAccounts.set(true);
     const outsideCriteria = messageForOutsideCriteria(account, this.criteria());
     this.actionMessage.set(outsideCriteria);
-    if (outsideCriteria === null) this.accounts.update((accounts) => [...(accounts ?? []), account]);
+    if (outsideCriteria === null) {
+      this.accounts.update((accounts) => [...(accounts ?? []), account]);
+    }
     this.reconcile();
   }
   protected toggleActive(account: Account): void {
@@ -255,8 +265,12 @@ export default class AccountList {
             ? DELETE_BLOCK_HINT[error.reason]
             : `${error.message} ${DELETE_BLOCK_HINT[error.reason]}`,
       };
-      if (error.reason === 'goal-allocation') notice.viewGoals = true;
-      if (error.reason === 'transaction-history') notice.retire = () => this.toggleActive(account);
+      if (error.reason === 'goal-allocation') {
+        notice.viewGoals = true;
+      }
+      if (error.reason === 'transaction-history') {
+        notice.retire = () => this.toggleActive(account);
+      }
       return notice;
     }
     return {
@@ -273,9 +287,11 @@ function messageFor(error: unknown): string {
   return error instanceof AccountModifiedError || error instanceof ApiError ? error.message : ACTION_FAILED;
 }
 function messageForOutsideCriteria(account: Account, criteria: AccountCriteria): string | null {
-  if (criteria.isActive !== undefined && account.isActive !== criteria.isActive)
+  if (criteria.isActive !== undefined && account.isActive !== criteria.isActive) {
     return `${account.name} is ${account.isActive ? 'active' : 'retired'}. Change the status filter to find it.`;
-  if (criteria.type !== undefined && account.type !== criteria.type)
+  }
+  if (criteria.type !== undefined && account.type !== criteria.type) {
     return `${account.name} is a ${account.type} account. Choose ${account.type} to find it.`;
+  }
   return null;
 }

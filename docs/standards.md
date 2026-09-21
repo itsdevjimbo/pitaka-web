@@ -24,6 +24,21 @@ Use `app/core/` for capabilities shared across domains, such as money formatting
 session handling, and dialog infrastructure. Share a helper when consumers need the
 same rule; similarity alone does not establish shared behavior.
 
+Apply responsibility-based grouping throughout the repository. When a directory
+mixes distinct responsibilities, introduce named subfolders so a reader can locate
+the relevant capability without scanning unrelated files. Keep each implementation
+with its templates, styles, tests, and private helpers. Small, cohesive folders may
+stay flat; there is no fixed file-count limit or requirement to wrap every file or
+component in its own directory. Avoid vague catch-all folders such as `misc/` or
+`helpers/` that hide ownership.
+
+Use `schedules/ui/` as the example: `new-schedule/` holds its dialog and form,
+while `schedule-row/` holds its component, template, and test. Group existing shared
+editors together when their forms or validation belong to the same responsibility.
+Apply the same principle within `data/`, `features/`, and shared capabilities;
+preserve the domain and layer boundaries above. Folder names should describe the
+responsibility, and extra nesting should make navigation clearer.
+
 Import another resource domain through its `index.ts`. Within a domain, use direct
 relative imports. Export only the vocabulary and capabilities other domains need;
 keep routed screens lazy-loaded from their concrete paths. Route assembly is the
@@ -39,6 +54,19 @@ import { GoalsService } from '../../data/goals.service';
 Use default exports for routed feature components and named exports for reusable
 UI, services, and helpers, matching the existing route and barrel conventions. Use
 `type` for type definitions; the lint configuration enforces this choice.
+
+## Control-flow braces
+
+Always use braces for `if`, `else if`, and `else` bodies, including single-statement
+guards, returns, and throws. Loops also require braces. Keep normal `else if`
+chains; each condition's body must be a block. ESLint enforces this with
+`curly: ['error', 'all']` in production code and tests.
+
+```ts
+if (!save) {
+  throw new Error('Expected the Save button');
+}
+```
 
 ## Components, state, and asynchronous work
 
@@ -116,7 +144,9 @@ stubs; an assertion must not conceal missing behavior the test relies on.
 ```ts
 const element = fixture.nativeElement as HTMLElement;
 const save = Array.from(element.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Save');
-if (!save) throw new Error('Expected the Save button');
+if (!save) {
+  throw new Error('Expected the Save button');
+}
 save.click();
 await fixture.whenStable();
 fixture.detectChanges();

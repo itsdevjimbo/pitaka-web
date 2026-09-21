@@ -111,3 +111,41 @@ test('rejects fixture internals casts, permits DOM casts and accepts a documente
     [],
   );
 });
+
+test('requires control-flow braces in production and tests, including single-line bodies', async () => {
+  const eslint = new ESLint({
+    overrideConfig: { languageOptions: { parserOptions: { projectService: false } } },
+  });
+  const source = `
+    if (ready) run(); else if (waiting) wait(); else stop();
+    for (let i = 0; i < 2; i++) run();
+    for (const value of values) run(value);
+    for (const key in values) run(key);
+    while (ready) run();
+    do run(); while (ready);
+  `;
+  const braced = `
+    if (ready) { run(); } else if (waiting) { wait(); } else { stop(); }
+    for (let i = 0; i < 2; i++) { run(); }
+    for (const value of values) { run(value); }
+    for (const key in values) { run(key); }
+    while (ready) { run(); }
+    do { run(); } while (ready);
+  `;
+  for (const file of ['src/app/app.ts', 'src/app/app.spec.ts']) {
+    const options = { filePath: resolve(file) };
+    const messages = (await eslint.lintText(source, options))[0].messages.filter(
+      (message) => message.ruleId === 'curly',
+    );
+    assert.equal(messages.length, 8, file);
+    assert.ok(
+      messages.every((message) => message.severity === 2),
+      file,
+    );
+    assert.deepEqual(
+      (await eslint.lintText(braced, options))[0].messages.filter((message) => message.ruleId === 'curly'),
+      [],
+      file,
+    );
+  }
+});

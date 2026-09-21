@@ -96,13 +96,17 @@ describe('GoalDetail', () => {
     const action = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
       '[aria-label="Contribution actions"]',
     );
-    if (!action) throw new Error('No Contribution actions button');
+    if (!action) {
+      throw new Error('No Contribution actions button');
+    }
     action.click();
     await settle(fixture);
     const menuDelete = Array.from(overlay().querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Delete contribution',
     );
-    if (!menuDelete) throw new Error('No Contribution Delete menu item');
+    if (!menuDelete) {
+      throw new Error('No Contribution Delete menu item');
+    }
     menuDelete.click();
     await settle(fixture);
   }
@@ -112,7 +116,9 @@ describe('GoalDetail', () => {
     const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find(
       (button) => button.textContent?.trim() === 'Delete',
     );
-    if (!confirm) throw new Error('No Contribution delete confirmation');
+    if (!confirm) {
+      throw new Error('No Contribution delete confirmation');
+    }
     confirm.click();
     await settle(fixture);
   }

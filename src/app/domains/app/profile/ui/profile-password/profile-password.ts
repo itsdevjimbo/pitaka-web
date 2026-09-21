@@ -69,7 +69,9 @@ export class ProfilePassword {
   }
 
   protected close(): void {
-    if (this.submitting()) return;
+    if (this.submitting()) {
+      return;
+    }
     this.editing.set(false);
     this.clearSecrets();
     this.errorMessage.set(null);

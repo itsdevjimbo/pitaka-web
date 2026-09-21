@@ -50,7 +50,9 @@ export class ScheduleLifecycleDialog {
   }
 
   protected confirm(): void {
-    if (this.submitting()) return;
+    if (this.submitting()) {
+      return;
+    }
     this.submitting.set(true);
     this.errorMessage.set(null);
     this.coordinator.setStatus(this.data.schedule.id, this.action.status).subscribe({

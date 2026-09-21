@@ -81,12 +81,19 @@ export function partitionServerErrorMessages(
   const fieldMessages: Record<string, readonly string[]> = {};
   const unattributed: string[] = [];
   for (const [field, messages] of Object.entries(error.fieldErrors)) {
-    if (acceptedFields.has(field)) fieldMessages[field] = messages;
-    else unattributed.push(...messages);
+    if (acceptedFields.has(field)) {
+      fieldMessages[field] = messages;
+    } else {
+      unattributed.push(...messages);
+    }
   }
 
-  if (unattributed.length > 0) return { fieldMessages, bannerMessage: unattributed.join(' ') };
-  if (Object.keys(fieldMessages).length === 0) return { fieldMessages, bannerMessage: error.message };
+  if (unattributed.length > 0) {
+    return { fieldMessages, bannerMessage: unattributed.join(' ') };
+  }
+  if (Object.keys(fieldMessages).length === 0) {
+    return { fieldMessages, bannerMessage: error.message };
+  }
   return { fieldMessages, bannerMessage: null };
 }
 

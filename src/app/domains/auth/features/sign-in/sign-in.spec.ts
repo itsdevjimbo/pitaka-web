@@ -112,7 +112,9 @@ describe('AuthSignIn', () => {
     const resend = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Resend confirmation email'),
     );
-    if (!resend) throw new Error('No resend confirmation button');
+    if (!resend) {
+      throw new Error('No resend confirmation button');
+    }
     resend.click();
     await fixture.whenStable();
     expect(resendConfirmation).toHaveBeenCalledWith('nobody@example.com');

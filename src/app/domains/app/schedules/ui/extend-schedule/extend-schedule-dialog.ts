@@ -63,7 +63,9 @@ export class ExtendScheduleDialog {
   }
 
   private async performExtension(lastGeneration: Date | null) {
-    if (this.submitting()) return undefined;
+    if (this.submitting()) {
+      return undefined;
+    }
     this.submitting.set(true);
     this.errorMessage.set(null);
     try {
@@ -80,8 +82,12 @@ export class ExtendScheduleDialog {
         { lastGeneration: this.extendForm.lastGeneration },
         'Something went wrong extending your Schedule. Please try again.',
       );
-      if (boundErrors.length > 0) this.extendForm().markAsTouched();
-      if (bannerMessage !== null) this.errorMessage.set(bannerMessage);
+      if (boundErrors.length > 0) {
+        this.extendForm().markAsTouched();
+      }
+      if (bannerMessage !== null) {
+        this.errorMessage.set(bannerMessage);
+      }
       return boundErrors.length > 0 ? boundErrors : undefined;
     } finally {
       this.submitting.set(false);
