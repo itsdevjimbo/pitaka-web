@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal, viewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
 import { Transaction, TransferDestinationAccount } from '../../data/transaction';
@@ -13,24 +13,22 @@ export type RecordTransactionDialogData = {
   destinations: readonly TransferDestinationAccount[];
 };
 
-/**
- * The *Record a transaction* dialog: the record form inside the shared shell. It
- * owns nothing but the wiring — the form still decides what a valid Transaction
- * is, and the Account detail screen still decides what a successful record does
- * (close, then re-read the balance and list — ADR 0006). A successful record
- * closes the dialog with the recorded Transaction; Cancel and the close control
- * close it with nothing.
- */
 @Component({
   selector: 'transactions-record-transaction-dialog',
   imports: [DialogShell, RecordTransactionForm],
   template: `
-    <app-dialog-shell heading="Record a transaction">
+    <app-dialog-shell
+      heading="Record a transaction"
+      [dirty]="dirty()"
+      [pending]="pending()"
+    >
       <transactions-record-transaction-form
         [fromAccountId]="fromAccountId"
         [destinations]="destinations"
         (recorded)="dialogRef.close($event)"
-        (cancelled)="dialogRef.close()"
+        (cancelled)="shell().requestClose()"
+        (dirtyChange)="dirty.set($event)"
+        (pendingChange)="pending.set($event)"
       />
     </app-dialog-shell>
   `,
@@ -45,4 +43,7 @@ export class RecordTransactionDialog {
 
   /** The valid Transfer destinations, already narrowed by the screen. */
   protected readonly destinations = this.data.destinations;
+  protected readonly dirty = signal(false);
+  protected readonly pending = signal(false);
+  protected readonly shell = viewChild.required(DialogShell);
 }

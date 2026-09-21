@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
-import { of, Subject, throwError } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
@@ -82,7 +82,7 @@ describe('RecordTransactionForm', () => {
   function enter(fixture: ComponentFixture<RecordTransactionForm>, selector: string, value: string) {
     const input = fixture.nativeElement.querySelector(selector) as HTMLInputElement;
     input.value = value;
-    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     fixture.detectChanges();
   }
 
@@ -225,6 +225,59 @@ describe('RecordTransactionForm', () => {
     await submit(fixture);
     expect(record).not.toHaveBeenCalled();
     expect(text(fixture)).toContain(message);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled,
+    ).toBe(false);
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#transaction-amount'));
+  });
+
+  it('reports edits and an in-flight financial write to the dialog shell', async () => {
+    const pending = new Subject<Transaction>();
+    const fixture = setup(() => pending);
+    const dirty: boolean[] = [];
+    const saving: boolean[] = [];
+    fixture.componentInstance.dirtyChange.subscribe((value) => dirty.push(value));
+    fixture.componentInstance.pendingChange.subscribe((value) => saving.push(value));
+
+    await fillExpense(fixture);
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+
+    expect(dirty).toContain(true);
+    expect(saving).toEqual([true]);
+
+    pending.next(RECORDED);
+    pending.complete();
+    await fixture.whenStable();
+
+    expect(saving).toEqual([true, false]);
+  });
+
+  it('releases the busy state after an uncertain timeout without retrying', async () => {
+    vi.useFakeTimers();
+    try {
+      const record = vi.fn(() => NEVER);
+      const fixture = setup(record as unknown as TransactionsService['record']);
+      await fillExpense(fixture);
+      const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+      form.dispatchEvent(new Event('submit'));
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled,
+      ).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(record).toHaveBeenCalledOnce();
+      expect(text(fixture)).toContain('couldn’t confirm whether this transaction was recorded');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled,
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([

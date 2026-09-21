@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { Account } from '../../data/account';
@@ -43,7 +43,7 @@ describe('RenameAccountForm', () => {
   function enterName(fixture: ComponentFixture<RenameAccountForm>, value: string) {
     const input = nameInput(fixture);
     input.value = value;
-    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   function text(fixture: ComponentFixture<RenameAccountForm>) {
@@ -54,6 +54,46 @@ describe('RenameAccountForm', () => {
     const { fixture } = setup(() => of(CASH));
 
     expect(nameInput(fixture).value).toBe('Cash on hand');
+  });
+
+  it('keeps Save available while invalid and focuses the invalid name on submit', async () => {
+    const rename = vi.fn(() => of(CASH));
+    const { fixture } = setup(rename);
+
+    enterName(fixture, '');
+    fixture.detectChanges();
+    const save = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Save',
+    );
+    expect(save?.disabled).toBe(false);
+
+    await submitAndSettle(fixture);
+
+    expect(rename).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(nameInput(fixture));
+    expect(text(fixture)).toContain('You must enter a name');
+  });
+
+  it('reports edits and an in-flight save to its dialog shell', async () => {
+    const response = new Subject<Account>();
+    const { fixture } = setup(() => response);
+    const dirty: boolean[] = [];
+    const pending: boolean[] = [];
+    fixture.componentInstance.dirtyChange.subscribe((value) => dirty.push(value));
+    fixture.componentInstance.pendingChange.subscribe((value) => pending.push(value));
+
+    enterName(fixture, 'Everyday cash');
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+
+    expect(dirty).toEqual([true]);
+    expect(pending).toEqual([true]);
+
+    response.next({ ...CASH, name: 'Everyday cash' });
+    response.complete();
+    await fixture.whenStable();
+
+    expect(pending).toEqual([true, false]);
   });
 
   it('sends the trimmed name and emits the renamed Account', async () => {

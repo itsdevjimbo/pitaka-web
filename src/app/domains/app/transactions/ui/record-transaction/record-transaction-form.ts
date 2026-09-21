@@ -8,8 +8,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTimepickerModule } from '@angular/material/timepicker';
-import { firstValueFrom } from 'rxjs';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { firstValueFrom, TimeoutError, timeout } from 'rxjs';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { Tag, TagField } from '@/app/domains/app/tags';
 import { combineDateTime } from '../../data/dates/combine-date-time';
@@ -24,6 +24,9 @@ import { TransactionsService } from '../../data/transactions.service';
 
 /** The banner line for a record that failed before it could be attributed. */
 const COULD_NOT_RECORD = 'Something went wrong recording this transaction. Please try again.';
+const RECORD_UNCERTAIN =
+  'We couldn’t confirm whether this transaction was recorded. Check Transactions before trying again.';
+const RECORD_TIMEOUT_MS = 15_000;
 
 /**
  * The directions this form offers, in display order — expense leads, being the
@@ -114,6 +117,8 @@ export class RecordTransactionForm {
   // Outputs
   readonly recorded = output<Transaction>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   // State
   protected readonly directionOptions = DIRECTION_OPTIONS;
@@ -207,10 +212,12 @@ export class RecordTransactionForm {
 
   save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.recordForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
 
         try {
@@ -222,21 +229,27 @@ export class RecordTransactionForm {
           // once more on the wire (ADR 0010).
           const isTransfer = direction === 'transfer';
           const recorded = await firstValueFrom(
-            this.service.record({
-              accountId: this.fromAccountId(),
-              direction,
-              // `required` / `min` have ruled out a null amount and a null
-              // date or time by the time the action runs.
-              amount: amount as number,
-              date: combineDateTime(date as Date, time as Date),
-              categoryId: isTransfer ? null : categoryId,
-              transferToAccountId: isTransfer ? transferToAccountId : null,
-              tagIds: tags.map((tag) => tag.id),
-            } satisfies NewTransaction),
+            this.service
+              .record({
+                accountId: this.fromAccountId(),
+                direction,
+                // `required` / `min` have ruled out a null amount and a null
+                // date or time by the time the action runs.
+                amount: amount as number,
+                date: combineDateTime(date as Date, time as Date),
+                categoryId: isTransfer ? null : categoryId,
+                transferToAccountId: isTransfer ? transferToAccountId : null,
+                tagIds: tags.map((tag) => tag.id),
+              } satisfies NewTransaction)
+              .pipe(timeout({ first: RECORD_TIMEOUT_MS })),
           );
           this.recorded.emit(recorded);
           return undefined;
         } catch (error) {
+          if (error instanceof TimeoutError) {
+            this.errorMessage.set(RECORD_UNCERTAIN);
+            return undefined;
+          }
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
@@ -251,9 +264,14 @@ export class RecordTransactionForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.recordForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected cancel(): void {

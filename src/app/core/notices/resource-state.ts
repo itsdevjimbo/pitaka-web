@@ -16,7 +16,7 @@ export type ResourceStateKind = 'loading' | 'initial-error' | 'stale' | 'saved-s
           role="status"
           aria-live="polite"
         >
-          <span>Loading…</span>
+          <span>{{ message() || 'Loading…' }}</span>
           <span
             class="h-16 animate-pulse rounded-2xl bg-soft motion-reduce:animate-none"
             aria-hidden="true"

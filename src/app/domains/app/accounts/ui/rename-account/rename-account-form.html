@@ -1,6 +1,7 @@
 <form
   class="flex flex-col gap-y-4"
   (submit)="save($event)"
+  (input)="dirtyChange.emit(true)"
 >
   @if (errorMessage(); as message) {
     <div
@@ -38,7 +39,7 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="renameForm().invalid() || submitting()"
+      [disabled]="submitting()"
     >
       {{ submitting() ? 'Saving…' : 'Save' }}
     </button>
