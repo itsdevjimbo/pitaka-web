@@ -69,7 +69,7 @@
   input,
   select,
   textarea {
-    min-block-size: 2.75rem;
+    min-block-size: var(--control-height);
   }
 
   ::selection {

@@ -316,13 +316,13 @@
   /* ------------------------------------------------------------------------ */
   /* Button                                                                   */
   /* ------------------------------------------------------------------------ */
-  --mat-button-text-container-shape: 0.5rem;
+  --mat-button-text-container-shape: var(--control-border-radius);
   --mat-button-text-container-height: 2.25rem;
   --mat-button-text-horizontal-padding: 0.75rem;
   --mat-button-text-with-icon-horizontal-padding: 0.75rem;
   --mat-button-text-icon-offset: 0rem;
 
-  --mat-button-outlined-container-shape: 0.5rem;
+  --mat-button-outlined-container-shape: var(--control-border-radius);
   --mat-button-outlined-container-height: 2.25rem;
   --mat-button-outlined-horizontal-padding: 0.75rem;
   --mat-button-outlined-icon-offset: 0rem;
@@ -339,17 +339,17 @@
     color-mix(in oklch, var(--color-white) 10%, transparent)
   );
 
-  --mat-button-tonal-container-shape: 0.5rem;
+  --mat-button-tonal-container-shape: var(--control-border-radius);
   --mat-button-tonal-container-height: 2.25rem;
   --mat-button-tonal-horizontal-padding: 0.75rem;
   --mat-button-tonal-icon-offset: 0rem;
 
-  --mat-button-filled-container-shape: 0.5rem;
+  --mat-button-filled-container-shape: var(--control-border-radius);
   --mat-button-filled-container-height: 2.25rem;
   --mat-button-filled-horizontal-padding: 0.75rem;
   --mat-button-filled-icon-offset: 0rem;
 
-  --mat-button-protected-container-shape: 0.5rem;
+  --mat-button-protected-container-shape: var(--control-border-radius);
   --mat-button-protected-container-height: 2.25rem;
   --mat-button-protected-horizontal-padding: 0.75rem;
   --mat-button-protected-icon-offset: 0rem;
@@ -681,6 +681,7 @@
 
           /* Native input element */
           .mat-mdc-input-element {
+            min-block-size: var(--form-field-line-height);
             color: var(--form-field-text-color);
             caret-color: currentColor;
 
@@ -863,9 +864,11 @@
     --form-field-subscript-letter-spacing: var(--tracking-normal);
 
     /* Size */
-    --form-field-border-radius: 0.75rem; /* 12px */
+    --form-field-border-radius: var(--control-border-radius);
     --form-field-margin-top: 1.5rem; /* 24px */
-    --form-field-padding-y: 0.75rem; /* 12px */
+    --form-field-padding-y: calc(
+      (var(--control-height) - var(--form-field-line-height)) / 2
+    );
     --form-field-padding-x: 0.75rem; /* 12px */
     --form-field-gap-y: 0.5rem; /* 8px */
     --form-field-gap-x: 0.5rem; /* 8px */
@@ -1216,10 +1219,10 @@
   --mat-sys-headline-small: 750 1.75rem / 2rem var(--font-display);
   --mat-sys-headline-small-font: var(--font-display);
   --mat-sys-headline-small-weight: 750;
-  --mat-button-filled-container-height: 2.75rem;
-  --mat-button-outlined-container-height: 2.75rem;
-  --mat-button-text-container-height: 2.75rem;
-  --mat-icon-button-state-layer-size: 2.75rem;
+  --mat-button-filled-container-height: var(--control-height);
+  --mat-button-outlined-container-height: var(--control-height);
+  --mat-button-text-container-height: var(--control-height);
+  --mat-icon-button-state-layer-size: var(--control-height);
   --mat-dialog-container-shape: 1.5rem;
   --mat-menu-container-shape: 1rem;
 }

@@ -16,6 +16,10 @@
   --font-smoothing: antialiased;
   --font-optical-sizing: auto;
 
+  /* Control size */
+  --control-height: 2.75rem; /* 44px */
+  --control-border-radius: 0.5rem; /* 8px */
+
   /* Font weight */
   --font-weight-normal: 400;
   --font-weight-medium: 500;
