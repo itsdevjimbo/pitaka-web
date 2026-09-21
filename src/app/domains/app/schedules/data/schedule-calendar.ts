@@ -25,7 +25,9 @@ export function formatCalendarDate(value: Date): string {
  * is recalculated from the original Frequency anchor and today's UTC calendar.
  */
 export function nextEligibleGeneration(schedule: Schedule, now = new Date()): Date {
-  if (schedule.status === 'active') return schedule.nextGeneration;
+  if (schedule.status === 'active') {
+    return schedule.nextGeneration;
+  }
 
   const today = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   return occurrenceOnOrAfter(schedule, today);
@@ -79,7 +81,9 @@ const FREQUENCY_STRATEGY: Record<ScheduleFrequency, FrequencyStrategy> = {
   yearly: {
     count: (start, end) => {
       const years = end.getFullYear() - start.getFullYear();
-      if (end.getMonth() !== start.getMonth()) return end.getMonth() < start.getMonth() ? years - 1 : years;
+      if (end.getMonth() !== start.getMonth()) {
+        return end.getMonth() < start.getMonth() ? years - 1 : years;
+      }
       return end.getDate() < start.getDate() ? years - 1 : years;
     },
     add: addYearsClamped,

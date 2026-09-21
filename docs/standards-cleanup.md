@@ -98,6 +98,31 @@ explicit product decisions rather than guessed cancellation changes.
 Do not mark those follow-ups complete from the inspection alone. Land runtime
 fixes separately with their focused behavior tests and normal repository checks.
 
+## 5. Responsibility folders and control-flow braces
+
+Completed on 2026-09-21. The repository-wide folder review applied the
+`schedules/ui/` responsibility grouping to existing mixed directories, moving 96
+files into 22 named folders and updating imports and domain exports. UI groups
+keep dialogs, forms, templates, tests, and private helpers together; existing
+shared Goal, Contribution, and Category editors stay together. Transaction date
+helpers and Linked Contribution calculations, Goal Contribution data, and session
+routing now have their own responsibility folders.
+
+Small cohesive folders remain flat, including routed screen implementations,
+Layout shell controls, and the remaining shared capabilities. The rule has no
+fixed file-count limit and does not require a wrapper for every component. Domain
+and layer ownership are preserved.
+
+ESLint now requires braces for all conditional and loop bodies, including
+single-statement branches in production code and tests. Existing violations were
+fixed, and the standards examples now follow the rule. The enforcement suite
+covers unbraced bodies and permits braced `else if` chains.
+
+Verification: changed-file checks, full-source formatting, full lint, all six
+standards enforcement tests, all 985 application tests across 77 test files, and
+the production build passed. The sandboxed build aborted before reporting a
+result; its rerun outside the sandbox passed.
+
 ## Completion
 
 The repository-wide inspection is complete: fixture-cast diagnostics are resolved,

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
-import { GoalContributionWithAccountName } from '../../data/contribution-account-name';
+import { GoalContributionWithAccountName } from '../../data/contributions/contribution-account-name';
 import { ContributionHistoryRow } from './contribution-history-row';
 
 const CONTRIBUTION: GoalContributionWithAccountName = {

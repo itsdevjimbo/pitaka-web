@@ -115,7 +115,9 @@ export class NewScheduleForm {
     validate(path.lastGeneration, (context) => {
       const value = context.value();
       const first = this.model().firstGeneration;
-      if (value === null || first === null) return null;
+      if (value === null || first === null) {
+        return null;
+      }
       const minimum = addCalendarDays(first, 1);
       return compareCalendarDates(value, minimum) < 0
         ? { kind: 'minimum-date', message: minimumMessage(minimum) }
@@ -188,8 +190,12 @@ export class NewScheduleForm {
             this.serverErrorControls(),
             COULD_NOT_CREATE,
           );
-          if (boundErrors.length > 0) this.scheduleForm().markAsTouched();
-          if (bannerMessage !== null) this.errorMessage.set(bannerMessage);
+          if (boundErrors.length > 0) {
+            this.scheduleForm().markAsTouched();
+          }
+          if (bannerMessage !== null) {
+            this.errorMessage.set(bannerMessage);
+          }
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
@@ -251,7 +257,9 @@ export class NewScheduleForm {
     const eligibleAccounts = accounts.filter((account) => account.isActive);
     this.accounts.set(eligibleAccounts);
     this.categories.set(categories);
-    if (!clearUnavailable) return;
+    if (!clearUnavailable) {
+      return;
+    }
     this.model.update((value) => ({
       ...value,
       accountId: eligibleAccounts.some((account) => account.id === value.accountId) ? value.accountId : null,

@@ -65,7 +65,9 @@ describe('User', () => {
     const button = Array.from(overlay().querySelectorAll('button')).find(
       (candidate) => candidate.textContent?.trim() === 'Sign out',
     );
-    if (!button) throw new Error('No Sign out button');
+    if (!button) {
+      throw new Error('No Sign out button');
+    }
     button.click();
 
     expect(signOut).toHaveBeenCalledTimes(1);

@@ -6,12 +6,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
+import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal, GoalStatus } from '../../data/goal';
-import { GoalContributionsService } from '../../data/goal-contributions.service';
 import { GoalsService } from '../../data/goals.service';
-import { EditGoalDialog } from '../../ui/edit-goal-dialog';
-import { GoalRow } from '../../ui/goal-row';
-import { NewGoalDialog } from '../../ui/new-goal-dialog';
+import { EditGoalDialog } from '../../ui/goal-editor/edit-goal-dialog';
+import { NewGoalDialog } from '../../ui/goal-editor/new-goal-dialog';
+import { GoalRow } from '../../ui/goal-row/goal-row';
 
 const LOAD_FAILED = 'Something went wrong loading your goals. Please try again.';
 
@@ -52,7 +52,9 @@ export default class GoalList {
   /** All lifecycle sections stay visible after the first Goal exists. */
   protected readonly groups = computed<readonly GoalGroup[]>(() => {
     const goals = this.goals();
-    if (!goals) return [];
+    if (!goals) {
+      return [];
+    }
 
     return GROUPS.map((group) => ({
       ...group,
@@ -93,7 +95,9 @@ export default class GoalList {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((goal) => {
-        if (goal) this.load();
+        if (goal) {
+          this.load();
+        }
       });
   }
   protected openEdit(goal: Goal): void {
@@ -103,7 +107,9 @@ export default class GoalList {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
-        if (saved) this.load();
+        if (saved) {
+          this.load();
+        }
       });
   }
 
@@ -195,9 +201,15 @@ export default class GoalList {
 }
 
 function byActiveOrder(left: Goal, right: Goal): number {
-  if (left.targetDate === null && right.targetDate === null) return byName(left, right);
-  if (left.targetDate === null) return 1;
-  if (right.targetDate === null) return -1;
+  if (left.targetDate === null && right.targetDate === null) {
+    return byName(left, right);
+  }
+  if (left.targetDate === null) {
+    return 1;
+  }
+  if (right.targetDate === null) {
+    return -1;
+  }
   return left.targetDate.getTime() - right.targetDate.getTime() || byName(left, right);
 }
 

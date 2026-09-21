@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { AccountModifiedError } from '@/app/domains/app/accounts';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
-import { GoalContributionsService } from './goal-contributions.service';
+import { GoalContributionsService } from './contributions/goal-contributions.service';
 import { GoalsService } from './goals.service';
 
 describe('Goals data adapters', () => {

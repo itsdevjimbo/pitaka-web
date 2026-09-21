@@ -14,12 +14,13 @@ export default defineConfig(
   // Base configs
   eslint.configs.recommended,
 
-  // Unused imports
+  // Shared code rules
   {
     plugins: {
       'unused-imports': unusedImports,
     },
     rules: {
+      curly: ['error', 'all'],
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': [
         'warn',

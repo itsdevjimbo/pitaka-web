@@ -110,7 +110,9 @@ describe('TransactionsFilterBar', () => {
         const button = Array.from(host.querySelectorAll('button')).find((candidate) =>
           candidate.textContent?.includes('Clear filters'),
         );
-        if (!button) throw new Error('No Clear filters button');
+        if (!button) {
+          throw new Error('No Clear filters button');
+        }
         button.click();
         fixture.detectChanges();
       },

@@ -151,7 +151,9 @@ describe('AccountDetail', () => {
     const trigger = Array.from(host.querySelectorAll('button')).find(
       (button) => button.getAttribute('aria-label') === 'Transaction actions',
     );
-    if (!trigger) throw new Error('No Transaction actions button');
+    if (!trigger) {
+      throw new Error('No Transaction actions button');
+    }
     trigger.click();
     await settle(fixture);
     overlayButton('Refile').click();
@@ -956,7 +958,9 @@ describe('AccountDetail', () => {
     const confirm = Array.from(host.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Remove',
     );
-    if (!confirm) throw new Error('No remove confirmation button');
+    if (!confirm) {
+      throw new Error('No remove confirmation button');
+    }
     confirm.click();
     await settle(fixture);
 

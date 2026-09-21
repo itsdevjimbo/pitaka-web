@@ -45,7 +45,9 @@ describe('ProfileIdentity', () => {
     const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
       (candidate) => candidate.textContent?.trim() === label,
     );
-    if (!button) throw new Error(`No button labelled "${label}"`);
+    if (!button) {
+      throw new Error(`No button labelled "${label}"`);
+    }
     button.click();
     fixture.detectChanges();
   }

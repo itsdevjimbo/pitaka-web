@@ -13,8 +13,8 @@ import { CategoriesService } from '@/app/domains/app/categories';
 import { Budget, BudgetWithSpend, PERIODS } from '../../data/budget';
 import { budgetPhase, BudgetPhase, budgetRemaining, BudgetRemaining } from '../../data/budget-calendar';
 import { BudgetsService } from '../../data/budgets.service';
-import { AdjustBudgetDialog } from '../../ui/adjust-budget-dialog';
-import { NewBudgetDialog } from '../../ui/new-budget-dialog';
+import { AdjustBudgetDialog } from '../../ui/adjust-budget/adjust-budget-dialog';
+import { NewBudgetDialog } from '../../ui/new-budget/new-budget-dialog';
 
 const LOAD_FAILED = 'Something went wrong loading your budgets. Please try again.';
 

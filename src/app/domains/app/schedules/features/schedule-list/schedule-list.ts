@@ -96,7 +96,9 @@ export default class ScheduleList {
       paused: 0,
       past: 0,
     };
-    for (const row of this.rows()) result[STATUS_VIEW[row.schedule.status]] += 1;
+    for (const row of this.rows()) {
+      result[STATUS_VIEW[row.schedule.status]] += 1;
+    }
     return result;
   });
 
@@ -111,8 +113,11 @@ export default class ScheduleList {
 
   protected load(conflict?: { scheduleId: number; message: string }): void {
     const hasCurrentData = this.schedules() !== null;
-    if (hasCurrentData) this.refreshing.set(true);
-    else this.loading.set(true);
+    if (hasCurrentData) {
+      this.refreshing.set(true);
+    } else {
+      this.loading.set(true);
+    }
     this.loadFailed.set(false);
 
     forkJoin({
@@ -133,11 +138,16 @@ export default class ScheduleList {
             const current = schedules.find((schedule) => schedule.id === conflict.scheduleId);
             const state = current ? ` It is currently ${current.status}.` : '';
             this.actionMessage.set(`${conflict.message}${state} Review the refreshed Schedule before trying again.`);
-          } else this.actionMessage.set(null);
+          } else {
+            this.actionMessage.set(null);
+          }
         },
         error: () => {
-          if (hasCurrentData) this.stale.set(true);
-          else this.loadFailed.set(true);
+          if (hasCurrentData) {
+            this.stale.set(true);
+          } else {
+            this.loadFailed.set(true);
+          }
           this.loading.set(false);
           this.refreshing.set(false);
         },
@@ -145,18 +155,24 @@ export default class ScheduleList {
   }
 
   protected openCreateDialog(): void {
-    if (this.stale() || this.refreshing()) return;
+    if (this.stale() || this.refreshing()) {
+      return;
+    }
     this.dialog
       .open<NewScheduleDialog, undefined, Schedule>(NewScheduleDialog)
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((created) => {
-        if (created) this.load();
+        if (created) {
+          this.load();
+        }
       });
   }
 
   protected openEditDialog(row: ScheduleRowData): void {
-    if (this.stale() || this.refreshing()) return;
+    if (this.stale() || this.refreshing()) {
+      return;
+    }
     const ref = this.dialog.open<EditScheduleDialog, ScheduleRowData, Schedule>(EditScheduleDialog, { data: row });
     ref
       .afterClosed()
@@ -165,13 +181,17 @@ export default class ScheduleList {
   }
 
   protected openExtendDialog(row: ScheduleRowData): void {
-    if (this.stale() || this.refreshing() || row.accountRetired || row.schedule.status !== 'completed') return;
+    if (this.stale() || this.refreshing() || row.accountRetired || row.schedule.status !== 'completed') {
+      return;
+    }
     this.actionMessage.set(null);
     this.dialog.open<ExtendScheduleDialog, ScheduleRowData>(ExtendScheduleDialog, { data: row });
   }
 
   protected openLifecycleDialog(row: ScheduleRowData, action: ScheduleLifecycleAction): void {
-    if (this.stale() || this.refreshing() || (action === 'resume' && row.accountRetired)) return;
+    if (this.stale() || this.refreshing() || (action === 'resume' && row.accountRetired)) {
+      return;
+    }
     this.actionMessage.set(null);
     this.dialog.open<ScheduleLifecycleDialog, ScheduleLifecycleDialogData>(ScheduleLifecycleDialog, {
       data: {
@@ -195,8 +215,11 @@ export default class ScheduleList {
     if (event.kind === 'updated') {
       this.selectedView.set(STATUS_VIEW[event.schedule.status]);
       this.load();
-    } else if (event.kind === 'conflict') this.load(event);
-    else this.actionMessage.set(event.message);
+    } else if (event.kind === 'conflict') {
+      this.load(event);
+    } else {
+      this.actionMessage.set(event.message);
+    }
   }
 
   protected onScheduleDeleted(): void {

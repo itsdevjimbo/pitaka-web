@@ -8,7 +8,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EmailNotConfirmedError } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { APP_HOME_ROUTE, reasonMessage, safeReturnUrl, Session, SIGN_IN_REASON_PARAM } from '@/app/core/session';
-import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation';
+import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation/resend-confirmation';
 
 /** The banner line for a sign-in that failed before it could be attributed. */
 const COULD_NOT_SIGN_IN = 'Something went wrong signing you in. Please try again.';

@@ -5,7 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { ApiError } from '@/app/core/api';
 import { CategoriesService } from '../../data/categories.service';
 import { Category } from '../../data/category';
-import { CategoryPane } from '../../ui/category-pane';
+import { CategoryPane } from '../../ui/category-pane/category-pane';
 
 const LOAD_FAILED = 'Something went wrong loading your categories. Please try again.';
 

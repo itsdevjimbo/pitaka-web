@@ -89,7 +89,9 @@ describe('ProfilePassword', () => {
     const cancel = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Cancel',
     );
-    if (!cancel) throw new Error('No Cancel button');
+    if (!cancel) {
+      throw new Error('No Cancel button');
+    }
     cancel.click();
     fixture.detectChanges();
 

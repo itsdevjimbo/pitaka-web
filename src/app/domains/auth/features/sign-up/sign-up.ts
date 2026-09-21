@@ -9,7 +9,7 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService, Registration } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { passwordRules } from '@/app/domains/auth/password-rules';
-import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation';
+import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation/resend-confirmation';
 
 /** The banner line for a registration that failed before it could be attributed. */
 const COULD_NOT_REGISTER = 'Something went wrong creating your profile. Please try again.';

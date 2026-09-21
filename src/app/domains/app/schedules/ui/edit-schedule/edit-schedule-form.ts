@@ -164,8 +164,12 @@ export class EditScheduleForm {
             this.serverErrorControls(),
             'Something went wrong saving your Schedule. Please try again.',
           );
-          if (boundErrors.length > 0) this.scheduleForm().markAsTouched();
-          if (bannerMessage !== null) this.errorMessage.set(bannerMessage);
+          if (boundErrors.length > 0) {
+            this.scheduleForm().markAsTouched();
+          }
+          if (bannerMessage !== null) {
+            this.errorMessage.set(bannerMessage);
+          }
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
@@ -215,7 +219,9 @@ export class EditScheduleForm {
       const current = schedules.find((schedule) => schedule.id === this.currentSchedule().id);
       this.activeCategories.set(active);
       this.allCategories.set(all);
-      if (current === undefined) return false;
+      if (current === undefined) {
+        return false;
+      }
       this.currentSchedule.set(current);
       return true;
     } catch {

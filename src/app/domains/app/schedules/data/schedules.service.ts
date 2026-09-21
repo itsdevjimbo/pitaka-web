@@ -183,7 +183,9 @@ function toDateOnly(value: Date): string {
 
 /** Keep API field names and recurring-transaction wording inside this adapter. */
 function toScheduleError(error: unknown, schedule?: NewSchedule): unknown {
-  if (!(error instanceof ApiError)) return error;
+  if (!(error instanceof ApiError)) {
+    return error;
+  }
 
   if (error.status === 409 && DUPLICATE_NAME.test(error.message)) {
     const message = 'A Schedule with this name already exists.';
@@ -204,9 +206,15 @@ function toProductMessage(message: string): string {
 }
 
 function scheduleFieldErrors(field: string, messages: readonly string[], schedule: NewSchedule): readonly string[] {
-  if (messages.length === 0) return messages;
-  if (field === 'firstGeneration') return [minimumMessage(firstGenerationMinimum())];
-  if (field === 'lastGeneration') return [minimumMessage(addCalendarDays(schedule.firstGeneration, 1))];
+  if (messages.length === 0) {
+    return messages;
+  }
+  if (field === 'firstGeneration') {
+    return [minimumMessage(firstGenerationMinimum())];
+  }
+  if (field === 'lastGeneration') {
+    return [minimumMessage(addCalendarDays(schedule.firstGeneration, 1))];
+  }
   return messages;
 }
 

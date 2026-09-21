@@ -2,10 +2,18 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
 import { API_BASE_URL } from '@/app/core/api';
-import { toRequestDateBounds } from './date-range-bounds';
-import { TransactionLinkedContribution, TransactionLinkedContributions } from './linked-contribution';
-import { toOffsetTimestamp } from './offset-timestamp';
-import { parseTransactionDate } from './parse-transaction-date';
+import { toRequestDateBounds } from './dates/date-range-bounds';
+import { toOffsetTimestamp } from './dates/offset-timestamp';
+import { parseTransactionDate } from './dates/parse-transaction-date';
+import {
+  TransactionLinkedContribution,
+  TransactionLinkedContributions,
+} from './linked-contributions/linked-contribution';
+import {
+  toTransactionSplitError,
+  TransactionSplitPayload,
+  TransactionSplitResult,
+} from './linked-contributions/transaction-split';
 import {
   NewTransaction,
   RefileTransaction,
@@ -15,7 +23,6 @@ import {
   TransactionSearchResult,
 } from './transaction';
 import { toTransactionRemovalError } from './transaction-removal';
-import { toTransactionSplitError, TransactionSplitPayload, TransactionSplitResult } from './transaction-split';
 
 /**
  * Wire shape of one Transaction from the API. `GET /api/accounts/:id/
