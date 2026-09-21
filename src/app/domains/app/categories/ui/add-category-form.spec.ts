@@ -1,21 +1,10 @@
-import { OutputEmitterRef, WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { FieldTree } from '@angular/forms/signals';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService } from '../data/categories.service';
 import { Category, CATEGORY_NAME_MAX, CategoryKind } from '../data/category';
 import { AddCategoryForm } from './add-category-form';
-
-/** The slice of the component the tests reach into. */
-type AddInternals = {
-  model: WritableSignal<{ name: string }>;
-  addForm: { name: FieldTree<string> };
-  errorMessage: () => string | null;
-  created: OutputEmitterRef<Category>;
-  save(event: Event): void;
-};
 
 const CREATED: Category = {
   id: 12,
@@ -26,134 +15,121 @@ const CREATED: Category = {
 };
 
 describe('AddCategoryForm', () => {
-  function setup(
-    create: CategoriesService['create'],
-    kind: CategoryKind = 'expense'
-  ) {
+  function setup(create: CategoriesService['create'], kind: CategoryKind = 'expense') {
     TestBed.configureTestingModule({
       imports: [AddCategoryForm],
-      providers: [
-        provideIcons(),
-        { provide: CategoriesService, useValue: { create } },
-      ],
+      providers: [provideIcons(), { provide: CategoriesService, useValue: { create } }],
     });
 
     const fixture = TestBed.createComponent(AddCategoryForm);
     fixture.componentRef.setInput('kind', kind);
-    const cmp = fixture.componentInstance as unknown as AddInternals;
     fixture.detectChanges();
-    return { fixture, cmp };
+    return { fixture };
   }
 
-  async function submitAndSettle(
-    fixture: { whenStable: () => Promise<unknown> },
-    cmp: AddInternals
-  ) {
-    cmp.save(new Event('submit'));
+  async function submitAndSettle(fixture: ComponentFixture<AddCategoryForm>) {
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
     await fixture.whenStable();
+    fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
   }
 
-  function messagesOn(field: FieldTree<unknown>) {
-    return field()
-      .errors()
-      .map((error) => error.message);
+  function nameInput(fixture: ComponentFixture<AddCategoryForm>) {
+    return fixture.nativeElement.querySelector('#add-category-name') as HTMLInputElement;
+  }
+
+  function enterName(fixture: ComponentFixture<AddCategoryForm>, value: string) {
+    const input = nameInput(fixture);
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function text(fixture: ComponentFixture<AddCategoryForm>) {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
   }
 
   it('starts empty', () => {
-    const { cmp } = setup(() => of(CREATED));
+    const { fixture } = setup(() => of(CREATED));
 
-    expect(cmp.model().name).toBe('');
+    expect(nameInput(fixture).value).toBe('');
   });
 
   it('creates with the pane’s kind, sends the trimmed name, and emits the row', async () => {
     const create = vi.fn((_category) => of(CREATED));
-    const { fixture, cmp } = setup(
-      create as unknown as CategoriesService['create'],
-      'income'
-    );
+    const { fixture } = setup(create as unknown as CategoriesService['create'], 'income');
     const emitted: Category[] = [];
-    cmp.created.subscribe((category) => emitted.push(category));
+    fixture.componentInstance.created.subscribe((category) => emitted.push(category));
 
-    cmp.model.set({ name: '  Holidays  ' });
-    await submitAndSettle(fixture, cmp);
+    enterName(fixture, '  Holidays  ');
+    await submitAndSettle(fixture);
 
     expect(create).toHaveBeenCalledWith({ name: 'Holidays', kind: 'income' });
     expect(emitted).toEqual([CREATED]);
-    expect(cmp.errorMessage()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('blocks a submission with no name and never calls the service', async () => {
     const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as CategoriesService['create']
-    );
+    const { fixture } = setup(create as unknown as CategoriesService['create']);
 
-    cmp.model.set({ name: '' });
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
-    expect(messagesOn(cmp.addForm.name)).toContain('You must enter a name');
+    expect(text(fixture)).toContain('You must enter a name');
     expect(create).not.toHaveBeenCalled();
   });
 
   it('refuses a name over the maximum length', async () => {
     const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as CategoriesService['create']
-    );
+    const { fixture } = setup(create as unknown as CategoriesService['create']);
 
-    cmp.model.set({ name: 'x'.repeat(CATEGORY_NAME_MAX + 1) });
-    await submitAndSettle(fixture, cmp);
+    enterName(fixture, 'x'.repeat(CATEGORY_NAME_MAX + 1));
+    await submitAndSettle(fixture);
 
-    expect(messagesOn(cmp.addForm.name)).toContain(
-      `The name must be ${CATEGORY_NAME_MAX} characters or fewer`
-    );
+    expect(text(fixture)).toContain(`The name must be ${CATEGORY_NAME_MAX} characters or fewer`);
     expect(create).not.toHaveBeenCalled();
   });
 
   it('shows a 409 as the cross-kind duplicate message on the name control, banner empty, text kept', async () => {
-    const { fixture, cmp } = setup(() =>
+    const { fixture } = setup(() =>
       throwError(
         () =>
           new ApiError('A category with this name already exists.', 409, {
             name: ['A category with this name already exists.'],
-          })
-      )
+          }),
+      ),
     );
 
-    cmp.model.set({ name: 'Gifts' });
-    await submitAndSettle(fixture, cmp);
+    enterName(fixture, 'Gifts');
+    await submitAndSettle(fixture);
 
-    expect(messagesOn(cmp.addForm.name)).toContain(
-      'You already have a category called “Gifts”. A name can only be used once, whether it files income or expenses.'
+    expect(text(fixture)).toContain(
+      'You already have a category called “Gifts”. A name can only be used once, whether it files income or expenses.',
     );
-    expect(cmp.errorMessage()).toBeNull();
-    expect(cmp.model().name).toBe('Gifts');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(nameInput(fixture).value).toBe('Gifts');
   });
 
   it('shows a failure it cannot attribute as a banner and binds nothing, keeping the text', async () => {
-    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
+    const { fixture } = setup(() => throwError(() => new Error('offline')));
 
-    cmp.model.set({ name: 'Brokerage' });
-    await submitAndSettle(fixture, cmp);
+    enterName(fixture, 'Brokerage');
+    await submitAndSettle(fixture);
 
-    expect(cmp.errorMessage()).toBe(
-      'Something went wrong adding the category. Please try again.'
-    );
-    expect(cmp.addForm.name().errors()).toEqual([]);
-    expect(cmp.model().name).toBe('Brokerage');
+    expect(text(fixture)).toContain('Something went wrong adding the category. Please try again.');
+    expect(nameInput(fixture).value).toBe('Brokerage');
   });
 
   it('sends exactly one request when submitted twice in a row', async () => {
     const inFlight = new Subject<Category>();
     const create = vi.fn(() => inFlight.asObservable());
-    const { fixture, cmp } = setup(
-      create as unknown as CategoriesService['create']
-    );
+    const { fixture } = setup(create as unknown as CategoriesService['create']);
 
-    cmp.model.set({ name: 'Holidays' });
-    cmp.save(new Event('submit'));
-    cmp.save(new Event('submit'));
+    enterName(fixture, 'Holidays');
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    form.dispatchEvent(new Event('submit'));
+    form.dispatchEvent(new Event('submit'));
     await fixture.whenStable();
 
     expect(create).toHaveBeenCalledTimes(1);

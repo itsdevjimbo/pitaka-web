@@ -1,62 +1,21 @@
-import { OutputEmitterRef, WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { FieldTree } from '@angular/forms/signals';
-import {
-  MATERIAL_ANIMATIONS,
-  provideNativeDateAdapter,
-} from '@angular/material/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
-import { Tag, TagsService } from '@/app/domains/app/tags';
+import { TagsService } from '@/app/domains/app/tags';
+import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Transaction } from '../data/transaction';
 import { TransactionsService } from '../data/transactions.service';
 import { RefileTransactionForm } from './refile-transaction-form';
 
-type Model = {
-  date: Date | null;
-  time: Date | null;
-  categoryId: number | null;
-  description: string;
-  tags: readonly Tag[];
-};
-
-/** The slice of the component the tests reach into. */
-type RefileFormInternals = {
-  model: WritableSignal<Model>;
-  refileForm: {
-    date: FieldTree<Date | null>;
-    time: FieldTree<Date | null>;
-    categoryId: FieldTree<number | null>;
-    description: FieldTree<string>;
-  };
-  categoryOptions: () => Category[];
-  isTransfer: () => boolean;
-  errorMessage: () => string | null;
-  refiled: OutputEmitterRef<Transaction>;
-  cancelled: OutputEmitterRef<void>;
-  save(event: Event): void;
-  cancel(): void;
-};
-
-const COULD_NOT_REFILE =
-  'Something went wrong refiling this transaction. Please try again.';
-
-/** What `list()` returns — active only, the filing rule (#108). */
+const COULD_NOT_REFILE = 'Something went wrong refiling this transaction. Please try again.';
 const CATEGORIES: Category[] = [
-  {
-    id: 1,
-    name: 'Groceries',
-    kind: 'expense',
-    isActive: true,
-    isDefault: false,
-  },
+  { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
-
-/** A since-retired expense Category — offered by `all()`, never by `list()`. */
 const DINING_RETIRED: Category = {
   id: 7,
   name: 'Dining out',
@@ -65,10 +24,6 @@ const DINING_RETIRED: Category = {
   isDefault: false,
 };
 
-/** What `all()` returns — the whole set, retired included (#106). */
-const ALL_CATEGORIES: Category[] = [...CATEGORIES, DINING_RETIRED];
-
-/** The Transaction the row swapped from — an expense, filed, noted, and tagged. */
 function existing(over: Partial<Transaction> = {}): Transaction {
   return {
     id: 42,
@@ -76,7 +31,7 @@ function existing(over: Partial<Transaction> = {}): Transaction {
     direction: 'expense',
     accountId: 3,
     transferToAccountId: null,
-    date: new Date(2026, 7, 29, 9, 30, 0),
+    date: new Date(2026, 7, 29, 9, 30),
     categoryId: 1,
     generated: false,
     description: 'Coffee',
@@ -85,413 +40,275 @@ function existing(over: Partial<Transaction> = {}): Transaction {
   };
 }
 
-/**
- * The moment the form should send when neither the day nor the time is touched:
- * the Transaction's own moment, with seconds dropped as the folder does.
- */
-function sameMoment(tx: Transaction): Date {
-  const d = tx.date;
-  return new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    d.getHours(),
-    d.getMinutes(),
-    0,
-    0
-  );
-}
-
 describe('RefileTransactionForm', () => {
+  const overlay = withOverlayContainer();
+
   function setup(
     refile: TransactionsService['refile'],
     transaction: Transaction = existing(),
     list: CategoriesService['list'] = () => of(CATEGORIES),
-    all: CategoriesService['all'] = () => of(ALL_CATEGORIES)
+    all: CategoriesService['all'] = () => of([...CATEGORIES, DINING_RETIRED]),
   ) {
     TestBed.configureTestingModule({
       imports: [RefileTransactionForm],
       providers: [
         provideIcons(),
         provideNativeDateAdapter(),
-        {
-          provide: MATERIAL_ANIMATIONS,
-          useValue: { animationsDisabled: true },
-        },
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: TransactionsService, useValue: { refile } },
         { provide: CategoriesService, useValue: { list, all } },
         { provide: TagsService, useValue: { all: () => of([]) } },
       ],
     });
-
     const fixture = TestBed.createComponent(RefileTransactionForm);
     fixture.componentRef.setInput('transaction', transaction);
-    const cmp = fixture.componentInstance as unknown as RefileFormInternals;
     fixture.detectChanges();
-    return {
-      fixture,
-      cmp,
-      text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
-    };
+    return fixture;
   }
 
-  async function submitAndSettle(
-    fixture: { whenStable: () => Promise<unknown> },
-    cmp: RefileFormInternals
-  ) {
-    cmp.save(new Event('submit'));
+  async function settle(fixture: ComponentFixture<RefileTransactionForm>) {
+    fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  function enter(fixture: ComponentFixture<RefileTransactionForm>, selector: string, value: string) {
+    const input = fixture.nativeElement.querySelector(selector) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  async function options(fixture: ComponentFixture<RefileTransactionForm>) {
+    (fixture.nativeElement.querySelector('mat-select') as HTMLElement).click();
+    await settle(fixture);
+    const panel = Array.from(overlay().querySelectorAll<HTMLElement>('.mat-mdc-select-panel')).at(-1)!;
+    return Array.from(panel.querySelectorAll<HTMLElement>('mat-option'));
+  }
+
+  async function pick(fixture: ComponentFixture<RefileTransactionForm>, label: string) {
+    const option = (await options(fixture)).find(
+      (candidate) => candidate.textContent?.replace(/\s+/g, ' ').trim() === label,
+    );
+    if (!option) throw new Error(`No option labelled "${label}"`);
+    option.click();
+    await settle(fixture);
+  }
+
+  async function submit(fixture: ComponentFixture<RefileTransactionForm>) {
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await settle(fixture);
     await fixture.whenStable();
+    fixture.detectChanges();
   }
 
-  function messagesOn(field: FieldTree<unknown>) {
-    return field()
-      .errors()
-      .map((error) => error.message);
+  function text(fixture: ComponentFixture<RefileTransactionForm>) {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
   }
 
-  it('opens carrying the current moment, Category, and note', () => {
-    const tx = existing();
-    const { cmp } = setup(vi.fn(), tx);
-
-    expect(cmp.model()).toMatchObject({
-      date: tx.date,
-      time: tx.date,
-      categoryId: 1,
-      description: 'Coffee',
-    });
-  });
-
-  it('opens with the record’s Tags as chips, seeded from the Transaction', () => {
-    const { cmp } = setup(
-      vi.fn(),
-      existing({ tags: [{ id: 9, name: 'treats' }] })
+  it('opens carrying the current moment, Category, note, and Tags', async () => {
+    const fixture = setup(vi.fn());
+    expect((fixture.nativeElement.querySelector('#refile-transaction-date') as HTMLInputElement).value).toContain(
+      '2026',
     );
-
-    expect(cmp.model().tags).toMatchObject([{ id: 9, name: 'treats' }]);
-  });
-
-  it('drops a removed Tag’s id from the save — the pass-through could not', async () => {
-    const tx = existing({ tags: [{ id: 9, name: 'treats' }] });
-    const refile = vi.fn(() => of(tx));
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile'],
-      tx
+    expect((fixture.nativeElement.querySelector('#refile-transaction-time') as HTMLInputElement).value).toContain(
+      '9:30',
     );
-
-    cmp.model.update((model) => ({ ...model, tags: [] }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(refile).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({ tagIds: [] })
-    );
+    expect((fixture.nativeElement.querySelector('#refile-transaction-note') as HTMLInputElement).value).toBe('Coffee');
+    expect(text(fixture)).toContain('treats');
+    const labels = (await options(fixture)).map((option) => option.textContent?.replace(/\s+/g, ' ').trim());
+    expect(labels).toContain('Groceries');
   });
 
-  it('shows the amount and direction as text, with no field for either', () => {
-    const { fixture, text } = setup(vi.fn());
-
-    expect(text()).toContain('Expense');
-    expect(text()).toContain('120.50');
-    // The amount and direction are settled — no control offers to change them.
-    const host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('input[type="number"]')).toBeNull();
-    expect(host.querySelector('mat-button-toggle-group')).toBeNull();
+  it('shows amount and direction as settled text with no destructive action', () => {
+    const fixture = setup(vi.fn());
+    expect(text(fixture)).toContain('Expense');
+    expect(text(fixture)).toContain('₱120.50');
+    expect(text(fixture)).toContain('remove this transaction and record it again');
+    expect(fixture.nativeElement.querySelector('input[type="number"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('mat-button-toggle-group')).toBeNull();
+    expect(
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).some(
+        (button) => button.textContent?.trim() === 'Remove',
+      ),
+    ).toBe(false);
   });
 
-  it('points someone who mistyped an amount at removing and recording again', () => {
-    const { text } = setup(vi.fn());
+  it('offers active Categories of the Transaction direction only', async () => {
+    let fixture = setup(vi.fn());
+    expect((await options(fixture)).map((option) => option.textContent?.trim())).toEqual([
+      'Uncategorised',
+      'Groceries',
+      'Rent',
+    ]);
 
-    expect(text().toLowerCase()).toContain(
-      'remove this transaction and record it again'
-    );
+    TestBed.resetTestingModule();
+    fixture = setup(vi.fn(), existing({ direction: 'income', categoryId: 2 }));
+    expect((await options(fixture)).map((option) => option.textContent?.trim())).toEqual(['Uncategorised', 'Salary']);
   });
 
-  it('offers nothing that removes the Transaction — no button, no confirmation (ADR 0014)', () => {
-    const { fixture, text } = setup(vi.fn());
-    const host = fixture.nativeElement as HTMLElement;
-
-    const removeButton = Array.from(host.querySelectorAll('button')).find(
-      (b) => (b.textContent ?? '').trim() === 'Remove'
-    );
-    expect(removeButton).toBeUndefined();
-    expect(host.querySelector('[aria-label="Confirm remove"]')).toBeNull();
-    // The only footer actions are Cancel and Save.
-    expect(text()).not.toContain('Removing…');
+  it('keeps only this Transaction’s retired saved Category and drops it after moving away', async () => {
+    const fixture = setup(vi.fn(), existing({ categoryId: 7 }));
+    expect((await options(fixture)).map((option) => option.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'Uncategorised',
+      'Groceries',
+      'Rent',
+      'Dining out · Retired',
+    ]);
+    pressEscape();
+    await settle(fixture);
+    await pick(fixture, 'Rent');
+    expect((await options(fixture)).map((option) => option.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'Uncategorised',
+      'Groceries',
+      'Rent',
+    ]);
   });
 
-  it('offers only expense Categories for an expense', () => {
-    const { cmp } = setup(vi.fn(), existing({ direction: 'expense' }));
-    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
-  });
-
-  it('offers only income Categories for an income', () => {
-    const { cmp } = setup(
-      vi.fn(),
-      existing({ direction: 'income', categoryId: 2 })
-    );
-    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([2]);
-  });
-
-  it('does not offer a retired Category — refiling is still filing (#108)', () => {
-    const { cmp } = setup(vi.fn(), existing({ direction: 'expense' }));
-
-    expect(cmp.categoryOptions().map((c) => c.id)).not.toContain(7);
-  });
-
-  it('offers this Transaction’s since-retired saved Category, marked retired, at the tail (#108)', () => {
-    const { cmp } = setup(vi.fn(), existing({ categoryId: 7 }));
-
-    const options = cmp.categoryOptions();
-    expect(options.map((c) => c.id)).toEqual([1, 3, 7]);
-    expect(options.at(-1)).toMatchObject({ id: 7, isActive: false });
-  });
-
-  it('drops the since-retired saved Category once the selection moves off it (#108)', () => {
-    const { cmp } = setup(vi.fn(), existing({ categoryId: 7 }));
-
-    cmp.model.update((m) => ({ ...m, categoryId: 1 }));
-
-    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
-  });
-
-  it('sends the whole mutable set when only the Category changes, so the note and Tags survive', async () => {
-    const tx = existing();
-    const refile = vi.fn(() => of(tx));
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile'],
-      tx
-    );
+  it('sends the whole mutable set when the Category changes', async () => {
+    const transaction = existing();
+    const updated = { ...transaction, categoryId: 3 };
+    const refile = vi.fn(() => of(updated));
+    const fixture = setup(refile as unknown as TransactionsService['refile'], transaction);
     const emitted: Transaction[] = [];
-    cmp.refiled.subscribe((t) => emitted.push(t));
-
-    cmp.model.update((m) => ({ ...m, categoryId: 3 }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(refile).toHaveBeenCalledWith(tx, {
-      date: sameMoment(tx),
+    fixture.componentInstance.refiled.subscribe((value) => emitted.push(value));
+    await pick(fixture, 'Rent');
+    await submit(fixture);
+    expect(refile).toHaveBeenCalledWith(transaction, {
+      date: new Date(2026, 7, 29, 9, 30),
       categoryId: 3,
       description: 'Coffee',
       tagIds: [9],
     });
-    expect(emitted).toEqual([tx]);
-    expect(cmp.errorMessage()).toBeNull();
+    expect(emitted).toEqual([updated]);
   });
 
-  it('corrects the note alone, leaving the date and Category as they were', async () => {
-    const tx = existing();
-    const refile = vi.fn(() => of(tx));
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile'],
-      tx
-    );
+  it('drops a removed Tag id from the save', async () => {
+    const transaction = existing();
+    const refile = vi.fn(() => of({ ...transaction, tags: [] }));
+    const fixture = setup(refile as unknown as TransactionsService['refile'], transaction);
+    (fixture.nativeElement.querySelector('[matChipRemove]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await submit(fixture);
+    expect(refile).toHaveBeenCalledWith(transaction, expect.objectContaining({ tagIds: [] }));
+  });
 
-    cmp.model.update((m) => ({ ...m, description: '  Flat white  ' }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(refile).toHaveBeenCalledWith(tx, {
-      date: sameMoment(tx),
+  it('corrects the note alone and folds an emptied note to null', async () => {
+    const transaction = existing();
+    const refile = vi.fn(() => of(transaction));
+    let fixture = setup(refile as unknown as TransactionsService['refile'], transaction);
+    enter(fixture, '#refile-transaction-note', '  Flat white  ');
+    await submit(fixture);
+    expect(refile).toHaveBeenCalledWith(transaction, {
+      date: new Date(2026, 7, 29, 9, 30),
       categoryId: 1,
       description: 'Flat white',
       tagIds: [9],
     });
+
+    TestBed.resetTestingModule();
+    refile.mockClear();
+    fixture = setup(refile as unknown as TransactionsService['refile'], transaction);
+    enter(fixture, '#refile-transaction-note', '');
+    await submit(fixture);
+    expect(refile).toHaveBeenCalledWith(transaction, expect.objectContaining({ description: null }));
   });
 
-  it('corrects the day alone, keeping the original time of day', async () => {
-    const tx = existing({ date: new Date(2026, 7, 29, 9, 30, 0) });
-    const refile = vi.fn(() => of(tx));
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile'],
-      tx
-    );
+  it('corrects day and time independently while preserving the other half', async () => {
+    const transaction = existing();
+    const refile = vi.fn(() => of(transaction));
+    let fixture = setup(refile as unknown as TransactionsService['refile'], transaction);
+    enter(fixture, '#refile-transaction-date', '8/25/2026');
+    await submit(fixture);
+    expect(refile).toHaveBeenCalledWith(transaction, expect.objectContaining({ date: new Date(2026, 7, 25, 9, 30) }));
 
-    cmp.model.update((m) => ({ ...m, date: new Date(2026, 7, 25) }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(refile).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({ date: new Date(2026, 7, 25, 9, 30, 0, 0) })
-    );
+    TestBed.resetTestingModule();
+    refile.mockClear();
+    fixture = setup(refile as unknown as TransactionsService['refile'], transaction);
+    enter(fixture, '#refile-transaction-time', '6:45 PM');
+    await submit(fixture);
+    expect(refile).toHaveBeenCalledWith(transaction, expect.objectContaining({ date: new Date(2026, 7, 29, 18, 45) }));
   });
 
-  it('corrects the time alone, keeping the original day', async () => {
-    const tx = existing({ date: new Date(2026, 7, 29, 9, 30, 0) });
-    const refile = vi.fn(() => of(tx));
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile'],
-      tx
-    );
-
-    cmp.model.update((m) => ({ ...m, time: new Date(2000, 0, 1, 18, 45) }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(refile).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({ date: new Date(2026, 7, 29, 18, 45, 0, 0) })
-    );
-  });
-
-  it('folds an emptied note back to null rather than an empty string', async () => {
-    const tx = existing();
-    const refile = vi.fn(() => of(tx));
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile'],
-      tx
-    );
-
-    cmp.model.update((m) => ({ ...m, description: '' }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(refile).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({ description: null })
-    );
-  });
-
-  it('never reaches the service with the date cleared', async () => {
+  it.each([
+    ['#refile-transaction-date', 'Choose a date'],
+    ['#refile-transaction-time', 'Choose a time'],
+  ])('blocks a cleared required moment field', async (selector, message) => {
     const refile = vi.fn();
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile']
-    );
-
-    cmp.model.update((m) => ({ ...m, date: null }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.refileForm.date)).toContain('Choose a date');
+    const fixture = setup(refile as unknown as TransactionsService['refile']);
+    enter(fixture, selector, '');
+    await submit(fixture);
     expect(refile).not.toHaveBeenCalled();
+    expect(text(fixture)).toContain(message);
   });
 
-  it('never reaches the service with the time cleared — an omitted time is not midnight', async () => {
-    const refile = vi.fn();
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile']
-    );
-
-    cmp.model.update((m) => ({ ...m, time: null }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.refileForm.time)).toContain('Choose a time');
-    expect(refile).not.toHaveBeenCalled();
-  });
-
-  it('sends exactly one request when submitted twice in a row', async () => {
-    const inFlight = new Subject<Transaction>();
-    const refile = vi.fn(() => inFlight.asObservable());
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile']
-    );
-
-    cmp.save(new Event('submit'));
-    cmp.save(new Event('submit'));
+  it('sends exactly one request while a refile is in flight', async () => {
+    const pending = new Subject<Transaction>();
+    const refile = vi.fn(() => pending.asObservable());
+    const fixture = setup(refile as unknown as TransactionsService['refile']);
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    form.dispatchEvent(new Event('submit'));
+    form.dispatchEvent(new Event('submit'));
     await fixture.whenStable();
-
     expect(refile).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a bodyless rejection as one form-level line that blames no field', async () => {
-    const { fixture, cmp } = setup(() =>
-      throwError(
-        () => new ApiError('We could not refile that just now.', 400, {})
-      )
-    );
+  it('shows unattributed and field-attributed failures in the right place', async () => {
+    let fixture = setup(() => throwError(() => new ApiError('We could not refile that just now.', 400)));
+    await submit(fixture);
+    expect(text(fixture)).toContain('We could not refile that just now.');
 
-    await submitAndSettle(fixture, cmp);
+    TestBed.resetTestingModule();
+    fixture = setup(() => throwError(() => new Error('offline')));
+    await submit(fixture);
+    expect(text(fixture)).toContain(COULD_NOT_REFILE);
 
-    expect(cmp.errorMessage()).toBe('We could not refile that just now.');
-    expect(cmp.refileForm.date().errors()).toEqual([]);
-    expect(cmp.refileForm.categoryId().errors()).toEqual([]);
+    TestBed.resetTestingModule();
+    fixture = setup(() => throwError(() => new ApiError('Invalid', 400, { categoryId: ['Choose another category.'] })));
+    await submit(fixture);
+    expect(text(fixture)).toContain('Choose another category.');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('falls back to the generic banner when the failure is not an ApiError', async () => {
-    const { fixture, cmp } = setup(() =>
-      throwError(() => new Error('offline'))
-    );
-
-    await submitAndSettle(fixture, cmp);
-
-    expect(cmp.errorMessage()).toBe(COULD_NOT_REFILE);
-  });
-
-  it('marks the field for a rejection the API can attribute', async () => {
-    const { fixture, cmp } = setup(() =>
-      throwError(
-        () =>
-          new ApiError('Please correct the highlighted field.', 400, {
-            categoryId: ['That category is not yours.'],
-          })
-      )
-    );
-
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.refileForm.categoryId)).toContain(
-      'That category is not yours.'
-    );
-    expect(cmp.errorMessage()).toBeNull();
-  });
-
-  describe('a Transfer', () => {
+  it('refiles a Transfer without a Category', async () => {
     const transfer = existing({
       direction: 'transfer',
       categoryId: null,
-      transferToAccountId: 9,
+      transferToAccountId: 4,
       description: 'Move to savings',
     });
-
-    it('asks for no Category and reads as a Transfer', () => {
-      const { fixture, cmp, text } = setup(vi.fn(), transfer);
-
-      expect(cmp.isTransfer()).toBe(true);
-      expect(text()).toContain('Transfer');
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('mat-select')
-      ).toBeNull();
-    });
-
-    it('refiles with a null Category and the untouched destination-side fields', async () => {
-      const refile = vi.fn(() => of(transfer));
-      const { fixture, cmp } = setup(
-        refile as unknown as TransactionsService['refile'],
-        transfer
-      );
-
-      cmp.model.update((m) => ({ ...m, description: 'Move to house fund' }));
-      await submitAndSettle(fixture, cmp);
-
-      expect(refile).toHaveBeenCalledWith(transfer, {
-        date: sameMoment(transfer),
-        categoryId: null,
-        description: 'Move to house fund',
-        tagIds: [9],
-      });
+    const refile = vi.fn(() => of(transfer));
+    const fixture = setup(refile as unknown as TransactionsService['refile'], transfer);
+    expect(text(fixture)).toContain('Transfer');
+    expect(fixture.nativeElement.querySelector('mat-select')).toBeNull();
+    enter(fixture, '#refile-transaction-note', 'Move to house fund');
+    await submit(fixture);
+    expect(refile).toHaveBeenCalledWith(transfer, {
+      date: new Date(2026, 7, 29, 9, 30),
+      categoryId: null,
+      description: 'Move to house fund',
+      tagIds: [9],
     });
   });
 
-  it('refiles a generated transaction like any other', async () => {
+  it('refiles a generated Transaction like any other', async () => {
     const generated = existing({ generated: true, description: 'Rent' });
     const refile = vi.fn(() => of(generated));
-    const { fixture, cmp } = setup(
-      refile as unknown as TransactionsService['refile'],
-      generated
-    );
-
-    cmp.model.update((m) => ({ ...m, categoryId: 3 }));
-    await submitAndSettle(fixture, cmp);
-
-    expect(refile).toHaveBeenCalledWith(
-      generated,
-      expect.objectContaining({ categoryId: 3, description: 'Rent' })
-    );
+    const fixture = setup(refile as unknown as TransactionsService['refile'], generated);
+    await pick(fixture, 'Rent');
+    await submit(fixture);
+    expect(refile).toHaveBeenCalledWith(generated, expect.objectContaining({ categoryId: 3, description: 'Rent' }));
   });
 
   it('emits cancelled without touching the service', () => {
     const refile = vi.fn();
-    const { cmp } = setup(refile as unknown as TransactionsService['refile']);
+    const fixture = setup(refile as unknown as TransactionsService['refile']);
     const emitted: unknown[] = [];
-    cmp.cancelled.subscribe(() => emitted.push('cancelled'));
-
-    cmp.cancel();
-
+    fixture.componentInstance.cancelled.subscribe(() => emitted.push('cancelled'));
+    const cancel = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Cancel',
+    )!;
+    cancel.click();
     expect(emitted).toEqual(['cancelled']);
     expect(refile).not.toHaveBeenCalled();
   });

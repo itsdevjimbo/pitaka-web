@@ -1,5 +1,5 @@
-import { Component, signal, WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { Component, signal } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { form, FormField } from '@angular/forms/signals';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { of, throwError } from 'rxjs';
@@ -14,109 +14,43 @@ const GROCERIES: Tag = { id: 1, name: 'groceries' };
 const WORK: Tag = { id: 2, name: 'work' };
 
 @Component({
-  template: `<tags-tag-field [formField]="tagForm.tags" />`,
+  template: `
+    <tags-tag-field [formField]="tagForm.tags" />
+  `,
   imports: [FormField, TagField],
 })
 class TagFieldHost {
-  readonly model = signal<{ tags: readonly Tag[] }>({ tags: [GROCERIES] });
+  readonly model = signal<{ tags: readonly Tag[] }>({ tags: [] });
   readonly tagForm = form(this.model);
-}
-
-/** The slice of the control the tests reach into — its observable state. */
-type Internals = {
-  value: WritableSignal<readonly Tag[]>;
-  loadFailed: () => boolean;
-  query: WritableSignal<string>;
-  filteredOptions: () => Tag[];
-  showCreate: () => boolean;
-  onInput(value: string): void;
-  onOptionActivated(event: unknown): void;
-  onOptionSelected(event: unknown): void;
-  commitTyped(event: unknown): void;
-  onBackspace(event: Event, input: HTMLInputElement): void;
-  remove(tag: Tag): void;
-};
-
-/** A chip-input event whose `clear()` the control calls after committing. */
-function tokenEnd(value: string) {
-  return { value, chipInput: { clear: vi.fn() } };
-}
-
-function backspaceEvent(): Event {
-  return {
-    preventDefault: vi.fn(),
-    stopImmediatePropagation: vi.fn(),
-  } as unknown as Event;
 }
 
 describe('TagField', () => {
   const overlay = withOverlayContainer();
 
-  function setup(service: Partial<TagsService> = {}) {
+  function setup(service: Partial<TagsService> = {}, initial: readonly Tag[] = []) {
     const create = service.create ?? vi.fn();
     const all = service.all ?? (() => of<Tag[]>([GROCERIES, WORK]));
     const readAll = service.readAll ?? all;
-
-    TestBed.configureTestingModule({
-      imports: [TagField],
-      providers: [
-        provideIcons(),
-        {
-          provide: MATERIAL_ANIMATIONS,
-          useValue: { animationsDisabled: true },
-        },
-        { provide: TagsService, useValue: { all, readAll, create } },
-      ],
-    });
-
-    const fixture = TestBed.createComponent(TagField);
-    const cmp = fixture.componentInstance as unknown as Internals;
-    fixture.detectChanges();
-    return {
-      fixture,
-      cmp,
-      create,
-      host: () => fixture.nativeElement as HTMLElement,
-      input: () =>
-        fixture.nativeElement.querySelector('input') as HTMLInputElement,
-      panelOptions: () =>
-        Array.from(overlay().querySelectorAll('mat-option')).map(
-          (o) => o.textContent?.trim() ?? ''
-        ),
-    };
-  }
-
-  it('binds its chips to a signal-form field', () => {
     TestBed.configureTestingModule({
       imports: [TagFieldHost],
       providers: [
         provideIcons(),
-        {
-          provide: MATERIAL_ANIMATIONS,
-          useValue: { animationsDisabled: true },
-        },
-        { provide: TagsService, useValue: { all: () => of([GROCERIES]) } },
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: TagsService, useValue: { all, readAll, create } },
       ],
     });
-
     const fixture = TestBed.createComponent(TagFieldHost);
+    fixture.componentInstance.model.set({ tags: initial });
     fixture.detectChanges();
+    return {
+      fixture,
+      create,
+      input: () => fixture.nativeElement.querySelector('input') as HTMLInputElement,
+      host: () => fixture.nativeElement as HTMLElement,
+    };
+  }
 
-    const remove = fixture.nativeElement.querySelector(
-      '[matChipRemove]'
-    ) as HTMLButtonElement;
-    remove.click();
-    fixture.detectChanges();
-
-    expect(fixture.componentInstance.model().tags).toEqual([]);
-  });
-
-  /** Type into the real input and let the autocomplete panel open. */
-  async function type(
-    fixture: { detectChanges: () => void; whenStable: () => Promise<unknown> },
-    input: HTMLInputElement,
-    value: string
-  ) {
+  async function type(fixture: ComponentFixture<TagFieldHost>, input: HTMLInputElement, value: string) {
     input.value = value;
     input.dispatchEvent(new Event('input'));
     input.dispatchEvent(new Event('focusin'));
@@ -125,227 +59,132 @@ describe('TagField', () => {
     fixture.detectChanges();
   }
 
-  /** Legacy `keyCode`s Material's chip input and autocomplete still read. */
-  const KEY_CODES: Record<string, number> = { Enter: 13, ArrowDown: 40 };
-
+  const KEY_CODES: Record<string, number> = { Enter: 13, ArrowDown: 40, Backspace: 8 };
   function press(input: HTMLInputElement, key: string) {
     const event = new KeyboardEvent('keydown', { key, bubbles: true });
-    // jsdom does not derive `keyCode` from `key`, and Material's `_keydown`
-    // paths branch on `keyCode` — set it so the real handlers run.
     Object.defineProperty(event, 'keyCode', { get: () => KEY_CODES[key] ?? 0 });
     input.dispatchEvent(event);
   }
 
-  describe('the Enter collision', () => {
-    it('takes the highlighted option and creates nothing from the raw text', () => {
-      const create = vi.fn();
-      const { cmp } = setup({ all: () => of([GROCERIES]), create });
+  function chips(host: HTMLElement) {
+    return Array.from(host.querySelectorAll('mat-chip-row')).map(
+      (chip) => chip.textContent?.replace('cancel', '').trim() ?? '',
+    );
+  }
 
-      cmp.onInput('gro');
-      cmp.onOptionActivated({ option: { value: GROCERIES } });
-      // In the browser Enter fires both the autocomplete and the chip input.
-      cmp.onOptionSelected({ option: { value: GROCERIES } });
-      cmp.commitTyped(tokenEnd('gro'));
+  function currentOptions() {
+    const panel = Array.from(overlay().querySelectorAll<HTMLElement>('.mat-mdc-autocomplete-panel')).at(-1);
+    return Array.from(panel?.querySelectorAll('mat-option') ?? []).map((option) => option.textContent?.trim() ?? '');
+  }
 
-      expect(cmp.value()).toEqual([GROCERIES]);
-      expect(create).not.toHaveBeenCalled();
-    });
-
-    it('commits the raw text as a new Tag when nothing is highlighted', () => {
-      const created: Tag = { id: 5, name: 'gro' };
-      const create = vi.fn(() => of(created));
-      const { cmp } = setup({ all: () => of([GROCERIES]), create });
-
-      cmp.onInput('gro');
-      cmp.commitTyped(tokenEnd('gro'));
-
-      expect(create).toHaveBeenCalledWith('gro');
-      expect(cmp.value()).toEqual([created]);
-    });
-
-    it('does nothing on Enter with an option highlighted but no matching selection event', () => {
-      const create = vi.fn();
-      const { cmp } = setup({ all: () => of([GROCERIES]), create });
-
-      cmp.onInput('gro');
-      cmp.onOptionActivated({ option: { value: GROCERIES } });
-      cmp.commitTyped(tokenEnd('gro'));
-
-      expect(cmp.value()).toEqual([]);
-      expect(create).not.toHaveBeenCalled();
-    });
-
-    // The real keystroke path, driven end to end: arrow to the option, then
-    // Enter — so a regression in the actual wiring is caught, not just the
-    // handler contract.
-    it('attaches groceries, not "gro", when Enter lands on the arrowed-to option', async () => {
-      const create = vi.fn(() => of({ id: 99, name: 'gro' }));
-      const { fixture, cmp, input } = setup({
-        all: () => of([GROCERIES]),
-        create,
-      });
-
-      await type(fixture, input(), 'gro');
-      press(input(), 'ArrowDown');
-      fixture.detectChanges();
-      press(input(), 'Enter');
-      fixture.detectChanges();
-      await fixture.whenStable();
-
-      expect(cmp.value()).toEqual([GROCERIES]);
-      expect(create).not.toHaveBeenCalled();
-    });
-
-    it('creates from the raw text when Enter lands with nothing arrowed to', async () => {
-      const created: Tag = { id: 5, name: 'gro' };
-      const create = vi.fn(() => of(created));
-      const { fixture, cmp, input } = setup({
-        all: () => of([GROCERIES]),
-        create,
-      });
-
-      await type(fixture, input(), 'gro');
-      press(input(), 'Enter');
-      fixture.detectChanges();
-      await fixture.whenStable();
-
-      expect(create).toHaveBeenCalledWith('gro');
-      expect(cmp.value()).toEqual([created]);
-    });
+  it('binds its chips to a signal-form field', () => {
+    const { fixture, host } = setup({}, [GROCERIES]);
+    (host().querySelector('[matChipRemove]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.model().tags).toEqual([]);
   });
 
-  describe('Create "…"', () => {
-    it('is offered only when nothing matches', () => {
-      const { cmp } = setup({ all: () => of([GROCERIES]) });
-
-      cmp.onInput('gro');
-      expect(cmp.showCreate()).toBe(false);
-
-      cmp.onInput('groceries');
-      expect(cmp.showCreate()).toBe(false);
-
-      cmp.onInput('holiday');
-      expect(cmp.showCreate()).toBe(true);
-    });
-
-    it('is withheld while the field is disabled by a failed load', () => {
-      const { cmp } = setup({
-        all: () => throwError(() => new ApiError('nope', 500, {})),
-      });
-
-      cmp.onInput('holiday');
-      expect(cmp.showCreate()).toBe(false);
-    });
+  it('attaches the highlighted option rather than creating the raw prefix', async () => {
+    const create = vi.fn(() => of({ id: 99, name: 'gro' }));
+    const { fixture, input, host } = setup({ all: () => of([GROCERIES]), create });
+    await type(fixture, input(), 'gro');
+    press(input(), 'ArrowDown');
+    press(input(), 'Enter');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(chips(host())).toEqual(['groceries']);
+    expect(create).not.toHaveBeenCalled();
   });
 
-  describe('a name that already exists', () => {
-    it('attaches the existing Tag with no request and no error rendered', () => {
-      const create = vi.fn();
-      const { cmp, host } = setup({ all: () => of([GROCERIES]), create });
-
-      cmp.onInput('Groceries');
-      cmp.commitTyped(tokenEnd('Groceries'));
-
-      expect(cmp.value()).toEqual([GROCERIES]);
-      expect(create).not.toHaveBeenCalled();
-      expect(host().querySelector('mat-error')).toBeNull();
-    });
-
-    it('attaches it silently after a create races a 409', () => {
-      const holiday: Tag = { id: 7, name: 'holiday' };
-      const create = vi.fn(() =>
-        throwError(() => new ApiError('taken', 409, { name: ['taken'] }))
-      );
-      // The shared cache is stale on load; the cold re-read after the 409
-      // (readAll, not all) carries the row that really exists.
-      const all = () => of([GROCERIES]);
-      const readAll = vi.fn(() => of([GROCERIES, holiday]));
-      const { cmp, host } = setup({ all, readAll, create });
-
-      cmp.onInput('holiday');
-      cmp.commitTyped(tokenEnd('holiday'));
-
-      expect(create).toHaveBeenCalledWith('holiday');
-      expect(cmp.value()).toEqual([holiday]);
-      expect(host().querySelector('mat-error')).toBeNull();
-    });
-  });
-
-  it('adds an inline-created Tag to its own option source', () => {
+  it('creates from raw text when Enter lands with nothing highlighted', async () => {
     const created: Tag = { id: 5, name: 'holiday' };
     const create = vi.fn(() => of(created));
-    const { cmp } = setup({ all: () => of([GROCERIES]), create });
-
-    cmp.onInput('holiday');
-    cmp.commitTyped(tokenEnd('holiday'));
-    expect(cmp.value()).toEqual([created]);
-
-    // Detached again, it is offered back as an option rather than lost.
-    cmp.remove(created);
-    cmp.onInput('hol');
-    expect(cmp.filteredOptions()).toContainEqual(created);
+    const { fixture, input, host } = setup({ all: () => of([GROCERIES]), create });
+    await type(fixture, input(), 'holiday');
+    press(input(), 'Enter');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(create).toHaveBeenCalledWith('holiday');
+    expect(chips(host())).toEqual(['holiday']);
   });
 
-  describe('removal', () => {
-    it('drops a chip through remove() — the × path', () => {
-      const { cmp } = setup();
-      cmp.value.set([GROCERIES, WORK]);
-
-      cmp.remove(GROCERIES);
-
-      expect(cmp.value()).toEqual([WORK]);
-    });
-
-    it('drops the last chip on Backspace when the input is empty', () => {
-      const { cmp } = setup();
-      cmp.value.set([GROCERIES, WORK]);
-
-      cmp.onBackspace(backspaceEvent(), { value: '' } as HTMLInputElement);
-
-      expect(cmp.value()).toEqual([GROCERIES]);
-    });
-
-    it('leaves the chips alone on Backspace while the input has text', () => {
-      const { cmp } = setup();
-      cmp.value.set([GROCERIES]);
-
-      cmp.onBackspace(backspaceEvent(), { value: 'gr' } as HTMLInputElement);
-
-      expect(cmp.value()).toEqual([GROCERIES]);
-    });
+  it('offers Create only when nothing matches', async () => {
+    const { fixture, input } = setup({ all: () => of([GROCERIES]) });
+    await type(fixture, input(), 'gro');
+    expect(currentOptions().some((option) => option.includes('Create'))).toBe(false);
+    await type(fixture, input(), 'holiday');
+    expect(currentOptions()).toContain('Create “holiday”');
   });
 
-  describe('with zero Tags', () => {
-    it('says nothing extra — no hint, no explanatory line', () => {
-      const { host } = setup({ all: () => of<Tag[]>([]) });
-
-      expect(host().querySelector('mat-hint')).toBeNull();
-    });
+  it('attaches an existing Tag case-insensitively with no create request', async () => {
+    const create = vi.fn();
+    const { fixture, input, host } = setup({ all: () => of([GROCERIES]), create });
+    await type(fixture, input(), 'Groceries');
+    press(input(), 'Enter');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(chips(host())).toEqual(['groceries']);
+    expect(create).not.toHaveBeenCalled();
+    expect(host().querySelector('mat-error')).toBeNull();
   });
 
-  describe('a failed fetch of the option set', () => {
-    it('disables the field and shows a short line', () => {
-      const { cmp, host } = setup({
-        all: () => throwError(() => new ApiError('nope', 500, {})),
-      });
+  it('attaches the cold reread result after a create races a 409', async () => {
+    const holiday: Tag = { id: 7, name: 'holiday' };
+    const create = vi.fn(() => throwError(() => new ApiError('taken', 409, { name: ['taken'] })));
+    const readAll = vi.fn(() => of([GROCERIES, holiday]));
+    const { fixture, input, host } = setup({ all: () => of([GROCERIES]), readAll, create });
+    await type(fixture, input(), 'holiday');
+    press(input(), 'Enter');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(create).toHaveBeenCalledWith('holiday');
+    expect(chips(host())).toEqual(['holiday']);
+    expect(host().querySelector('mat-error')).toBeNull();
+  });
 
-      expect(cmp.loadFailed()).toBe(true);
-      expect(host().querySelector('mat-hint')?.textContent).toContain(
-        'couldn’t be loaded'
-      );
-      const input = host().querySelector('input') as HTMLInputElement;
-      expect(input.disabled).toBe(true);
+  it('offers an inline-created Tag again after its chip is removed', async () => {
+    const created: Tag = { id: 5, name: 'holiday' };
+    const { fixture, input, host } = setup({
+      all: () => of([GROCERIES]),
+      create: () => of(created),
     });
+    await type(fixture, input(), 'holiday');
+    press(input(), 'Enter');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    (host().querySelector('[matChipRemove]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await type(fixture, input(), 'hol');
+    expect(currentOptions()).toContain('holiday');
+  });
 
-    it('keeps the chips the parent seeded', () => {
-      const { fixture, cmp } = setup({
-        all: () => throwError(() => new ApiError('nope', 500, {})),
-      });
+  it('removes a chip with its button and the last chip with Backspace on empty input', () => {
+    const { fixture, input, host } = setup({}, [GROCERIES, WORK]);
+    (host().querySelector('[matChipRemove]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(chips(host())).toEqual(['work']);
+    press(input(), 'Backspace');
+    fixture.detectChanges();
+    expect(chips(host())).toEqual([]);
+  });
 
-      cmp.value.set([GROCERIES]);
-      fixture.detectChanges();
+  it('leaves chips alone on Backspace while the input has text', async () => {
+    const { fixture, input, host } = setup({}, [GROCERIES]);
+    await type(fixture, input(), 'gr');
+    press(input(), 'Backspace');
+    fixture.detectChanges();
+    expect(chips(host())).toEqual(['groceries']);
+  });
 
-      expect(cmp.value()).toEqual([GROCERIES]);
-    });
+  it('says nothing extra when there are zero Tags', () => {
+    const { host } = setup({ all: () => of<Tag[]>([]) });
+    expect(host().querySelector('mat-hint')).toBeNull();
+  });
+
+  it('disables the field after a failed option fetch and keeps parent-seeded chips', () => {
+    const { input, host } = setup({ all: () => throwError(() => new ApiError('nope', 500, {})) }, [GROCERIES]);
+    expect(host().querySelector('mat-hint')?.textContent).toContain('couldn’t be loaded');
+    expect(input().disabled).toBe(true);
+    expect(chips(host())).toEqual(['groceries']);
   });
 });

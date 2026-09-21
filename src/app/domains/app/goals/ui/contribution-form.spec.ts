@@ -1,4 +1,3 @@
-import { WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { of } from 'rxjs';
@@ -8,16 +7,6 @@ import { GoalContributionWithAccountName } from '../data/contribution-account-na
 import { Goal } from '../data/goal';
 import { GoalContributionsService } from '../data/goal-contributions.service';
 import { ContributionForm } from './contribution-form';
-
-type FormInternals = {
-  model: WritableSignal<{
-    accountId: number | null;
-    amount: number | null;
-    contributionDate: Date;
-    note: string;
-  }>;
-  save(event: Event): void;
-};
 
 const GOAL: Goal = {
   id: 3,
@@ -64,15 +53,16 @@ describe('ContributionForm', () => {
     fixture.componentRef.setInput('contribution', contribution);
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
-    const component = fixture.componentInstance as unknown as FormInternals;
 
     expect(host.textContent).toContain('Dated 12 Sep 2026');
     expect(host.textContent).toContain('delete this Contribution and add another');
     expect(host.textContent).not.toContain('Contribution date');
     expect(host.querySelectorAll('input').length).toBe(1);
 
-    component.model.update((value) => ({ ...value, note: '  Revised  ' }));
-    component.save(new Event('submit'));
+    const note = host.querySelector('input') as HTMLInputElement;
+    note.value = '  Revised  ';
+    note.dispatchEvent(new Event('input'));
+    (host.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
     await fixture.whenStable();
     await fixture.whenStable();
 

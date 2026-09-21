@@ -1,6 +1,4 @@
-import { WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { FieldTree } from '@angular/forms/signals';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -8,13 +6,6 @@ import { AuthService, ResetLinkRejectedError } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import AuthResetPassword from './reset-password';
-
-/** The slice of the component the tests reach into. */
-type ResetPasswordInternals = {
-  resetFormModel: WritableSignal<{ newPassword: string }>;
-  resetForm: { newPassword: FieldTree<string> };
-  resetPassword(event: Event): void;
-};
 
 /**
  * The reset-password screen's own seam (ADR 0015). Unlike confirm-email, it
@@ -33,7 +24,7 @@ describe('AuthResetPassword', () => {
       resetPassword = () => of(undefined),
     }: {
       resetPassword?: AuthService['resetPassword'];
-    } = {}
+    } = {},
   ) {
     const completePasswordReset = vi.fn();
 
@@ -53,18 +44,21 @@ describe('AuthResetPassword', () => {
     });
 
     const fixture = TestBed.createComponent(AuthResetPassword);
-    const cmp = fixture.componentInstance as unknown as ResetPasswordInternals;
     fixture.detectChanges();
-    return { fixture, cmp, completePasswordReset };
+    return { fixture, completePasswordReset };
   }
 
-  async function submitAndSettle(
-    fixture: { whenStable: () => Promise<unknown>; detectChanges: () => void },
-    cmp: ResetPasswordInternals
-  ) {
-    cmp.resetPassword(new Event('submit'));
+  async function submitAndSettle(fixture: ComponentFixture<AuthResetPassword>) {
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
     await fixture.whenStable();
     await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  function enterPassword(fixture: ComponentFixture<AuthResetPassword>, value: string) {
+    const input = fixture.nativeElement.querySelector('#new-password') as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
   }
 
@@ -75,9 +69,7 @@ describe('AuthResetPassword', () => {
   it('shows the new-password form for a well-formed link', () => {
     const { fixture } = setup({ userId: '7', token: 'a-token' });
 
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('#new-password')
-    ).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#new-password')).not.toBeNull();
     expect(text(fixture)).not.toContain('This link is no longer valid');
   });
 
@@ -96,10 +88,7 @@ describe('AuthResetPassword', () => {
    */
   it('lands on the dead-link state for a non-integer userId, without calling the API', () => {
     const resetPassword = vi.fn(() => of(undefined));
-    const { fixture } = setup(
-      { userId: 'not-a-number', token: 'a-token' },
-      { resetPassword }
-    );
+    const { fixture } = setup({ userId: 'not-a-number', token: 'a-token' }, { resetPassword });
 
     expect(resetPassword).not.toHaveBeenCalled();
     expect(text(fixture)).toContain('This link is no longer valid');
@@ -107,60 +96,46 @@ describe('AuthResetPassword', () => {
 
   it('resets with the userId coerced to a number, the token as given, and the typed password', async () => {
     const resetPassword = vi.fn(() => of(undefined));
-    const { fixture, cmp } = setup(
-      { userId: '7', token: 'a-token' },
-      { resetPassword }
-    );
-    cmp.resetFormModel.set({ newPassword: 'a-new-password' });
-    fixture.detectChanges();
+    const { fixture } = setup({ userId: '7', token: 'a-token' }, { resetPassword });
+    enterPassword(fixture, 'a-new-password');
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(resetPassword).toHaveBeenCalledWith(7, 'a-token', 'a-new-password');
   });
 
   it('clears the local session and lands at sign-in on a clean reset', async () => {
-    const { fixture, cmp, completePasswordReset } = setup({
+    const { fixture, completePasswordReset } = setup({
       userId: '7',
       token: 'a-token',
     });
-    cmp.resetFormModel.set({ newPassword: 'a-new-password' });
-    fixture.detectChanges();
+    enterPassword(fixture, 'a-new-password');
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(completePasswordReset).toHaveBeenCalled();
   });
 
   it('shows a server-rejected password bound to the field, not the dead-link state', async () => {
-    const { fixture, cmp, completePasswordReset } = setup(
+    const { fixture, completePasswordReset } = setup(
       { userId: '7', token: 'a-token' },
       {
         resetPassword: () =>
           throwError(
             () =>
-              new ApiError(
-                'Please correct the highlighted fields and try again.',
-                400,
-                {
-                  password: [
-                    'The field Password must be a string with a minimum length of 8.',
-                  ],
-                }
-              )
+              new ApiError('Please correct the highlighted fields and try again.', 400, {
+                password: ['The field Password must be a string with a minimum length of 8.'],
+              }),
           ),
-      }
+      },
     );
     // Long enough to pass the client's own minLength(8), so the failure
     // reaching the component is the server's alone.
-    cmp.resetFormModel.set({ newPassword: 'a-new-password' });
-    fixture.detectChanges();
+    enterPassword(fixture, 'a-new-password');
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
-    expect(text(fixture)).toContain(
-      'The field Password must be a string with a minimum length of 8.'
-    );
+    expect(text(fixture)).toContain('The field Password must be a string with a minimum length of 8.');
     expect(text(fixture)).not.toContain('This link is no longer valid');
     expect(completePasswordReset).not.toHaveBeenCalled();
   });
@@ -173,35 +148,30 @@ describe('AuthResetPassword', () => {
    * banner over a form that can no longer succeed.
    */
   it('lands on the dead-link state when the reset link is rejected', async () => {
-    const { fixture, cmp, completePasswordReset } = setup(
+    const { fixture, completePasswordReset } = setup(
       { userId: '7', token: 'stale-token' },
       {
         resetPassword: () => throwError(() => new ResetLinkRejectedError()),
-      }
+      },
     );
-    cmp.resetFormModel.set({ newPassword: 'a-new-password' });
-    fixture.detectChanges();
+    enterPassword(fixture, 'a-new-password');
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(text(fixture)).toContain('This link is no longer valid');
     expect(completePasswordReset).not.toHaveBeenCalled();
   });
 
   it('shows a banner rather than the dead-link state for a failure that is not a 400', async () => {
-    const { fixture, cmp, completePasswordReset } = setup(
+    const { fixture, completePasswordReset } = setup(
       { userId: '7', token: 'a-token' },
       {
-        resetPassword: () =>
-          throwError(
-            () => new ApiError('Something went wrong on the server.', 500)
-          ),
-      }
+        resetPassword: () => throwError(() => new ApiError('Something went wrong on the server.', 500)),
+      },
     );
-    cmp.resetFormModel.set({ newPassword: 'a-new-password' });
-    fixture.detectChanges();
+    enterPassword(fixture, 'a-new-password');
 
-    await submitAndSettle(fixture, cmp);
+    await submitAndSettle(fixture);
 
     expect(text(fixture)).toContain('Something went wrong on the server.');
     expect(text(fixture)).not.toContain('This link is no longer valid');

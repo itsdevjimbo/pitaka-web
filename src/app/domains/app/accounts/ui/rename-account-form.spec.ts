@@ -1,6 +1,4 @@
-import { OutputEmitterRef, WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { FieldTree } from '@angular/forms/signals';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
@@ -8,15 +6,6 @@ import { Account } from '../data/account';
 import { AccountModifiedError } from '../data/account-errors';
 import { AccountsService } from '../data/accounts.service';
 import { RenameAccountForm } from './rename-account-form';
-
-/** The slice of the component the tests reach into. */
-type RenameInternals = {
-  model: WritableSignal<{ name: string }>;
-  renameForm: { name: FieldTree<string> };
-  errorMessage: () => string | null;
-  renamed: OutputEmitterRef<Account>;
-  save(event: Event): void;
-};
 
 const CASH: Account = {
   id: 9,
@@ -30,89 +19,83 @@ describe('RenameAccountForm', () => {
   function setup(rename: AccountsService['rename']) {
     TestBed.configureTestingModule({
       imports: [RenameAccountForm],
-      providers: [
-        provideIcons(),
-        { provide: AccountsService, useValue: { rename } },
-      ],
+      providers: [provideIcons(), { provide: AccountsService, useValue: { rename } }],
     });
 
     const fixture = TestBed.createComponent(RenameAccountForm);
     fixture.componentRef.setInput('account', CASH);
-    const cmp = fixture.componentInstance as unknown as RenameInternals;
     fixture.detectChanges();
-    return { fixture, cmp };
+    return { fixture };
   }
 
-  async function submitAndSettle(
-    fixture: { whenStable: () => Promise<unknown> },
-    cmp: RenameInternals
-  ) {
-    cmp.save(new Event('submit'));
+  async function submitAndSettle(fixture: ComponentFixture<RenameAccountForm>) {
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
     await fixture.whenStable();
+    fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  function nameInput(fixture: ComponentFixture<RenameAccountForm>) {
+    return fixture.nativeElement.querySelector('#rename-account-name') as HTMLInputElement;
+  }
+
+  function enterName(fixture: ComponentFixture<RenameAccountForm>, value: string) {
+    const input = nameInput(fixture);
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  function text(fixture: ComponentFixture<RenameAccountForm>) {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
   }
 
   it('starts pre-filled with the current name', () => {
-    const { cmp } = setup(() => of(CASH));
+    const { fixture } = setup(() => of(CASH));
 
-    expect(cmp.model().name).toBe('Cash on hand');
+    expect(nameInput(fixture).value).toBe('Cash on hand');
   });
 
   it('sends the trimmed name and emits the renamed Account', async () => {
-    const rename = vi.fn((_id: number, _name: string) =>
-      of({ ...CASH, name: 'Everyday cash' })
-    );
-    const { fixture, cmp } = setup(
-      rename as unknown as AccountsService['rename']
-    );
+    const rename = vi.fn((_id: number, _name: string) => of({ ...CASH, name: 'Everyday cash' }));
+    const { fixture } = setup(rename as unknown as AccountsService['rename']);
     const emitted: Account[] = [];
-    cmp.renamed.subscribe((account) => emitted.push(account));
+    fixture.componentInstance.renamed.subscribe((account) => emitted.push(account));
 
-    cmp.model.set({ name: '  Everyday cash  ' });
-    await submitAndSettle(fixture, cmp);
+    enterName(fixture, '  Everyday cash  ');
+    await submitAndSettle(fixture);
 
     expect(rename).toHaveBeenCalledWith(9, 'Everyday cash');
     expect(emitted).toEqual([{ ...CASH, name: 'Everyday cash' }]);
-    expect(cmp.errorMessage()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('binds a duplicate-name conflict onto the name control', async () => {
-    const { fixture, cmp } = setup(() =>
+    const { fixture } = setup(() =>
       throwError(
         () =>
           new ApiError('An account with this name already exists.', 409, {
             name: ['An account with this name already exists.'],
-          })
-      )
+          }),
+      ),
     );
 
-    cmp.model.set({ name: 'Savings' });
-    await submitAndSettle(fixture, cmp);
+    enterName(fixture, 'Savings');
+    await submitAndSettle(fixture);
 
-    const messages = cmp.renameForm
-      .name()
-      .errors()
-      .map((error) => error.message);
-    expect(messages).toContain('An account with this name already exists.');
-    expect(cmp.errorMessage()).toBeNull();
+    expect(text(fixture)).toContain('An account with this name already exists.');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('shows a concurrency rejection as a banner the person can retry from', async () => {
-    const { fixture, cmp } = setup(() =>
-      throwError(
-        () =>
-          new AccountModifiedError(
-            'This account was updated by another request. Please try again.'
-          )
-      )
+    const { fixture } = setup(() =>
+      throwError(() => new AccountModifiedError('This account was updated by another request. Please try again.')),
     );
 
-    cmp.model.set({ name: 'Everyday cash' });
-    await submitAndSettle(fixture, cmp);
+    enterName(fixture, 'Everyday cash');
+    await submitAndSettle(fixture);
 
-    expect(cmp.errorMessage()).toBe(
-      'This account was updated by another request. Please try again.'
-    );
-    expect(cmp.renameForm.name().errors()).toEqual([]);
+    expect(text(fixture)).toContain('This account was updated by another request. Please try again.');
+    expect(text(fixture)).not.toContain('You must enter a name');
   });
 });

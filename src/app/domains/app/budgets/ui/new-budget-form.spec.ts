@@ -1,56 +1,21 @@
-import { OutputEmitterRef, WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { FieldTree } from '@angular/forms/signals';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNativeDateAdapter } from '@angular/material/core';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
+import { withOverlayContainer } from '@/testing/overlay';
 import { withPinnedTimezone } from '@/testing/timezone';
-import { Budget, BUDGET_NAME_MAX, Period } from '../data/budget';
-import { startOfCurrentPeriod } from '../data/budget-calendar';
+import { Budget, BUDGET_NAME_MAX } from '../data/budget';
 import { BudgetsService } from '../data/budgets.service';
 import { NewBudgetForm } from './new-budget-form';
 
-type Model = {
-  name: string;
-  amountLimit: number | null;
-  period: Period | '';
-  startDate: Date | null;
-  categoryId: number | null;
-};
-
-/** The slice of the component the tests reach into. */
-type NewBudgetInternals = {
-  model: WritableSignal<Model>;
-  budgetForm: {
-    name: FieldTree<string>;
-    amountLimit: FieldTree<number | null>;
-    period: FieldTree<Period | ''>;
-    startDate: FieldTree<Date | null>;
-    categoryId: FieldTree<number | null>;
-  };
-  categoryOptions: () => Category[];
-  startDateEdited: WritableSignal<boolean>;
-  errorMessage: () => string | null;
-  created: OutputEmitterRef<Budget>;
-  cancelled: OutputEmitterRef<void>;
-  save(event: Event): void;
-  cancel(): void;
-  onStartDateEdited(): void;
-};
-
-const COULD_NOT_CREATE =
-  'Something went wrong creating your budget. Please try again.';
-
-/** What `list()` returns — active only, the filing rule (#108). */
+const COULD_NOT_CREATE = 'Something went wrong creating your budget. Please try again.';
 const CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
   { id: 2, name: 'Salary', kind: 'income', isActive: true, isDefault: false },
   { id: 3, name: 'Rent', kind: 'expense', isActive: true, isDefault: false },
 ];
-
-/** A since-retired expense Category — in the whole set `all()` would carry, never in `list()`. */
 const DINING_RETIRED: Category = {
   id: 7,
   name: 'Dining out',
@@ -58,7 +23,6 @@ const DINING_RETIRED: Category = {
   isActive: false,
   isDefault: false,
 };
-
 const CREATED: Budget = {
   id: 12,
   name: 'Groceries',
@@ -70,17 +34,12 @@ const CREATED: Budget = {
 };
 
 describe('NewBudgetForm', () => {
-  // The self-filling start date is computed from `new Date()`; pin a zone so the
-  // expected calendar day is stable regardless of where the runner sits.
+  const overlay = withOverlayContainer();
   const pinTimezone = withPinnedTimezone();
   beforeEach(() => pinTimezone('America/New_York'));
-
   const allCategories = vi.fn(() => of([...CATEGORIES, DINING_RETIRED]));
 
-  function setup(
-    create: BudgetsService['create'],
-    list: CategoriesService['list'] = () => of(CATEGORIES)
-  ) {
+  function setup(create: BudgetsService['create'], list: CategoriesService['list'] = () => of(CATEGORIES)) {
     allCategories.mockClear();
     TestBed.configureTestingModule({
       imports: [NewBudgetForm],
@@ -91,131 +50,80 @@ describe('NewBudgetForm', () => {
         { provide: CategoriesService, useValue: { list, all: allCategories } },
       ],
     });
-
     const fixture = TestBed.createComponent(NewBudgetForm);
-    const cmp = fixture.componentInstance as unknown as NewBudgetInternals;
     fixture.detectChanges();
-    return { fixture, cmp };
+    return fixture;
   }
 
-  async function submitAndSettle(
-    fixture: { whenStable: () => Promise<unknown> },
-    cmp: NewBudgetInternals
+  async function settle(fixture: ComponentFixture<NewBudgetForm>) {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  function enter(fixture: ComponentFixture<NewBudgetForm>, selector: string, value: string) {
+    const input = fixture.nativeElement.querySelector(selector) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  async function pick(fixture: ComponentFixture<NewBudgetForm>, index: number, label: string) {
+    (fixture.nativeElement.querySelectorAll('mat-select')[index] as HTMLElement).click();
+    await settle(fixture);
+    const option = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).find(
+      (candidate) => candidate.textContent?.trim() === label,
+    );
+    if (!option) throw new Error(`No option labelled "${label}"`);
+    option.click();
+    await settle(fixture);
+  }
+
+  async function fill(
+    fixture: ComponentFixture<NewBudgetForm>,
+    values: { name?: string; amount?: string; period?: string; category?: string } = {},
   ) {
-    cmp.save(new Event('submit'));
+    enter(fixture, '#budget-name', values.name ?? 'Groceries');
+    enter(fixture, '#budget-amount', values.amount ?? '20000');
+    if (values.period !== '') await pick(fixture, 0, values.period ?? 'Monthly');
+    enter(fixture, '#budget-start-date', '8/1/2026');
+    if (values.category) await pick(fixture, 1, values.category);
+  }
+
+  async function submit(fixture: ComponentFixture<NewBudgetForm>) {
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await settle(fixture);
     await fixture.whenStable();
-    await fixture.whenStable();
+    fixture.detectChanges();
   }
 
-  function messagesOn(field: FieldTree<unknown>) {
-    return field()
-      .errors()
-      .map((error) => error.message);
-  }
+  const text = (fixture: ComponentFixture<NewBudgetForm>) => (fixture.nativeElement as HTMLElement).textContent ?? '';
 
-  /**
-   * A complete, valid model — the common starting point for the happy paths and
-   * the error paths. The start date is set explicitly, so `startDateEdited` is
-   * flipped too: that is the honest state ("the person filled the whole form")
-   * and it stops the Period-driven self-fill from churning the model underneath
-   * a test that is watching the banner.
-   */
-  function fill(cmp: NewBudgetInternals, over: Partial<Model> = {}) {
-    cmp.startDateEdited.set(true);
-    cmp.model.set({
-      name: 'Groceries',
-      amountLimit: 20000,
-      period: 'monthly',
-      startDate: new Date(2026, 7, 1),
-      categoryId: null,
-      ...over,
-    });
-  }
-
-  it('blocks a submission with no name and never calls the service', async () => {
+  it.each([
+    { values: { name: '' }, message: 'You must enter a name' },
+    { values: { amount: '' }, message: 'You must enter an amount' },
+    { values: { amount: '0' }, message: 'The amount must be at least 0.01' },
+    {
+      values: { name: 'x'.repeat(BUDGET_NAME_MAX + 1) },
+      message: `The name must be ${BUDGET_NAME_MAX} characters or fewer`,
+    },
+    { values: { period: '' }, message: 'You must choose a period' },
+  ])('blocks invalid input: $message', async ({ values, message }) => {
     const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as BudgetsService['create']
-    );
-
-    fill(cmp, { name: '' });
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.budgetForm.name)).toContain('You must enter a name');
+    const fixture = setup(create as unknown as BudgetsService['create']);
+    await fill(fixture, values);
+    await submit(fixture);
+    expect(text(fixture)).toContain(message);
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('blocks a submission with no amount and never calls the service', async () => {
-    const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as BudgetsService['create']
-    );
-
-    fill(cmp, { amountLimit: null });
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.budgetForm.amountLimit)).toContain(
-      'You must enter an amount'
-    );
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it('blocks a submission with an amount below the minimum ceiling', async () => {
-    const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as BudgetsService['create']
-    );
-
-    fill(cmp, { amountLimit: 0 });
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.budgetForm.amountLimit)).toContain(
-      'The amount must be at least 0.01'
-    );
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it('refuses a name over the maximum length', async () => {
-    const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as BudgetsService['create']
-    );
-
-    fill(cmp, { name: 'x'.repeat(BUDGET_NAME_MAX + 1) });
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.budgetForm.name)).toContain(
-      `The name must be ${BUDGET_NAME_MAX} characters or fewer`
-    );
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it('blocks a submission with no period chosen and never calls the service', async () => {
-    const create = vi.fn();
-    const { fixture, cmp } = setup(
-      create as unknown as BudgetsService['create']
-    );
-
-    fill(cmp, { period: '', startDate: new Date(2026, 7, 1) });
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.budgetForm.period)).toContain(
-      'You must choose a period'
-    );
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it('sends the trimmed name, amount, period, start date and Category, and emits the created Budget', async () => {
-    const create = vi.fn((_budget) => of(CREATED));
-    const { fixture, cmp } = setup(
-      create as unknown as BudgetsService['create']
-    );
+  it('sends the trimmed fields and emits the created Budget', async () => {
+    const create = vi.fn(() => of(CREATED));
+    const fixture = setup(create as unknown as BudgetsService['create']);
     const emitted: Budget[] = [];
-    cmp.created.subscribe((budget) => emitted.push(budget));
-
-    fill(cmp, { name: '  Groceries  ', categoryId: 3 });
-    await submitAndSettle(fixture, cmp);
-
+    fixture.componentInstance.created.subscribe((budget) => emitted.push(budget));
+    await fill(fixture, { name: '  Groceries  ', category: 'Rent' });
+    await submit(fixture);
     expect(create).toHaveBeenCalledWith({
       name: 'Groceries',
       amountLimit: 20000,
@@ -224,133 +132,94 @@ describe('NewBudgetForm', () => {
       categoryId: 3,
     });
     expect(emitted).toEqual([CREATED]);
-    expect(cmp.errorMessage()).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('defaults the Category to "All spending" — a null categoryId is sent, not blocked', async () => {
-    const create = vi.fn((_budget) => of({ ...CREATED, categoryId: null }));
-    const { fixture, cmp } = setup(
-      create as unknown as BudgetsService['create']
-    );
-
-    // Never touch the Category field.
-    fill(cmp, { categoryId: null });
-    await submitAndSettle(fixture, cmp);
-
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ categoryId: null })
-    );
-    expect(messagesOn(cmp.budgetForm.categoryId)).toEqual([]);
+  it('defaults the Category to All spending', async () => {
+    const create = vi.fn(() => of({ ...CREATED, categoryId: null }));
+    const fixture = setup(create as unknown as BudgetsService['create']);
+    await fill(fixture);
+    await submit(fixture);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ categoryId: null }));
   });
 
-  it('lists expense Categories only in the picker', () => {
-    const { cmp } = setup(vi.fn());
-
-    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
-  });
-
-  it('offers no retired Category — the picker is the active-only list(), never a whole-set read (#108)', () => {
+  it('lists active expense Categories only in the picker', async () => {
     const list = vi.fn(() => of(CATEGORIES));
-    const { cmp } = setup(vi.fn(), list);
-
-    // The retired Dining out (id 7) sits only in what `all()` would return.
-    expect(cmp.categoryOptions().map((c) => c.id)).toEqual([1, 3]);
-    expect(cmp.categoryOptions().map((c) => c.id)).not.toContain(7);
+    const fixture = setup(vi.fn(), list);
+    await pick(fixture, 0, 'Monthly');
+    (fixture.nativeElement.querySelectorAll('mat-select')[1] as HTMLElement).click();
+    await settle(fixture);
+    const panel = Array.from(overlay().querySelectorAll<HTMLElement>('.mat-mdc-select-panel')).at(-1)!;
+    const options = Array.from(panel.querySelectorAll('mat-option')).map((option) => option.textContent?.trim());
+    expect(options).toEqual(['All spending', 'Groceries', 'Rent']);
     expect(list).toHaveBeenCalled();
     expect(allCategories).not.toHaveBeenCalled();
   });
 
-  it('fills the start date from the Period once one is chosen, and re-fills when it changes', async () => {
-    const { fixture, cmp } = setup(vi.fn());
-
-    expect(cmp.model().startDate).toBeNull();
-
-    cmp.model.update((m) => ({ ...m, period: 'monthly' }));
-    await fixture.whenStable();
-
-    expect(cmp.model().startDate).toEqual(
-      startOfCurrentPeriod('monthly', new Date())
-    );
-
-    cmp.model.update((m) => ({ ...m, period: 'weekly' }));
-    await fixture.whenStable();
-
-    expect(cmp.model().startDate).toEqual(
-      startOfCurrentPeriod('weekly', new Date())
-    );
+  it('fills the start date from the Period and refills it when the Period changes', async () => {
+    const fixture = setup(vi.fn());
+    const date = fixture.nativeElement.querySelector('#budget-start-date') as HTMLInputElement;
+    expect(date.value).toBe('');
+    await pick(fixture, 0, 'Monthly');
+    const monthly = date.value;
+    expect(monthly).not.toBe('');
+    await pick(fixture, 0, 'Weekly');
+    expect(date.value).not.toBe(monthly);
   });
 
   it('stops following the Period once the person edits the start date', async () => {
-    const { fixture, cmp } = setup(vi.fn());
-
-    cmp.model.update((m) => ({ ...m, period: 'monthly' }));
-    await fixture.whenStable();
-
-    // The person picks their own start date.
-    cmp.onStartDateEdited();
-    const chosen = new Date(2026, 0, 15);
-    cmp.model.update((m) => ({ ...m, startDate: chosen }));
-    await fixture.whenStable();
-
-    // A later Period change must not overwrite it.
-    cmp.model.update((m) => ({ ...m, period: 'yearly' }));
-    await fixture.whenStable();
-
-    expect(cmp.model().startDate).toEqual(chosen);
+    const fixture = setup(vi.fn());
+    await pick(fixture, 0, 'Monthly');
+    enter(fixture, '#budget-start-date', '1/15/2026');
+    await pick(fixture, 0, 'Yearly');
+    expect((fixture.nativeElement.querySelector('#budget-start-date') as HTMLInputElement).value).toBe('1/15/2026');
   });
 
-  it('binds a duplicate-name conflict onto the name control and leaves the banner empty', async () => {
-    const { fixture, cmp } = setup(() =>
+  it('binds a duplicate-name conflict onto the name control', async () => {
+    const fixture = setup(() =>
       throwError(
         () =>
           new ApiError('A budget with this name already exists.', 409, {
             name: ['A budget with this name already exists.'],
-          })
-      )
+          }),
+      ),
     );
-
-    fill(cmp);
-    await submitAndSettle(fixture, cmp);
-
-    expect(messagesOn(cmp.budgetForm.name)).toContain(
-      'A budget with this name already exists.'
-    );
-    expect(cmp.errorMessage()).toBeNull();
+    await fill(fixture);
+    await submit(fixture);
+    expect(text(fixture)).toContain('A budget with this name already exists.');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('shows the generic banner for a failure it cannot pin to a field', async () => {
-    const { fixture, cmp } = setup(() => throwError(() => new Error('offline')));
-
-    fill(cmp);
-    await submitAndSettle(fixture, cmp);
-
-    expect(cmp.errorMessage()).toBe(COULD_NOT_CREATE);
-    expect(cmp.budgetForm.name().errors()).toEqual([]);
+  it('shows the generic banner for an unattributed failure', async () => {
+    const fixture = setup(() => throwError(() => new Error('offline')));
+    await fill(fixture);
+    await submit(fixture);
+    expect(text(fixture)).toContain(COULD_NOT_CREATE);
+    expect(text(fixture)).not.toContain('You must enter a name');
   });
 
   it('sends exactly one request when submitted twice in a row', async () => {
     const inFlight = new Subject<Budget>();
     const create = vi.fn(() => inFlight.asObservable());
-    const { fixture, cmp } = setup(
-      create as unknown as BudgetsService['create']
-    );
-
-    fill(cmp);
-    cmp.save(new Event('submit'));
-    cmp.save(new Event('submit'));
+    const fixture = setup(create as unknown as BudgetsService['create']);
+    await fill(fixture);
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    form.dispatchEvent(new Event('submit'));
+    form.dispatchEvent(new Event('submit'));
     await fixture.whenStable();
-
     expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('emits cancelled without touching the service', () => {
     const create = vi.fn();
-    const { cmp } = setup(create as unknown as BudgetsService['create']);
+    const fixture = setup(create as unknown as BudgetsService['create']);
     const emitted: unknown[] = [];
-    cmp.cancelled.subscribe(() => emitted.push('cancelled'));
-
-    cmp.cancel();
-
+    fixture.componentInstance.cancelled.subscribe(() => emitted.push('cancelled'));
+    const cancel = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Cancel',
+    );
+    if (!cancel) throw new Error('No Cancel button');
+    cancel.click();
     expect(emitted).toEqual(['cancelled']);
     expect(create).not.toHaveBeenCalled();
   });

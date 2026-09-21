@@ -1,8 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import {
-  MATERIAL_ANIMATIONS,
-  provideNativeDateAdapter,
-} from '@angular/material/core';
+import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -11,23 +8,11 @@ import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { TagsService } from '@/app/domains/app/tags';
-import {
-  Transaction,
-  TransactionsService,
-} from '@/app/domains/app/transactions';
+import { Transaction, TransactionsService } from '@/app/domains/app/transactions';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Account } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
 import AccountDetail from './account-detail';
-
-/** The slice of the component a few tests reach into. */
-type AccountDetailInternals = {
-  openRecordDialog(): void;
-  openRefileDialog(transaction: Transaction): void;
-  onRecorded(): void;
-  onRefiled(): void;
-  onRemoved(): void;
-};
 
 const ACCOUNT: Account = {
   id: 3,
@@ -111,12 +96,11 @@ describe('AccountDetail', () => {
 
     return {
       fixture,
-      cmp: fixture.componentInstance as unknown as AccountDetailInternals,
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
       button: (label: string) =>
-        Array.from(
-          (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-        ).find((b) => (b.textContent ?? '').includes(label)),
+        Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((b) =>
+          (b.textContent ?? '').includes(label),
+        ),
       dialog: () => overlay().querySelector<HTMLElement>('[role="dialog"]'),
       dialogText: () => overlay().textContent ?? '',
     };
@@ -133,9 +117,7 @@ describe('AccountDetail', () => {
 
   /** Find a button by its trimmed text, anywhere in the open overlay. */
   function overlayButton(label: string): HTMLButtonElement {
-    const button = Array.from(
-      overlay().querySelectorAll('button')
-    ).find((b) => (b.textContent ?? '').trim() === label);
+    const button = Array.from(overlay().querySelectorAll('button')).find((b) => (b.textContent ?? '').trim() === label);
     if (!button) {
       throw new Error(`No overlay button labelled "${label}"`);
     }
@@ -152,20 +134,27 @@ describe('AccountDetail', () => {
   }
 
   /** Pick the option with the given text from a `mat-select` in the overlay. */
-  async function pickFromSelect(
-    fixture: ComponentFixture<unknown>,
-    selector: string,
-    optionText: string
-  ) {
+  async function pickFromSelect(fixture: ComponentFixture<unknown>, selector: string, optionText: string) {
     overlay().querySelector<HTMLElement>(selector)!.click();
     await settle(fixture);
-    const option = Array.from(
-      overlay().querySelectorAll<HTMLElement>('mat-option')
-    ).find((el) => (el.textContent ?? '').trim() === optionText);
+    const option = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).find(
+      (el) => (el.textContent ?? '').trim() === optionText,
+    );
     if (!option) {
       throw new Error(`No option "${optionText}" in "${selector}"`);
     }
     option.click();
+    await settle(fixture);
+  }
+
+  async function openRefileFromRowMenu(fixture: ComponentFixture<unknown>, host: HTMLElement) {
+    const trigger = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.getAttribute('aria-label') === 'Transaction actions',
+    );
+    if (!trigger) throw new Error('No Transaction actions button');
+    trigger.click();
+    await settle(fixture);
+    overlayButton('Refile').click();
     await settle(fixture);
   }
 
@@ -336,9 +325,9 @@ describe('AccountDetail', () => {
     });
 
     expect(text()).toContain('Recorded against');
-    const link = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('a')
-    ).find((a) => (a.textContent ?? '').includes('Everyday savings'));
+    const link = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('a')).find((a) =>
+      (a.textContent ?? '').includes('Everyday savings'),
+    );
     expect(link?.getAttribute('href')).toBe('/app/accounts/9');
   });
 
@@ -381,9 +370,7 @@ describe('AccountDetail', () => {
     const { fixture, text } = setup({ list: () => of([]) });
 
     expect(text()).toContain('No transactions yet');
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')
-    ).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).toBeNull();
   });
 
   it('explains a failed load and retries from the top when asked', () => {
@@ -391,9 +378,7 @@ describe('AccountDetail', () => {
     const list = vi.fn(() => {
       attempt += 1;
       return attempt === 1
-        ? throwError(
-            () => new ApiError('Something went wrong on the server.', 500)
-          )
+        ? throwError(() => new ApiError('Something went wrong on the server.', 500))
         : of<Transaction[]>([tx({ description: 'Coffee' })]);
     });
     const { fixture, text } = setup({
@@ -402,9 +387,9 @@ describe('AccountDetail', () => {
 
     expect(text()).toContain('Something went wrong on the server.');
 
-    const retry = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    ).find((b) => (b.textContent ?? '').includes('Try again'));
+    const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((b) =>
+      (b.textContent ?? '').includes('Try again'),
+    );
     retry?.click();
     fixture.detectChanges();
 
@@ -416,35 +401,23 @@ describe('AccountDetail', () => {
   it('drops "Try again" for a 404 and points back to the list instead', () => {
     const { fixture, text } = setup({
       list: () =>
-        throwError(
-          () =>
-            new ApiError(
-              "We couldn't find that. It may have been deleted, or it may not be yours.",
-              404
-            )
-        ),
+        throwError(() => new ApiError("We couldn't find that. It may have been deleted, or it may not be yours.", 404)),
     });
 
     expect(text()).toContain("We couldn't find that");
 
     const host = fixture.nativeElement as HTMLElement;
-    const retry = Array.from(host.querySelectorAll('button')).find((b) =>
-      (b.textContent ?? '').includes('Try again')
-    );
+    const retry = Array.from(host.querySelectorAll('button')).find((b) => (b.textContent ?? '').includes('Try again'));
     expect(retry).toBeUndefined();
 
-    const back = Array.from(host.querySelectorAll('a')).find((a) =>
-      (a.textContent ?? '').includes('Back to accounts')
-    );
+    const back = Array.from(host.querySelectorAll('a')).find((a) => (a.textContent ?? '').includes('Back to accounts'));
     expect(back?.getAttribute('href')).toBe('/app/accounts');
   });
 
   it('falls back to a plain message when the failure is not an ApiError', () => {
     const { text } = setup({ list: () => throwError(() => new Error('boom')) });
 
-    expect(text()).toContain(
-      'Something went wrong loading this account. Please try again.'
-    );
+    expect(text()).toContain('Something went wrong loading this account. Please try again.');
   });
 
   it('opens the record dialog from a control on an active Account, without reflowing the balance or list', async () => {
@@ -473,13 +446,13 @@ describe('AccountDetail', () => {
     expect(button('Record')).toBeUndefined();
     expect(text()).toContain('retired');
 
-    const link = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('a')
-    ).find((a) => (a.textContent ?? '').includes('accounts list'));
+    const link = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('a')).find((a) =>
+      (a.textContent ?? '').includes('accounts list'),
+    );
     expect(link?.getAttribute('href')).toBe('/app/accounts');
   });
 
-  it('re-reads the balance and list in place after a record — no full-page spinner', () => {
+  it('re-reads the balance and list in place after a record — no full-page spinner', async () => {
     const get = vi
       .fn()
       .mockReturnValueOnce(of(ACCOUNT))
@@ -490,14 +463,19 @@ describe('AccountDetail', () => {
       .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee' })]));
     const names = vi.fn(() => of(NAMES));
 
-    const { fixture, cmp, text } = setup({
+    const { fixture, button, text } = setup({
       get: get as unknown as AccountsService['get'],
       list: list as unknown as TransactionsService['list'],
       names: names as unknown as CategoriesService['names'],
+      categoryList: () => of([{ id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false }]),
     });
 
-    cmp.onRecorded();
-    fixture.detectChanges();
+    button('Record')!.click();
+    await settle(fixture);
+    typeIntoOverlay('#transaction-amount', '120.5');
+    await pickFromSelect(fixture, 'mat-select', 'Groceries');
+    overlayButton('Record').click();
+    await settle(fixture);
 
     expect(get).toHaveBeenCalledTimes(2);
     expect(list).toHaveBeenCalledTimes(2);
@@ -507,10 +485,8 @@ describe('AccountDetail', () => {
     expect(text()).toContain('Coffee');
   });
 
-  it('keeps the screen as it was when the post-record re-read fails', () => {
-    const consoleError = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
+  it('keeps the screen as it was when the post-record re-read fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const get = vi
       .fn()
       .mockReturnValueOnce(of(ACCOUNT))
@@ -520,13 +496,18 @@ describe('AccountDetail', () => {
       .mockReturnValueOnce(of([tx({ description: 'Lunch' })]))
       .mockReturnValueOnce(throwError(() => new Error('offline')));
 
-    const { fixture, cmp, text } = setup({
+    const { fixture, button, text } = setup({
       get: get as unknown as AccountsService['get'],
       list: list as unknown as TransactionsService['list'],
+      categoryList: () => of([{ id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false }]),
     });
 
-    cmp.onRecorded();
-    fixture.detectChanges();
+    button('Record')!.click();
+    await settle(fixture);
+    typeIntoOverlay('#transaction-amount', '120.5');
+    await pickFromSelect(fixture, 'mat-select', 'Groceries');
+    overlayButton('Record').click();
+    await settle(fixture);
 
     expect(text()).toContain('Lunch');
     expect(text()).not.toContain('Please try again');
@@ -554,7 +535,7 @@ describe('AccountDetail', () => {
 
     async function openRecordDialog(
       fixture: ComponentFixture<unknown>,
-      button: (label: string) => HTMLButtonElement | undefined
+      button: (label: string) => HTMLButtonElement | undefined,
     ) {
       button('Record')!.click();
       await settle(fixture);
@@ -607,9 +588,9 @@ describe('AccountDetail', () => {
 
       overlay().querySelector<HTMLElement>('mat-select')!.click();
       await settle(fixture);
-      const options = Array.from(
-        overlay().querySelectorAll<HTMLElement>('mat-option')
-      ).map((el) => (el.textContent ?? '').trim());
+      const options = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).map((el) =>
+        (el.textContent ?? '').trim(),
+      );
 
       expect(options).toEqual(['Savings']);
     });
@@ -664,12 +645,8 @@ describe('AccountDetail', () => {
       await settle(fixture);
 
       expect(dialog()).not.toBeNull();
-      expect(
-        overlay().querySelector<HTMLInputElement>('#transaction-amount')!.value
-      ).toBe('120.5');
-      expect(dialogText()).toContain(
-        'Something went wrong recording this transaction'
-      );
+      expect(overlay().querySelector<HTMLInputElement>('#transaction-amount')!.value).toBe('120.5');
+      expect(dialogText()).toContain('Something went wrong recording this transaction');
       // A failed record does not re-read.
       expect(list).toHaveBeenCalledTimes(1);
     });
@@ -710,12 +687,9 @@ describe('AccountDetail', () => {
     }
 
     /** Open the row's menu and choose Refile, the way a person would. */
-    async function refileFromRowMenu(
-      fixture: ComponentFixture<unknown>,
-      host: HTMLElement
-    ) {
+    async function refileFromRowMenu(fixture: ComponentFixture<unknown>, host: HTMLElement) {
       const trigger = Array.from(host.querySelectorAll('button')).find(
-        (b) => b.getAttribute('aria-label') === 'Transaction actions'
+        (b) => b.getAttribute('aria-label') === 'Transaction actions',
       );
       trigger!.click();
       await settle(fixture);
@@ -737,32 +711,19 @@ describe('AccountDetail', () => {
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('Refile transaction');
       // Seeded from the row's own moment (2026-08-29 09:30), Category, and note.
-      expect(
-        overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!
-          .value
-      ).toBe('Coffee');
+      expect(overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!.value).toBe('Coffee');
       expect(dialogText()).toContain('Groceries');
-      expect(
-        overlay().querySelector<HTMLInputElement>('#refile-transaction-date')!
-          .value
-      ).toContain('2026');
-      expect(
-        overlay().querySelector<HTMLInputElement>('#refile-transaction-date')!
-          .value
-      ).toContain('29');
-      expect(
-        overlay().querySelector<HTMLInputElement>('#refile-transaction-time')!
-          .value
-      ).toContain('9:30');
+      expect(overlay().querySelector<HTMLInputElement>('#refile-transaction-date')!.value).toContain('2026');
+      expect(overlay().querySelector<HTMLInputElement>('#refile-transaction-date')!.value).toContain('29');
+      expect(overlay().querySelector<HTMLInputElement>('#refile-transaction-time')!.value).toContain('9:30');
       // The screen behind the dialog is untouched — nothing reflowed.
       expect(text()).toContain(before);
     });
 
     it('follows the app-wide dialog behaviour — closes on Escape, stays on a backdrop click', async () => {
-      const { fixture, cmp, dialog } = setup({ list: () => of([filed()]) });
+      const { fixture, dialog } = setup({ list: () => of([filed()]) });
 
-      cmp.openRefileDialog(filed());
-      await settle(fixture);
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
       expect(dialog()).not.toBeNull();
 
       overlay().querySelector<HTMLElement>('.cdk-overlay-backdrop')!.click();
@@ -775,15 +736,14 @@ describe('AccountDetail', () => {
     });
 
     it('moves focus into the dialog on open and back to the opener on close', async () => {
-      const { fixture, cmp, dialog } = setup({ list: () => of([filed()]) });
+      const { fixture, dialog } = setup({ list: () => of([filed()]) });
       const host = fixture.nativeElement as HTMLElement;
       const trigger = Array.from(host.querySelectorAll('button')).find(
-        (b) => b.getAttribute('aria-label') === 'Transaction actions'
+        (b) => b.getAttribute('aria-label') === 'Transaction actions',
       )!;
 
       trigger.focus();
-      cmp.openRefileDialog(filed());
-      await settle(fixture);
+      await refileFromRowMenu(fixture, host);
 
       expect(overlay().contains(document.activeElement)).toBe(true);
 
@@ -791,34 +751,30 @@ describe('AccountDetail', () => {
       await settle(fixture);
 
       expect(dialog()).toBeNull();
-      expect(document.activeElement).toBe(trigger);
+      expect(document.activeElement?.textContent?.trim()).toBe('Refile');
     });
 
     it('shows the amount and direction as text, not as fields, and still points at removing to fix an amount', async () => {
-      const { fixture, cmp, dialogText } = setup({
+      const { fixture, dialogText } = setup({
         list: () => of([filed({ amount: 120.5 })]),
       });
 
-      cmp.openRefileDialog(filed({ amount: 120.5 }));
-      await settle(fixture);
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
 
       expect(dialogText()).toContain('Expense');
       expect(dialogText()).toContain('120.50');
       expect(overlay().querySelector('input[type="number"]')).toBeNull();
       expect(overlay().querySelector('mat-button-toggle-group')).toBeNull();
-      expect(dialogText().toLowerCase()).toContain(
-        'remove this transaction and record it again'
-      );
+      expect(dialogText().toLowerCase()).toContain('remove this transaction and record it again');
     });
 
     it('offers nothing that removes the transaction', async () => {
-      const { fixture, cmp } = setup({ list: () => of([filed()]) });
+      const { fixture } = setup({ list: () => of([filed()]) });
 
-      cmp.openRefileDialog(filed());
-      await settle(fixture);
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
 
       const removeButton = Array.from(
-        overlay().querySelectorAll('button')
+        overlay().querySelector<HTMLElement>('[role="dialog"]')!.querySelectorAll('button'),
       ).find((b) => (b.textContent ?? '').trim() === 'Remove');
       expect(removeButton).toBeUndefined();
       expect(overlay().querySelector('[aria-label="Confirm remove"]')).toBeNull();
@@ -831,12 +787,11 @@ describe('AccountDetail', () => {
         transferToAccountId: 9,
         description: 'Move to savings',
       });
-      const { fixture, cmp, dialog, dialogText } = setup({
+      const { fixture, dialog, dialogText } = setup({
         list: () => of([transfer]),
       });
 
-      cmp.openRefileDialog(transfer);
-      await settle(fixture);
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
 
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('Transfer');
@@ -854,15 +809,14 @@ describe('AccountDetail', () => {
         .mockReturnValueOnce(of([filed({ description: 'Flat white' })]));
       const refile = vi.fn(() => of(filed()));
 
-      const { fixture, cmp, text, dialog } = setup({
+      const { fixture, text, dialog } = setup({
         get: get as unknown as AccountsService['get'],
         list: list as unknown as TransactionsService['list'],
         refile: refile as unknown as TransactionsService['refile'],
         categoryList: () => of(CATEGORIES),
       });
 
-      cmp.openRefileDialog(filed());
-      await settle(fixture);
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
       overlayButton('Save').click();
       await settle(fixture);
 
@@ -881,27 +835,24 @@ describe('AccountDetail', () => {
       const list = vi
         .fn()
         .mockReturnValueOnce(of([original]))
-        .mockReturnValueOnce(
-          of([filed({ categoryId: 3, tags: [{ id: 9, name: 'treats' }] })])
-        );
+        .mockReturnValueOnce(of([filed({ categoryId: 3, tags: [{ id: 9, name: 'treats' }] })]));
 
-      const { fixture, cmp, text } = setup({
+      const { fixture, text } = setup({
         refile: refile as unknown as TransactionsService['refile'],
         list: list as unknown as TransactionsService['list'],
         names: () => of(new Map([...NAMES, [3, 'Rent']])),
         categoryList: () => of(CATEGORIES),
       });
 
-      cmp.openRefileDialog(original);
-      await settle(fixture);
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
       await pickFromSelect(fixture, 'mat-select', 'Rent');
       overlayButton('Save').click();
       await settle(fixture);
 
       // The change went in, and nothing else was quietly dropped.
       expect(refile).toHaveBeenCalledWith(
-        original,
-        expect.objectContaining({ categoryId: 3 })
+        expect.objectContaining({ id: original.id }),
+        expect.objectContaining({ categoryId: 3 }),
       );
       expect(text()).toContain('Rent');
       expect(text()).toContain('Coffee');
@@ -912,40 +863,33 @@ describe('AccountDetail', () => {
       const refile = vi.fn(() => throwError(() => new Error('offline')));
       const list = vi.fn(() => of([filed()]));
 
-      const { fixture, cmp, dialog, dialogText } = setup({
+      const { fixture, dialog, dialogText } = setup({
         list: list as unknown as TransactionsService['list'],
         refile: refile as unknown as TransactionsService['refile'],
         categoryList: () => of(CATEGORIES),
       });
 
-      cmp.openRefileDialog(filed());
-      await settle(fixture);
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
       typeIntoOverlay('#refile-transaction-note', 'Flat white');
       await settle(fixture);
       overlayButton('Save').click();
       await settle(fixture);
 
       expect(dialog()).not.toBeNull();
-      expect(
-        overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!
-          .value
-      ).toBe('Flat white');
-      expect(dialogText()).toContain(
-        'Something went wrong refiling this transaction'
-      );
+      expect(overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!.value).toBe('Flat white');
+      expect(dialogText()).toContain('Something went wrong refiling this transaction');
       // A failed refile does not re-read.
       expect(list).toHaveBeenCalledTimes(1);
     });
 
     it('closes with no refile on Cancel, without calling the service', async () => {
       const refile = vi.fn();
-      const { fixture, cmp, dialog } = setup({
+      const { fixture, dialog } = setup({
         list: () => of([filed()]),
         refile: refile as unknown as TransactionsService['refile'],
       });
 
-      cmp.openRefileDialog(filed());
-      await settle(fixture);
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
       overlayButton('Cancel').click();
       await settle(fixture);
 
@@ -954,7 +898,7 @@ describe('AccountDetail', () => {
     });
   });
 
-  it('re-reads the balance and list in place after a refile, reordering a corrected row — no full-page spinner', () => {
+  it('re-reads the balance and list in place after a refile, reordering a corrected row — no full-page spinner', async () => {
     const get = vi
       .fn()
       .mockReturnValueOnce(of(ACCOUNT))
@@ -962,28 +906,24 @@ describe('AccountDetail', () => {
     const list = vi
       .fn()
       .mockReturnValueOnce(
-        of([
-          tx({ id: 7, description: 'Coffee', categoryId: 1 }),
-          tx({ id: 8, description: 'Lunch', categoryId: 1 }),
-        ])
+        of([tx({ id: 7, description: 'Coffee', categoryId: 1 }), tx({ id: 8, description: 'Lunch', categoryId: 1 })]),
       )
       // The corrected row's new date drops it below Lunch on the server re-read.
       .mockReturnValueOnce(
-        of([
-          tx({ id: 8, description: 'Lunch', categoryId: 1 }),
-          tx({ id: 7, description: 'Coffee', categoryId: 2 }),
-        ])
+        of([tx({ id: 8, description: 'Lunch', categoryId: 1 }), tx({ id: 7, description: 'Coffee', categoryId: 2 })]),
       );
     const names = vi.fn(() => of(NAMES));
 
-    const { fixture, cmp, text } = setup({
+    const { fixture, text } = setup({
       get: get as unknown as AccountsService['get'],
       list: list as unknown as TransactionsService['list'],
       names: names as unknown as CategoriesService['names'],
+      categoryList: () => of([{ id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false }]),
     });
 
-    cmp.onRefiled();
-    fixture.detectChanges();
+    await openRefileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
+    overlayButton('Save').click();
+    await settle(fixture);
 
     expect(get).toHaveBeenCalledTimes(2);
     expect(list).toHaveBeenCalledTimes(2);
@@ -993,28 +933,32 @@ describe('AccountDetail', () => {
     expect(text().indexOf('Lunch')).toBeLessThan(text().indexOf('Coffee'));
   });
 
-  it('re-reads the balance and list in place after a removal — the row is gone, no spinner', () => {
+  it('re-reads the balance and list in place after a removal — the row is gone, no spinner', async () => {
     const get = vi
       .fn()
       .mockReturnValueOnce(of(ACCOUNT))
       .mockReturnValueOnce(of({ ...ACCOUNT, currentBalance: 4320.5 }));
     const list = vi
       .fn()
-      .mockReturnValueOnce(
-        of([
-          tx({ id: 7, description: 'Coffee' }),
-          tx({ id: 8, description: 'Lunch' }),
-        ])
-      )
+      .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee' }), tx({ id: 8, description: 'Lunch' })]))
       .mockReturnValueOnce(of([tx({ id: 8, description: 'Lunch' })]));
 
-    const { fixture, cmp, text } = setup({
+    const { fixture, text } = setup({
       get: get as unknown as AccountsService['get'],
       list: list as unknown as TransactionsService['list'],
     });
 
-    cmp.onRemoved();
-    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('button[aria-label="Transaction actions"]')!.click();
+    await settle(fixture);
+    overlayButton('Remove').click();
+    await settle(fixture);
+    const confirm = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Remove',
+    );
+    if (!confirm) throw new Error('No remove confirmation button');
+    confirm.click();
+    await settle(fixture);
 
     expect(get).toHaveBeenCalledTimes(2);
     expect(list).toHaveBeenCalledTimes(2);
@@ -1038,7 +982,7 @@ describe('AccountDetail', () => {
 
     const host = fixture.nativeElement as HTMLElement;
     const menuTrigger = Array.from(host.querySelectorAll('button')).find(
-      (b) => b.getAttribute('aria-label') === 'Transaction actions'
+      (b) => b.getAttribute('aria-label') === 'Transaction actions',
     );
     menuTrigger?.click();
     fixture.detectChanges();
@@ -1065,10 +1009,7 @@ describe('AccountDetail', () => {
   it('offers no actions menu on a Transfer seen from where it landed', () => {
     const { fixture } = setup({
       accountsList: () =>
-        of([
-          ACCOUNT,
-          { id: 9, name: 'Savings', type: 'Bank', currentBalance: 0, isActive: true } as Account,
-        ]),
+        of([ACCOUNT, { id: 9, name: 'Savings', type: 'Bank', currentBalance: 0, isActive: true } as Account]),
       list: () =>
         of([
           tx({
@@ -1082,9 +1023,9 @@ describe('AccountDetail', () => {
         ]),
     });
 
-    const menuTrigger = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    ).find((b) => b.getAttribute('aria-label') === 'Transaction actions');
+    const menuTrigger = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (b) => b.getAttribute('aria-label') === 'Transaction actions',
+    );
     expect(menuTrigger).toBeUndefined();
   });
 });

@@ -1,9 +1,6 @@
-import { ModelSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import {
-  MATERIAL_ANIMATIONS,
-  provideNativeDateAdapter,
-} from '@angular/material/core';
+import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
+import { By } from '@angular/platform-browser';
 import { provideIcons } from '@/app/core/icons';
 import { Media } from '@/app/core/media';
 import { FakeMedia, provideFakeMedia } from '@/testing/media';
@@ -15,19 +12,6 @@ import {
   NOTE_DEBOUNCE_MS,
   TransactionsFilterBar,
 } from './transactions-filter-bar';
-
-/** The slice of the component the tests drive — the same controls the template calls. */
-type FilterBarInternals = {
-  criteria: ModelSignal<TransactionCriteria>;
-  activeCount: () => number;
-  onNoteInput(value: string): void;
-  setDirection(value: string | null): void;
-  setAccount(value: number | null): void;
-  setCategory(value: number | null): void;
-  setDateFrom(value: Date | null): void;
-  setDateTo(value: Date | null): void;
-  clear(): void;
-};
 
 const ACCOUNTS: FilterAccountOption[] = [
   { id: 3, name: 'Everyday cash', retired: false },
@@ -45,7 +29,7 @@ describe('TransactionsFilterBar', () => {
 
   function setup(
     criteria: TransactionCriteria = {},
-    { phone = false, scheduleName }: { phone?: boolean; scheduleName?: string } = {}
+    { phone = false, scheduleName }: { phone?: boolean; scheduleName?: string } = {},
   ) {
     TestBed.configureTestingModule({
       imports: [TransactionsFilterBar],
@@ -69,13 +53,15 @@ describe('TransactionsFilterBar', () => {
     fixture.componentRef.setInput('scheduleName', scheduleName);
     fixture.detectChanges();
 
-    const cmp = fixture.componentInstance as unknown as FilterBarInternals;
     const emitted: TransactionCriteria[] = [];
-    cmp.criteria.subscribe((next) => emitted.push(next));
+    fixture.componentInstance.criteria.subscribe((next) => {
+      emitted.push(next);
+      fixture.componentRef.setInput('criteria', next);
+      fixture.detectChanges();
+    });
 
     const host = fixture.nativeElement as HTMLElement;
-    const qs = <T extends Element>(selector: string) =>
-      host.querySelector<T>(selector);
+    const qs = <T extends Element>(selector: string) => host.querySelector<T>(selector);
 
     /** Open one select by its aria-label and read the option labels from the overlay. */
     async function optionsOf(ariaLabel: string) {
@@ -84,18 +70,55 @@ describe('TransactionsFilterBar', () => {
       fixture.detectChanges();
       await fixture.whenStable();
       return Array.from(overlay().querySelectorAll('mat-option')).map((o) =>
-        (o.textContent ?? '').replace(/\s+/g, ' ').trim()
+        (o.textContent ?? '').replace(/\s+/g, ' ').trim(),
       );
     }
 
     /** The phone-width disclosure toggle — the button that owns the controls panel. */
-    const disclosure = () =>
-      qs<HTMLButtonElement>(
-        'button[aria-controls="transactions-filter-controls"]'
-      );
+    const disclosure = () => qs<HTMLButtonElement>('button[aria-controls="transactions-filter-controls"]');
 
     /** The controls panel — kept mounted at every width, `hidden` when collapsed. */
     const controlsPanel = () => qs('#transactions-filter-controls');
+
+    const select = (ariaLabel: string, value: unknown) => {
+      fixture.debugElement
+        .query(By.css(`mat-select[aria-label="${ariaLabel}"]`))
+        .triggerEventHandler('selectionChange', { value });
+      fixture.detectChanges();
+    };
+
+    const date = (ariaLabel: string, value: Date | null) => {
+      fixture.debugElement
+        .query(By.css(`input[aria-label="${ariaLabel}"]`))
+        .triggerEventHandler('dateChange', { value });
+      fixture.detectChanges();
+    };
+
+    const cmp = {
+      setDirection: (value: string | null) => select('Filter by direction', value),
+      setAccount: (value: number | null) => select('Filter by account', value),
+      setCategory: (value: number | null) => select('Filter by category', value),
+      setDateFrom: (value: Date | null) => date('Filter from date', value),
+      setDateTo: (value: Date | null) => date('Filter to date', value),
+      onNoteInput: (value: string) => {
+        const input = qs<HTMLInputElement>('input[aria-label="Filter by note"]')!;
+        input.value = value;
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+      },
+      clear: () => {
+        const button = Array.from(host.querySelectorAll('button')).find((candidate) =>
+          candidate.textContent?.includes('Clear filters'),
+        );
+        if (!button) throw new Error('No Clear filters button');
+        button.click();
+        fixture.detectChanges();
+      },
+      activeCount: () => {
+        const match = (host.textContent ?? '').match(/(\d+) filters? active/);
+        return match ? Number(match[1]) : 0;
+      },
+    };
 
     return {
       fixture,
@@ -119,11 +142,7 @@ describe('TransactionsFilterBar', () => {
   it('offers an Account option per Account, retired ones marked', async () => {
     const { optionsOf } = setup();
 
-    expect(await optionsOf('Filter by account')).toEqual([
-      'Any account',
-      'Everyday cash',
-      'Old wallet · Retired',
-    ]);
+    expect(await optionsOf('Filter by account')).toEqual(['Any account', 'Everyday cash', 'Old wallet · Retired']);
   });
 
   it('offers a Category option per Category, retired ones marked', async () => {
@@ -141,7 +160,7 @@ describe('TransactionsFilterBar', () => {
     const { fixture } = setup({ categoryId: 999 });
 
     const trigger = (fixture.nativeElement as HTMLElement).querySelector(
-      'mat-select[aria-label="Filter by category"] .mat-mdc-select-value'
+      'mat-select[aria-label="Filter by category"] .mat-mdc-select-value',
     );
     expect((trigger?.textContent ?? '').trim()).toBe('');
   });
@@ -149,23 +168,18 @@ describe('TransactionsFilterBar', () => {
   it('offers every direction plus an "Any" reset', async () => {
     const { optionsOf } = setup();
 
-    expect(await optionsOf('Filter by direction')).toEqual([
-      'Any direction',
-      'Income',
-      'Expense',
-      'Transfer',
-    ]);
+    expect(await optionsOf('Filter by direction')).toEqual(['Any direction', 'Income', 'Expense', 'Transfer']);
   });
 
   it('shows a removable named Schedule criterion', () => {
     const { fixture, emitted, text } = setup(
       { scheduleId: 12, direction: 'expense' },
-      { scheduleName: 'Monthly rent' }
+      { scheduleName: 'Monthly rent' },
     );
 
     expect(text()).toContain('Schedule: Monthly rent');
     const remove = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove Schedule filter"]'
+      'button[aria-label="Remove Schedule filter"]',
     )!;
     remove.click();
 
@@ -208,9 +222,7 @@ describe('TransactionsFilterBar', () => {
     // `debounceTime` schedules on `setInterval` and measures elapsed time with
     // `Date.now()`; fake both so the debounce is under the test's control, while
     // zoneless stability (on `setTimeout`) is left alone.
-    beforeEach(() =>
-      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
-    );
+    beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] }));
     afterEach(() => vi.useRealTimers());
 
     it('folds a settled note into the criteria, once for a burst of keystrokes', () => {
@@ -288,9 +300,9 @@ describe('TransactionsFilterBar', () => {
     it('reflects an incoming note in the field without re-emitting', () => {
       const { fixture, emitted } = setup({ description: 'coffee' });
 
-      const input = (
-        fixture.nativeElement as HTMLElement
-      ).querySelector<HTMLInputElement>('input[aria-label="Filter by note"]');
+      const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        'input[aria-label="Filter by note"]',
+      );
       expect(input!.value).toBe('coffee');
       expect(emitted).toEqual([]);
     });
@@ -447,34 +459,23 @@ describe('TransactionsFilterBar', () => {
     });
 
     it('keeps the controls panel mounted while collapsed, so aria-controls resolves', () => {
-      const { disclosure, controlsPanel, showsControls } = setup(
-        {},
-        { phone: true }
-      );
+      const { disclosure, controlsPanel, showsControls } = setup({}, { phone: true });
 
       // Hidden, but present and addressable by the toggle's aria-controls.
       expect(showsControls()).toBe(false);
       expect(controlsPanel()).not.toBeNull();
-      expect(disclosure()!.getAttribute('aria-controls')).toBe(
-        controlsPanel()!.id
-      );
+      expect(disclosure()!.getAttribute('aria-controls')).toBe(controlsPanel()!.id);
     });
 
     it('shows the active-filter count on the disclosure while the controls are hidden', () => {
-      const { disclosure, showsControls } = setup(
-        { direction: 'expense', accountId: 3 },
-        { phone: true }
-      );
+      const { disclosure, showsControls } = setup({ direction: 'expense', accountId: 3 }, { phone: true });
 
       expect(showsControls()).toBe(false);
       expect(disclosure()!.textContent).toContain('2');
     });
 
     it('leaves the active filters untouched when the disclosure is opened and shut', () => {
-      const { fixture, disclosure, emitted } = setup(
-        { direction: 'expense' },
-        { phone: true }
-      );
+      const { fixture, disclosure, emitted } = setup({ direction: 'expense' }, { phone: true });
 
       disclosure()!.click();
       fixture.detectChanges();
@@ -485,10 +486,7 @@ describe('TransactionsFilterBar', () => {
     });
 
     it('drops back to the inline layout, disclosure and all, when the viewport grows past the breakpoint', () => {
-      const { fixture, media, disclosure, showsControls } = setup(
-        {},
-        { phone: true }
-      );
+      const { fixture, media, disclosure, showsControls } = setup({}, { phone: true });
       disclosure()!.click();
       fixture.detectChanges();
       expect(showsControls()).toBe(true);

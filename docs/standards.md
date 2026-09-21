@@ -131,7 +131,7 @@ private field names or the number of internal helper calls.
 Direct access to component internals is a narrow exception: explain the exact
 behavior that cannot reasonably be exercised through the rendered or public
 interface, and limit the accessed surface. Do not add public production members
-solely to bypass this rule. Where the fixture-cast lint warning applies, place an
+solely to bypass this rule. Where the fixture-cast lint rule applies, place an
 `eslint-disable-next-line no-restricted-syntax -- <specific reason>` immediately
 above the exceptional line. Review the reason; “needed for testing” is insufficient.
 Unnecessary disables are reported by ESLint.
@@ -173,10 +173,9 @@ previous tip, including force-push rollbacks. A new branch's first push compares
 default branch. Missing or invalid Git history fails the check rather than silently
 skipping it.
 
-Existing fixture-internals casts produce warnings in full-repository lint until
-their planned migration. A changed file must resolve its warnings or carry the
-narrow, reviewed exception described above. The full formatting pass remains a
-separate cleanup task. Changes to checks themselves should run
+Fixture-internals casts are errors in full-repository lint. A necessary access must
+carry the narrow, reviewed exception described above. The full formatting pass
+remains a separate cleanup task. Changes to checks themselves should run
 `npm run test:standards`; behavior changes should run the affected tests and the
 normal repository checks.
 

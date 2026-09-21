@@ -1,12 +1,6 @@
-import { Signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
-import {
-  ActivatedRoute,
-  convertToParamMap,
-  ParamMap,
-  provideRouter,
-} from '@angular/router';
+import { ActivatedRoute, convertToParamMap, ParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
@@ -14,34 +8,9 @@ import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
 import { Account } from '../../data/account';
-import {
-  AccountDeleteBlockedError,
-  AccountModifiedError,
-} from '../../data/account-errors';
+import { AccountDeleteBlockedError, AccountModifiedError } from '../../data/account-errors';
 import { AccountsService } from '../../data/accounts.service';
 import AccountList from './account-list';
-
-type RowNotice = {
-  id: number;
-  message: string;
-  retry?: () => void;
-  retire?: () => void;
-};
-
-/** The slice of the component the tests reach into. */
-type AccountsInternals = {
-  load(): void;
-  openNewAccountDialog(): void;
-  openRenameDialog(account: Account): void;
-  toggleActive(account: Account): void;
-  askDelete(account: Account): void;
-  confirmDelete(account: Account): void;
-  cancelDelete(): void;
-  readonly confirmingDeleteId: Signal<number | null>;
-  readonly busyId: Signal<number | null>;
-  readonly notice: Signal<RowNotice | null>;
-  readonly errorMessage: Signal<string | null>;
-};
 
 const CASH: Account = {
   id: 1,
@@ -71,7 +40,7 @@ describe('AccountList', () => {
   function setup(
     all: AccountsService['all'],
     overrides: Partial<AccountsService> = {},
-    routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({}))
+    routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({})),
   ) {
     TestBed.configureTestingModule({
       imports: [AccountList],
@@ -95,17 +64,40 @@ describe('AccountList', () => {
     });
 
     const fixture = TestBed.createComponent(AccountList);
-    const cmp = fixture.componentInstance as unknown as AccountsInternals;
     fixture.detectChanges();
 
     return {
       fixture,
-      cmp,
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
       dialog: () => overlay().querySelector<HTMLElement>('[role="dialog"]'),
-      dialogText: () => overlay().textContent ?? '',
+      dialogText: () => overlay().querySelector<HTMLElement>('[role="dialog"]')?.textContent ?? '',
       routeParams,
     };
+  }
+
+  function row(fixture: ComponentFixture<AccountList>, accountName: string) {
+    const item = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('li')).find((candidate) =>
+      candidate.textContent?.includes(accountName),
+    );
+    if (!item) throw new Error(`No Account row named "${accountName}"`);
+    return item;
+  }
+
+  async function chooseRowAction(fixture: ComponentFixture<AccountList>, accountName: string, action: string) {
+    row(fixture, accountName).querySelector<HTMLButtonElement>('button[aria-label="Account actions"]')!.click();
+    await settle(fixture);
+    overlayButton(action).click();
+    await settle(fixture);
+  }
+
+  async function confirmDelete(fixture: ComponentFixture<AccountList>, accountName: string) {
+    await chooseRowAction(fixture, accountName, 'Delete');
+    const confirm = Array.from(row(fixture, accountName).querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Delete',
+    );
+    if (!confirm) throw new Error('No delete confirmation button');
+    confirm.click();
+    await settle(fixture);
   }
 
   /**
@@ -121,9 +113,9 @@ describe('AccountList', () => {
   }
 
   function clickButton(fixture: ComponentFixture<AccountList>, label: string) {
-    const button = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    ).find((element) => (element.textContent ?? '').includes(label));
+    const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((element) =>
+      (element.textContent ?? '').includes(label),
+    );
     if (!button) {
       throw new Error(`No button labelled "${label}"`);
     }
@@ -133,8 +125,8 @@ describe('AccountList', () => {
 
   /** Find a button by its text, anywhere in the open overlay. */
   function overlayButton(label: string): HTMLButtonElement {
-    const button = Array.from(overlay().querySelectorAll('button')).find(
-      (element) => (element.textContent ?? '').includes(label)
+    const button = Array.from(overlay().querySelectorAll('button')).find((element) =>
+      (element.textContent ?? '').includes(label),
     );
     if (!button) {
       throw new Error(`No overlay button labelled "${label}"`);
@@ -159,16 +151,16 @@ describe('AccountList', () => {
    */
   async function submitNewAccount(
     fixture: ComponentFixture<AccountList>,
-    values: { name: string; type: string; balance: string }
+    values: { name: string; type: string; balance: string },
   ) {
     typeInto('#account-name', values.name);
     typeInto('#account-initial-balance', values.balance);
 
     overlay().querySelector<HTMLElement>('mat-select')!.click();
     await settle(fixture);
-    const option = Array.from(
-      overlay().querySelectorAll<HTMLElement>('mat-option')
-    ).find((element) => (element.textContent ?? '').trim() === values.type);
+    const option = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).find(
+      (element) => (element.textContent ?? '').trim() === values.type,
+    );
     if (!option) {
       throw new Error(`No type option "${values.type}"`);
     }
@@ -218,7 +210,7 @@ describe('AccountList', () => {
       of([
         { ...CASH, currentBalance: 0.1 },
         { ...BANK, currentBalance: 0.2 },
-      ])
+      ]),
     );
 
     expect(text()).toContain(formatPeso(0.3));
@@ -258,19 +250,21 @@ describe('AccountList', () => {
     expect(text()).toContain('Add your first account');
   });
 
-  it('returns to the true-empty state after deleting the final Account', () => {
-    const all = vi.fn().mockReturnValueOnce(of([CASH])).mockReturnValueOnce(of([]));
+  it('returns to the true-empty state after deleting the final Account', async () => {
+    const all = vi
+      .fn()
+      .mockReturnValueOnce(of([CASH]))
+      .mockReturnValueOnce(of([]));
     const list = vi
       .fn()
       .mockReturnValueOnce(of([CASH]))
       .mockReturnValueOnce(of([]));
-    const { cmp, fixture, text } = setup(all, {
+    const { fixture, text } = setup(all, {
       list: list as unknown as AccountsService['list'],
       remove: (() => of(undefined)) as AccountsService['remove'],
     });
 
-    cmp.confirmDelete(CASH);
-    fixture.detectChanges();
+    await confirmDelete(fixture, 'Cash on hand');
 
     expect(all).toHaveBeenCalledTimes(2);
     expect(text()).toContain('No accounts yet');
@@ -285,10 +279,9 @@ describe('AccountList', () => {
       .mockReturnValueOnce(of([CASH]))
       .mockReturnValueOnce(retired)
       .mockReturnValueOnce(all);
-    const { fixture, routeParams, text } = setup(
-      () => of([CASH, OLD_WALLET]),
-      { list: list as unknown as AccountsService['list'] }
-    );
+    const { fixture, routeParams, text } = setup(() => of([CASH, OLD_WALLET]), {
+      list: list as unknown as AccountsService['list'],
+    });
 
     routeParams.next(convertToParamMap({ status: 'retired' }));
     fixture.detectChanges();
@@ -313,10 +306,9 @@ describe('AccountList', () => {
       .mockReturnValueOnce(of([CASH]))
       .mockReturnValueOnce(throwError(() => new ApiError('Offline', 0)))
       .mockReturnValueOnce(of([OLD_WALLET]));
-    const { fixture, routeParams, text } = setup(
-      () => of([CASH, OLD_WALLET]),
-      { list: list as unknown as AccountsService['list'] }
-    );
+    const { fixture, routeParams, text } = setup(() => of([CASH, OLD_WALLET]), {
+      list: list as unknown as AccountsService['list'],
+    });
 
     routeParams.next(convertToParamMap({ status: 'retired' }));
     fixture.detectChanges();
@@ -337,13 +329,7 @@ describe('AccountList', () => {
     const list = vi.fn(() => {
       attempt += 1;
       return attempt === 1
-        ? throwError(
-            () =>
-              new ApiError(
-                'Could not reach the server. Check your connection and try again.',
-                0
-              )
-          )
+        ? throwError(() => new ApiError('Could not reach the server. Check your connection and try again.', 0))
         : of([CASH, BANK]);
     });
     const { fixture, text } = setup(list as unknown as AccountsService['all']);
@@ -360,9 +346,7 @@ describe('AccountList', () => {
   it('falls back to a plain message when the failure is not an ApiError', () => {
     const { text } = setup(() => throwError(() => new Error('boom')));
 
-    expect(text()).toContain(
-      'Something went wrong loading your accounts. Please try again.'
-    );
+    expect(text()).toContain('Something went wrong loading your accounts. Please try again.');
   });
 
   describe('create, in a dialog', () => {
@@ -382,9 +366,7 @@ describe('AccountList', () => {
     }
 
     it('opens the new-account form in a dialog from the heading, without reflowing the list', async () => {
-      const { fixture, text, dialog, dialogText } = setup(() =>
-        of([CASH, BANK])
-      );
+      const { fixture, text, dialog, dialogText } = setup(() => of([CASH, BANK]));
       const before = text();
 
       await openAddDialog(fixture);
@@ -419,9 +401,9 @@ describe('AccountList', () => {
     it('moves focus into the dialog on open and back to the opener on close', async () => {
       const { fixture, dialog } = setup(() => of([CASH]));
 
-      const addButton = Array.from(
-        (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-      ).find((element) => (element.textContent ?? '').includes('Add account'))!;
+      const addButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((element) =>
+        (element.textContent ?? '').includes('Add account'),
+      )!;
       addButton.focus();
       addButton.click();
       await settle(fixture);
@@ -476,9 +458,7 @@ describe('AccountList', () => {
       });
 
       await openAddDialog(fixture);
-      overlay()
-        .querySelector<HTMLButtonElement>('button[aria-label="Close"]')!
-        .click();
+      overlay().querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
       await settle(fixture);
 
       expect(dialog()).toBeNull();
@@ -493,10 +473,9 @@ describe('AccountList', () => {
         return attempt === 1 ? of([CASH]) : reReadPending.asObservable();
       });
       const create = vi.fn(() => of(SERVER_SAVINGS));
-      const { fixture, text, dialog } = setup(
-        list as unknown as AccountsService['all'],
-        { create: create as unknown as AccountsService['create'] }
-      );
+      const { fixture, text, dialog } = setup(list as unknown as AccountsService['all'], {
+        create: create as unknown as AccountsService['create'],
+      });
 
       await openAddDialog(fixture);
       await submitNewAccount(fixture, {
@@ -530,12 +509,8 @@ describe('AccountList', () => {
       });
 
       expect(dialog()).not.toBeNull();
-      expect(
-        overlay().querySelector<HTMLInputElement>('#account-name')!.value
-      ).toBe('Brokerage');
-      expect(dialogText()).toContain(
-        'Something went wrong creating your account'
-      );
+      expect(overlay().querySelector<HTMLInputElement>('#account-name')!.value).toBe('Brokerage');
+      expect(dialogText()).toContain('Something went wrong creating your account');
     });
 
     it('shows a server-rejected field its own message, in the still-open dialog', async () => {
@@ -544,8 +519,8 @@ describe('AccountList', () => {
           () =>
             new ApiError('An account with this name already exists.', 409, {
               name: ['An account with this name already exists.'],
-            })
-        )
+            }),
+        ),
       );
       const { fixture, dialog, dialogText } = setup(() => of([CASH]), {
         create: create as unknown as AccountsService['create'],
@@ -559,9 +534,7 @@ describe('AccountList', () => {
       });
 
       expect(dialog()).not.toBeNull();
-      expect(dialogText()).toContain(
-        'An account with this name already exists.'
-      );
+      expect(dialogText()).toContain('An account with this name already exists.');
     });
 
     it('keeps the optimistic row when the re-read fails, rather than flipping to an error', async () => {
@@ -569,15 +542,12 @@ describe('AccountList', () => {
       let attempt = 0;
       const list = vi.fn(() => {
         attempt += 1;
-        return attempt === 1
-          ? of([CASH])
-          : throwError(() => new ApiError('Internal Server Error', 500));
+        return attempt === 1 ? of([CASH]) : throwError(() => new ApiError('Internal Server Error', 500));
       });
       const create = vi.fn(() => of(SERVER_SAVINGS));
-      const { fixture, cmp, text } = setup(
-        list as unknown as AccountsService['all'],
-        { create: create as unknown as AccountsService['create'] }
-      );
+      const { fixture, text } = setup(list as unknown as AccountsService['all'], {
+        create: create as unknown as AccountsService['create'],
+      });
 
       await openAddDialog(fixture);
       await submitNewAccount(fixture, {
@@ -588,31 +558,25 @@ describe('AccountList', () => {
 
       expect(text()).toContain('Cash on hand');
       expect(text()).toContain('New Savings');
-      expect(cmp.errorMessage()).toBeNull();
+      expect(text()).not.toContain('We could not load your accounts');
     });
   });
 
   describe('rename, in a dialog', () => {
     it('opens the rename form in a dialog seeded with the current name', async () => {
-      const { fixture, cmp, dialog, dialogText } = setup(() =>
-        of([CASH, BANK])
-      );
+      const { fixture, dialog, dialogText } = setup(() => of([CASH, BANK]));
 
-      cmp.openRenameDialog(CASH);
-      await settle(fixture);
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
 
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('Rename account');
-      expect(
-        overlay().querySelector<HTMLInputElement>('#rename-account-name')!.value
-      ).toBe('Cash on hand');
+      expect(overlay().querySelector<HTMLInputElement>('#rename-account-name')!.value).toBe('Cash on hand');
     });
 
     it('leaves the row showing name, type, balance and retired badge while it is open', async () => {
-      const { fixture, cmp, text } = setup(() => of([OLD_WALLET]));
+      const { fixture, text } = setup(() => of([OLD_WALLET]));
 
-      cmp.openRenameDialog(OLD_WALLET);
-      await settle(fixture);
+      await chooseRowAction(fixture, 'Old GCash', 'Rename');
 
       expect(text()).toContain('Old GCash');
       expect(text()).toContain('Wallet');
@@ -621,10 +585,9 @@ describe('AccountList', () => {
     });
 
     it('offers nothing destructive inside the dialog', async () => {
-      const { fixture, cmp, dialogText } = setup(() => of([CASH]));
+      const { fixture, dialogText } = setup(() => of([CASH]));
 
-      cmp.openRenameDialog(CASH);
-      await settle(fixture);
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
 
       expect(dialogText()).not.toContain('Delete');
       expect(dialogText()).not.toContain('Retire');
@@ -633,26 +596,21 @@ describe('AccountList', () => {
 
     it('dismisses on Cancel, the close control, and Escape without calling the service', async () => {
       const rename = vi.fn();
-      const { fixture, cmp, dialog } = setup(() => of([CASH]), {
+      const { fixture, dialog } = setup(() => of([CASH]), {
         rename: rename as unknown as AccountsService['rename'],
       });
 
-      cmp.openRenameDialog(CASH);
-      await settle(fixture);
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
       overlayButton('Cancel').click();
       await settle(fixture);
       expect(dialog()).toBeNull();
 
-      cmp.openRenameDialog(CASH);
-      await settle(fixture);
-      overlay()
-        .querySelector<HTMLButtonElement>('button[aria-label="Close"]')!
-        .click();
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
+      overlay().querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
       await settle(fixture);
       expect(dialog()).toBeNull();
 
-      cmp.openRenameDialog(CASH);
-      await settle(fixture);
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
       pressEscape();
       await settle(fixture);
       expect(dialog()).toBeNull();
@@ -664,20 +622,14 @@ describe('AccountList', () => {
       let attempt = 0;
       const list = vi.fn(() => {
         attempt += 1;
-        return attempt === 1
-          ? of([CASH, BANK])
-          : of([{ ...CASH, name: 'Everyday cash' }, BANK]);
+        return attempt === 1 ? of([CASH, BANK]) : of([{ ...CASH, name: 'Everyday cash' }, BANK]);
       });
-      const rename = vi.fn((_id: number, _name: string) =>
-        of({ ...CASH, name: 'Everyday cash' })
-      );
-      const { fixture, cmp, text, dialog } = setup(
-        list as unknown as AccountsService['all'],
-        { rename: rename as unknown as AccountsService['rename'] }
-      );
+      const rename = vi.fn((_id: number, _name: string) => of({ ...CASH, name: 'Everyday cash' }));
+      const { fixture, text, dialog } = setup(list as unknown as AccountsService['all'], {
+        rename: rename as unknown as AccountsService['rename'],
+      });
 
-      cmp.openRenameDialog(CASH);
-      await settle(fixture);
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
       typeInto('#rename-account-name', 'Everyday cash');
       overlayButton('Save').click();
       await settle(fixture);
@@ -691,19 +643,13 @@ describe('AccountList', () => {
 
     it('on a failed rename, keeps the dialog open with the reason shown', async () => {
       const rename = vi.fn(() =>
-        throwError(
-          () =>
-            new AccountModifiedError(
-              'This account was updated by another request. Please try again.'
-            )
-        )
+        throwError(() => new AccountModifiedError('This account was updated by another request. Please try again.')),
       );
-      const { fixture, cmp, dialog, dialogText } = setup(() => of([CASH]), {
+      const { fixture, dialog, dialogText } = setup(() => of([CASH]), {
         rename: rename as unknown as AccountsService['rename'],
       });
 
-      cmp.openRenameDialog(CASH);
-      await settle(fixture);
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
       typeInto('#rename-account-name', 'Everyday cash');
       overlayButton('Save').click();
       await settle(fixture);
@@ -718,168 +664,145 @@ describe('AccountList', () => {
           () =>
             new ApiError('An account with this name already exists.', 409, {
               name: ['An account with this name already exists.'],
-            })
-        )
+            }),
+        ),
       );
-      const { fixture, cmp, dialog, dialogText } = setup(
-        () => of([CASH, BANK]),
-        {
-          rename: rename as unknown as AccountsService['rename'],
-        }
-      );
+      const { fixture, dialog, dialogText } = setup(() => of([CASH, BANK]), {
+        rename: rename as unknown as AccountsService['rename'],
+      });
 
-      cmp.openRenameDialog(CASH);
-      await settle(fixture);
+      await chooseRowAction(fixture, 'Cash on hand', 'Rename');
       typeInto('#rename-account-name', 'BPI Savings');
       overlayButton('Save').click();
       await settle(fixture);
 
       expect(dialog()).not.toBeNull();
-      expect(dialogText()).toContain(
-        'An account with this name already exists.'
-      );
+      expect(dialogText()).toContain('An account with this name already exists.');
     });
   });
 
   describe('retire and reactivate', () => {
-    it('retires an active Account through the service and re-reads the list', () => {
+    it('retires an active Account through the service and re-reads the list', async () => {
       const setActive = vi.fn(() => of({ ...CASH, isActive: false }));
       const list = vi.fn(() => of([CASH]));
-      const { cmp } = setup(list as unknown as AccountsService['all'], {
+      const { fixture } = setup(list as unknown as AccountsService['all'], {
         setActive,
       });
 
-      cmp.toggleActive(CASH);
+      await chooseRowAction(fixture, 'Cash on hand', 'Retire');
 
       expect(setActive).toHaveBeenCalledWith(1, false);
       expect(list).toHaveBeenCalledTimes(2);
     });
 
-    it('reactivates a retired Account by asking for isActive true', () => {
+    it('reactivates a retired Account by asking for isActive true', async () => {
       const setActive = vi.fn(() => of({ ...OLD_WALLET, isActive: true }));
-      const { cmp } = setup(() => of([OLD_WALLET]), { setActive });
+      const { fixture } = setup(() => of([OLD_WALLET]), { setActive });
 
-      cmp.toggleActive(OLD_WALLET);
+      await chooseRowAction(fixture, 'Old GCash', 'Reactivate');
 
       expect(setActive).toHaveBeenCalledWith(3, true);
     });
 
-    it('reports a retire that lost a concurrency race and offers a retry', () => {
+    it('reports a retire that lost a concurrency race and offers a retry', async () => {
       const setActive = vi.fn(() =>
-        throwError(
-          () =>
-            new AccountModifiedError(
-              'This account was updated by another request. Please try again.'
-            )
-        )
+        throwError(() => new AccountModifiedError('This account was updated by another request. Please try again.')),
       );
-      const { fixture, cmp, text } = setup(() => of([CASH]), { setActive });
+      const { fixture, text } = setup(() => of([CASH]), { setActive });
 
-      cmp.toggleActive(CASH);
-      fixture.detectChanges();
+      await chooseRowAction(fixture, 'Cash on hand', 'Retire');
 
-      expect(cmp.notice()?.id).toBe(1);
       expect(text()).toContain('updated by another request');
       expect(text()).toContain('Try again');
     });
   });
 
   describe('delete', () => {
-    it('asks for confirmation and does not call the service until confirmed', () => {
+    it('asks for confirmation and does not call the service until confirmed', async () => {
       const remove = vi.fn(() => of(undefined));
-      const { fixture, cmp, text } = setup(() => of([CASH]), { remove });
+      const { fixture, text } = setup(() => of([CASH]), { remove });
 
-      cmp.askDelete(CASH);
-      fixture.detectChanges();
+      await chooseRowAction(fixture, 'Cash on hand', 'Delete');
 
-      expect(cmp.confirmingDeleteId()).toBe(1);
       expect(text()).toContain('This can’t be undone');
       expect(remove).not.toHaveBeenCalled();
 
-      cmp.confirmDelete(CASH);
+      const confirm = Array.from(row(fixture, 'Cash on hand').querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Delete',
+      );
+      if (!confirm) throw new Error('No delete confirmation button');
+      confirm.click();
       expect(remove).toHaveBeenCalledWith(1);
     });
 
-    it('deletes an empty Account and re-reads the list and total', () => {
+    it('deletes an empty Account and re-reads the list and total', async () => {
       const remove = vi.fn(() => of(undefined));
       let attempt = 0;
       const list = vi.fn(() => {
         attempt += 1;
         return attempt === 1 ? of([CASH, BANK]) : of([BANK]);
       });
-      const { fixture, cmp, text } = setup(
-        list as unknown as AccountsService['all'],
-        { remove }
-      );
+      const { fixture, text } = setup(list as unknown as AccountsService['all'], { remove });
 
-      cmp.confirmDelete(CASH);
-      fixture.detectChanges();
+      await confirmDelete(fixture, 'Cash on hand');
 
       expect(list).toHaveBeenCalledTimes(2);
       expect(text()).not.toContain('Cash on hand');
       expect(text()).toContain(formatPeso(8500));
     });
 
-    it('explains a delete refused for Transaction history and points at retiring', () => {
+    it('explains a delete refused for Transaction history and points at retiring', async () => {
       const remove = vi.fn(() =>
         throwError(
           () =>
             new AccountDeleteBlockedError(
               'transaction-history',
-              'This account has transaction history and cannot be deleted.'
-            )
-        )
+              'This account has transaction history and cannot be deleted.',
+            ),
+        ),
       );
-      const { fixture, cmp, text } = setup(() => of([CASH]), { remove });
+      const { fixture, text } = setup(() => of([CASH]), { remove });
 
-      cmp.confirmDelete(CASH);
-      fixture.detectChanges();
+      await confirmDelete(fixture, 'Cash on hand');
 
       expect(text()).toContain('transaction history');
       expect(text()).toContain('Retire instead');
-      expect(cmp.notice()?.retire).toBeTypeOf('function');
+      expect(text()).toContain('Retire instead');
     });
 
-    it('explains a delete refused for Goal earmarks and links to Goals', () => {
+    it('explains a delete refused for Goal earmarks and links to Goals', async () => {
       const remove = vi.fn(() =>
         throwError(
           () =>
             new AccountDeleteBlockedError(
               'goal-allocation',
-              'This account contains funds allocated toward a specific goal.'
-            )
-        )
+              'This account contains funds allocated toward a specific goal.',
+            ),
+        ),
       );
-      const { fixture, cmp, text } = setup(() => of([CASH]), { remove });
+      const { fixture, text } = setup(() => of([CASH]), { remove });
 
-      cmp.confirmDelete(CASH);
-      fixture.detectChanges();
+      await confirmDelete(fixture, 'Cash on hand');
 
       expect(text()).toContain(
-        'This Account can’t be deleted while Contributions earmark money in it. Remove those Contributions or delete their Goals, then try again.'
+        'This Account can’t be deleted while Contributions earmark money in it. Remove those Contributions or delete their Goals, then try again.',
       );
       expect(text()).not.toContain('allocated toward a specific goal');
       expect(text()).not.toContain('transaction history');
       expect(text()).not.toContain('Retire instead');
       const viewGoals = [...fixture.nativeElement.querySelectorAll('a')].find(
-        (element: HTMLAnchorElement) => element.textContent?.trim() === 'View goals'
+        (element: HTMLAnchorElement) => element.textContent?.trim() === 'View goals',
       ) as HTMLAnchorElement | undefined;
       expect(viewGoals?.getAttribute('href')).toBe('/app/goals');
     });
 
-    it('reports a delete that lost a concurrency race and offers a retry', () => {
+    it('reports a delete that lost a concurrency race and offers a retry', async () => {
       const remove = vi.fn(() =>
-        throwError(
-          () =>
-            new AccountModifiedError(
-              'This account was updated by another request. Please try again.'
-            )
-        )
+        throwError(() => new AccountModifiedError('This account was updated by another request. Please try again.')),
       );
-      const { fixture, cmp, text } = setup(() => of([CASH]), { remove });
+      const { fixture, text } = setup(() => of([CASH]), { remove });
 
-      cmp.confirmDelete(CASH);
-      fixture.detectChanges();
+      await confirmDelete(fixture, 'Cash on hand');
 
       expect(text()).toContain('updated by another request');
       expect(text()).toContain('Try again');

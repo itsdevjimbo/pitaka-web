@@ -136,10 +136,10 @@ export default defineConfig(
   {
     files: ['**/*.spec.ts'],
     rules: {
-      // Existing tests migrate through docs/standards-cleanup.md. Changed-file
-      // checks reject warnings; a justified exception uses a line-level disable.
+      // Tests exercise rendered/public behavior. A justified exception uses a
+      // line-level disable with the exact non-rendered contract it protects.
       'no-restricted-syntax': [
-        'warn',
+        'error',
         {
           selector:
             'TSAsExpression[expression.type="TSAsExpression"][expression.typeAnnotation.type="TSUnknownKeyword"][expression.expression.type="MemberExpression"][expression.expression.property.name="componentInstance"]',

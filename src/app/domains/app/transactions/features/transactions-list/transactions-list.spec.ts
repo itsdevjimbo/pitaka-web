@@ -1,15 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import {
-  MATERIAL_ANIMATIONS,
-  provideNativeDateAdapter,
-} from '@angular/material/core';
-import {
-  ActivatedRoute,
-  convertToParamMap,
-  ParamMap,
-  provideRouter,
-  Router,
-} from '@angular/router';
+import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
+import { By } from '@angular/platform-browser';
+import { ActivatedRoute, convertToParamMap, ParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
@@ -20,16 +12,11 @@ import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { TagsService } from '@/app/domains/app/tags';
 import { provideFakeMedia } from '@/testing/media';
 import { pressEscape, withOverlayContainer } from '@/testing/overlay';
-import { Transaction, TransactionSearchResult } from '../../data/transaction';
+import { Transaction, TransactionCriteria, TransactionSearchResult } from '../../data/transaction';
 import { TransactionsService } from '../../data/transactions.service';
+import { TransactionRow } from '../../ui/transaction-row';
+import { TransactionsFilterBar } from './transactions-filter-bar';
 import TransactionsList from './transactions-list';
-
-/** The slice of the component a couple of tests reach into. */
-type TransactionsListInternals = {
-  onRemoved(): void;
-  openRefileDialog(transaction: Transaction): void;
-  applyCriteria(criteria: Record<string, unknown>): void;
-};
 
 /**
  * A stand-in for the query string: `navigate` on the spied Router pushes the
@@ -45,8 +32,7 @@ function fakeUrl(initial: Record<string, string> = {}) {
       snapshot: { queryParamMap: convertToParamMap(initial) },
       queryParamMap: params$.asObservable(),
     },
-    navigate: (queryParams: Record<string, string>) =>
-      params$.next(convertToParamMap(queryParams)),
+    navigate: (queryParams: Record<string, string>) => params$.next(convertToParamMap(queryParams)),
   };
 }
 
@@ -82,9 +68,7 @@ function tx(over: Partial<Transaction> = {}): Transaction {
   };
 }
 
-function page(
-  over: Partial<TransactionSearchResult> = {}
-): TransactionSearchResult {
+function page(over: Partial<TransactionSearchResult> = {}): TransactionSearchResult {
   return { transactions: [], totalCount: 0, ...over };
 }
 
@@ -99,10 +83,9 @@ describe('TransactionsList', () => {
       refile?: TransactionsService['refile'];
       remove?: TransactionsService['remove'];
       queryParams?: Record<string, string>;
-    } = {}
+    } = {},
   ) {
-    const search =
-      over.search ?? (() => of(page({ transactions: [tx()], totalCount: 1 })));
+    const search = over.search ?? (() => of(page({ transactions: [tx()], totalCount: 1 })));
     const categoryRead = over.categoryRead ?? (() => of(CATEGORY_LIST));
     const accounts = over.accounts ?? (() => of(ACCOUNTS as unknown as never));
     const refile = over.refile ?? (() => of({} as Transaction));
@@ -139,12 +122,10 @@ describe('TransactionsList', () => {
 
     // The bar navigates through the Router; route it back into the fake URL so
     // the component reacts synchronously, the way the app does.
-    const navigate = vi
-      .spyOn(TestBed.inject(Router), 'navigate')
-      .mockImplementation((_commands, extras) => {
-        url.navigate((extras?.queryParams ?? {}) as Record<string, string>);
-        return Promise.resolve(true);
-      });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockImplementation((_commands, extras) => {
+      url.navigate((extras?.queryParams ?? {}) as Record<string, string>);
+      return Promise.resolve(true);
+    });
 
     const fixture = TestBed.createComponent(TransactionsList);
     fixture.detectChanges();
@@ -153,16 +134,24 @@ describe('TransactionsList', () => {
       fixture,
       navigate,
       setUrl: (params: Record<string, string>) => url.navigate(params),
-      cmp: fixture.componentInstance as unknown as TransactionsListInternals,
+      cmp: {
+        onRemoved: () => {
+          const row = fixture.debugElement.query(By.directive(TransactionRow));
+          if (!row) throw new Error('No rendered Transaction row');
+          (row.componentInstance as TransactionRow).removed.emit();
+        },
+        applyCriteria: (criteria: TransactionCriteria) => {
+          const bar = fixture.debugElement.query(By.directive(TransactionsFilterBar));
+          if (!bar) throw new Error('No rendered Transactions filter bar');
+          (bar.componentInstance as TransactionsFilterBar).criteria.set(criteria);
+        },
+      },
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
-      links: () =>
-        Array.from(
-          (fixture.nativeElement as HTMLElement).querySelectorAll('a')
-        ),
+      links: () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('a')),
       button: (label: string) =>
-        Array.from(
-          (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-        ).find((b) => (b.textContent ?? '').includes(label)),
+        Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((b) =>
+          (b.textContent ?? '').includes(label),
+        ),
       dialog: () => overlay().querySelector<HTMLElement>('[role="dialog"]'),
       dialogText: () => overlay().textContent ?? '',
     };
@@ -183,9 +172,7 @@ describe('TransactionsList', () => {
 
     expect(text()).toContain('Loading transactions…');
 
-    pending.next(
-      page({ transactions: [tx({ description: 'Coffee' })], totalCount: 1 })
-    );
+    pending.next(page({ transactions: [tx({ description: 'Coffee' })], totalCount: 1 }));
     pending.complete();
     fixture.detectChanges();
 
@@ -194,9 +181,7 @@ describe('TransactionsList', () => {
   });
 
   it('reads the first page with empty criteria and page 1', () => {
-    const search = vi.fn(() =>
-      of(page({ transactions: [tx()], totalCount: 1 }))
-    );
+    const search = vi.fn(() => of(page({ transactions: [tx()], totalCount: 1 })));
     setup({ search: search as unknown as TransactionsService['search'] });
 
     expect(search).toHaveBeenCalledWith({}, 1);
@@ -217,9 +202,7 @@ describe('TransactionsList', () => {
     expect(accounts).toHaveBeenCalledTimes(1);
     expect(text()).toContain('Loading transactions…');
 
-    pending.next(
-      page({ transactions: [tx({ description: 'Coffee' })], totalCount: 1 })
-    );
+    pending.next(page({ transactions: [tx({ description: 'Coffee' })], totalCount: 1 }));
     pending.complete();
     fixture.detectChanges();
 
@@ -243,7 +226,7 @@ describe('TransactionsList', () => {
               }),
             ],
             totalCount: 1,
-          })
+          }),
         ),
     });
 
@@ -253,12 +236,8 @@ describe('TransactionsList', () => {
     expect(text()).not.toContain(`+${formatPeso(500)}`);
     expect(text()).not.toContain(formatPeso(-500));
     // Both ends named and linked; the row itself is not a link.
-    const everyday = links().find((a) =>
-      (a.textContent ?? '').includes('Everyday cash')
-    );
-    const savings = links().find((a) =>
-      (a.textContent ?? '').includes('Savings')
-    );
+    const everyday = links().find((a) => (a.textContent ?? '').includes('Everyday cash'));
+    const savings = links().find((a) => (a.textContent ?? '').includes('Savings'));
     expect(everyday?.getAttribute('href')).toBe('/app/accounts/3');
     expect(savings?.getAttribute('href')).toBe('/app/accounts/9');
   });
@@ -273,7 +252,7 @@ describe('TransactionsList', () => {
               tx({ id: 2, direction: 'expense', amount: 250, categoryId: 1 }),
             ],
             totalCount: 2,
-          })
+          }),
         ),
     });
 
@@ -293,7 +272,7 @@ describe('TransactionsList', () => {
               }),
             ],
             totalCount: 1,
-          })
+          }),
         ),
     });
 
@@ -304,10 +283,7 @@ describe('TransactionsList', () => {
 
   it('shows how much of the whole is on screen', () => {
     const { text } = setup({
-      search: () =>
-        of(
-          page({ transactions: [tx({ id: 1 }), tx({ id: 2 })], totalCount: 37 })
-        ),
+      search: () => of(page({ transactions: [tx({ id: 1 }), tx({ id: 2 })], totalCount: 37 })),
     });
 
     expect(text()).toContain('Showing 2 of 37');
@@ -321,14 +297,14 @@ describe('TransactionsList', () => {
               page({
                 transactions: [tx({ id: 1, description: 'First' })],
                 totalCount: 2,
-              })
+              }),
             )
           : of(
               page({
                 transactions: [tx({ id: 2, description: 'Second' })],
                 totalCount: 2,
-              })
-            )
+              }),
+            ),
       );
     }
 
@@ -378,7 +354,7 @@ describe('TransactionsList', () => {
             page({
               transactions: [tx({ description: 'First' })],
               totalCount: 2,
-            })
+            }),
           );
         }
         attempt += 1;
@@ -388,7 +364,7 @@ describe('TransactionsList', () => {
               page({
                 transactions: [tx({ id: 2, description: 'Second' })],
                 totalCount: 2,
-              })
+              }),
             );
       });
       const { fixture, text, button } = setup({
@@ -417,8 +393,8 @@ describe('TransactionsList', () => {
               page({
                 transactions: [tx({ id: 1, description: 'First' })],
                 totalCount: 2,
-              })
-            )
+              }),
+            ),
       );
       const { fixture, cmp, button, text } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -438,7 +414,7 @@ describe('TransactionsList', () => {
         page({
           transactions: [tx({ id: 2, description: 'Stale' })],
           totalCount: 2,
-        })
+        }),
       );
       pendingSecond.complete();
       await settle(fixture);
@@ -454,9 +430,9 @@ describe('TransactionsList', () => {
               page({
                 transactions: [tx({ id: 1, description: 'First' })],
                 totalCount: 5,
-              })
+              }),
             )
-          : of(page({ transactions: [], totalCount: 5 }))
+          : of(page({ transactions: [], totalCount: 5 })),
       );
       const { fixture, button, text } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -476,14 +452,12 @@ describe('TransactionsList', () => {
     const search = vi.fn(() => {
       attempt += 1;
       return attempt === 1
-        ? throwError(
-            () => new ApiError('Something went wrong on the server.', 500)
-          )
+        ? throwError(() => new ApiError('Something went wrong on the server.', 500))
         : of(
             page({
               transactions: [tx({ description: 'Coffee' })],
               totalCount: 1,
-            })
+            }),
           );
     });
     const { fixture, text, button } = setup({
@@ -506,9 +480,7 @@ describe('TransactionsList', () => {
       search: () => throwError(() => new Error('boom')),
     });
 
-    expect(text()).toContain(
-      'Something went wrong loading your transactions. Please try again.'
-    );
+    expect(text()).toContain('Something went wrong loading your transactions. Please try again.');
   });
 
   it('shows an empty state driven by a zero totalCount, not the failed-load state, with no extra probe', () => {
@@ -518,9 +490,7 @@ describe('TransactionsList', () => {
     });
 
     expect(text()).toContain('No transactions yet');
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')
-    ).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).toBeNull();
     // A totalCount of zero with empty criteria is the answer — nothing more asked.
     expect(search).toHaveBeenCalledTimes(1);
   });
@@ -530,19 +500,16 @@ describe('TransactionsList', () => {
       p === 1
         ? of(
             page({
-              transactions: [
-                tx({ id: 1, description: 'First' }),
-                tx({ id: 2, description: 'Second' }),
-              ],
+              transactions: [tx({ id: 1, description: 'First' }), tx({ id: 2, description: 'Second' })],
               totalCount: 3,
-            })
+            }),
           )
         : of(
             page({
               transactions: [tx({ id: 3, description: 'Third' })],
               totalCount: 3,
-            })
-          )
+            }),
+          ),
     );
     const { fixture, cmp, button, text } = setup({
       search: search as unknown as TransactionsService['search'],
@@ -558,8 +525,8 @@ describe('TransactionsList', () => {
         page({
           transactions: [tx({ id: 2, description: 'Second' })],
           totalCount: 1,
-        })
-      )
+        }),
+      ),
     );
 
     cmp.onRemoved();
@@ -581,12 +548,9 @@ describe('TransactionsList', () => {
       if (attempt === 1) {
         return of(
           page({
-            transactions: [
-              tx({ id: 1, description: 'First' }),
-              tx({ id: 2, description: 'Second' }),
-            ],
+            transactions: [tx({ id: 1, description: 'First' }), tx({ id: 2, description: 'Second' })],
             totalCount: 2,
-          })
+          }),
         );
       }
       return attempt === 2
@@ -595,7 +559,7 @@ describe('TransactionsList', () => {
             page({
               transactions: [tx({ id: 2, description: 'Second' })],
               totalCount: 1,
-            })
+            }),
           );
     });
     const { fixture, cmp, text, button } = setup({
@@ -633,7 +597,7 @@ describe('TransactionsList', () => {
             page({
               transactions: [tx({ description: 'First' })],
               totalCount: 1,
-            })
+            }),
           )
         : throwError(() => new Error('boom'));
     });
@@ -645,9 +609,7 @@ describe('TransactionsList', () => {
     await settle(fixture);
 
     expect(text()).toContain('First');
-    expect(text()).toContain(
-      'Something went wrong refreshing your transactions. Please try again.'
-    );
+    expect(text()).toContain('Something went wrong refreshing your transactions. Please try again.');
   });
 
   describe('refile, from the row menu', () => {
@@ -669,7 +631,7 @@ describe('TransactionsList', () => {
     async function openRefileFromRowMenu(fixture: ComponentFixture<unknown>) {
       const host = fixture.nativeElement as HTMLElement;
       const trigger = Array.from(host.querySelectorAll('button')).find(
-        (b) => b.getAttribute('aria-label') === 'Transaction actions'
+        (b) => b.getAttribute('aria-label') === 'Transaction actions',
       );
       trigger!.click();
       await settle(fixture);
@@ -691,17 +653,12 @@ describe('TransactionsList', () => {
 
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('Refile transaction');
-      expect(
-        overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!
-          .value
-      ).toBe('Coffee');
+      expect(overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!.value).toBe('Coffee');
       expect(text()).toContain(before);
     });
 
     it('re-runs the whole read on a successful refile', async () => {
-      const search = vi.fn(() =>
-        of(page({ transactions: [filed()], totalCount: 1 }))
-      );
+      const search = vi.fn(() => of(page({ transactions: [filed()], totalCount: 1 })));
       const refile = vi.fn(() => of(filed()));
       const { fixture } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -721,9 +678,7 @@ describe('TransactionsList', () => {
     });
 
     it('does nothing on Cancel', async () => {
-      const search = vi.fn(() =>
-        of(page({ transactions: [filed()], totalCount: 1 }))
-      );
+      const search = vi.fn(() => of(page({ transactions: [filed()], totalCount: 1 })));
       const refile = vi.fn();
       const { fixture, dialog } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -760,9 +715,7 @@ describe('TransactionsList', () => {
     ];
 
     function filterBar(fixture: ComponentFixture<unknown>) {
-      return (fixture.nativeElement as HTMLElement).querySelector(
-        'transactions-filter-bar'
-      );
+      return (fixture.nativeElement as HTMLElement).querySelector('transactions-filter-bar');
     }
 
     it('renders the filter bar once a Profile has recorded something', () => {
@@ -787,16 +740,14 @@ describe('TransactionsList', () => {
         accounts: () => of(RETIRED_ACCOUNTS) as unknown as never,
       });
 
-      const trigger = (
-        fixture.nativeElement as HTMLElement
-      ).querySelector<HTMLElement>(
-        'mat-select[aria-label="Filter by account"]'
+      const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'mat-select[aria-label="Filter by account"]',
       );
       trigger!.click();
       await settle(fixture);
 
-      const options = Array.from(overlay().querySelectorAll('mat-option')).map(
-        (o) => (o.textContent ?? '').replace(/\s+/g, ' ').trim()
+      const options = Array.from(overlay().querySelectorAll('mat-option')).map((o) =>
+        (o.textContent ?? '').replace(/\s+/g, ' ').trim(),
       );
       expect(options).toContain('Old wallet · Retired');
     });
@@ -811,23 +762,16 @@ describe('TransactionsList', () => {
           ] as Category[]),
       });
 
-      const trigger = (
-        fixture.nativeElement as HTMLElement
-      ).querySelector<HTMLElement>(
-        'mat-select[aria-label="Filter by category"]'
+      const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'mat-select[aria-label="Filter by category"]',
       );
       trigger!.click();
       await settle(fixture);
 
-      const options = Array.from(overlay().querySelectorAll('mat-option')).map(
-        (o) => (o.textContent ?? '').replace(/\s+/g, ' ').trim()
+      const options = Array.from(overlay().querySelectorAll('mat-option')).map((o) =>
+        (o.textContent ?? '').replace(/\s+/g, ' ').trim(),
       );
-      expect(options).toEqual([
-        'Any category',
-        'Allowance',
-        'Zoo trips',
-        'Old gym · Retired',
-      ]);
+      expect(options).toEqual(['Any category', 'Allowance', 'Zoo trips', 'Old gym · Retired']);
     });
 
     it('is wired end to end: choosing an option in the rendered bar issues the narrowed read', async () => {
@@ -837,14 +781,12 @@ describe('TransactionsList', () => {
             transactions: [
               tx({
                 id: p,
-                description: Object.keys(criteria).length
-                  ? 'Narrowed'
-                  : 'Whole history',
+                description: Object.keys(criteria).length ? 'Narrowed' : 'Whole history',
               }),
             ],
             totalCount: Object.keys(criteria).length ? 1 : 4,
-          })
-        )
+          }),
+        ),
       );
       const { fixture, text } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -853,10 +795,8 @@ describe('TransactionsList', () => {
       expect(text()).toContain('Whole history');
 
       // Open the real Direction select inside the rendered child and pick Expense.
-      const trigger = (
-        fixture.nativeElement as HTMLElement
-      ).querySelector<HTMLElement>(
-        'transactions-filter-bar mat-select[aria-label="Filter by direction"]'
+      const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'transactions-filter-bar mat-select[aria-label="Filter by direction"]',
       );
       trigger!.click();
       await settle(fixture);
@@ -882,14 +822,12 @@ describe('TransactionsList', () => {
               transactions: [
                 tx({
                   id: p,
-                  description: criteria['description']
-                    ? 'Narrowed'
-                    : 'Whole history',
+                  description: criteria['description'] ? 'Narrowed' : 'Whole history',
                 }),
               ],
               totalCount: criteria['description'] ? 1 : 4,
-            })
-          )
+            }),
+          ),
         );
         const { fixture, text } = setup({
           search: search as unknown as TransactionsService['search'],
@@ -897,10 +835,8 @@ describe('TransactionsList', () => {
 
         expect(text()).toContain('Whole history');
 
-        const noteInput = (
-          fixture.nativeElement as HTMLElement
-        ).querySelector<HTMLInputElement>(
-          'transactions-filter-bar input[aria-label="Filter by note"]'
+        const noteInput = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+          'transactions-filter-bar input[aria-label="Filter by note"]',
         );
         noteInput!.value = 'coffee';
         noteInput!.dispatchEvent(new Event('input'));
@@ -931,7 +867,7 @@ describe('TransactionsList', () => {
                 page({
                   transactions: [tx({ description: 'Everything' })],
                   totalCount: 3,
-                })
+                }),
               )
             : pendingClear.asObservable();
         }
@@ -951,16 +887,10 @@ describe('TransactionsList', () => {
       // Criteria are back to {} but the read has not answered — the empty-history
       // wording must not appear and the filter bar must stay mounted.
       expect(text()).not.toContain('No transactions yet');
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector(
-          'transactions-filter-bar'
-        )
-      ).not.toBeNull();
+      expect((fixture.nativeElement as HTMLElement).querySelector('transactions-filter-bar')).not.toBeNull();
       expect(text()).toContain('Updating…');
 
-      pendingClear.next(
-        page({ transactions: [tx({ description: 'Back' })], totalCount: 1 })
-      );
+      pendingClear.next(page({ transactions: [tx({ description: 'Back' })], totalCount: 1 }));
       pendingClear.complete();
       await settle(fixture);
       expect(text()).toContain('Back');
@@ -974,9 +904,9 @@ describe('TransactionsList', () => {
               page({
                 transactions: [tx({ id: 1, description: 'Whole list' })],
                 totalCount: 5,
-              })
+              }),
             )
-          : pending.asObservable()
+          : pending.asObservable(),
       );
       const { fixture, cmp, text } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -988,10 +918,7 @@ describe('TransactionsList', () => {
       fixture.detectChanges();
 
       // The request went out with exactly the criteria and page 1…
-      expect(search).toHaveBeenLastCalledWith(
-        { direction: 'expense', accountId: 3 },
-        1
-      );
+      expect(search).toHaveBeenLastCalledWith({ direction: 'expense', accountId: 3 }, 1);
       // …and while it is in flight the previous rows stay put under a busy note.
       expect(text()).toContain('Whole list');
       expect(text()).toContain('Updating…');
@@ -1000,7 +927,7 @@ describe('TransactionsList', () => {
         page({
           transactions: [tx({ id: 2, description: 'Just the expenses' })],
           totalCount: 2,
-        })
+        }),
       );
       pending.complete();
       await settle(fixture);
@@ -1021,8 +948,8 @@ describe('TransactionsList', () => {
               }),
             ],
             totalCount: 9,
-          })
-        )
+          }),
+        ),
       );
       const { fixture, cmp, button } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -1049,9 +976,9 @@ describe('TransactionsList', () => {
               page({
                 transactions: [tx({ id: 1, description: 'Something' })],
                 totalCount: 1,
-              })
+              }),
             )
-          : of(page({ transactions: [], totalCount: 0 }))
+          : of(page({ transactions: [], totalCount: 0 })),
       );
       const { fixture, cmp, text, button } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -1063,11 +990,7 @@ describe('TransactionsList', () => {
       // Not the empty-history wording, and the filter bar is still there.
       expect(text()).toContain('No transactions match these filters');
       expect(text()).not.toContain('No transactions yet');
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector(
-          'transactions-filter-bar'
-        )
-      ).not.toBeNull();
+      expect((fixture.nativeElement as HTMLElement).querySelector('transactions-filter-bar')).not.toBeNull();
 
       button('Clear filters')!.click();
       await settle(fixture);
@@ -1103,7 +1026,7 @@ describe('TransactionsList', () => {
             page({
               transactions: [tx({ id: 1, description: 'Kept' })],
               totalCount: 1,
-            })
+            }),
           );
         }
         attempt += 1;
@@ -1113,7 +1036,7 @@ describe('TransactionsList', () => {
               page({
                 transactions: [tx({ id: 2, description: 'Filtered' })],
                 totalCount: 1,
-              })
+              }),
             );
       });
       const { fixture, cmp, text, button } = setup({
@@ -1139,7 +1062,7 @@ describe('TransactionsList', () => {
       const search = vi.fn((criteria: Record<string, unknown>) =>
         Object.keys(criteria).length === 0
           ? of(page({ transactions: [tx({ description: 'Whole history' })], totalCount: 1 }))
-          : of(page({ transactions: [], totalCount: 0 }))
+          : of(page({ transactions: [], totalCount: 0 })),
       );
       const { fixture, text, navigate } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -1156,17 +1079,14 @@ describe('TransactionsList', () => {
         .click();
       await settle(fixture);
 
-      expect(navigate).toHaveBeenLastCalledWith(
-        [],
-        expect.objectContaining({ queryParams: {}, replaceUrl: true })
-      );
+      expect(navigate).toHaveBeenLastCalledWith([], expect.objectContaining({ queryParams: {}, replaceUrl: true }));
       expect(search).toHaveBeenLastCalledWith({}, 1);
       expect(text()).toContain('Whole history');
     });
 
     it('reads linked history from URL state without depending on the Schedule collection', () => {
       const search = vi.fn(() =>
-        of(page({ transactions: [tx({ generated: true, description: 'Generated rent' })], totalCount: 1 }))
+        of(page({ transactions: [tx({ generated: true, description: 'Generated rent' })], totalCount: 1 })),
       );
       const { text } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -1195,7 +1115,7 @@ describe('TransactionsList', () => {
             scheduleName: 'Monthly rent',
           },
           replaceUrl: true,
-        })
+        }),
       );
     });
 
@@ -1214,25 +1134,18 @@ describe('TransactionsList', () => {
     });
 
     it('hydrates the criteria from the query string and reads the list already narrowed on entry', () => {
-      const search = vi.fn(() =>
-        of(page({ transactions: [tx({ description: 'Narrowed' })], totalCount: 1 }))
-      );
+      const search = vi.fn(() => of(page({ transactions: [tx({ description: 'Narrowed' })], totalCount: 1 })));
       setup({
         search: search as unknown as TransactionsService['search'],
         queryParams: { account: '3', direction: 'expense', note: 'coffee' },
       });
 
       expect(search).toHaveBeenCalledTimes(1);
-      expect(search).toHaveBeenCalledWith(
-        { direction: 'expense', accountId: 3, description: 'coffee' },
-        1
-      );
+      expect(search).toHaveBeenCalledWith({ direction: 'expense', accountId: 3, description: 'coffee' }, 1);
     });
 
     it('reads a hand-edited junk parameter as unfiltered — it widens rather than breaks', () => {
-      const search = vi.fn(() =>
-        of(page({ transactions: [tx({ description: 'Everything' })], totalCount: 1 }))
-      );
+      const search = vi.fn(() => of(page({ transactions: [tx({ description: 'Everything' })], totalCount: 1 })));
       const { fixture, text } = setup({
         search: search as unknown as TransactionsService['search'],
         queryParams: {
@@ -1247,15 +1160,11 @@ describe('TransactionsList', () => {
 
       expect(search).toHaveBeenCalledWith({}, 1);
       expect(text()).toContain('Everything');
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')
-      ).toBeNull();
+      expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).toBeNull();
     });
 
     it('drops both ends of an inverted date range carried in the URL', () => {
-      const search = vi.fn(() =>
-        of(page({ transactions: [tx()], totalCount: 1 }))
-      );
+      const search = vi.fn(() => of(page({ transactions: [tx()], totalCount: 1 })));
       setup({
         search: search as unknown as TransactionsService['search'],
         queryParams: { from: '2026-07-31', to: '2026-07-01' },
@@ -1274,7 +1183,7 @@ describe('TransactionsList', () => {
         expect.objectContaining({
           queryParams: { direction: 'income', account: '9' },
           replaceUrl: true,
-        })
+        }),
       );
       const [, extras] = navigate.mock.calls.at(-1)!;
       expect(extras?.queryParams).not.toHaveProperty('page');
@@ -1302,8 +1211,8 @@ describe('TransactionsList', () => {
               }),
             ],
             totalCount: 1,
-          })
-        )
+          }),
+        ),
       );
       const { fixture, setUrl, text } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -1319,9 +1228,7 @@ describe('TransactionsList', () => {
     });
 
     it('does not re-read when a navigation only drops a parameter the parser already ignored', () => {
-      const search = vi.fn(() =>
-        of(page({ transactions: [tx()], totalCount: 1 }))
-      );
+      const search = vi.fn(() => of(page({ transactions: [tx()], totalCount: 1 })));
       const { setUrl } = setup({
         search: search as unknown as TransactionsService['search'],
         queryParams: { account: '3' },
@@ -1342,9 +1249,9 @@ describe('TransactionsList', () => {
               page({
                 transactions: [tx({ description: 'Everything' })],
                 totalCount: 1,
-              })
+              }),
             )
-          : of(page({ transactions: [], totalCount: 0 }))
+          : of(page({ transactions: [], totalCount: 0 })),
       );
       const { fixture, cmp, button, navigate } = setup({
         search: search as unknown as TransactionsService['search'],
@@ -1356,10 +1263,7 @@ describe('TransactionsList', () => {
       button('Clear filters')!.click();
       await settle(fixture);
 
-      expect(navigate).toHaveBeenLastCalledWith(
-        [],
-        expect.objectContaining({ queryParams: {}, replaceUrl: true })
-      );
+      expect(navigate).toHaveBeenLastCalledWith([], expect.objectContaining({ queryParams: {}, replaceUrl: true }));
       expect(search).toHaveBeenLastCalledWith({}, 1);
     });
   });
