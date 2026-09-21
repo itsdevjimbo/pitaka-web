@@ -1,11 +1,4 @@
-import {
-  maxLength,
-  minLength,
-  PathKind,
-  required,
-  SchemaPath,
-  SchemaPathRules,
-} from '@angular/forms/signals';
+import { maxLength, minLength, PathKind, required, SchemaPath, SchemaPathRules } from '@angular/forms/signals';
 
 /** The API's password bounds (`pitaka` RegisterRequest/ResetPasswordRequest: 8–128, length only). */
 export const PASSWORD_MIN = 8;
@@ -17,7 +10,7 @@ export const PASSWORD_MAX = 128;
  * complexity check — the API deliberately has none.
  */
 export function passwordRules<TPathKind extends PathKind = PathKind.Root>(
-  field: SchemaPath<string, SchemaPathRules.Supported, TPathKind>
+  field: SchemaPath<string, SchemaPathRules.Supported, TPathKind>,
 ): void {
   required(field, { message: 'You must enter a password' });
   minLength(field, PASSWORD_MIN, {

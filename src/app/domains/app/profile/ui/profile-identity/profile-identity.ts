@@ -9,13 +9,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import {
-  disabled,
-  form,
-  FormField,
-  submit,
-  validate,
-} from '@angular/forms/signals';
+import { disabled, form, FormField, submit, validate } from '@angular/forms/signals';
 import { MatButton } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
@@ -26,8 +20,7 @@ import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Session } from '@/app/core/session';
 
 const PROFILE_NAME_MAX = 255;
-const COULD_NOT_UPDATE_NAME =
-  'Something went wrong updating your name. Please try again.';
+const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please try again.';
 
 /** The signed-in identity shown on the Profile page, including name editing. */
 @Component({
@@ -65,10 +58,8 @@ export class ProfileIdentity {
   });
   protected readonly successMessage = signal<string | null>(null);
   protected readonly errorMessage = signal<string | null>(null);
-  private readonly nameInput =
-    viewChild<ElementRef<HTMLInputElement>>('nameInput');
-  private readonly editNameAction =
-    viewChild<ElementRef<HTMLButtonElement>>('editNameAction');
+  private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  private readonly editNameAction = viewChild<ElementRef<HTMLButtonElement>>('editNameAction');
 
   protected beginNameEdit(): void {
     const profile = this.profile();
@@ -92,9 +83,7 @@ export class ProfileIdentity {
         this.submitting.set(true);
         this.errorMessage.set(null);
         try {
-          const updated = await firstValueFrom(
-            this.injector.get(AuthService).updateProfile(name)
-          );
+          const updated = await firstValueFrom(this.injector.get(AuthService).updateProfile(name));
           this.session.applyProfileUpdate(updated);
           this.editingName.set(false);
           this.successMessage.set('Name updated');
@@ -104,7 +93,7 @@ export class ProfileIdentity {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_UPDATE_NAME
+            COULD_NOT_UPDATE_NAME,
           );
           if (boundErrors.length > 0) {
             this.nameForm().markAsTouched();
@@ -130,16 +119,13 @@ export class ProfileIdentity {
     return { name: this.nameForm.name };
   }
 
-  private focusAfterRender<T extends HTMLElement>(
-    target: () => ElementRef<T> | undefined,
-    select = false
-  ): void {
+  private focusAfterRender<T extends HTMLElement>(target: () => ElementRef<T> | undefined, select = false): void {
     runInInjectionContext(this.injector, () =>
       afterNextRender(() => {
         const element = target()?.nativeElement;
         element?.focus();
         if (select && element instanceof HTMLInputElement) element.select();
-      })
+      }),
     );
   }
 }

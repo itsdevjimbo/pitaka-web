@@ -11,9 +11,7 @@ import { RESEND_COOLDOWN_SECONDS } from './resend-confirmation';
  * `forgotPassword` rather than `resendConfirmation`.
  */
 describe('RequestResetLink', () => {
-  function setup(
-    forgotPassword: AuthService['forgotPassword'] = () => of(undefined)
-  ) {
+  function setup(forgotPassword: AuthService['forgotPassword'] = () => of(undefined)) {
     TestBed.configureTestingModule({
       imports: [RequestResetLink],
       providers: [{ provide: AuthService, useValue: { forgotPassword } }],
@@ -39,9 +37,7 @@ describe('RequestResetLink', () => {
     fixture.detectChanges();
   }
 
-  beforeEach(() =>
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
-  );
+  beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] }));
   afterEach(() => vi.useRealTimers());
 
   it('asks the service for a fresh reset link to the address it was given', async () => {
@@ -63,9 +59,7 @@ describe('RequestResetLink', () => {
   });
 
   it('says the same line when the request fails', async () => {
-    const error = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const fixture = setup(() => throwError(() => new Error('offline')));
 
     await click(fixture);

@@ -3,12 +3,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
-import {
-  APP_HOME_ROUTE,
-  reasonQueryParams,
-  Session,
-  SIGN_IN_ROUTE,
-} from '@/app/core/session';
+import { APP_HOME_ROUTE, reasonQueryParams, Session, SIGN_IN_ROUTE } from '@/app/core/session';
 import { DeadLink } from '../../ui/dead-link';
 
 /**
@@ -79,7 +74,7 @@ export default class AuthConfirmEmail implements OnInit {
     // Confirmed. A navigation hiccup from here is not a confirmation failure —
     // the Profile is already confirmed — so it is only logged.
     await this.landingNavigation().catch((error: unknown) =>
-      console.error('[confirm-email] navigation after confirmation failed', error)
+      console.error('[confirm-email] navigation after confirmation failed', error),
     );
   }
 

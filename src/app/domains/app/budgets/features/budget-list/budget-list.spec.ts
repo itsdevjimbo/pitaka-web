@@ -1,8 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import {
-  MATERIAL_ANIMATIONS,
-  provideNativeDateAdapter,
-} from '@angular/material/core';
+import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -89,7 +86,7 @@ describe('BudgetList', () => {
       adjust?: BudgetsService['adjust'];
       remove?: BudgetsService['remove'];
       names?: CategoriesService['names'];
-    } = {}
+    } = {},
   ) {
     TestBed.configureTestingModule({
       imports: [BudgetList],
@@ -115,14 +112,8 @@ describe('BudgetList', () => {
             // The create/adjust dialog forms read this for their expense-Category
             // picker (active only), and `all()` to keep an adjusted Budget's
             // since-retired saved Category selectable (#108).
-            list: () =>
-              of([
-                { id: 10, name: 'Food', kind: 'expense', isActive: true, isDefault: false },
-              ]),
-            all: () =>
-              of([
-                { id: 10, name: 'Food', kind: 'expense', isActive: true, isDefault: false },
-              ]),
+            list: () => of([{ id: 10, name: 'Food', kind: 'expense', isActive: true, isDefault: false }]),
+            all: () => of([{ id: 10, name: 'Food', kind: 'expense', isActive: true, isDefault: false }]),
           },
         },
       ],
@@ -148,9 +139,9 @@ describe('BudgetList', () => {
   }
 
   function clickButton(fixture: ComponentFixture<BudgetList>, label: string) {
-    const button = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    ).find((element) => (element.textContent ?? '').includes(label));
+    const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((element) =>
+      (element.textContent ?? '').includes(label),
+    );
     if (!button) {
       throw new Error(`No button labelled "${label}"`);
     }
@@ -159,8 +150,8 @@ describe('BudgetList', () => {
   }
 
   function overlayButton(label: string): HTMLButtonElement {
-    const button = Array.from(overlay().querySelectorAll('button')).find(
-      (element) => (element.textContent ?? '').includes(label)
+    const button = Array.from(overlay().querySelectorAll('button')).find((element) =>
+      (element.textContent ?? '').includes(label),
     );
     if (!button) {
       throw new Error(`No overlay button labelled "${label}"`);
@@ -177,16 +168,12 @@ describe('BudgetList', () => {
     input.dispatchEvent(new Event('input'));
   }
 
-  async function pickOption(
-    fixture: ComponentFixture<BudgetList>,
-    selectSelector: string,
-    optionText: string
-  ) {
+  async function pickOption(fixture: ComponentFixture<BudgetList>, selectSelector: string, optionText: string) {
     overlay().querySelector<HTMLElement>(selectSelector)!.click();
     await settle(fixture);
-    const option = Array.from(
-      overlay().querySelectorAll<HTMLElement>('mat-option')
-    ).find((element) => (element.textContent ?? '').trim() === optionText);
+    const option = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).find(
+      (element) => (element.textContent ?? '').trim() === optionText,
+    );
     if (!option) {
       throw new Error(`No option "${optionText}"`);
     }
@@ -209,9 +196,7 @@ describe('BudgetList', () => {
   });
 
   it('groups Budgets as Live, Not yet started, Finished — in that order — and by name within a group', () => {
-    const { text } = setup(() =>
-      of([SUMMER, HOLIDAYS, TRANSPORT, GROCERIES])
-    );
+    const { text } = setup(() => of([SUMMER, HOLIDAYS, TRANSPORT, GROCERIES]));
 
     const body = text();
     expect(body).toContain('Live');
@@ -220,9 +205,7 @@ describe('BudgetList', () => {
 
     // Section order.
     expect(body.indexOf('Live')).toBeLessThan(body.indexOf('Not yet started'));
-    expect(body.indexOf('Not yet started')).toBeLessThan(
-      body.indexOf('Finished')
-    );
+    expect(body.indexOf('Not yet started')).toBeLessThan(body.indexOf('Finished'));
 
     // Within Live: "Groceries" before "Transport".
     expect(body.indexOf('Groceries')).toBeLessThan(body.indexOf('Transport'));
@@ -285,9 +268,9 @@ describe('BudgetList', () => {
   it('marks the overspend with the semantic expense token, but it reads without colour', () => {
     const { fixture } = setup(() => of([TRANSPORT]));
 
-    const over = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('span')
-    ).find((el) => (el.textContent ?? '').includes('over'));
+    const over = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('span')).find((el) =>
+      (el.textContent ?? '').includes('over'),
+    );
     expect(over).toBeTruthy();
     // Colour is carried by the token, and the word "over" carries it too.
     expect(over!.className).toContain('text-expense');
@@ -330,13 +313,7 @@ describe('BudgetList', () => {
     const list = vi.fn(() => {
       attempt += 1;
       return attempt === 1
-        ? throwError(
-            () =>
-              new ApiError(
-                'Could not reach the server. Check your connection and try again.',
-                0
-              )
-          )
+        ? throwError(() => new ApiError('Could not reach the server. Check your connection and try again.', 0))
         : of([GROCERIES]);
     });
     const { fixture, text } = setup(list as unknown as BudgetsService['list']);
@@ -354,9 +331,7 @@ describe('BudgetList', () => {
   it('falls back to a plain message when the failure is not an ApiError', () => {
     const { text } = setup(() => throwError(() => new Error('boom')));
 
-    expect(text()).toContain(
-      'Something went wrong loading your budgets. Please try again.'
-    );
+    expect(text()).toContain('Something went wrong loading your budgets. Please try again.');
   });
 
   describe('create, in a dialog', () => {
@@ -445,10 +420,9 @@ describe('BudgetList', () => {
         return attempt === 1 ? of([GROCERIES]) : of([GROCERIES, createdRow]);
       });
       const create = vi.fn(() => of(createdBare));
-      const { fixture, text, dialog } = setup(
-        list as unknown as BudgetsService['list'],
-        { create: create as unknown as BudgetsService['create'] }
-      );
+      const { fixture, text, dialog } = setup(list as unknown as BudgetsService['list'], {
+        create: create as unknown as BudgetsService['create'],
+      });
 
       await openDialog(fixture);
       await submitNewBudget(fixture);
@@ -459,7 +433,7 @@ describe('BudgetList', () => {
           amountLimit: 8000,
           period: 'monthly',
           categoryId: null,
-        })
+        }),
       );
       expect(dialog()).toBeNull();
       expect(text()).toContain('Dining out');
@@ -481,12 +455,9 @@ describe('BudgetList', () => {
   });
 
   /** Open the row's actions menu and click one of its items. */
-  async function openRowAction(
-    fixture: ComponentFixture<BudgetList>,
-    item: string
-  ) {
+  async function openRowAction(fixture: ComponentFixture<BudgetList>, item: string) {
     const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
-      'button[aria-label="Budget actions"]'
+      'button[aria-label="Budget actions"]',
     );
     if (!trigger) {
       throw new Error('No row actions menu');
@@ -495,7 +466,7 @@ describe('BudgetList', () => {
     await settle(fixture);
 
     const menuItem = Array.from(overlay().querySelectorAll('button')).find(
-      (element) => (element.textContent ?? '').trim() === item
+      (element) => (element.textContent ?? '').trim() === item,
     );
     if (!menuItem) {
       throw new Error(`No menu item "${item}"`);
@@ -513,9 +484,7 @@ describe('BudgetList', () => {
 
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('Adjust budget');
-      expect(
-        overlay().querySelector<HTMLInputElement>('#budget-name')!.value
-      ).toBe('Groceries');
+      expect(overlay().querySelector<HTMLInputElement>('#budget-name')!.value).toBe('Groceries');
       expect(text()).toContain(before);
     });
 
@@ -555,20 +524,16 @@ describe('BudgetList', () => {
         return attempt === 1 ? of([GROCERIES]) : of([adjustedRow]);
       });
       const adjust = vi.fn(() => of(adjustedBare));
-      const { fixture, text, dialog } = setup(
-        list as unknown as BudgetsService['list'],
-        { adjust: adjust as unknown as BudgetsService['adjust'] }
-      );
+      const { fixture, text, dialog } = setup(list as unknown as BudgetsService['list'], {
+        adjust: adjust as unknown as BudgetsService['adjust'],
+      });
 
       await openRowAction(fixture, 'Adjust');
       typeInto('#budget-amount', '30000');
       overlayButton('Save changes').click();
       await settle(fixture);
 
-      expect(adjust).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ amountLimit: 30000 })
-      );
+      expect(adjust).toHaveBeenCalledWith(1, expect.objectContaining({ amountLimit: 30000 }));
       expect(dialog()).toBeNull();
       expect(list).toHaveBeenCalledTimes(2);
       expect(text()).toContain(`${formatPeso(30000)}`);
@@ -586,9 +551,7 @@ describe('BudgetList', () => {
       await settle(fixture);
 
       expect(dialog()).not.toBeNull();
-      expect(dialogText()).toContain(
-        'Something went wrong adjusting your budget'
-      );
+      expect(dialogText()).toContain('Something went wrong adjusting your budget');
     });
   });
 
@@ -610,7 +573,7 @@ describe('BudgetList', () => {
 
       await openRowAction(fixture, 'Remove');
 
-      expect(text().toLowerCase()).toContain("aren’t archived".toLowerCase());
+      expect(text().toLowerCase()).toContain('aren’t archived'.toLowerCase());
     });
 
     it('backs out on Cancel without calling the service', async () => {
@@ -634,10 +597,9 @@ describe('BudgetList', () => {
         attempt += 1;
         return attempt === 1 ? of([GROCERIES, HOLIDAYS]) : of([HOLIDAYS]);
       });
-      const { fixture, text } = setup(
-        list as unknown as BudgetsService['list'],
-        { remove: remove as unknown as BudgetsService['remove'] }
-      );
+      const { fixture, text } = setup(list as unknown as BudgetsService['list'], {
+        remove: remove as unknown as BudgetsService['remove'],
+      });
 
       await openRowAction(fixture, 'Remove');
       clickButton(fixture, 'Remove');
@@ -653,9 +615,7 @@ describe('BudgetList', () => {
       let attempt = 0;
       const remove = vi.fn(() => {
         attempt += 1;
-        return attempt === 1
-          ? throwError(() => new ApiError('The server did not accept that.', 500))
-          : of(undefined);
+        return attempt === 1 ? throwError(() => new ApiError('The server did not accept that.', 500)) : of(undefined);
       });
       const { fixture, text } = setup(() => of([GROCERIES]), {
         remove: remove as unknown as BudgetsService['remove'],

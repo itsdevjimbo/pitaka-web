@@ -1,35 +1,16 @@
-import {
-  Component,
-  inject,
-  input,
-  linkedSignal,
-  output,
-  signal,
-} from '@angular/core';
-import {
-  form,
-  FormField,
-  maxLength,
-  required,
-  submit,
-} from '@angular/forms/signals';
+import { Component, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { form, FormField, maxLength, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError } from '@/app/core/forms';
 import { CategoriesService } from '../data/categories.service';
-import {
-  Category,
-  CATEGORY_NAME_MAX,
-  CategoryKind,
-  NewCategory,
-} from '../data/category';
+import { Category, CATEGORY_NAME_MAX, CategoryKind, NewCategory } from '../data/category';
 import { duplicateNameBinding } from './duplicate-name';
 
 /** The banner line for a create that failed before it could be attributed. */
-const COULD_NOT_ADD =
-  'Something went wrong adding the category. Please try again.';
+const COULD_NOT_ADD = 'Something went wrong adding the category. Please try again.';
 
 /**
  * The "add a Category" form: one name field, the kind already settled by the
@@ -93,16 +74,12 @@ export class AddCategoryForm {
             this.service.create({
               name: this.model().name.trim(),
               kind: this.kind(),
-            } satisfies NewCategory)
+            } satisfies NewCategory),
           );
           this.created.emit(created);
           return undefined;
         } catch (error) {
-          const conflict = duplicateNameBinding(
-            error,
-            this.addForm.name,
-            this.model().name.trim()
-          );
+          const conflict = duplicateNameBinding(error, this.addForm.name, this.model().name.trim());
           if (conflict) {
             this.addForm().markAsTouched();
             return conflict;
@@ -110,7 +87,7 @@ export class AddCategoryForm {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             { name: this.addForm.name },
-            COULD_NOT_ADD
+            COULD_NOT_ADD,
           );
           if (boundErrors.length > 0) {
             this.addForm().markAsTouched();

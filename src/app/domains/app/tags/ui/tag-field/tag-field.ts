@@ -1,13 +1,4 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  ElementRef,
-  inject,
-  model,
-  signal,
-  viewChild,
-} from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, model, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormValueControl } from '@angular/forms/signals';
 import {
@@ -78,12 +69,7 @@ function nameKey(name: string): string {
 @Component({
   selector: 'tags-tag-field',
   templateUrl: './tag-field.html',
-  imports: [
-    MatFormFieldModule,
-    MatChipsModule,
-    MatAutocompleteModule,
-    MatIconModule,
-  ],
+  imports: [MatFormFieldModule, MatChipsModule, MatAutocompleteModule, MatIconModule],
 })
 export class TagField implements FormValueControl<readonly Tag[]> {
   // Dependencies
@@ -186,9 +172,7 @@ export class TagField implements FormValueControl<readonly Tag[]> {
   }
 
   protected onOptionActivated(event: MatAutocompleteActivatedEvent): void {
-    this.activeOption.set(
-      (event.option?.value as Tag | typeof CREATE | undefined) ?? null
-    );
+    this.activeOption.set((event.option?.value as Tag | typeof CREATE | undefined) ?? null);
   }
 
   /** The panel closed: nothing is highlighted any more. */

@@ -1,16 +1,10 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
-import {
-  AccountDeleteBlockedError,
-  AccountModifiedError,
-} from './account-errors';
+import { AccountDeleteBlockedError, AccountModifiedError } from './account-errors';
 import { AccountsService } from './accounts.service';
 
 /** A ProblemDetails body shaped the way the API sends its bare 409s. */
@@ -91,9 +85,7 @@ describe('AccountsService', () => {
   it('lists Accounts narrowed to active status', async () => {
     const result = firstValueFrom(service.list({ isActive: true }));
 
-    const request = http.expectOne(
-      `${BASE_URL}/api/accounts?isActive=true`
-    );
+    const request = http.expectOne(`${BASE_URL}/api/accounts?isActive=true`);
     expect(request.request.params.keys()).toEqual(['isActive']);
     request.flush([]);
 
@@ -103,9 +95,7 @@ describe('AccountsService', () => {
   it('lists Accounts narrowed to retired status', async () => {
     const result = firstValueFrom(service.list({ isActive: false }));
 
-    const request = http.expectOne(
-      `${BASE_URL}/api/accounts?isActive=false`
-    );
+    const request = http.expectOne(`${BASE_URL}/api/accounts?isActive=false`);
     expect(request.request.params.keys()).toEqual(['isActive']);
     request.flush([]);
 
@@ -123,13 +113,9 @@ describe('AccountsService', () => {
   });
 
   it('composes Account status and type criteria', async () => {
-    const result = firstValueFrom(
-      service.list({ isActive: false, type: 'Investment' })
-    );
+    const result = firstValueFrom(service.list({ isActive: false, type: 'Investment' }));
 
-    const request = http.expectOne(
-      `${BASE_URL}/api/accounts?isActive=false&type=Investment`
-    );
+    const request = http.expectOne(`${BASE_URL}/api/accounts?isActive=false&type=Investment`);
     expect(request.request.params.keys()).toEqual(['isActive', 'type']);
     request.flush([]);
 
@@ -147,16 +133,12 @@ describe('AccountsService', () => {
   it('surfaces a server failure as a normalised ApiError', async () => {
     const result = firstValueFrom(service.all());
 
-    http
-      .expectOne(`${BASE_URL}/api/accounts`)
-      .flush(null, { status: 500, statusText: 'Internal Server Error' });
+    http.expectOne(`${BASE_URL}/api/accounts`).flush(null, { status: 500, statusText: 'Internal Server Error' });
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(500);
-    expect((error as ApiError).message).toBe(
-      'Something went wrong on the server. Please try again.'
-    );
+    expect((error as ApiError).message).toBe('Something went wrong on the server. Please try again.');
   });
 
   describe('get', () => {
@@ -187,9 +169,7 @@ describe('AccountsService', () => {
     it('surfaces a 404 as a normalised ApiError', async () => {
       const result = firstValueFrom(service.get(404));
 
-      http
-        .expectOne(`${BASE_URL}/api/accounts/404`)
-        .flush(null, { status: 404, statusText: 'Not Found' });
+      http.expectOne(`${BASE_URL}/api/accounts/404`).flush(null, { status: 404, statusText: 'Not Found' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -204,7 +184,7 @@ describe('AccountsService', () => {
           name: 'Cash on hand',
           type: 'Cash',
           initialBalance: 0,
-        })
+        }),
       );
 
       const request = http.expectOne(`${BASE_URL}/api/accounts`);
@@ -224,7 +204,7 @@ describe('AccountsService', () => {
           currentBalance: 0,
           isActive: true,
         },
-        { status: 201, statusText: 'Created' }
+        { status: 201, statusText: 'Created' },
       );
 
       await expect(result).resolves.toEqual({
@@ -242,7 +222,7 @@ describe('AccountsService', () => {
           name: 'Savings',
           type: 'Bank',
           initialBalance: 1000,
-        })
+        }),
       );
 
       http.expectOne(`${BASE_URL}/api/accounts`).flush(
@@ -252,24 +232,20 @@ describe('AccountsService', () => {
           status: 409,
           detail: 'An account with this name already exists.',
         },
-        { status: 409, statusText: 'Conflict' }
+        { status: 409, statusText: 'Conflict' },
       );
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).status).toBe(409);
-      expect((error as ApiError).message).toBe(
-        'An account with this name already exists.'
-      );
+      expect((error as ApiError).message).toBe('An account with this name already exists.');
       expect((error as ApiError).fieldErrors).toEqual({
         name: ['An account with this name already exists.'],
       });
     });
 
     it('camelCases a PascalCase field error so it binds to the name control', async () => {
-      const result = firstValueFrom(
-        service.create({ name: '', type: 'Cash', initialBalance: 0 })
-      );
+      const result = firstValueFrom(service.create({ name: '', type: 'Cash', initialBalance: 0 }));
 
       http.expectOne(`${BASE_URL}/api/accounts`).flush(
         {
@@ -277,7 +253,7 @@ describe('AccountsService', () => {
           status: 400,
           errors: { Name: ['The Name field is required.'] },
         },
-        { status: 400, statusText: 'Bad Request' }
+        { status: 400, statusText: 'Bad Request' },
       );
 
       const error = await result.catch((e: unknown) => e);
@@ -317,12 +293,10 @@ describe('AccountsService', () => {
     it('refiles a duplicate-name 409 as a name field error against the conflict reason', async () => {
       const result = firstValueFrom(service.rename(9, 'Savings'));
 
-      http
-        .expectOne(`${BASE_URL}/api/accounts/9`)
-        .flush(problem('An account with this name already exists.'), {
-          status: 409,
-          statusText: 'Conflict',
-        });
+      http.expectOne(`${BASE_URL}/api/accounts/9`).flush(problem('An account with this name already exists.'), {
+        status: 409,
+        statusText: 'Conflict',
+      });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -336,18 +310,14 @@ describe('AccountsService', () => {
 
       http
         .expectOne(`${BASE_URL}/api/accounts/9`)
-        .flush(
-          problem(
-            'This account was updated by another request. Please try again.'
-          ),
-          { status: 409, statusText: 'Conflict' }
-        );
+        .flush(problem('This account was updated by another request. Please try again.'), {
+          status: 409,
+          statusText: 'Conflict',
+        });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(AccountModifiedError);
-      expect((error as AccountModifiedError).message).toContain(
-        'updated by another request'
-      );
+      expect((error as AccountModifiedError).message).toContain('updated by another request');
     });
   });
 
@@ -400,12 +370,10 @@ describe('AccountsService', () => {
 
       http
         .expectOne(`${BASE_URL}/api/accounts/9/status`)
-        .flush(
-          problem(
-            'This account was updated by another request. Please try again.'
-          ),
-          { status: 409, statusText: 'Conflict' }
-        );
+        .flush(problem('This account was updated by another request. Please try again.'), {
+          status: 409,
+          statusText: 'Conflict',
+        });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(AccountModifiedError);
@@ -428,18 +396,14 @@ describe('AccountsService', () => {
 
       http
         .expectOne(`${BASE_URL}/api/accounts/9`)
-        .flush(
-          problem(
-            'This account has transaction history and cannot be deleted.'
-          ),
-          { status: 409, statusText: 'Conflict' }
-        );
+        .flush(problem('This account has transaction history and cannot be deleted.'), {
+          status: 409,
+          statusText: 'Conflict',
+        });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(AccountDeleteBlockedError);
-      expect((error as AccountDeleteBlockedError).reason).toBe(
-        'transaction-history'
-      );
+      expect((error as AccountDeleteBlockedError).reason).toBe('transaction-history');
     });
 
     it('maps the goal-allocation 409 to a distinct delete-blocked reason', async () => {
@@ -447,18 +411,14 @@ describe('AccountsService', () => {
 
       http
         .expectOne(`${BASE_URL}/api/accounts/9`)
-        .flush(
-          problem(
-            'This account contains funds allocated toward a specific goal.'
-          ),
-          { status: 409, statusText: 'Conflict' }
-        );
+        .flush(problem('This account contains funds allocated toward a specific goal.'), {
+          status: 409,
+          statusText: 'Conflict',
+        });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(AccountDeleteBlockedError);
-      expect((error as AccountDeleteBlockedError).reason).toBe(
-        'goal-allocation'
-      );
+      expect((error as AccountDeleteBlockedError).reason).toBe('goal-allocation');
     });
 
     it('surfaces a concurrency 409 as an AccountModifiedError, not a delete block', async () => {
@@ -466,12 +426,10 @@ describe('AccountsService', () => {
 
       http
         .expectOne(`${BASE_URL}/api/accounts/9`)
-        .flush(
-          problem(
-            'This account was updated by another request. Please try again.'
-          ),
-          { status: 409, statusText: 'Conflict' }
-        );
+        .flush(problem('This account was updated by another request. Please try again.'), {
+          status: 409,
+          statusText: 'Conflict',
+        });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(AccountModifiedError);

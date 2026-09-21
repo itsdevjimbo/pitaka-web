@@ -1,11 +1,4 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  input,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { firstValueFrom, interval, map, takeWhile } from 'rxjs';
@@ -103,15 +96,14 @@ export class ResendConfirmation {
    */
   private startCountdown(): void {
     const endsAt = Date.now() + RESEND_COOLDOWN_SECONDS * 1_000;
-    const secondsLeft = () =>
-      Math.max(0, Math.ceil((endsAt - Date.now()) / 1_000));
+    const secondsLeft = () => Math.max(0, Math.ceil((endsAt - Date.now()) / 1_000));
 
     this.remaining.set(secondsLeft());
     interval(1_000)
       .pipe(
         map(secondsLeft),
         takeWhile((left) => left > 0, true),
-        takeUntilDestroyed(this.destroyRef)
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((left) => this.remaining.set(left));
   }

@@ -1,14 +1,4 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  effect,
-  inject,
-  input,
-  linkedSignal,
-  output,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField, min, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
@@ -33,8 +23,7 @@ import {
 import { TransactionsService } from '../data/transactions.service';
 
 /** The banner line for a record that failed before it could be attributed. */
-const COULD_NOT_RECORD =
-  'Something went wrong recording this transaction. Please try again.';
+const COULD_NOT_RECORD = 'Something went wrong recording this transaction. Please try again.';
 
 /**
  * The directions this form offers, in display order — expense leads, being the
@@ -43,9 +32,10 @@ const COULD_NOT_RECORD =
  * income nor expense, so no Category could classify one (ADR 0010). Derived from
  * the canonical record so a label only ever lives in one place.
  */
-const DIRECTION_OPTIONS = (['expense', 'income', 'transfer'] as const).map(
-  (value) => ({ value, label: TRANSACTION_DIRECTIONS[value].label })
-);
+const DIRECTION_OPTIONS = (['expense', 'income', 'transfer'] as const).map((value) => ({
+  value,
+  label: TRANSACTION_DIRECTIONS[value].label,
+}));
 
 /**
  * `date` and `time` are held apart so each is its own required control — an
@@ -148,9 +138,7 @@ export class RecordTransactionForm {
   });
 
   /** True while the chosen direction is Transfer — the form asks for a destination, not a Category. */
-  protected readonly isTransfer = computed(
-    () => this.model().direction === 'transfer'
-  );
+  protected readonly isTransfer = computed(() => this.model().direction === 'transfer');
 
   /** Only the Categories matching the chosen direction (ADR 0010). */
   protected readonly categoryOptions = computed(() => {
@@ -164,9 +152,7 @@ export class RecordTransactionForm {
    * there is no destination to pick, which is also what lets one stale-pick
    * pruner serve both this field and the Category.
    */
-  protected readonly destinationOptions = computed(() =>
-    this.isTransfer() ? this.destinations() : []
-  );
+  protected readonly destinationOptions = computed(() => (this.isTransfer() ? this.destinations() : []));
 
   protected readonly recordForm = form(this.model, (path) => {
     // Entered positive — the sign is the direction's, never a minus the person
@@ -191,10 +177,7 @@ export class RecordTransactionForm {
   protected readonly submitting = signal(false);
 
   /** The form-level banner. Linked to the model so any edit clears a stale message. */
-  protected readonly errorMessage = linkedSignal<
-    RecordTransactionModel,
-    string | null
-  >({
+  protected readonly errorMessage = linkedSignal<RecordTransactionModel, string | null>({
     source: this.model,
     computation: () => null,
   });
@@ -211,16 +194,11 @@ export class RecordTransactionForm {
     // picker empties when it no longer applies, so pruning to its options
     // covers the direction switch too.
     effect(() => this.pruneStalePick('categoryId', this.categoryOptions()));
-    effect(() =>
-      this.pruneStalePick('transferToAccountId', this.destinationOptions())
-    );
+    effect(() => this.pruneStalePick('transferToAccountId', this.destinationOptions()));
   }
 
   /** Null a picked id its picker no longer offers. */
-  private pruneStalePick(
-    key: 'categoryId' | 'transferToAccountId',
-    options: readonly { id: number }[]
-  ): void {
+  private pruneStalePick(key: 'categoryId' | 'transferToAccountId', options: readonly { id: number }[]): void {
     const picked = this.model()[key];
     if (picked !== null && !options.some((option) => option.id === picked)) {
       this.model.update((model) => ({ ...model, [key]: null }));
@@ -236,15 +214,7 @@ export class RecordTransactionForm {
         this.errorMessage.set(null);
 
         try {
-          const {
-            direction,
-            amount,
-            date,
-            time,
-            categoryId,
-            transferToAccountId,
-            tags,
-          } = this.model();
+          const { direction, amount, date, time, categoryId, transferToAccountId, tags } = this.model();
           // Derive the mutually exclusive pair straight from `direction`, the
           // field being submitted: the stale-pick pruners reconcile the siblings
           // too, but they run as effects and need not have flushed by the time
@@ -262,7 +232,7 @@ export class RecordTransactionForm {
               categoryId: isTransfer ? null : categoryId,
               transferToAccountId: isTransfer ? transferToAccountId : null,
               tagIds: tags.map((tag) => tag.id),
-            } satisfies NewTransaction)
+            } satisfies NewTransaction),
           );
           this.recorded.emit(recorded);
           return undefined;
@@ -270,7 +240,7 @@ export class RecordTransactionForm {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_RECORD
+            COULD_NOT_RECORD,
           );
           if (boundErrors.length > 0) {
             this.recordForm().markAsTouched();

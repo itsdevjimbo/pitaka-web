@@ -1,8 +1,5 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { API_BASE_URL, errorInterceptor } from '@/app/core/api';
@@ -87,9 +84,7 @@ describe('Session', () => {
     const session = configure({ [TOKEN_KEY]: 'stale-token' });
 
     const pending = session.verifyBoot();
-    http
-      .expectOne(`${BASE_URL}/api/profile`)
-      .flush(null, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne(`${BASE_URL}/api/profile`).flush(null, { status: 401, statusText: 'Unauthorized' });
     await pending;
 
     expect(session.isAuthenticated()).toBe(false);
@@ -101,9 +96,7 @@ describe('Session', () => {
     const session = configure({ [TOKEN_KEY]: 'stored-token' });
 
     const pending = session.verifyBoot();
-    http
-      .expectOne(`${BASE_URL}/api/profile`)
-      .error(new ProgressEvent('error'));
+    http.expectOne(`${BASE_URL}/api/profile`).error(new ProgressEvent('error'));
     await pending;
 
     // Unverified, so the shell stays shut; the token survives so a refresh once
@@ -174,10 +167,9 @@ describe('Session', () => {
     expect(session.isAuthenticated()).toBe(false);
     expect(session.profile()).toBeNull();
     expect(storage.getItem(TOKEN_KEY)).toBeNull();
-    expect(router.navigate).toHaveBeenCalledWith(
-      ['/auth/sign-in'],
-      { queryParams: { returnUrl: '/accounts', reason: 'session-expired' } }
-    );
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/sign-in'], {
+      queryParams: { returnUrl: '/accounts', reason: 'session-expired' },
+    });
   });
 
   it('on sign-out clears the session and returns to sign-in without a return URL or a lapse marker', async () => {

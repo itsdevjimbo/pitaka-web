@@ -153,7 +153,7 @@ export default class GoalList {
       () => this.confirmDelete(goal),
     );
   }
-  
+
   private write(id: number, write$: import('rxjs').Observable<unknown>, success: () => void, retry: () => void): void {
     this.notice.set(null);
     this.busyId.set(id);
@@ -174,7 +174,7 @@ export default class GoalList {
       this.load();
       return;
     }
-    
+
     if (error instanceof ApiError && error.status === 403) {
       this.notice.set({ id, message: 'You can no longer change this Goal.' });
       this.load();

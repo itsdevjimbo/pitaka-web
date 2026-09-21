@@ -1,22 +1,6 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  effect,
-  inject,
-  linkedSignal,
-  output,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  form,
-  FormField,
-  maxLength,
-  min,
-  required,
-  submit,
-} from '@angular/forms/signals';
+import { form, FormField, maxLength, min, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -25,20 +9,12 @@ import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
-import {
-  Budget,
-  BUDGET_AMOUNT_MIN,
-  BUDGET_NAME_MAX,
-  NewBudget,
-  Period,
-  PERIODS,
-} from '../data/budget';
+import { Budget, BUDGET_AMOUNT_MIN, BUDGET_NAME_MAX, NewBudget, Period, PERIODS } from '../data/budget';
 import { startOfCurrentPeriod } from '../data/budget-calendar';
 import { BudgetsService } from '../data/budgets.service';
 
 /** The banner line for a create that failed before it could be attributed. */
-const COULD_NOT_CREATE =
-  'Something went wrong creating your budget. Please try again.';
+const COULD_NOT_CREATE = 'Something went wrong creating your budget. Please try again.';
 
 /** The value the Category picker uses for a Budget that watches all spending. */
 const ALL_SPENDING = null;
@@ -87,14 +63,7 @@ type NewBudgetModel = {
 @Component({
   selector: 'budgets-new-budget-form',
   templateUrl: './new-budget-form.html',
-  imports: [
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatButtonModule,
-    MatDatepickerModule,
-    FormField,
-  ],
+  imports: [MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatDatepickerModule, FormField],
 })
 export class NewBudgetForm {
   // Dependencies
@@ -119,7 +88,7 @@ export class NewBudgetForm {
 
   /** Only expense Categories — a Budget on an income Category reads zero (ADR 0012). */
   protected readonly categoryOptions = computed(() =>
-    this.categories().filter((category) => category.kind === 'expense')
+    this.categories().filter((category) => category.kind === 'expense'),
   );
 
   protected readonly model = signal<NewBudgetModel>({
@@ -200,8 +169,7 @@ export class NewBudgetForm {
         this.errorMessage.set(null);
 
         try {
-          const { name, amountLimit, period, startDate, categoryId } =
-            this.model();
+          const { name, amountLimit, period, startDate, categoryId } = this.model();
           const created = await firstValueFrom(
             this.service.create({
               name: name.trim(),
@@ -211,7 +179,7 @@ export class NewBudgetForm {
               period: period as Period,
               startDate: startDate as Date,
               categoryId,
-            } satisfies NewBudget)
+            } satisfies NewBudget),
           );
           this.created.emit(created);
           return undefined;
@@ -219,7 +187,7 @@ export class NewBudgetForm {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_CREATE
+            COULD_NOT_CREATE,
           );
           if (boundErrors.length > 0) {
             this.budgetForm().markAsTouched();

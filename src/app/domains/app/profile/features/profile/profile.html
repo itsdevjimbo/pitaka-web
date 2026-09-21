@@ -1,12 +1,15 @@
 <main class="mx-auto w-full max-w-5xl p-4 pb-28 sm:p-8 sm:pb-28">
   <header class="mb-6">
     <h1 class="text-2xl font-bold tracking-tight">Profile</h1>
-    <p class="mt-1 text-neutral-500 dark:text-neutral-400">
-      Your identity and sign-in details.
-    </p>
+    <p class="mt-1 text-neutral-500 dark:text-neutral-400">Your identity and sign-in details.</p>
   </header>
   @if (emailChangeConfirmed) {
-    <p class="mb-4 text-sm text-green-700 dark:text-green-300" role="status">Email address changed</p>
+    <p
+      class="mb-4 text-sm text-green-700 dark:text-green-300"
+      role="status"
+    >
+      Email address changed
+    </p>
   }
 
   @if (profile(); as person) {

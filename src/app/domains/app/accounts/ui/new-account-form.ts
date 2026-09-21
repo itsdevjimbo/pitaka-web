@@ -1,35 +1,22 @@
 import { Component, inject, linkedSignal, output, signal } from '@angular/core';
-import {
-  form,
-  FormField,
-  maxLength,
-  min,
-  required,
-  submit,
-} from '@angular/forms/signals';
+import { form, FormField, maxLength, min, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import {
-  Account,
-  ACCOUNT_NAME_MAX,
-  ACCOUNT_TYPES,
-  AccountType,
-  NewAccount,
-} from '../data/account';
+import { Account, ACCOUNT_NAME_MAX, ACCOUNT_TYPES, AccountType, NewAccount } from '../data/account';
 import { AccountsService } from '../data/accounts.service';
 
 /** The banner line for a create that failed before it could be attributed. */
-const COULD_NOT_CREATE =
-  'Something went wrong creating your account. Please try again.';
+const COULD_NOT_CREATE = 'Something went wrong creating your account. Please try again.';
 
 /** The four types, as ordered options for the picker. */
-const TYPE_OPTIONS = (Object.keys(ACCOUNT_TYPES) as AccountType[]).map(
-  (value) => ({ value, label: ACCOUNT_TYPES[value].label })
-);
+const TYPE_OPTIONS = (Object.keys(ACCOUNT_TYPES) as AccountType[]).map((value) => ({
+  value,
+  label: ACCOUNT_TYPES[value].label,
+}));
 
 /** `type` starts unset so the picker has no default the person didn't choose. */
 type NewAccountModel = {
@@ -53,13 +40,7 @@ type NewAccountModel = {
 @Component({
   selector: 'accounts-new-account-form',
   templateUrl: './new-account-form.html',
-  imports: [
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatButtonModule,
-    FormField,
-  ],
+  imports: [MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, FormField],
 })
 export class NewAccountForm {
   // Dependencies
@@ -116,7 +97,7 @@ export class NewAccountForm {
               // `required(form.type)` has already ruled out the empty option.
               type: type as AccountType,
               initialBalance,
-            } satisfies NewAccount)
+            } satisfies NewAccount),
           );
           this.created.emit(created);
           return undefined;
@@ -124,7 +105,7 @@ export class NewAccountForm {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_CREATE
+            COULD_NOT_CREATE,
           );
           if (boundErrors.length > 0) {
             this.accountForm().markAsTouched();

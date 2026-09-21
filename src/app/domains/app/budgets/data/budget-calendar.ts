@@ -35,11 +35,7 @@ export function toCalendarDate(value: string): Date {
  */
 export function toDateOnly(date: Date): string {
   const pad = (value: number): string => String(value).padStart(2, '0');
-  return (
-    `${date.getFullYear()}-` +
-    `${pad(date.getMonth() + 1)}-` +
-    `${pad(date.getDate())}`
-  );
+  return `${date.getFullYear()}-` + `${pad(date.getMonth() + 1)}-` + `${pad(date.getDate())}`;
 }
 
 /**
@@ -77,19 +73,13 @@ export function startOfCurrentPeriod(period: Period, reference: Date): Date {
  * the start day and the end day both read as live. A Budget with no `endDate`
  * never finishes.
  */
-export function budgetPhase(
-  budget: { startDate: Date; endDate: Date | null },
-  today: Date
-): BudgetPhase {
+export function budgetPhase(budget: { startDate: Date; endDate: Date | null }, today: Date): BudgetPhase {
   const midnight = startOfDay(today).getTime();
 
   if (startOfDay(budget.startDate).getTime() > midnight) {
     return 'not-started';
   }
-  if (
-    budget.endDate !== null &&
-    startOfDay(budget.endDate).getTime() < midnight
-  ) {
+  if (budget.endDate !== null && startOfDay(budget.endDate).getTime() < midnight) {
     return 'finished';
   }
   return 'live';
@@ -132,10 +122,7 @@ export type BudgetRemaining = {
  * balance-class figure the person acts on (ADR 0006), and it must not land on
  * `-199.99999999999998` for a ceiling and Spent that both have two decimals.
  */
-export function budgetRemaining(budget: {
-  amountLimit: number;
-  amountSpent: number;
-}): BudgetRemaining {
+export function budgetRemaining(budget: { amountLimit: number; amountSpent: number }): BudgetRemaining {
   const left = sumPesos([budget.amountLimit, -budget.amountSpent]);
 
   return {

@@ -1,13 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import {
-  catchError,
-  map,
-  Observable,
-  shareReplay,
-  tap,
-  throwError,
-} from 'rxjs';
+import { catchError, map, Observable, shareReplay, tap, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
 import { Tag } from './tag';
 
@@ -105,12 +98,10 @@ export class TagsService {
    * here as a `name` field error the caller surfaces under the name control.
    */
   create(name: string): Observable<Tag> {
-    return this.http
-      .post<TagResource>(`${this.baseUrl}/api/tags`, { name })
-      .pipe(
-        tap(() => this.invalidate()),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
-      );
+    return this.http.post<TagResource>(`${this.baseUrl}/api/tags`, { name }).pipe(
+      tap(() => this.invalidate()),
+      catchError((error: unknown) => throwError(() => asNameConflict(error))),
+    );
   }
 
   /**
@@ -119,12 +110,10 @@ export class TagsService {
    * name — and is re-filed the same way, as a `name` field error.
    */
   rename(id: number, name: string): Observable<Tag> {
-    return this.http
-      .put<TagResource>(`${this.baseUrl}/api/tags/${id}`, { name })
-      .pipe(
-        tap(() => this.invalidate()),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
-      );
+    return this.http.put<TagResource>(`${this.baseUrl}/api/tags/${id}`, { name }).pipe(
+      tap(() => this.invalidate()),
+      catchError((error: unknown) => throwError(() => asNameConflict(error))),
+    );
   }
 
   /**
@@ -136,12 +125,10 @@ export class TagsService {
    * distinguishable from a generic failure without any re-filing.
    */
   remove(id: number): Observable<void> {
-    return this.http
-      .delete<void>(`${this.baseUrl}/api/tags/${id}`)
-      .pipe(
-        map(() => undefined),
-        tap(() => this.invalidate())
-      );
+    return this.http.delete<void>(`${this.baseUrl}/api/tags/${id}`).pipe(
+      map(() => undefined),
+      tap(() => this.invalidate()),
+    );
   }
 
   /** Drop the cache so the next reader re-fetches. Called from inside every write. */
@@ -156,7 +143,7 @@ export class TagsService {
       catchError((error: unknown) => {
         this.cached = null;
         return throwError(() => error);
-      })
+      }),
     );
     return this.cached;
   }

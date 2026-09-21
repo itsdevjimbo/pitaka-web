@@ -24,7 +24,7 @@ describe('the auth area routes', () => {
   function setup(
     isAuthenticated = false,
     confirmEmail: AuthService['confirmEmail'] = () => of(undefined),
-    resetPassword: AuthService['resetPassword'] = () => of(undefined)
+    resetPassword: AuthService['resetPassword'] = () => of(undefined),
   ) {
     TestBed.configureTestingModule({
       providers: [
@@ -61,9 +61,9 @@ describe('the auth area routes', () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/auth/sign-in');
 
-    const link = (
-      harness.routeNativeElement as HTMLElement
-    ).querySelector<HTMLAnchorElement>('a[href="/auth/forgot-password"]');
+    const link = (harness.routeNativeElement as HTMLElement).querySelector<HTMLAnchorElement>(
+      'a[href="/auth/forgot-password"]',
+    );
     expect(link?.textContent?.trim()).toBe('Forgot password?');
   });
 
@@ -74,9 +74,7 @@ describe('the auth area routes', () => {
     await harness.navigateByUrl('/auth/forgot-password');
 
     expect(TestBed.inject(Router).url).toBe('/auth/forgot-password');
-    expect((harness.routeNativeElement as HTMLElement).textContent).toContain(
-      'Forgot password?'
-    );
+    expect((harness.routeNativeElement as HTMLElement).textContent).toContain('Forgot password?');
   });
 
   /**
@@ -124,8 +122,6 @@ describe('the auth area routes', () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/auth/reset-password?userId=7&token=a-token');
 
-    expect(TestBed.inject(Router).url).toBe(
-      '/auth/reset-password?userId=7&token=a-token'
-    );
+    expect(TestBed.inject(Router).url).toBe('/auth/reset-password?userId=7&token=a-token');
   });
 });

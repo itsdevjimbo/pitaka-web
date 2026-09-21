@@ -4,32 +4,13 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Component, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatIcon } from '@angular/material/icon';
-import {
-  isActive,
-  IsActiveMatchOptions,
-  NavigationEnd,
-  Router,
-  RouterLink,
-  RouterLinkActive,
-} from '@angular/router';
+import { isActive, IsActiveMatchOptions, NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, take } from 'rxjs';
-import {
-  NAVIGATION,
-  NavigationItem,
-} from '@/app/domains/app/layout/data/navigation';
+import { NAVIGATION, NavigationItem } from '@/app/domains/app/layout/data/navigation';
 
 @Component({
   selector: 'navigation',
-  imports: [
-    MatIcon,
-    NgTemplateOutlet,
-    RouterLinkActive,
-    Tree,
-    TreeItem,
-    TreeItemGroup,
-    RouterLink,
-    CdkMonitorFocus,
-  ],
+  imports: [MatIcon, NgTemplateOutlet, RouterLinkActive, Tree, TreeItem, TreeItemGroup, RouterLink, CdkMonitorFocus],
   template: `
     <div class="flex flex-col gap-y-4">
       @for (section of navigation(); track section.id) {
@@ -81,9 +62,7 @@ import {
                 [selectable]="!node.children"
                 [(expanded)]="node.expanded"
                 [routerLink]="node.route"
-                [routerLinkActiveOptions]="
-                  node.activeOptions ?? { exact: true }
-                "
+                [routerLinkActiveOptions]="node.activeOptions ?? { exact: true }"
                 (click)="$event.preventDefault()"
                 #rla="routerLinkActive"
                 #treeItem="ngTreeItem"
@@ -110,9 +89,7 @@ import {
 
                 <!-- Badge -->
                 @if (node.badge) {
-                  <div
-                    class="rounded bg-pink-400 px-1.5 py-0.5 text-xs font-semibold dark:bg-pink-700"
-                  >
+                  <div class="rounded bg-pink-400 px-1.5 py-0.5 text-xs font-semibold dark:bg-pink-700">
                     {{ node.badge }}
                   </div>
                 }
@@ -166,8 +143,8 @@ export class Navigation {
   protected navigationEnd = toSignal(
     this.router.events.pipe(
       filter((event) => event instanceof NavigationEnd),
-      take(1)
-    )
+      take(1),
+    ),
   );
 
   constructor() {
@@ -198,11 +175,7 @@ export class Navigation {
 
       if (
         item.route &&
-        isActive(
-          item.route,
-          this.router,
-          this.isActiveOption(item.activeOptions ?? { exact: true })
-        )()
+        isActive(item.route, this.router, this.isActiveOption(item.activeOptions ?? { exact: true }))()
       ) {
         item.expanded = true;
       }
@@ -214,9 +187,7 @@ export class Navigation {
    * Convert simple exact option to full IsActiveMatchOptions.
    * @param options
    */
-  isActiveOption(
-    options: { exact: boolean } | IsActiveMatchOptions
-  ): IsActiveMatchOptions {
+  isActiveOption(options: { exact: boolean } | IsActiveMatchOptions): IsActiveMatchOptions {
     if ('exact' in options) {
       return options.exact
         ? {

@@ -14,20 +14,14 @@ describe('combineDateTime', () => {
   });
 
   it('drops seconds and milliseconds — the person set minutes', () => {
-    const result = combineDateTime(
-      new Date(2026, 0, 2),
-      new Date(2026, 0, 2, 9, 30, 59, 999)
-    );
+    const result = combineDateTime(new Date(2026, 0, 2), new Date(2026, 0, 2, 9, 30, 59, 999));
 
     expect(result.getSeconds()).toBe(0);
     expect(result.getMilliseconds()).toBe(0);
   });
 
   it('keeps midnight as midnight rather than rolling the day', () => {
-    const result = combineDateTime(
-      new Date(2026, 11, 31),
-      new Date(2000, 0, 1, 0, 0)
-    );
+    const result = combineDateTime(new Date(2026, 11, 31), new Date(2000, 0, 1, 0, 0));
 
     expect(result).toEqual(new Date(2026, 11, 31, 0, 0, 0, 0));
   });

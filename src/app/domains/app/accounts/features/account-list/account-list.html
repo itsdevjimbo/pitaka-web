@@ -2,16 +2,15 @@
   <header class="flex items-start justify-between gap-x-4">
     <div class="flex flex-col gap-y-1">
       <h1 class="text-2xl font-bold tracking-tight">Accounts</h1>
-      <p class="text-neutral-500 dark:text-neutral-400">
-        Where you stand right now.
-      </p>
+      <p class="text-neutral-500 dark:text-neutral-400">Where you stand right now.</p>
     </div>
     @if (!loading() && !errorMessage()) {
       <button
         matButton="filled"
         (click)="openNewAccountDialog()"
       >
-        <mat-icon svgIcon="plus" />Add account
+        <mat-icon svgIcon="plus" />
+        Add account
       </button>
     }
   </header>
@@ -23,7 +22,8 @@
       <mat-icon
         class="size-6 animate-spin"
         svgIcon="loader-circle"
-      /><span>Loading your accounts…</span>
+      />
+      <span>Loading your accounts…</span>
     </div>
   } @else if (errorMessage(); as message) {
     <div
@@ -41,7 +41,8 @@
         matButton="filled"
         (click)="load()"
       >
-        <mat-icon svgIcon="refresh-cw" />Try again
+        <mat-icon svgIcon="refresh-cw" />
+        Try again
       </button>
     </div>
   } @else if (trueEmpty()) {
@@ -54,15 +55,16 @@
       />
       <p class="text-lg font-semibold">No accounts yet</p>
       <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
-        Add your first account — cash, a bank account, a wallet, or an
-        investment — to start tracking where your money sits.
+        Add your first account — cash, a bank account, a wallet, or an investment — to start tracking where your money
+        sits.
       </p>
       <button
         matButton="filled"
         class="mt-2"
         (click)="openNewAccountDialog()"
       >
-        <mat-icon svgIcon="plus" />Add account
+        <mat-icon svgIcon="plus" />
+        Add account
       </button>
     </div>
   } @else {
@@ -87,9 +89,7 @@
             matButton
             [attr.aria-pressed]="criteria().isActive === status.value"
             [class.font-bold]="criteria().isActive === status.value"
-            (click)="
-              applyCriteria({ isActive: status.value, type: criteria().type })
-            "
+            (click)="applyCriteria({ isActive: status.value, type: criteria().type })"
           >
             {{ status.label }}
           </button>
@@ -98,8 +98,9 @@
       <mat-form-field
         subscriptSizing="dynamic"
         class="w-full sm:w-56"
-        ><mat-label>Account type</mat-label
-        ><mat-select
+      >
+        <mat-label>Account type</mat-label>
+        <mat-select
           aria-label="Filter by account type"
           [value]="criteria().type ?? null"
           (selectionChange)="
@@ -108,17 +109,16 @@
               type: $event.value ?? undefined,
             })
           "
-          ><mat-option [value]="null">All types</mat-option>
+        >
+          <mat-option [value]="null">All types</mat-option>
           @for (type of types | keyvalue; track type.key) {
             <mat-option [value]="type.key">{{ type.value.label }}</mat-option>
           }
-        </mat-select></mat-form-field
-      >
+        </mat-select>
+      </mat-form-field>
       <div class="flex items-center justify-between gap-4">
         <div>
-          <span class="text-sm text-neutral-500 dark:text-neutral-400">{{
-            totalLabel()
-          }}</span>
+          <span class="text-sm text-neutral-500 dark:text-neutral-400">{{ totalLabel() }}</span>
           <div class="text-2xl font-bold tracking-tight tabular-nums">
             {{ total() | peso }}
           </div>
@@ -127,11 +127,13 @@
           <span
             class="flex items-center gap-2 text-sm text-neutral-500"
             role="status"
-            ><mat-icon
+          >
+            <mat-icon
               class="size-4 animate-spin"
               svgIcon="loader-circle"
-            />Updating…</span
-          >
+            />
+            Updating…
+          </span>
         }
       </div>
       @if (filterError(); as message) {
@@ -139,8 +141,8 @@
           class="flex items-center justify-between gap-3 text-sm"
           role="alert"
         >
-          <span>{{ message }}</span
-          ><button
+          <span>{{ message }}</span>
+          <button
             matButton
             (click)="retryFilters()"
           >
@@ -172,35 +174,35 @@
     } @else {
       <ul class="flex flex-col gap-y-2">
         @for (account of accounts() ?? []; track account.id) {
-          <li
-            class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
-          >
+          <li class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800">
             <div class="flex items-center gap-x-3">
               <a
                 class="-m-2 flex min-w-0 flex-auto items-center gap-x-3 rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-900"
                 [routerLink]="['/app/accounts', account.id]"
-                ><span
+              >
+                <span
                   class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
-                  ><mat-icon
+                >
+                  <mat-icon
                     class="size-5"
                     [svgIcon]="types[account.type].icon"
-                /></span>
+                  />
+                </span>
                 <div class="flex min-w-0 flex-auto flex-col">
-                  <span class="truncate font-medium">{{ account.name }}</span
-                  ><span class="text-sm text-neutral-500 dark:text-neutral-400"
-                    >{{ types[account.type].label }}
+                  <span class="truncate font-medium">{{ account.name }}</span>
+                  <span class="text-sm text-neutral-500 dark:text-neutral-400">
+                    {{ types[account.type].label }}
                     @if (!account.isActive) {
                       <span
                         class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold uppercase dark:bg-neutral-700"
-                        >Retired</span
                       >
+                        Retired
+                      </span>
                     }
                   </span>
                 </div>
-                <span class="shrink-0 font-semibold tabular-nums">{{
-                  account.currentBalance | peso
-                }}</span></a
-              >
+                <span class="shrink-0 font-semibold tabular-nums">{{ account.currentBalance | peso }}</span>
+              </a>
               @if (busyId() === account.id) {
                 <mat-icon
                   class="size-5 animate-spin"
@@ -213,31 +215,31 @@
                   aria-label="Account actions"
                   [matMenuTriggerFor]="rowMenu"
                 >
-                  <mat-icon svgIcon="ellipsis-vertical" /></button
-                ><mat-menu #rowMenu
-                  ><button
+                  <mat-icon svgIcon="ellipsis-vertical" />
+                </button>
+                <mat-menu #rowMenu>
+                  <button
                     mat-menu-item
                     (click)="openRenameDialog(account)"
                   >
-                    <mat-icon svgIcon="pencil" /><span>Rename</span></button
-                  ><button
+                    <mat-icon svgIcon="pencil" />
+                    <span>Rename</span>
+                  </button>
+                  <button
                     mat-menu-item
                     (click)="toggleActive(account)"
                   >
-                    <mat-icon
-                      [svgIcon]="
-                        account.isActive ? 'archive' : 'archive-restore'
-                      "
-                    /><span>{{
-                      account.isActive ? 'Retire' : 'Reactivate'
-                    }}</span></button
-                  ><button
+                    <mat-icon [svgIcon]="account.isActive ? 'archive' : 'archive-restore'" />
+                    <span>{{ account.isActive ? 'Retire' : 'Reactivate' }}</span>
+                  </button>
+                  <button
                     mat-menu-item
                     (click)="askDelete(account)"
                   >
-                    <mat-icon svgIcon="trash-2" /><span>Delete</span>
-                  </button></mat-menu
-                >
+                    <mat-icon svgIcon="trash-2" />
+                    <span>Delete</span>
+                  </button>
+                </mat-menu>
               }
             </div>
             @if (confirmingDeleteId() === account.id) {
@@ -246,15 +248,17 @@
                 aria-label="Confirm delete"
               >
                 <p>
-                  Delete <span class="font-semibold">{{ account.name }}</span
-                  >? This can’t be undone.
+                  Delete
+                  <span class="font-semibold">{{ account.name }}</span>
+                  ? This can’t be undone.
                 </p>
                 <button
                   matButton
                   (click)="cancelDelete()"
                 >
-                  Cancel</button
-                ><button
+                  Cancel
+                </button>
+                <button
                   matButton="filled"
                   (click)="confirmDelete(account)"
                 >

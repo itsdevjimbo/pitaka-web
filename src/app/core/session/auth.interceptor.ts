@@ -32,24 +32,16 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const forApi = request.url.startsWith(baseUrl);
   const token = session.token();
 
-  const outgoing =
-    forApi && token
-      ? request.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
-      : request;
+  const outgoing = forApi && token ? request.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : request;
 
   const selfHandles401 = request.context.get(HANDLES_OWN_401);
 
   return next(outgoing).pipe(
     catchError((error: unknown) => {
-      if (
-        forApi &&
-        !selfHandles401 &&
-        error instanceof ApiError &&
-        error.status === 401
-      ) {
+      if (forApi && !selfHandles401 && error instanceof ApiError && error.status === 401) {
         session.expire();
       }
       return throwError(() => error);
-    })
+    }),
   );
 };

@@ -10,13 +10,5 @@
  * with its UTC offset on the way out (`toOffsetTimestamp`).
  */
 export function combineDateTime(date: Date, time: Date): Date {
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    time.getHours(),
-    time.getMinutes(),
-    0,
-    0
-  );
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), time.getHours(), time.getMinutes(), 0, 0);
 }

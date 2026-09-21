@@ -9,23 +9,13 @@ import { Scheme, Theming } from '@/app/core/theming';
 
 @Component({
   selector: 'user',
-  imports: [
-    MatDivider,
-    MatIcon,
-    MatMenu,
-    MatMenuItem,
-    MatPseudoCheckbox,
-    MatMenuTrigger,
-    RouterLink,
-  ],
+  imports: [MatDivider, MatIcon, MatMenu, MatMenuItem, MatPseudoCheckbox, MatMenuTrigger, RouterLink],
   template: `
     <button
       class="flex w-full cursor-pointer items-center gap-x-3 rounded-xl p-2 text-left hover:bg-neutral-700/10 dark:hover:bg-neutral-300/10"
       [matMenuTriggerFor]="userMenu"
     >
-      <span
-        class="flex size-9 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10"
-      >
+      <span class="flex size-9 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10">
         <mat-icon
           class="size-5"
           svgIcon="user-round"

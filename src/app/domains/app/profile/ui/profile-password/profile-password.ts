@@ -14,15 +14,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { AuthService, IncorrectCurrentPasswordError } from '@/app/core/auth';
-import {
-  BoundServerError,
-  partitionServerError,
-  ServerErrorControls,
-} from '@/app/core/forms';
+import { BoundServerError, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { passwordRules } from '@/app/domains/auth/password-rules';
 
-const COULD_NOT_CHANGE_PASSWORD =
-  'Something went wrong changing your password. Please try again.';
+const COULD_NOT_CHANGE_PASSWORD = 'Something went wrong changing your password. Please try again.';
 const WRONG_CURRENT_PASSWORD = 'Your current password is incorrect.';
 const EMPTY_PASSWORDS = {
   currentPassword: '',
@@ -52,7 +47,7 @@ export class ProfilePassword {
     disabled(form.newPassword, { when: () => this.submitting() });
     disabled(form.confirmationPassword, { when: () => this.submitting() });
     validate(form.currentPassword, (context) =>
-      context.value() ? undefined : { kind: 'required', message: 'Enter your current password' }
+      context.value() ? undefined : { kind: 'required', message: 'Enter your current password' },
     );
     passwordRules(form.newPassword);
     validate(form.confirmationPassword, (context) => {
@@ -92,9 +87,7 @@ export class ProfilePassword {
     this.errorMessage.set(null);
     this.successMessage.set(null);
     try {
-      await firstValueFrom(
-        this.injector.get(AuthService).changePassword(currentPassword, newPassword)
-      );
+      await firstValueFrom(this.injector.get(AuthService).changePassword(currentPassword, newPassword));
       this.editing.set(false);
       this.clearSecrets();
       this.successMessage.set('Password changed');
@@ -103,7 +96,7 @@ export class ProfilePassword {
       const { boundErrors, bannerMessage } = partitionServerError(
         error,
         this.serverErrorControls(),
-        COULD_NOT_CHANGE_PASSWORD
+        COULD_NOT_CHANGE_PASSWORD,
       );
       const attributedErrors =
         error instanceof IncorrectCurrentPasswordError

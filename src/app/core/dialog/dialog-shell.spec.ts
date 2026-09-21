@@ -57,9 +57,7 @@ describe('DialogShell', () => {
   it('closes the dialog when its close control is pressed', () => {
     const { host } = setup();
 
-    host
-      .querySelector<HTMLButtonElement>('button[aria-label="Close"]')!
-      .click();
+    host.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
 
     expect(close).toHaveBeenCalledTimes(1);
   });
@@ -75,9 +73,7 @@ describe('DialogShell', () => {
   it('ignores Escape held with a modifier, and other keys', () => {
     setup();
 
-    keydown.next(
-      new KeyboardEvent('keydown', { key: 'Escape', altKey: true })
-    );
+    keydown.next(new KeyboardEvent('keydown', { key: 'Escape', altKey: true }));
     keydown.next(new KeyboardEvent('keydown', { key: 'Enter' }));
 
     expect(close).not.toHaveBeenCalled();

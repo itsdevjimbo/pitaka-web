@@ -987,13 +987,11 @@ describe('ScheduleList', () => {
 
     click(fixture, 'Refresh');
     const link = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>(
-      'a[aria-label="View generated Transactions for Later salary"]'
+      'a[aria-label="View generated Transactions for Later salary"]',
     );
 
     expect(link).not.toBeNull();
-    expect(link!.getAttribute('href')).toBe(
-      '/app/transactions?schedule=1&scheduleName=Later%20salary'
-    );
+    expect(link!.getAttribute('href')).toBe('/app/transactions?schedule=1&scheduleName=Later%20salary');
     expect(link!.getAttribute('aria-disabled')).toBeNull();
   });
 

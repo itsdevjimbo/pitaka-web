@@ -129,8 +129,7 @@
         />
         <p class="text-lg font-semibold">No tags yet</p>
         <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
-          You attach a tag to a transaction while filing it; on its own it does
-          nothing yet.
+          You attach a tag to a transaction while filing it; on its own it does nothing yet.
         </p>
       </div>
     } @else if (noMatch()) {
@@ -142,9 +141,7 @@
           class="size-7 text-neutral-400"
           svgIcon="search-x"
         />
-        <p class="text-sm text-neutral-500 dark:text-neutral-400">
-          No tags match “{{ trimmedSearch() }}”.
-        </p>
+        <p class="text-sm text-neutral-500 dark:text-neutral-400">No tags match “{{ trimmedSearch() }}”.</p>
         <button
           matButton
           type="button"
@@ -156,9 +153,7 @@
     } @else {
       <ul class="flex flex-col gap-y-2">
         @for (tag of visible(); track tag.id) {
-          <li
-            class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 px-4 py-2.5 dark:border-neutral-800"
-          >
+          <li class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 px-4 py-2.5 dark:border-neutral-800">
             <div class="flex items-center gap-x-3">
               @if (editingId() === tag.id) {
                 <div class="relative min-w-0 flex-auto">
@@ -235,9 +230,9 @@
                 aria-label="Confirm delete"
               >
                 <p class="text-sm text-neutral-700 dark:text-neutral-200">
-                  Delete <span class="font-semibold">{{ tag.name }}</span>? It
-                  will be removed from every transaction carrying it. This can’t
-                  be undone.
+                  Delete
+                  <span class="font-semibold">{{ tag.name }}</span>
+                  ? It will be removed from every transaction carrying it. This can’t be undone.
                 </p>
                 <div class="flex gap-x-2">
                   <button

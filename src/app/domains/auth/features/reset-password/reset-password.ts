@@ -13,8 +13,7 @@ import { passwordRules } from '../../password-rules';
 import { DeadLink } from '../../ui/dead-link';
 
 /** The banner line for a reset that failed before it could be attributed to the field. */
-const COULD_NOT_RESET =
-  'Something went wrong resetting your password. Please try again.';
+const COULD_NOT_RESET = 'Something went wrong resetting your password. Please try again.';
 
 /**
  * The screen a reset email links to (ADR 0015). Reads `userId` and `token` off
@@ -30,14 +29,7 @@ const COULD_NOT_RESET =
 @Component({
   selector: 'auth-reset-password',
   templateUrl: './reset-password.html',
-  imports: [
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    MatIconModule,
-    FormField,
-    DeadLink,
-  ],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormField, DeadLink],
 })
 export default class AuthResetPassword {
   // Dependencies
@@ -114,7 +106,7 @@ export default class AuthResetPassword {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_RESET
+            COULD_NOT_RESET,
           );
 
           if (boundErrors.length > 0) {

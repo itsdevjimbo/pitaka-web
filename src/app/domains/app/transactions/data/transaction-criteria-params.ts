@@ -1,9 +1,5 @@
 import { ParamMap } from '@angular/router';
-import {
-  TransactionCriteria,
-  TransactionDirection,
-  TRANSACTION_DIRECTIONS,
-} from './transaction';
+import { TransactionCriteria, TransactionDirection, TRANSACTION_DIRECTIONS } from './transaction';
 
 /**
  * The query-string round-trip for the Transactions filter (#41). The URL is the
@@ -54,10 +50,7 @@ const TO_PARAM = 'to';
  * is blank once trimmed) is not written here either, so serialise-then-parse is
  * the identity and every serialised URL round-trips.
  */
-export function criteriaToQueryParams(
-  criteria: TransactionCriteria,
-  scheduleName?: string
-): Record<string, string> {
+export function criteriaToQueryParams(criteria: TransactionCriteria, scheduleName?: string): Record<string, string> {
   const params: Record<string, string> = {};
 
   if (criteria.direction !== undefined && isDirection(criteria.direction)) {
@@ -93,10 +86,7 @@ export function criteriaToQueryParams(
 }
 
 /** Query parameters for opening one Schedule's generated Transaction history. */
-export function scheduleHistoryQueryParams(
-  scheduleId: number,
-  scheduleName: string
-): Record<string, string> {
+export function scheduleHistoryQueryParams(scheduleId: number, scheduleName: string): Record<string, string> {
   return criteriaToQueryParams({ scheduleId }, scheduleName);
 }
 
@@ -111,9 +101,7 @@ export function scheduleNameFromQueryParams(params: ParamMap): string | undefine
  * means that axis is unfiltered. No input can produce a criteria object the
  * search endpoint would reject.
  */
-export function criteriaFromQueryParams(
-  params: ParamMap
-): TransactionCriteria {
+export function criteriaFromQueryParams(params: ParamMap): TransactionCriteria {
   const criteria: TransactionCriteria = {};
 
   const direction = params.get(DIRECTION_PARAM);
@@ -141,10 +129,7 @@ export function criteriaFromQueryParams(
     criteria.description = note;
   }
 
-  const range = orderedRange(
-    toCalendarDate(params.get(FROM_PARAM)),
-    toCalendarDate(params.get(TO_PARAM))
-  );
+  const range = orderedRange(toCalendarDate(params.get(FROM_PARAM)), toCalendarDate(params.get(TO_PARAM)));
   if (range.from) {
     criteria.from = range.from;
   }
@@ -161,17 +146,11 @@ export function criteriaFromQueryParams(
  * unchanged does not count and the check cannot drift from what the URL
  * actually carries.
  */
-export function sameCriteria(
-  a: TransactionCriteria,
-  b: TransactionCriteria
-): boolean {
+export function sameCriteria(a: TransactionCriteria, b: TransactionCriteria): boolean {
   const left = criteriaToQueryParams(a);
   const right = criteriaToQueryParams(b);
   const keys = Object.keys(left);
-  return (
-    keys.length === Object.keys(right).length &&
-    keys.every((key) => left[key] === right[key])
-  );
+  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 }
 
 /** Whether a raw string is one of the three directions the search accepts. */
@@ -213,11 +192,7 @@ function toCalendarDate(raw: string | null): Date | null {
   const month1 = Number(match[2]);
   const date = Number(match[3]);
   const parsed = new Date(year, month1 - 1, date);
-  return parsed.getFullYear() === year &&
-    parsed.getMonth() === month1 - 1 &&
-    parsed.getDate() === date
-    ? parsed
-    : null;
+  return parsed.getFullYear() === year && parsed.getMonth() === month1 - 1 && parsed.getDate() === date ? parsed : null;
 }
 
 /** Local-midnight `YYYY-MM-DD` for a `Date`, via local getters — never `toISOString()` (ADR 0011). */
@@ -235,10 +210,7 @@ function toCalendarDay(date: Date): string {
  * the list to "everything after that month" when the person asked for a range.
  * A single end, or a correctly ordered pair, passes through.
  */
-function orderedRange(
-  from: Date | null,
-  to: Date | null
-): { from?: Date; to?: Date } {
+function orderedRange(from: Date | null, to: Date | null): { from?: Date; to?: Date } {
   if (from !== null && to !== null && from.getTime() > to.getTime()) {
     return {};
   }

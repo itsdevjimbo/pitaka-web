@@ -38,13 +38,9 @@ export function keepSavedFilingCategory(
   options: readonly Category[],
   all: readonly Category[],
   savedId: number | null,
-  selectedId: number | null
+  selectedId: number | null,
 ): Category[] {
-  if (
-    savedId === null ||
-    savedId !== selectedId ||
-    options.some((category) => category.id === savedId)
-  ) {
+  if (savedId === null || savedId !== selectedId || options.some((category) => category.id === savedId)) {
     return [...options];
   }
   const saved = all.find((category) => category.id === savedId);

@@ -7,14 +7,7 @@ import { Scheme, Theming } from '@/app/core/theming';
 
 @Component({
   selector: 'scheme-switcher',
-  imports: [
-    MatIcon,
-    MatIconButton,
-    MatMenu,
-    MatMenuItem,
-    MatPseudoCheckbox,
-    MatMenuTrigger,
-  ],
+  imports: [MatIcon, MatIconButton, MatMenu, MatMenuItem, MatPseudoCheckbox, MatMenuTrigger],
   template: `
     <button
       matIconButton

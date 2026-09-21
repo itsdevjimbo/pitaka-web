@@ -26,8 +26,7 @@ import { AddCategoryForm } from './add-category-form';
   `,
 })
 export class AddCategoryDialog {
-  protected readonly dialogRef =
-    inject<MatDialogRef<AddCategoryDialog, Category>>(MatDialogRef);
+  protected readonly dialogRef = inject<MatDialogRef<AddCategoryDialog, Category>>(MatDialogRef);
 
   /** The kind of the pane whose *Add* button opened the dialog. */
   protected readonly kind = inject<CategoryKind>(MAT_DIALOG_DATA);

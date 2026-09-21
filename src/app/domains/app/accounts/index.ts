@@ -4,9 +4,6 @@
 // barrel export would defeat their code-splitting.
 export { ACCOUNT_NAME_MAX, ACCOUNT_TYPES } from './data/account';
 export type { Account, AccountCriteria, AccountType, NewAccount } from './data/account';
-export {
-  AccountDeleteBlockedError,
-  AccountModifiedError,
-} from './data/account-errors';
+export { AccountDeleteBlockedError, AccountModifiedError } from './data/account-errors';
 export type { DeleteBlockReason } from './data/account-errors';
 export { AccountsService } from './data/accounts.service';

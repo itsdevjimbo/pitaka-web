@@ -42,23 +42,17 @@ describe('TagsList', () => {
       fixture,
       root,
       text: () => root().textContent ?? '',
-      addInput: () =>
-        root().querySelector<HTMLInputElement>('input[aria-label="Add a tag"]')!,
-      searchInput: () =>
-        root().querySelector<HTMLInputElement>('input[type="search"]'),
-      countText: () =>
-        root().querySelector('span.text-xs')?.textContent?.trim() ?? '',
+      addInput: () => root().querySelector<HTMLInputElement>('input[aria-label="Add a tag"]')!,
+      searchInput: () => root().querySelector<HTMLInputElement>('input[type="search"]'),
+      countText: () => root().querySelector('span.text-xs')?.textContent?.trim() ?? '',
       rows: () => Array.from(root().querySelectorAll('ul > li')),
       rowNames: () =>
         Array.from(root().querySelectorAll('ul > li')).map((li) =>
-          li.querySelector('span.truncate')?.textContent?.trim()
+          li.querySelector('span.truncate')?.textContent?.trim(),
         ),
       menuTrigger: (name: string) =>
-        root().querySelector<HTMLButtonElement>(
-          `button[aria-label="Actions for ${name}"]`
-        ),
-      editInput: () =>
-        root().querySelector<HTMLInputElement>('input[aria-label^="Rename "]'),
+        root().querySelector<HTMLButtonElement>(`button[aria-label="Actions for ${name}"]`),
+      editInput: () => root().querySelector<HTMLInputElement>('input[aria-label^="Rename "]'),
     };
   }
 
@@ -72,7 +66,7 @@ describe('TagsList', () => {
 
   function overlayButton(label: string): HTMLButtonElement {
     const button = Array.from(overlay().querySelectorAll('button')).find((el) =>
-      (el.textContent ?? '').includes(label)
+      (el.textContent ?? '').includes(label),
     );
     if (!button) {
       throw new Error(`No overlay button labelled "${label}"`);
@@ -80,10 +74,7 @@ describe('TagsList', () => {
     return button;
   }
 
-  async function openRowMenu(
-    fixture: ComponentFixture<TagsList>,
-    trigger: HTMLButtonElement
-  ) {
+  async function openRowMenu(fixture: ComponentFixture<TagsList>, trigger: HTMLButtonElement) {
     trigger.click();
     await settle(fixture);
   }
@@ -109,9 +100,7 @@ describe('TagsList', () => {
   });
 
   it('withholds the search and count at zero but keeps the add field, focused', async () => {
-    const { fixture, searchInput, countText, addInput, text } = setup(() =>
-      of([])
-    );
+    const { fixture, searchInput, countText, addInput, text } = setup(() => of([]));
     await settle(fixture);
 
     expect(searchInput()).toBeNull();
@@ -151,13 +140,9 @@ describe('TagsList', () => {
     let attempt = 0;
     const readAll = vi.fn(() => {
       attempt += 1;
-      return attempt === 1
-        ? throwError(() => new ApiError('Could not reach the server.', 0))
-        : of(EVERYTHING);
+      return attempt === 1 ? throwError(() => new ApiError('Could not reach the server.', 0)) : of(EVERYTHING);
     });
-    const { fixture, text, root } = setup(
-      readAll as unknown as TagsService['readAll']
-    );
+    const { fixture, text, root } = setup(readAll as unknown as TagsService['readAll']);
 
     expect(text()).toContain('Could not reach the server.');
     expect(root().querySelector('input[aria-label="Add a tag"]')).toBeNull();
@@ -179,10 +164,9 @@ describe('TagsList', () => {
         attempt += 1;
         return attempt === 1 ? of(EVERYTHING) : of([...EVERYTHING, tag(9, 'errands')]);
       });
-      const { fixture, addInput, rowNames } = setup(
-        readAll as unknown as TagsService['readAll'],
-        { create: create as unknown as TagsService['create'] }
-      );
+      const { fixture, addInput, rowNames } = setup(readAll as unknown as TagsService['readAll'], {
+        create: create as unknown as TagsService['create'],
+      });
 
       const input = addInput();
       type(input, '  errands  ');
@@ -210,9 +194,7 @@ describe('TagsList', () => {
     });
 
     it('shows a duplicate-name 409 under the field, keeping the typed text', async () => {
-      const create = vi.fn(() =>
-        throwError(() => new ApiError('taken', 409, { name: ['taken'] }))
-      );
+      const create = vi.fn(() => throwError(() => new ApiError('taken', 409, { name: ['taken'] })));
       const { fixture, addInput, text } = setup(() => of(EVERYTHING), {
         create: create as unknown as TagsService['create'],
       });
@@ -228,10 +210,7 @@ describe('TagsList', () => {
   });
 
   describe('rename, in place on the row', () => {
-    function startEditing(
-      fixture: ComponentFixture<TagsList>,
-      trigger: HTMLButtonElement
-    ) {
+    function startEditing(fixture: ComponentFixture<TagsList>, trigger: HTMLButtonElement) {
       return openRowMenu(fixture, trigger).then(() => {
         overlayButton('Rename').click();
         return settle(fixture);
@@ -254,10 +233,9 @@ describe('TagsList', () => {
         attempt += 1;
         return attempt === 1 ? of(EVERYTHING) : of([tag(1, 'food'), HOLIDAY, WORK]);
       });
-      const { fixture, menuTrigger, editInput, rowNames } = setup(
-        readAll as unknown as TagsService['readAll'],
-        { rename: rename as unknown as TagsService['rename'] }
-      );
+      const { fixture, menuTrigger, editInput, rowNames } = setup(readAll as unknown as TagsService['readAll'], {
+        rename: rename as unknown as TagsService['rename'],
+      });
 
       await startEditing(fixture, menuTrigger('groceries')!);
       const input = editInput()!;
@@ -334,13 +312,10 @@ describe('TagsList', () => {
     });
 
     it('shows a duplicate-name 409 under the rename field, keeping the typed text', async () => {
-      const rename = vi.fn(() =>
-        throwError(() => new ApiError('taken', 409, { name: ['taken'] }))
-      );
-      const { fixture, menuTrigger, editInput, text } = setup(
-        () => of(EVERYTHING),
-        { rename: rename as unknown as TagsService['rename'] }
-      );
+      const rename = vi.fn(() => throwError(() => new ApiError('taken', 409, { name: ['taken'] })));
+      const { fixture, menuTrigger, editInput, text } = setup(() => of(EVERYTHING), {
+        rename: rename as unknown as TagsService['rename'],
+      });
 
       await startEditing(fixture, menuTrigger('groceries')!);
       const input = editInput()!;
@@ -353,18 +328,15 @@ describe('TagsList', () => {
     });
 
     it('folds a 403 into one staleness line, re-reads, and offers no retry', async () => {
-      const rename = vi.fn(() =>
-        throwError(() => new ApiError('Forbidden', 403))
-      );
+      const rename = vi.fn(() => throwError(() => new ApiError('Forbidden', 403)));
       let attempt = 0;
       const readAll = vi.fn(() => {
         attempt += 1;
         return of(attempt === 1 ? EVERYTHING : [HOLIDAY, WORK]);
       });
-      const { fixture, menuTrigger, editInput, text } = setup(
-        readAll as unknown as TagsService['readAll'],
-        { rename: rename as unknown as TagsService['rename'] }
-      );
+      const { fixture, menuTrigger, editInput, text } = setup(readAll as unknown as TagsService['readAll'], {
+        rename: rename as unknown as TagsService['rename'],
+      });
 
       await startEditing(fixture, menuTrigger('groceries')!);
       type(editInput()!, 'food');
@@ -388,14 +360,12 @@ describe('TagsList', () => {
       overlayButton('Delete').click();
       await settle(fixture);
 
-      expect(text()).toContain(
-        'It will be removed from every transaction carrying it. This can’t be undone.'
-      );
+      expect(text()).toContain('It will be removed from every transaction carrying it. This can’t be undone.');
       expect(remove).not.toHaveBeenCalled();
 
       const strip = root().querySelector('[role="alertdialog"]')!;
       const confirm = Array.from(strip.querySelectorAll('button')).find(
-        (b) => (b.textContent ?? '').trim() === 'Delete'
+        (b) => (b.textContent ?? '').trim() === 'Delete',
       )!;
       expect(confirm.className).toContain('red');
       confirm.click();
@@ -410,10 +380,9 @@ describe('TagsList', () => {
         attempt += 1;
         return of(attempt === 1 ? EVERYTHING : [HOLIDAY, WORK]);
       });
-      const { fixture, menuTrigger, root, text } = setup(
-        readAll as unknown as TagsService['readAll'],
-        { remove: remove as unknown as TagsService['remove'] }
-      );
+      const { fixture, menuTrigger, root, text } = setup(readAll as unknown as TagsService['readAll'], {
+        remove: remove as unknown as TagsService['remove'],
+      });
 
       await openRowMenu(fixture, menuTrigger('groceries')!);
       overlayButton('Delete').click();
@@ -435,17 +404,14 @@ describe('TagsList', () => {
         attempt += 1;
         return of(attempt === 1 ? EVERYTHING : [HOLIDAY, WORK]);
       });
-      const { fixture, menuTrigger, root, text } = setup(
-        readAll as unknown as TagsService['readAll'],
-        { remove: remove as unknown as TagsService['remove'] }
-      );
+      const { fixture, menuTrigger, root, text } = setup(readAll as unknown as TagsService['readAll'], {
+        remove: remove as unknown as TagsService['remove'],
+      });
 
       await openRowMenu(fixture, menuTrigger('groceries')!);
       overlayButton('Delete').click();
       await settle(fixture);
-      Array.from(
-        root().querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')
-      )
+      Array.from(root().querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'))
         .find((b) => (b.textContent ?? '').trim() === 'Delete')!
         .click();
       await settle(fixture);
@@ -460,14 +426,11 @@ describe('TagsList', () => {
       let attempt = 0;
       const readAll = vi.fn(() => {
         attempt += 1;
-        return attempt === 1
-          ? of(EVERYTHING)
-          : throwError(() => new ApiError('Server error', 500));
+        return attempt === 1 ? of(EVERYTHING) : throwError(() => new ApiError('Server error', 500));
       });
-      const { fixture, menuTrigger, root, text } = setup(
-        readAll as unknown as TagsService['readAll'],
-        { remove: remove as unknown as TagsService['remove'] }
-      );
+      const { fixture, menuTrigger, root, text } = setup(readAll as unknown as TagsService['readAll'], {
+        remove: remove as unknown as TagsService['remove'],
+      });
 
       await openRowMenu(fixture, menuTrigger('groceries')!);
       overlayButton('Delete').click();

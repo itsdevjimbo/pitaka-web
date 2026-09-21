@@ -2,13 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
-import {
-  AdjustBudget,
-  Budget,
-  BudgetWithSpend,
-  NewBudget,
-  Period,
-} from './budget';
+import { AdjustBudget, Budget, BudgetWithSpend, NewBudget, Period } from './budget';
 import { toCalendarDate, toDateOnly } from './budget-calendar';
 
 /**
@@ -108,7 +102,7 @@ export class BudgetsService {
       })
       .pipe(
         map(toBudget),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
+        catchError((error: unknown) => throwError(() => asNameConflict(error))),
       );
   }
 
@@ -142,7 +136,7 @@ export class BudgetsService {
       })
       .pipe(
         map(toBudget),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
+        catchError((error: unknown) => throwError(() => asNameConflict(error))),
       );
   }
 
@@ -154,9 +148,7 @@ export class BudgetsService {
    * there is no block state to word; a failure is a plain normalised `ApiError`.
    */
   remove(id: number): Observable<void> {
-    return this.http
-      .delete<void>(`${this.baseUrl}/api/budgets/${id}`)
-      .pipe(map(() => undefined));
+    return this.http.delete<void>(`${this.baseUrl}/api/budgets/${id}`).pipe(map(() => undefined));
   }
 }
 
@@ -182,8 +174,7 @@ function toBudget(resource: BudgetResource): Budget {
     amountLimit: resource.amountLimit,
     period: PERIOD[resource.period],
     startDate: toCalendarDate(resource.startDate),
-    endDate:
-      resource.endDate === null ? null : toCalendarDate(resource.endDate),
+    endDate: resource.endDate === null ? null : toCalendarDate(resource.endDate),
     categoryId: resource.categoryId,
   };
 }

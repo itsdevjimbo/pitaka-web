@@ -12,8 +12,7 @@ import { passwordRules } from '@/app/domains/auth/password-rules';
 import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation';
 
 /** The banner line for a registration that failed before it could be attributed. */
-const COULD_NOT_REGISTER =
-  'Something went wrong creating your profile. Please try again.';
+const COULD_NOT_REGISTER = 'Something went wrong creating your profile. Please try again.';
 
 @Component({
   selector: 'auth-sign-up',
@@ -89,7 +88,7 @@ export default class AuthSignUp {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_REGISTER
+            COULD_NOT_REGISTER,
           );
           if (boundErrors.length > 0) {
             this.signUpForm().markAsTouched();

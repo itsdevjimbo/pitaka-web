@@ -1,11 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
-import {
-  AuthService,
-  EmailChangeAddressTakenError,
-  EmailChangeLinkInvalidError,
-} from '@/app/core/auth';
+import { AuthService, EmailChangeAddressTakenError, EmailChangeLinkInvalidError } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import AuthConfirmEmailChange from './confirm-email-change';
@@ -14,7 +10,7 @@ describe('AuthConfirmEmailChange', () => {
   function setup(
     params: Record<string, string>,
     confirmEmailChange: AuthService['confirmEmailChange'] = () => of(undefined),
-    session: Partial<Session> = {}
+    session: Partial<Session> = {},
   ) {
     const navigate = vi.fn(() => Promise.resolve(true));
     const navigateByUrl = vi.fn(() => Promise.resolve(true));
@@ -52,21 +48,18 @@ describe('AuthConfirmEmailChange', () => {
   });
 
   it('shows the truthful invalid-link recovery', async () => {
-    const { fixture } = setup(
-      { userId: '7', token: 'a-token' },
-      () => throwError(() => new EmailChangeLinkInvalidError())
+    const { fixture } = setup({ userId: '7', token: 'a-token' }, () =>
+      throwError(() => new EmailChangeLinkInvalidError()),
     );
     (fixture.nativeElement.querySelector('button:last-child') as HTMLButtonElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('link is no longer valid');
-
   });
 
   it('shows the distinct address-taken recovery', async () => {
-    const { fixture } = setup(
-      { userId: '7', token: 'a-token' },
-      () => throwError(() => new EmailChangeAddressTakenError())
+    const { fixture } = setup({ userId: '7', token: 'a-token' }, () =>
+      throwError(() => new EmailChangeAddressTakenError()),
     );
     (fixture.nativeElement.querySelector('button:last-child') as HTMLButtonElement).click();
     await fixture.whenStable();

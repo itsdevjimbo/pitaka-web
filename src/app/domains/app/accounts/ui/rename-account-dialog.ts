@@ -25,8 +25,7 @@ import { RenameAccountForm } from './rename-account-form';
   `,
 })
 export class RenameAccountDialog {
-  protected readonly dialogRef =
-    inject<MatDialogRef<RenameAccountDialog, Account>>(MatDialogRef);
+  protected readonly dialogRef = inject<MatDialogRef<RenameAccountDialog, Account>>(MatDialogRef);
 
   /** The Account being renamed, handed in when the dialog was opened. */
   protected readonly account = inject<Account>(MAT_DIALOG_DATA);

@@ -20,7 +20,7 @@ export type DeleteBlockReason =
 export class AccountDeleteBlockedError extends Error {
   constructor(
     readonly reason: DeleteBlockReason,
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = 'AccountDeleteBlockedError';

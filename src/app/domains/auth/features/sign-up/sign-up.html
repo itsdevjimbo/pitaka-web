@@ -1,7 +1,5 @@
 <div class="flex flex-auto">
-  <div
-    class="flex flex-auto items-center justify-center bg-white p-4 sm:p-12 dark:bg-neutral-950"
-  >
+  <div class="flex flex-auto items-center justify-center bg-white p-4 sm:p-12 dark:bg-neutral-950">
     <div class="flex w-full max-w-80 flex-col sm:min-w-80">
       <!-- Logo -->
       <img
@@ -13,12 +11,11 @@
       @if (registeredEmail(); as email) {
         <!-- Check-your-inbox state. No navigation, no route: the address
              stays here for the resend control, never the URL or history. -->
-        <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">
-          Check your inbox
-        </div>
+        <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">Check your inbox</div>
         <p class="mt-4 font-medium text-neutral-500">
-          We sent a confirmation link to <span class="text-neutral-900 dark:text-neutral-100">{{ email }}</span>. The
-          link is short-lived, so confirm soon.
+          We sent a confirmation link to
+          <span class="text-neutral-900 dark:text-neutral-100">{{ email }}</span>
+          . The link is short-lived, so confirm soon.
         </p>
 
         <auth-resend-confirmation
@@ -37,9 +34,7 @@
         </div>
       } @else {
         <!-- Title -->
-        <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">
-          Sign up
-        </div>
+        <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">Sign up</div>
         <div class="mt-0.5 flex items-baseline font-medium">
           <div class="text-neutral-500">Already have an account?</div>
           <a
@@ -92,9 +87,7 @@
                 [formField]="signUpForm.email"
               />
               <mat-error>
-                @if (
-                  signUpForm.email().touched() && signUpForm.email().invalid()
-                ) {
+                @if (signUpForm.email().touched() && signUpForm.email().invalid()) {
                   @for (error of signUpForm.email().errors(); track error) {
                     {{ error.message }}
                   }
@@ -119,9 +112,7 @@
                 matIconButton
                 type="button"
                 (click)="
-                  passwordField.type === 'password'
-                    ? (passwordField.type = 'text')
-                    : (passwordField.type = 'password')
+                  passwordField.type === 'password' ? (passwordField.type = 'text') : (passwordField.type = 'password')
                 "
                 matSuffix
               >
@@ -139,10 +130,7 @@
                 }
               </button>
               <mat-error>
-                @if (
-                  signUpForm.password().touched() &&
-                  signUpForm.password().invalid()
-                ) {
+                @if (signUpForm.password().touched() && signUpForm.password().invalid()) {
                   @for (error of signUpForm.password().errors(); track error) {
                     {{ error.message }}
                   }

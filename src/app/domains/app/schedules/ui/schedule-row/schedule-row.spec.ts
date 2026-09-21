@@ -57,7 +57,7 @@ describe('ScheduleRow', () => {
       schedule: { ...SCHEDULE, id: 12, generatedTransactionCount: 0 },
     });
     const link = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>(
-      'a[aria-label="View generated Transactions for Rent"]'
+      'a[aria-label="View generated Transactions for Rent"]',
     );
 
     expect(link).not.toBeNull();

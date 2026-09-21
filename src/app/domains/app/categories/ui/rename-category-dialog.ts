@@ -26,8 +26,7 @@ import { RenameCategoryForm } from './rename-category-form';
   `,
 })
 export class RenameCategoryDialog {
-  protected readonly dialogRef =
-    inject<MatDialogRef<RenameCategoryDialog, Category>>(MatDialogRef);
+  protected readonly dialogRef = inject<MatDialogRef<RenameCategoryDialog, Category>>(MatDialogRef);
 
   /** The Category being renamed, handed in when the dialog was opened. */
   protected readonly category = inject<Category>(MAT_DIALOG_DATA);

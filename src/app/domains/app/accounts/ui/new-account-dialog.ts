@@ -24,6 +24,5 @@ import { NewAccountForm } from './new-account-form';
   `,
 })
 export class NewAccountDialog {
-  protected readonly dialogRef =
-    inject<MatDialogRef<NewAccountDialog, Account>>(MatDialogRef);
+  protected readonly dialogRef = inject<MatDialogRef<NewAccountDialog, Account>>(MatDialogRef);
 }

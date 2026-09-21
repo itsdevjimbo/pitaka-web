@@ -25,13 +25,7 @@ import { ResendConfirmation } from './resend-confirmation';
 @Component({
   selector: 'auth-dead-link',
   templateUrl: './dead-link.html',
-  imports: [
-    MatFormFieldModule,
-    MatInputModule,
-    FormField,
-    RequestResetLink,
-    ResendConfirmation,
-  ],
+  imports: [MatFormFieldModule, MatInputModule, FormField, RequestResetLink, ResendConfirmation],
 })
 export class DeadLink {
   /** Which link this is standing in for, and so which endpoint the fix spends. */

@@ -10,19 +10,44 @@ import { GoalsService } from '../../data/goals.service';
 import GoalList from './goal-list';
 
 const DENTAL: Goal = {
-  id: 1, name: 'Dental work', targetAmount: 30000, targetDate: new Date(2026, 2, 1), status: 'Active', currentAmount: 18000,
+  id: 1,
+  name: 'Dental work',
+  targetAmount: 30000,
+  targetDate: new Date(2026, 2, 1),
+  status: 'Active',
+  currentAmount: 18000,
 };
 const HOLIDAY: Goal = {
-  id: 2, name: 'Holiday', targetAmount: 10000, targetDate: null, status: 'Active', currentAmount: 12000,
+  id: 2,
+  name: 'Holiday',
+  targetAmount: 10000,
+  targetDate: null,
+  status: 'Active',
+  currentAmount: 12000,
 };
 const EMERGENCY: Goal = {
-  id: 3, name: 'Emergency fund', targetAmount: 20000, targetDate: new Date(2026, 8, 13), status: 'Active', currentAmount: 20000,
+  id: 3,
+  name: 'Emergency fund',
+  targetAmount: 20000,
+  targetDate: new Date(2026, 8, 13),
+  status: 'Active',
+  currentAmount: 20000,
 };
 const CAR: Goal = {
-  id: 4, name: 'Car', targetAmount: 50000, targetDate: new Date(2025, 11, 1), status: 'Completed', currentAmount: 50000,
+  id: 4,
+  name: 'Car',
+  targetAmount: 50000,
+  targetDate: new Date(2025, 11, 1),
+  status: 'Completed',
+  currentAmount: 50000,
 };
 const CAMERA: Goal = {
-  id: 5, name: 'Camera', targetAmount: 40000, targetDate: new Date(2025, 11, 1), status: 'Abandoned', currentAmount: 5000,
+  id: 5,
+  name: 'Camera',
+  targetAmount: 40000,
+  targetDate: new Date(2025, 11, 1),
+  status: 'Abandoned',
+  currentAmount: 5000,
 };
 
 describe('GoalList', () => {

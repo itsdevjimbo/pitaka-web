@@ -43,7 +43,7 @@ describe('transaction criteria <-> query params', () => {
           description: 'coffee',
           from: day(2026, 7, 1),
           to: day(2026, 7, 31),
-        })
+        }),
       ).toEqual({
         direction: 'expense',
         account: '3',
@@ -94,9 +94,7 @@ describe('transaction criteria <-> query params', () => {
     });
 
     it('serialises an inverted range to neither end, matching the parser', () => {
-      expect(
-        criteriaToQueryParams({ from: day(2026, 7, 31), to: day(2026, 7, 1) })
-      ).toEqual({});
+      expect(criteriaToQueryParams({ from: day(2026, 7, 31), to: day(2026, 7, 1) })).toEqual({});
     });
 
     it('keeps a single end', () => {
@@ -115,7 +113,7 @@ describe('transaction criteria <-> query params', () => {
         criteriaToQueryParams({
           description: '   ',
           direction: 'sideways' as never,
-        })
+        }),
       ).toEqual({});
       expect(criteriaToQueryParams({ description: '  coffee  ' })).toEqual({
         note: 'coffee',
@@ -142,9 +140,7 @@ describe('transaction criteria <-> query params', () => {
       expect(parse({})).toEqual({});
       expect(parse({ account: '3' })).toEqual({ accountId: 3 });
       expect(parse({ schedule: '12' })).toEqual({ scheduleId: 12 });
-      expect(
-        scheduleNameFromQueryParams(convertToParamMap({ scheduleName: ' Monthly rent ' }))
-      ).toBe('Monthly rent');
+      expect(scheduleNameFromQueryParams(convertToParamMap({ scheduleName: ' Monthly rent ' }))).toBe('Monthly rent');
     });
 
     it('reads `to` as the inclusive calendar day the URL carries, at local midnight', () => {
@@ -190,9 +186,7 @@ describe('transaction criteria <-> query params', () => {
       });
 
       it('keeps the readable axes when another axis is junk', () => {
-        expect(
-          parse({ direction: 'banana', account: '3', from: 'nope' })
-        ).toEqual({ accountId: 3 });
+        expect(parse({ direction: 'banana', account: '3', from: 'nope' })).toEqual({ accountId: 3 });
       });
     });
 
@@ -228,26 +222,15 @@ describe('transaction criteria <-> query params', () => {
   describe('sameCriteria', () => {
     it('is true for two criteria that narrow the list identically', () => {
       expect(sameCriteria({}, {})).toBe(true);
-      expect(
-        sameCriteria(
-          { direction: 'expense', accountId: 3 },
-          { accountId: 3, direction: 'expense' }
-        )
-      ).toBe(true);
+      expect(sameCriteria({ direction: 'expense', accountId: 3 }, { accountId: 3, direction: 'expense' })).toBe(true);
       // Same calendar day, different `Date` object.
-      expect(
-        sameCriteria({ from: day(2026, 7, 1) }, { from: day(2026, 7, 1) })
-      ).toBe(true);
+      expect(sameCriteria({ from: day(2026, 7, 1) }, { from: day(2026, 7, 1) })).toBe(true);
     });
 
     it('is false when any axis differs', () => {
       expect(sameCriteria({}, { direction: 'income' })).toBe(false);
-      expect(
-        sameCriteria({ accountId: 3 }, { accountId: 4 })
-      ).toBe(false);
-      expect(
-        sameCriteria({ from: day(2026, 7, 1) }, { from: day(2026, 7, 2) })
-      ).toBe(false);
+      expect(sameCriteria({ accountId: 3 }, { accountId: 4 })).toBe(false);
+      expect(sameCriteria({ from: day(2026, 7, 1) }, { from: day(2026, 7, 2) })).toBe(false);
     });
   });
 });

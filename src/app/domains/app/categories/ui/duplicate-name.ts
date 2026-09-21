@@ -23,7 +23,7 @@ export function duplicateCategoryNameMessage(name: string): string {
 export function duplicateNameBinding(
   error: unknown,
   nameControl: FieldTree<string>,
-  typedName: string
+  typedName: string,
 ): BoundServerError[] | null {
   if (error instanceof ApiError && error.status === 409) {
     return [

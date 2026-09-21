@@ -16,10 +16,7 @@
  * A string that already carries a designator — `Z` or `±HH:MM` — is honoured as
  * written on either path: nothing is appended and nothing is stripped.
  */
-export function parseTransactionDate(
-  wireValue: string,
-  generated: boolean
-): Date {
+export function parseTransactionDate(wireValue: string, generated: boolean): Date {
   const hasZoneDesignator = /(?:Z|[+-]\d{2}:?\d{2})$/.test(wireValue);
 
   if (hasZoneDesignator || generated) {

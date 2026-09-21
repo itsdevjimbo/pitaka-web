@@ -13,5 +13,4 @@ import { HttpContext, HttpContextToken } from '@angular/common/http';
 export const HANDLES_OWN_401 = new HttpContextToken<boolean>(() => false);
 
 /** An `HttpContext` marking the request as handling its own 401. */
-export const handlesOwn401 = (): HttpContext =>
-  new HttpContext().set(HANDLES_OWN_401, true);
+export const handlesOwn401 = (): HttpContext => new HttpContext().set(HANDLES_OWN_401, true);

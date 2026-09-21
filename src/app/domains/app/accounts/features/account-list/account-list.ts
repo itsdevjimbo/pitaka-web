@@ -13,27 +13,17 @@ import { ApiError } from '@/app/core/api';
 import { PesoPipe, sumPesos } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
 import { Account, AccountCriteria, ACCOUNT_TYPES } from '../../data/account';
-import {
-  criteriaFromQueryParams,
-  criteriaToQueryParams,
-  sameCriteria,
-} from '../../data/account-criteria-params';
-import {
-  AccountDeleteBlockedError,
-  AccountModifiedError,
-} from '../../data/account-errors';
+import { criteriaFromQueryParams, criteriaToQueryParams, sameCriteria } from '../../data/account-criteria-params';
+import { AccountDeleteBlockedError, AccountModifiedError } from '../../data/account-errors';
 import { AccountsService } from '../../data/accounts.service';
 import { NewAccountDialog } from '../../ui/new-account-dialog';
 import { RenameAccountDialog } from '../../ui/rename-account-dialog';
 
-const LOAD_FAILED =
-  'Something went wrong loading your accounts. Please try again.';
-const FILTER_FAILED =
-  'Something went wrong applying those filters. Please try again.';
+const LOAD_FAILED = 'Something went wrong loading your accounts. Please try again.';
+const FILTER_FAILED = 'Something went wrong applying those filters. Please try again.';
 const ACTION_FAILED = 'Something went wrong. Please try again.';
 const DELETE_BLOCK_HINT: Record<AccountDeleteBlockedError['reason'], string> = {
-  'transaction-history':
-    'You can retire it instead — that keeps everything it has recorded.',
+  'transaction-history': 'You can retire it instead — that keeps everything it has recorded.',
   'goal-allocation':
     'This Account can’t be deleted while Contributions earmark money in it. Remove those Contributions or delete their Goals, then try again.',
 };
@@ -75,19 +65,13 @@ export default class AccountList {
   protected readonly filterError = signal<string | null>(null);
   protected readonly actionMessage = signal<string | null>(null);
   protected readonly ownsAccounts = signal<boolean | null>(null);
-  protected readonly criteria = signal<AccountCriteria>(
-    criteriaFromQueryParams(this.route.snapshot.queryParamMap)
-  );
-  protected readonly displayedCriteria = signal<AccountCriteria>(
-    this.criteria()
-  );
+  protected readonly criteria = signal<AccountCriteria>(criteriaFromQueryParams(this.route.snapshot.queryParamMap));
+  protected readonly displayedCriteria = signal<AccountCriteria>(this.criteria());
   protected readonly confirmingDeleteId = signal<number | null>(null);
   protected readonly busyId = signal<number | null>(null);
   protected readonly notice = signal<RowNoticeState | null>(null);
   protected readonly types = ACCOUNT_TYPES;
-  protected readonly total = computed(() =>
-    sumPesos((this.accounts() ?? []).map((account) => account.currentBalance))
-  );
+  protected readonly total = computed(() => sumPesos((this.accounts() ?? []).map((account) => account.currentBalance)));
   protected readonly totalLabel = computed(() => {
     const status =
       this.displayedCriteria().isActive === false
@@ -100,22 +84,17 @@ export default class AccountList {
   });
   protected readonly trueEmpty = computed(() => this.ownsAccounts() === false);
   protected readonly matchedNothing = computed(
-    () =>
-      this.ownsAccounts() === true &&
-      !this.filtering() &&
-      this.accounts()?.length === 0
+    () => this.ownsAccounts() === true && !this.filtering() && this.accounts()?.length === 0,
   );
   constructor() {
     this.destroyRef.onDestroy(() => this.readReset.complete());
-    this.route.queryParamMap
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((params) => {
-        const next = criteriaFromQueryParams(params);
-        if (!sameCriteria(next, this.criteria())) {
-          this.criteria.set(next);
-          if (this.ownsAccounts() === true) this.readCriteria(next);
-        }
-      });
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const next = criteriaFromQueryParams(params);
+      if (!sameCriteria(next, this.criteria())) {
+        this.criteria.set(next);
+        if (this.ownsAccounts() === true) this.readCriteria(next);
+      }
+    });
     this.load();
   }
   protected load(): void {
@@ -141,9 +120,7 @@ export default class AccountList {
           this.readCriteria(this.criteria(), true);
         },
         error: (error: unknown) => {
-          this.errorMessage.set(
-            error instanceof ApiError ? error.message : LOAD_FAILED
-          );
+          this.errorMessage.set(error instanceof ApiError ? error.message : LOAD_FAILED);
           this.loading.set(false);
         },
       });
@@ -177,13 +154,8 @@ export default class AccountList {
         },
         error: (error: unknown) => {
           if (initial && this.accounts() === null)
-            this.errorMessage.set(
-              error instanceof ApiError ? error.message : LOAD_FAILED
-            );
-          else
-            this.filterError.set(
-              error instanceof ApiError ? error.message : FILTER_FAILED
-            );
+            this.errorMessage.set(error instanceof ApiError ? error.message : LOAD_FAILED);
+          else this.filterError.set(error instanceof ApiError ? error.message : FILTER_FAILED);
           this.loading.set(false);
           this.filtering.set(false);
         },
@@ -201,26 +173,19 @@ export default class AccountList {
       });
   }
   protected openNewAccountDialog(): void {
-    this.onDialogResult(
-      this.dialog.open<NewAccountDialog, undefined, Account>(NewAccountDialog),
-      (created) => this.onCreated(created)
+    this.onDialogResult(this.dialog.open<NewAccountDialog, undefined, Account>(NewAccountDialog), (created) =>
+      this.onCreated(created),
     );
   }
   protected openRenameDialog(account: Account): void {
     this.notice.set(null);
     this.confirmingDeleteId.set(null);
     this.onDialogResult(
-      this.dialog.open<RenameAccountDialog, Account, Account>(
-        RenameAccountDialog,
-        { data: account }
-      ),
-      () => this.reconcile()
+      this.dialog.open<RenameAccountDialog, Account, Account>(RenameAccountDialog, { data: account }),
+      () => this.reconcile(),
     );
   }
-  private onDialogResult<R>(
-    ref: MatDialogRef<unknown, R>,
-    handle: (result: R) => void
-  ): void {
+  private onDialogResult<R>(ref: MatDialogRef<unknown, R>, handle: (result: R) => void): void {
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -232,8 +197,7 @@ export default class AccountList {
     this.ownsAccounts.set(true);
     const outsideCriteria = messageForOutsideCriteria(account, this.criteria());
     this.actionMessage.set(outsideCriteria);
-    if (outsideCriteria === null)
-      this.accounts.update((accounts) => [...(accounts ?? []), account]);
+    if (outsideCriteria === null) this.accounts.update((accounts) => [...(accounts ?? []), account]);
     this.reconcile();
   }
   protected toggleActive(account: Account): void {
@@ -245,7 +209,7 @@ export default class AccountList {
         message: messageFor(error),
         retry: () => this.toggleActive(account),
       }),
-      { ...account, isActive: !account.isActive }
+      { ...account, isActive: !account.isActive },
     );
   }
   protected askDelete(account: Account): void {
@@ -258,14 +222,14 @@ export default class AccountList {
   protected confirmDelete(account: Account): void {
     this.confirmingDeleteId.set(null);
     this.runRowWrite(account.id, this.service.remove(account.id), (error) =>
-      this.noticeForFailedDelete(account, error)
+      this.noticeForFailedDelete(account, error),
     );
   }
   private runRowWrite(
     id: number,
     write$: Observable<unknown>,
     noticeFor: (error: unknown) => RowNoticeState,
-    changed: Account | null = null
+    changed: Account | null = null,
   ): void {
     this.notice.set(null);
     this.actionMessage.set(null);
@@ -273,11 +237,7 @@ export default class AccountList {
     write$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.busyId.set(null);
-        this.actionMessage.set(
-          changed === null
-            ? null
-            : messageForOutsideCriteria(changed, this.criteria())
-        );
+        this.actionMessage.set(changed === null ? null : messageForOutsideCriteria(changed, this.criteria()));
         this.reconcile();
       },
       error: (error) => {
@@ -286,10 +246,7 @@ export default class AccountList {
       },
     });
   }
-  private noticeForFailedDelete(
-    account: Account,
-    error: unknown
-  ): RowNoticeState {
+  private noticeForFailedDelete(account: Account, error: unknown): RowNoticeState {
     if (error instanceof AccountDeleteBlockedError) {
       const notice: RowNoticeState = {
         id: account.id,
@@ -299,8 +256,7 @@ export default class AccountList {
             : `${error.message} ${DELETE_BLOCK_HINT[error.reason]}`,
       };
       if (error.reason === 'goal-allocation') notice.viewGoals = true;
-      if (error.reason === 'transaction-history')
-        notice.retire = () => this.toggleActive(account);
+      if (error.reason === 'transaction-history') notice.retire = () => this.toggleActive(account);
       return notice;
     }
     return {
@@ -314,14 +270,9 @@ export default class AccountList {
   }
 }
 function messageFor(error: unknown): string {
-  return error instanceof AccountModifiedError || error instanceof ApiError
-    ? error.message
-    : ACTION_FAILED;
+  return error instanceof AccountModifiedError || error instanceof ApiError ? error.message : ACTION_FAILED;
 }
-function messageForOutsideCriteria(
-  account: Account,
-  criteria: AccountCriteria
-): string | null {
+function messageForOutsideCriteria(account: Account, criteria: AccountCriteria): string | null {
   if (criteria.isActive !== undefined && account.isActive !== criteria.isActive)
     return `${account.name} is ${account.isActive ? 'active' : 'retired'}. Change the status filter to find it.`;
   if (criteria.type !== undefined && account.type !== criteria.type)

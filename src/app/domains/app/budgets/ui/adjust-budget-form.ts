@@ -1,22 +1,6 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  input,
-  linkedSignal,
-  output,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  form,
-  FormField,
-  maxLength,
-  min,
-  required,
-  submit,
-} from '@angular/forms/signals';
+import { form, FormField, maxLength, min, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -24,24 +8,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import {
-  CategoriesService,
-  Category,
-  keepSavedFilingCategory,
-} from '@/app/domains/app/categories';
-import {
-  AdjustBudget,
-  Budget,
-  BUDGET_AMOUNT_MIN,
-  BUDGET_NAME_MAX,
-  Period,
-  PERIODS,
-} from '../data/budget';
+import { CategoriesService, Category, keepSavedFilingCategory } from '@/app/domains/app/categories';
+import { AdjustBudget, Budget, BUDGET_AMOUNT_MIN, BUDGET_NAME_MAX, Period, PERIODS } from '../data/budget';
 import { BudgetsService } from '../data/budgets.service';
 
 /** The banner line for an adjust that failed before it could be attributed. */
-const COULD_NOT_ADJUST =
-  'Something went wrong adjusting your budget. Please try again.';
+const COULD_NOT_ADJUST = 'Something went wrong adjusting your budget. Please try again.';
 
 /** The value the Category picker uses for a Budget that watches all spending. */
 const ALL_SPENDING = null;
@@ -88,14 +60,7 @@ type AdjustBudgetModel = {
 @Component({
   selector: 'budgets-adjust-budget-form',
   templateUrl: './adjust-budget-form.html',
-  imports: [
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatButtonModule,
-    MatDatepickerModule,
-    FormField,
-  ],
+  imports: [MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatDatepickerModule, FormField],
 })
 export class AdjustBudgetForm {
   // Dependencies
@@ -139,15 +104,8 @@ export class AdjustBudgetForm {
    * badged `Retired` off its `isActive` flag in the template.
    */
   protected readonly categoryOptions = computed(() => {
-    const expenses = this.categories().filter(
-      (category) => category.kind === 'expense'
-    );
-    return keepSavedFilingCategory(
-      expenses,
-      this.allCategories(),
-      this.budget().categoryId,
-      this.model().categoryId
-    );
+    const expenses = this.categories().filter((category) => category.kind === 'expense');
+    return keepSavedFilingCategory(expenses, this.allCategories(), this.budget().categoryId, this.model().categoryId);
   });
 
   protected readonly model = linkedSignal<AdjustBudgetModel>(() => {
@@ -181,10 +139,7 @@ export class AdjustBudgetForm {
    * The form-level banner. Linked to the model so any edit clears it: a message
    * about values the person has since changed is worse than none.
    */
-  protected readonly errorMessage = linkedSignal<
-    AdjustBudgetModel,
-    string | null
-  >({
+  protected readonly errorMessage = linkedSignal<AdjustBudgetModel, string | null>({
     source: this.model,
     computation: () => null,
   });
@@ -209,8 +164,7 @@ export class AdjustBudgetForm {
         this.errorMessage.set(null);
 
         try {
-          const { name, amountLimit, period, startDate, categoryId } =
-            this.model();
+          const { name, amountLimit, period, startDate, categoryId } = this.model();
           const adjusted = await firstValueFrom(
             this.service.adjust(this.budget().id, {
               name: name.trim(),
@@ -221,7 +175,7 @@ export class AdjustBudgetForm {
               // Carried through untouched so the full-replacement PUT keeps it.
               endDate: this.budget().endDate,
               categoryId,
-            } satisfies AdjustBudget)
+            } satisfies AdjustBudget),
           );
           this.adjusted.emit(adjusted);
           return undefined;
@@ -229,7 +183,7 @@ export class AdjustBudgetForm {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_ADJUST
+            COULD_NOT_ADJUST,
           );
           if (boundErrors.length > 0) {
             this.budgetForm().markAsTouched();

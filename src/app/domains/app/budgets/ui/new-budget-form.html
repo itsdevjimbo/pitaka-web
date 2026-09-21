@@ -35,8 +35,9 @@
     <span
       matTextPrefix
       aria-hidden="true"
-      >₱&nbsp;</span
     >
+      ₱&nbsp;
+    </span>
     <input
       id="budget-amount"
       matInput
@@ -47,9 +48,7 @@
     />
     <mat-hint>The most you plan to spend in one period.</mat-hint>
     <mat-error>
-      @if (
-        budgetForm.amountLimit().touched() && budgetForm.amountLimit().invalid()
-      ) {
+      @if (budgetForm.amountLimit().touched() && budgetForm.amountLimit().invalid()) {
         @for (error of budgetForm.amountLimit().errors(); track error) {
           {{ error.message }}
         }
@@ -92,9 +91,7 @@
     <mat-datepicker #startPicker />
     <mat-hint>Cycles follow the calendar from here.</mat-hint>
     <mat-error>
-      @if (
-        budgetForm.startDate().touched() && budgetForm.startDate().invalid()
-      ) {
+      @if (budgetForm.startDate().touched() && budgetForm.startDate().invalid()) {
         @for (error of budgetForm.startDate().errors(); track error) {
           {{ error.message }}
         }

@@ -4,20 +4,24 @@
   role="img"
   [attr.aria-label]="progressLabel()"
 >
-  <span class="h-full bg-income" [style.width.%]="filledWidth()"></span>
+  <span
+    class="h-full bg-income"
+    [style.width.%]="filledWidth()"
+  ></span>
   @if (isOver()) {
-    <span class="h-full bg-transfer" [style.width.%]="overflowWidth()"></span>
+    <span
+      class="h-full bg-transfer"
+      [style.width.%]="overflowWidth()"
+    ></span>
   }
 </div>
 
-<div class="flex flex-wrap items-baseline justify-between gap-x-2 text-sm mt-2">
-  <span class="tabular-nums text-neutral-600 dark:text-neutral-300">
+<div class="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
+  <span class="text-neutral-600 tabular-nums dark:text-neutral-300">
     {{ goal().currentAmount | peso }} of {{ goal().targetAmount | peso }}
   </span>
   @if (isOver()) {
-    <span class="font-medium text-neutral-700 dark:text-neutral-200">
-      {{ gap() | peso }} over
-    </span>
+    <span class="font-medium text-neutral-700 dark:text-neutral-200">{{ gap() | peso }} over</span>
   } @else if (gap() === 0) {
     <span class="font-medium text-income">Target reached</span>
   } @else {

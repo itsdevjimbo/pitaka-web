@@ -1,9 +1,4 @@
-import {
-  reasonMessage,
-  reasonQueryParams,
-  safeReturnUrl,
-  signInRedirect,
-} from './sign-in-route';
+import { reasonMessage, reasonQueryParams, safeReturnUrl, signInRedirect } from './sign-in-route';
 
 describe('safeReturnUrl', () => {
   it('keeps an in-app path', () => {
@@ -38,9 +33,7 @@ describe('signInRedirect', () => {
   });
 
   it('adds the reason marker when asked', () => {
-    expect(
-      signInRedirect('/app/accounts/42', { reason: 'session-expired' })
-    ).toEqual([
+    expect(signInRedirect('/app/accounts/42', { reason: 'session-expired' })).toEqual([
       ['/auth/sign-in'],
       {
         queryParams: {
@@ -71,21 +64,15 @@ describe('reasonMessage', () => {
     const [, { queryParams }] = signInRedirect('/x', {
       reason: 'session-expired',
     });
-    expect(reasonMessage(queryParams?.['reason'] as string)).toBe(
-      'Your session has ended. Please sign in again.'
-    );
+    expect(reasonMessage(queryParams?.['reason'] as string)).toBe('Your session has ended. Please sign in again.');
   });
 
   it('gives the email-confirmed wording for its exact marker', () => {
-    expect(reasonMessage('email-confirmed')).toBe(
-      'Your email is confirmed. Sign in to continue.'
-    );
+    expect(reasonMessage('email-confirmed')).toBe('Your email is confirmed. Sign in to continue.');
   });
 
   it('gives the password-reset wording for its exact marker', () => {
-    expect(reasonMessage('password-reset')).toBe(
-      'Your password was changed. Sign in with your new password.'
-    );
+    expect(reasonMessage('password-reset')).toBe('Your password was changed. Sign in with your new password.');
   });
 
   it('yields nothing for anything else, including every flavour of absent', () => {

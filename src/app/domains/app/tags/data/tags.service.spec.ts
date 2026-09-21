@@ -1,8 +1,5 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
@@ -77,9 +74,7 @@ describe('TagsService', () => {
     it('readAll() returns the whole set as domain Tags', async () => {
       const result = firstValueFrom(service.readAll());
 
-      http
-        .expectOne(TAGS_URL)
-        .flush([resource(1, 'groceries'), resource(2, 'holiday')]);
+      http.expectOne(TAGS_URL).flush([resource(1, 'groceries'), resource(2, 'holiday')]);
 
       await expect(result).resolves.toEqual([
         { id: 1, name: 'groceries' },
@@ -103,9 +98,7 @@ describe('TagsService', () => {
       await warm;
 
       const cold = firstValueFrom(service.readAll());
-      http
-        .expectOne(TAGS_URL)
-        .flush([resource(1, 'groceries'), resource(2, 'holiday')]);
+      http.expectOne(TAGS_URL).flush([resource(1, 'groceries'), resource(2, 'holiday')]);
 
       await expect(cold).resolves.toEqual([
         { id: 1, name: 'groceries' },
@@ -127,9 +120,7 @@ describe('TagsService', () => {
     it('surfaces a server failure as a normalised ApiError', async () => {
       const result = firstValueFrom(service.all());
 
-      http
-        .expectOne(TAGS_URL)
-        .flush(null, { status: 500, statusText: 'Internal Server Error' });
+      http.expectOne(TAGS_URL).flush(null, { status: 500, statusText: 'Internal Server Error' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -137,9 +128,7 @@ describe('TagsService', () => {
 
     it('does not cache a failed fetch — the next read retries', async () => {
       const failed = firstValueFrom(service.all());
-      http
-        .expectOne(TAGS_URL)
-        .flush(null, { status: 503, statusText: 'Service Unavailable' });
+      http.expectOne(TAGS_URL).flush(null, { status: 503, statusText: 'Service Unavailable' });
       await failed.catch(() => undefined);
 
       const retried = firstValueFrom(service.all());
@@ -167,12 +156,10 @@ describe('TagsService', () => {
     it('re-files a duplicate-name 409 as a name field error', async () => {
       const result = firstValueFrom(service.create('groceries'));
 
-      http
-        .expectOne(TAGS_URL)
-        .flush(problem('You already have a tag with this name.'), {
-          status: 409,
-          statusText: 'Conflict',
-        });
+      http.expectOne(TAGS_URL).flush(problem('You already have a tag with this name.'), {
+        status: 409,
+        statusText: 'Conflict',
+      });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -191,7 +178,7 @@ describe('TagsService', () => {
           status: 400,
           errors: { Name: ['The Name field is required.'] },
         },
-        { status: 400, statusText: 'Bad Request' }
+        { status: 400, statusText: 'Bad Request' },
       );
 
       const error = await result.catch((e: unknown) => e);
@@ -216,12 +203,10 @@ describe('TagsService', () => {
     it('re-files a duplicate-name 409 as a name field error', async () => {
       const result = firstValueFrom(service.rename(7, 'groceries'));
 
-      http
-        .expectOne(`${TAGS_URL}/7`)
-        .flush(problem('You already have a tag with this name.'), {
-          status: 409,
-          statusText: 'Conflict',
-        });
+      http.expectOne(`${TAGS_URL}/7`).flush(problem('You already have a tag with this name.'), {
+        status: 409,
+        statusText: 'Conflict',
+      });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -234,9 +219,7 @@ describe('TagsService', () => {
     it('passes a 403 on a Tag owned by someone else straight through, distinguishable by status', async () => {
       const result = firstValueFrom(service.rename(7, 'vacation'));
 
-      http
-        .expectOne(`${TAGS_URL}/7`)
-        .flush(null, { status: 403, statusText: 'Forbidden' });
+      http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 403, statusText: 'Forbidden' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -247,9 +230,7 @@ describe('TagsService', () => {
     it('passes a 404 on an unknown id straight through, distinguishable by status', async () => {
       const result = firstValueFrom(service.rename(99, 'vacation'));
 
-      http
-        .expectOne(`${TAGS_URL}/99`)
-        .flush(null, { status: 404, statusText: 'Not Found' });
+      http.expectOne(`${TAGS_URL}/99`).flush(null, { status: 404, statusText: 'Not Found' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -272,9 +253,7 @@ describe('TagsService', () => {
     it('has no in-use 409 to catch — a failure passes through as a plain ApiError', async () => {
       const result = firstValueFrom(service.remove(7));
 
-      http
-        .expectOne(`${TAGS_URL}/7`)
-        .flush(null, { status: 500, statusText: 'Internal Server Error' });
+      http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 500, statusText: 'Internal Server Error' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -283,20 +262,12 @@ describe('TagsService', () => {
 
     it('passes a 403 and a 404 straight through, distinguishable by status', async () => {
       const forbidden = firstValueFrom(service.remove(7));
-      http
-        .expectOne(`${TAGS_URL}/7`)
-        .flush(null, { status: 403, statusText: 'Forbidden' });
-      expect(
-        ((await forbidden.catch((e: unknown) => e)) as ApiError).status
-      ).toBe(403);
+      http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 403, statusText: 'Forbidden' });
+      expect(((await forbidden.catch((e: unknown) => e)) as ApiError).status).toBe(403);
 
       const missing = firstValueFrom(service.remove(99));
-      http
-        .expectOne(`${TAGS_URL}/99`)
-        .flush(null, { status: 404, statusText: 'Not Found' });
-      expect(((await missing.catch((e: unknown) => e)) as ApiError).status).toBe(
-        404
-      );
+      http.expectOne(`${TAGS_URL}/99`).flush(null, { status: 404, statusText: 'Not Found' });
+      expect(((await missing.catch((e: unknown) => e)) as ApiError).status).toBe(404);
     });
   });
 
@@ -321,9 +292,7 @@ describe('TagsService', () => {
       await warmCache();
 
       const created = firstValueFrom(service.create('holiday'));
-      http
-        .expectOne(TAGS_URL)
-        .flush(resource(7, 'holiday'), { status: 201, statusText: 'Created' });
+      http.expectOne(TAGS_URL).flush(resource(7, 'holiday'), { status: 201, statusText: 'Created' });
       await created;
 
       await expectReadRefetches();
@@ -343,9 +312,7 @@ describe('TagsService', () => {
       await warmCache();
 
       const removed = firstValueFrom(service.remove(1));
-      http
-        .expectOne(`${TAGS_URL}/1`)
-        .flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne(`${TAGS_URL}/1`).flush(null, { status: 204, statusText: 'No Content' });
       await removed;
 
       await expectReadRefetches();
@@ -355,12 +322,10 @@ describe('TagsService', () => {
       await warmCache();
 
       const failed = firstValueFrom(service.create('groceries'));
-      http
-        .expectOne(TAGS_URL)
-        .flush(problem('You already have a tag with this name.'), {
-          status: 409,
-          statusText: 'Conflict',
-        });
+      http.expectOne(TAGS_URL).flush(problem('You already have a tag with this name.'), {
+        status: 409,
+        statusText: 'Conflict',
+      });
       await failed.catch(() => undefined);
 
       await firstValueFrom(service.all());

@@ -18,11 +18,7 @@ import { User } from '@/app/domains/app/layout/ui/user';
         alt="Pitaka logo"
       />
 
-      <div
-        class="text-on-surface text-lg leading-none font-bold tracking-wider"
-      >
-        Pitaka
-      </div>
+      <div class="text-on-surface text-lg leading-none font-bold tracking-wider">Pitaka</div>
     </div>
 
     <!-- Navigation -->

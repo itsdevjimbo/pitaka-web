@@ -58,10 +58,7 @@
     />
     <mat-hint>In pesos. Zero is fine — you can fund it later.</mat-hint>
     <mat-error>
-      @if (
-        accountForm.initialBalance().touched() &&
-        accountForm.initialBalance().invalid()
-      ) {
+      @if (accountForm.initialBalance().touched() && accountForm.initialBalance().invalid()) {
         @for (error of accountForm.initialBalance().errors(); track error) {
           {{ error.message }}
         }

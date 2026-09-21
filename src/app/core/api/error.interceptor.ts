@@ -10,8 +10,6 @@ import { normalizeHttpError } from './normalize-error';
 export const errorInterceptor: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
     catchError((error: unknown) =>
-      throwError(() =>
-        error instanceof HttpErrorResponse ? normalizeHttpError(error) : error
-      )
-    )
+      throwError(() => (error instanceof HttpErrorResponse ? normalizeHttpError(error) : error)),
+    ),
   );
