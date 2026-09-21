@@ -42,11 +42,7 @@
         class="shrink-0"
         aria-controls="transactions-filter-controls"
         [attr.aria-expanded]="isOpen()"
-        [attr.aria-label]="
-          activeCount() > 0
-            ? 'Filters, ' + activeCount() + ' active'
-            : 'Filters'
-        "
+        [attr.aria-label]="activeCount() > 0 ? 'Filters, ' + activeCount() + ' active' : 'Filters'"
         (click)="toggleOpen()"
       >
         <mat-icon svgIcon="list-filter" />
@@ -106,9 +102,7 @@
           <mat-option [value]="option.id">
             {{ option.name }}
             @if (option.retired) {
-              <span class="text-neutral-500 dark:text-neutral-400">
-                · Retired</span
-              >
+              <span class="text-neutral-500 dark:text-neutral-400">· Retired</span>
             }
           </mat-option>
         }
@@ -131,9 +125,7 @@
           <mat-option [value]="option.id">
             {{ option.name }}
             @if (option.retired) {
-              <span class="text-neutral-500 dark:text-neutral-400">
-                · Retired</span
-              >
+              <span class="text-neutral-500 dark:text-neutral-400">· Retired</span>
             }
           </mat-option>
         }

@@ -49,20 +49,13 @@ export type NewAccount = {
 export const ACCOUNT_NAME_MAX = 255;
 
 /** The four kinds of Account, spelt as the API's `AccountType` enum serialises. */
-export type AccountType =
-  | 'Cash'
-  | 'Bank'
-  | 'Wallet'
-  | 'Investment';
+export type AccountType = 'Cash' | 'Bank' | 'Wallet' | 'Investment';
 
 /**
  * How each Account type presents in the list: the word the person reads (the
  * lucide icon beside it. One entry per type so the two cannot drift apart.
  */
-export const ACCOUNT_TYPES: Record<
-  AccountType,
-  { label: string; icon: string }
-> = {
+export const ACCOUNT_TYPES: Record<AccountType, { label: string; icon: string }> = {
   Cash: { label: 'Cash', icon: 'banknote' },
   Bank: { label: 'Bank', icon: 'landmark' },
   Wallet: { label: 'Wallet', icon: 'wallet' },

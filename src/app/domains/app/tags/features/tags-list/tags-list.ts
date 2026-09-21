@@ -25,8 +25,7 @@ const NAME_MAX = 255;
 const LOAD_FAILED = 'Something went wrong loading your tags. Please try again.';
 
 /** The re-read after a write failed: the change landed, the list may be stale. */
-const REFRESH_FAILED =
-  'Your change was saved, but this list may be out of date. Try again to refresh it.';
+const REFRESH_FAILED = 'Your change was saved, but this list may be out of date. Try again to refresh it.';
 
 /** A write failed before the server could attribute it to anything. */
 const ACTION_FAILED = 'Something went wrong. Please try again.';
@@ -141,16 +140,12 @@ export default class TagsList {
   /** A per-row message left by a failed delete that was not staleness. */
   protected readonly notice = signal<RowNoticeState | null>(null);
 
-  private readonly addInput =
-    viewChild<ElementRef<HTMLInputElement>>('addInput');
-  private readonly editInput =
-    viewChild<ElementRef<HTMLInputElement>>('editInput');
+  private readonly addInput = viewChild<ElementRef<HTMLInputElement>>('addInput');
+  private readonly editInput = viewChild<ElementRef<HTMLInputElement>>('editInput');
 
   /** Alphabetical, case-insensitive — there is no `createdAt` or usage count to sort by. */
   private readonly sorted = computed(() =>
-    [...(this.tags() ?? [])].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-    )
+    [...(this.tags() ?? [])].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
   );
 
   protected readonly trimmedSearch = computed(() => this.search().trim());
@@ -161,9 +156,7 @@ export default class TagsList {
     if (!query) {
       return this.sorted();
     }
-    return this.sorted().filter((tag) =>
-      tag.name.toLocaleLowerCase().includes(query)
-    );
+    return this.sorted().filter((tag) => tag.name.toLocaleLowerCase().includes(query));
   });
 
   /** `true` once the person has at least one Tag — gates the search and the count. */
@@ -172,14 +165,10 @@ export default class TagsList {
   /** The count beside the search — the whole set, not the search-narrowed view. */
   protected readonly count = computed(() => this.sorted().length);
 
-  protected readonly hasSearch = computed(
-    () => this.trimmedSearch().length > 0
-  );
+  protected readonly hasSearch = computed(() => this.trimmedSearch().length > 0);
 
   /** The search matched nothing — offers a clear-search action, never read as an empty collection. */
-  protected readonly noMatch = computed(
-    () => this.hasSearch() && this.visible().length === 0
-  );
+  protected readonly noMatch = computed(() => this.hasSearch() && this.visible().length === 0);
 
   constructor() {
     this.load();
@@ -203,9 +192,7 @@ export default class TagsList {
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          this.errorMessage.set(
-            error instanceof ApiError ? error.message : LOAD_FAILED
-          );
+          this.errorMessage.set(error instanceof ApiError ? error.message : LOAD_FAILED);
           this.loading.set(false);
         },
       });
@@ -275,7 +262,7 @@ export default class TagsList {
               ? duplicateNameMessage(name)
               : error instanceof ApiError
                 ? error.message
-                : ACTION_FAILED
+                : ACTION_FAILED,
           );
         },
       });
@@ -332,9 +319,7 @@ export default class TagsList {
             this.editingId.set(null);
             this.goStale();
           } else {
-            this.editError.set(
-              error instanceof ApiError ? error.message : ACTION_FAILED
-            );
+            this.editError.set(error instanceof ApiError ? error.message : ACTION_FAILED);
           }
         },
       });
@@ -383,10 +368,7 @@ export default class TagsList {
   }
 
   private isStale(error: unknown): boolean {
-    return (
-      error instanceof ApiError &&
-      (error.status === 403 || error.status === 404)
-    );
+    return error instanceof ApiError && (error.status === 403 || error.status === 404);
   }
 
   /**
@@ -411,9 +393,7 @@ export default class TagsList {
   }
 
   /** Focus a view-child input on the render after it appears. */
-  private focusOnceRendered(
-    ref: Signal<ElementRef<HTMLInputElement> | undefined>
-  ): void {
+  private focusOnceRendered(ref: Signal<ElementRef<HTMLInputElement> | undefined>): void {
     afterNextRender(() => ref()?.nativeElement.focus(), {
       injector: this.injector,
     });

@@ -33,7 +33,5 @@ export function withOverlayContainer(): () => HTMLElement {
  * `MatDialogRef`'s own key-event stream, which is document-scoped.
  */
 export function pressEscape(): void {
-  document.body.dispatchEvent(
-    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-  );
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 }

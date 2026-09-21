@@ -40,18 +40,11 @@ export type RequestDateBounds = { from?: string; to?: string };
  * issue and the API's own filter-bounds ADR record that as latent (Manila, the
  * only zone in use, has no DST).
  */
-export function toRequestDateBounds(
-  from: Date | null,
-  to: Date | null
-): RequestDateBounds {
+export function toRequestDateBounds(from: Date | null, to: Date | null): RequestDateBounds {
   if (from === null && to === null) {
     return {};
   }
-  if (
-    from !== null &&
-    to !== null &&
-    startOfDayMillis(from) > startOfDayMillis(to)
-  ) {
+  if (from !== null && to !== null && startOfDayMillis(from) > startOfDayMillis(to)) {
     return {};
   }
 

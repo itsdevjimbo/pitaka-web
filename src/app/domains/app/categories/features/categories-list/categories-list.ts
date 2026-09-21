@@ -7,12 +7,10 @@ import { CategoriesService } from '../../data/categories.service';
 import { Category } from '../../data/category';
 import { CategoryPane } from '../../ui/category-pane';
 
-const LOAD_FAILED =
-  'Something went wrong loading your categories. Please try again.';
+const LOAD_FAILED = 'Something went wrong loading your categories. Please try again.';
 
 /** The re-read after a write failed: the change landed, the list may be stale. */
-const REFRESH_FAILED =
-  'Your change was saved, but this list may be out of date. Try again to refresh it.';
+const REFRESH_FAILED = 'Your change was saved, but this list may be out of date. Try again to refresh it.';
 
 /**
  * The Categories screen: reference data, visited rarely and deliberately,
@@ -57,11 +55,11 @@ export default class CategoriesList {
   protected readonly refreshError = signal<string | null>(null);
 
   protected readonly expenseCategories = computed(() =>
-    (this.categories() ?? []).filter((category) => category.kind === 'expense')
+    (this.categories() ?? []).filter((category) => category.kind === 'expense'),
   );
 
   protected readonly incomeCategories = computed(() =>
-    (this.categories() ?? []).filter((category) => category.kind === 'income')
+    (this.categories() ?? []).filter((category) => category.kind === 'income'),
   );
 
   constructor() {
@@ -83,9 +81,7 @@ export default class CategoriesList {
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          this.errorMessage.set(
-            error instanceof ApiError ? error.message : LOAD_FAILED
-          );
+          this.errorMessage.set(error instanceof ApiError ? error.message : LOAD_FAILED);
           this.loading.set(false);
         },
       });

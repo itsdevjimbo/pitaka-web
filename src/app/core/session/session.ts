@@ -25,9 +25,7 @@ export class Session {
   private router = inject(Router);
 
   // State
-  private readonly _token = signal<string | null>(
-    this.storage.getItem(TOKEN_KEY)
-  );
+  private readonly _token = signal<string | null>(this.storage.getItem(TOKEN_KEY));
   private readonly _profile = signal<Profile | null>(null);
 
   /** The bearer token to attach to API requests, or `null` when signed out. */
@@ -112,9 +110,7 @@ export class Session {
    */
   expire(): void {
     if (this.teardown()) {
-      this.router.navigate(
-        ...signInRedirect(this.router.url, { reason: 'session-expired' })
-      );
+      this.router.navigate(...signInRedirect(this.router.url, { reason: 'session-expired' }));
     }
   }
 

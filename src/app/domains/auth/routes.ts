@@ -27,29 +27,25 @@ const routes: Routes = [
         // sign-up, unlike the two link-landing screens below (ADR 0015).
         path: 'forgot-password',
         canActivate: [guestGuard],
-        loadComponent: () =>
-          import('./features/forgot-password/forgot-password'),
+        loadComponent: () => import('./features/forgot-password/forgot-password'),
       },
       {
         // Confirming is an operation on a Profile reached by link, not a guest
         // action a live session makes meaningless — `guestGuard` here would
         // silently destroy the token the person came to spend (ADR 0015).
         path: 'confirm-email',
-        loadComponent: () =>
-          import('./features/confirm-email/confirm-email'),
+        loadComponent: () => import('./features/confirm-email/confirm-email'),
       },
       {
         // Resetting is an operation on a Profile reached by link, not a guest
         // action a live session makes meaningless — `guestGuard` here would
         // silently destroy the token the person came to spend (ADR 0015).
         path: 'reset-password',
-        loadComponent: () =>
-          import('./features/reset-password/reset-password'),
+        loadComponent: () => import('./features/reset-password/reset-password'),
       },
       {
         path: 'confirm-email-change',
-        loadComponent: () =>
-          import('./features/confirm-email-change/confirm-email-change'),
+        loadComponent: () => import('./features/confirm-email-change/confirm-email-change'),
       },
     ],
   },

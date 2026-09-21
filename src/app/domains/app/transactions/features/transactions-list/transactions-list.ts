@@ -8,12 +8,7 @@ import { forkJoin, Observable, Subject, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
-import {
-  activeCriteriaCount,
-  Transaction,
-  TransactionCriteria,
-  TransactionSearchResult,
-} from '../../data/transaction';
+import { activeCriteriaCount, Transaction, TransactionCriteria, TransactionSearchResult } from '../../data/transaction';
 import {
   criteriaFromQueryParams,
   criteriaToQueryParams,
@@ -21,32 +16,17 @@ import {
   sameCriteria,
 } from '../../data/transaction-criteria-params';
 import { TransactionsService } from '../../data/transactions.service';
-import {
-  RefileTransactionDialog,
-  RefileTransactionDialogData,
-} from '../../ui/refile-transaction-dialog';
-import {
-  TransactionRow,
-  TransactionRowModel,
-  toSpanningRow,
-} from '../../ui/transaction-row';
-import {
-  FilterAccountOption,
-  FilterCategoryOption,
-  TransactionsFilterBar,
-} from './transactions-filter-bar';
+import { RefileTransactionDialog, RefileTransactionDialogData } from '../../ui/refile-transaction-dialog';
+import { TransactionRow, TransactionRowModel, toSpanningRow } from '../../ui/transaction-row';
+import { FilterAccountOption, FilterCategoryOption, TransactionsFilterBar } from './transactions-filter-bar';
 
-const LOAD_FAILED =
-  'Something went wrong loading your transactions. Please try again.';
+const LOAD_FAILED = 'Something went wrong loading your transactions. Please try again.';
 
-const LOAD_MORE_FAILED =
-  'Something went wrong loading more transactions. Please try again.';
+const LOAD_MORE_FAILED = 'Something went wrong loading more transactions. Please try again.';
 
-const REFRESH_FAILED =
-  'Something went wrong refreshing your transactions. Please try again.';
+const REFRESH_FAILED = 'Something went wrong refreshing your transactions. Please try again.';
 
-const FILTER_FAILED =
-  'Something went wrong applying your filters. Please try again.';
+const FILTER_FAILED = 'Something went wrong applying your filters. Please try again.';
 
 /** Category id → name and Account id → name, resolved once for a whole page of rows. */
 type NameMaps = {
@@ -70,35 +50,25 @@ type FirstPageRead = {
 };
 
 /** Categories sorted for a picker: active first, then retired, each group by name. */
-function toCategoryOptions(
-  categories: readonly Category[]
-): FilterCategoryOption[] {
+function toCategoryOptions(categories: readonly Category[]): FilterCategoryOption[] {
   return categories
     .map((category) => ({
       id: category.id,
       name: category.name,
       retired: !category.isActive,
     }))
-    .sort(
-      (a, b) =>
-        Number(a.retired) - Number(b.retired) || a.name.localeCompare(b.name)
-    );
+    .sort((a, b) => Number(a.retired) - Number(b.retired) || a.name.localeCompare(b.name));
 }
 
 /** Accounts sorted for a picker: active first, then retired, each group by name. */
-function toAccountOptions(
-  accounts: readonly ListedAccount[]
-): FilterAccountOption[] {
+function toAccountOptions(accounts: readonly ListedAccount[]): FilterAccountOption[] {
   return accounts
     .map((account) => ({
       id: account.id,
       name: account.name,
       retired: !account.isActive,
     }))
-    .sort(
-      (a, b) =>
-        Number(a.retired) - Number(b.retired) || a.name.localeCompare(b.name)
-    );
+    .sort((a, b) => Number(a.retired) - Number(b.retired) || a.name.localeCompare(b.name));
 }
 
 /**
@@ -155,12 +125,7 @@ function toAccountOptions(
 @Component({
   selector: 'transactions-list',
   templateUrl: './transactions-list.html',
-  imports: [
-    MatButtonModule,
-    MatIconModule,
-    TransactionRow,
-    TransactionsFilterBar,
-  ],
+  imports: [MatButtonModule, MatIconModule, TransactionRow, TransactionsFilterBar],
   host: {
     class: 'flex flex-auto flex-col',
   },
@@ -190,13 +155,11 @@ export default class TransactionsList {
    * to the URL and flows back here through the route subscription rather than
    * being set directly.
    */
-  protected readonly criteria = signal<TransactionCriteria>(
-    criteriaFromQueryParams(this.route.snapshot.queryParamMap)
-  );
+  protected readonly criteria = signal<TransactionCriteria>(criteriaFromQueryParams(this.route.snapshot.queryParamMap));
 
   /** Name carried beside a Schedule id so stale history links stay readable on reload. */
   private readonly linkedScheduleName = signal<string | undefined>(
-    scheduleNameFromQueryParams(this.route.snapshot.queryParamMap)
+    scheduleNameFromQueryParams(this.route.snapshot.queryParamMap),
   );
 
   /** True while a filter-change read is in flight — the busy affordance over the kept rows. */
@@ -206,14 +169,10 @@ export default class TransactionsList {
   protected readonly filterError = signal<string | null>(null);
 
   /** The Account options the filter bar offers — retired ones included, marked. */
-  protected readonly accountOptions = signal<readonly FilterAccountOption[]>(
-    []
-  );
+  protected readonly accountOptions = signal<readonly FilterAccountOption[]>([]);
 
   /** The Category options the filter bar offers — flat, retired ones included and marked. */
-  protected readonly categoryOptions = signal<readonly FilterCategoryOption[]>(
-    []
-  );
+  protected readonly categoryOptions = signal<readonly FilterCategoryOption[]>([]);
 
   /** The readable name carried beside the active Schedule criterion. */
   protected readonly scheduleName = computed(() => {
@@ -256,9 +215,7 @@ export default class TransactionsList {
   protected readonly shownCount = computed(() => this.rows()?.length ?? 0);
 
   /** Whether any axis is narrowed — the discriminant between the two empty states. */
-  protected readonly hasActiveCriteria = computed(
-    () => activeCriteriaCount(this.criteria()) > 0
-  );
+  protected readonly hasActiveCriteria = computed(() => activeCriteriaCount(this.criteria()) > 0);
 
   /**
    * A settled load that came back empty — but only when nothing is in flight.
@@ -268,9 +225,7 @@ export default class TransactionsList {
    * state would flash the "nothing recorded" screen and unmount the filter bar.
    * The busy affordance covers that gap instead.
    */
-  private readonly isEmpty = computed(
-    () => !this.filtering() && this.rows() !== null && this.totalCount() === 0
-  );
+  private readonly isEmpty = computed(() => !this.filtering() && this.rows() !== null && this.totalCount() === 0);
 
   /**
    * Nothing came back and no filter is active — the Profile has recorded
@@ -278,32 +233,25 @@ export default class TransactionsList {
    * reads it directly rather than a probe request. The filter bar is not
    * rendered in this state.
    */
-  protected readonly noneRecorded = computed(
-    () => this.isEmpty() && !this.hasActiveCriteria()
-  );
+  protected readonly noneRecorded = computed(() => this.isEmpty() && !this.hasActiveCriteria());
 
   /**
    * Nothing came back but a filter is active — the criteria matched nothing.
    * A distinct state from the nothing-recorded one, offering Clear filters.
    */
   protected readonly matchedNothing = computed(
-    () => this.isEmpty() && this.hasActiveCriteria() && !this.emptyScheduleHistory()
+    () => this.isEmpty() && this.hasActiveCriteria() && !this.emptyScheduleHistory(),
   );
 
   /** A Schedule-scoped search with no surviving generated Transactions. */
   protected readonly emptyScheduleHistory = computed(
-    () =>
-      this.isEmpty() &&
-      this.criteria().scheduleId !== undefined &&
-      activeCriteriaCount(this.criteria()) === 1
+    () => this.isEmpty() && this.criteria().scheduleId !== undefined && activeCriteriaCount(this.criteria()) === 1,
   );
 
   /** Whether a page of rows is still unshown — gates the *Load more* control. */
   protected readonly hasMore = computed(() => {
     const rows = this.rows();
-    return (
-      rows !== null && !this.reachedEnd() && rows.length < this.totalCount()
-    );
+    return rows !== null && !this.reachedEnd() && rows.length < this.totalCount();
   });
 
   constructor() {
@@ -355,12 +303,7 @@ export default class TransactionsList {
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          const message =
-            error instanceof ApiError
-              ? error.message
-              : refreshing
-                ? REFRESH_FAILED
-                : LOAD_FAILED;
+          const message = error instanceof ApiError ? error.message : refreshing ? REFRESH_FAILED : LOAD_FAILED;
           (refreshing ? this.refreshError : this.errorMessage).set(message);
           this.loading.set(false);
         },
@@ -433,9 +376,7 @@ export default class TransactionsList {
           this.filtering.set(false);
         },
         error: (error: unknown) => {
-          this.filterError.set(
-            error instanceof ApiError ? error.message : FILTER_FAILED
-          );
+          this.filterError.set(error instanceof ApiError ? error.message : FILTER_FAILED);
           this.filtering.set(false);
         },
       });
@@ -484,10 +425,7 @@ export default class TransactionsList {
       .pipe(takeUntil(this.reset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
-          this.rows.update((rows) => [
-            ...(rows ?? []),
-            ...this.toRows(result.transactions),
-          ]);
+          this.rows.update((rows) => [...(rows ?? []), ...this.toRows(result.transactions)]);
           this.totalCount.set(result.totalCount);
           this.lastPage.update((page) => page + 1);
           if (result.transactions.length === 0) {
@@ -496,9 +434,7 @@ export default class TransactionsList {
           this.loadingMore.set(false);
         },
         error: (error: unknown) => {
-          this.loadMoreError.set(
-            error instanceof ApiError ? error.message : LOAD_MORE_FAILED
-          );
+          this.loadMoreError.set(error instanceof ApiError ? error.message : LOAD_MORE_FAILED);
           this.loadingMore.set(false);
         },
       });
@@ -512,10 +448,9 @@ export default class TransactionsList {
    */
   protected openRefileDialog(transaction: Transaction): void {
     this.dialog
-      .open<RefileTransactionDialog, RefileTransactionDialogData, Transaction>(
-        RefileTransactionDialog,
-        { data: { transaction } }
-      )
+      .open<RefileTransactionDialog, RefileTransactionDialogData, Transaction>(RefileTransactionDialog, {
+        data: { transaction },
+      })
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((refiled) => {
@@ -556,12 +491,8 @@ export default class TransactionsList {
   /** Push a completed first-page read into the screen's signals. */
   private apply(result: FirstPageRead): void {
     this.names = {
-      categoryNames: new Map(
-        result.categories.map((category) => [category.id, category.name])
-      ),
-      accountNames: new Map(
-        result.accounts.map((account) => [account.id, account.name])
-      ),
+      categoryNames: new Map(result.categories.map((category) => [category.id, category.name])),
+      accountNames: new Map(result.accounts.map((account) => [account.id, account.name])),
     };
     this.accountOptions.set(toAccountOptions(result.accounts));
     this.categoryOptions.set(toCategoryOptions(result.categories));
@@ -573,11 +504,7 @@ export default class TransactionsList {
   /** Build the spanning row model for each Transaction from the kept name maps. */
   private toRows(transactions: readonly Transaction[]): TransactionRowModel[] {
     return transactions.map((transaction) =>
-      toSpanningRow(
-        transaction,
-        this.names.categoryNames,
-        this.names.accountNames
-      )
+      toSpanningRow(transaction, this.names.categoryNames, this.names.accountNames),
     );
   }
 }

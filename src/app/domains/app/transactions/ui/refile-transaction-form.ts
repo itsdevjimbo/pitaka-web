@@ -1,13 +1,4 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  input,
-  linkedSignal,
-  output,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
@@ -19,23 +10,14 @@ import { MatTimepickerModule } from '@angular/material/timepicker';
 import { firstValueFrom } from 'rxjs';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { PesoPipe } from '@/app/core/money';
-import {
-  CategoriesService,
-  Category,
-  keepSavedFilingCategory,
-} from '@/app/domains/app/categories';
+import { CategoriesService, Category, keepSavedFilingCategory } from '@/app/domains/app/categories';
 import { Tag, TagField } from '@/app/domains/app/tags';
 import { combineDateTime } from '../data/combine-date-time';
-import {
-  RefileTransaction,
-  Transaction,
-  TRANSACTION_DIRECTIONS,
-} from '../data/transaction';
+import { RefileTransaction, Transaction, TRANSACTION_DIRECTIONS } from '../data/transaction';
 import { TransactionsService } from '../data/transactions.service';
 
 /** The banner line for a refile that failed before it could be attributed. */
-const COULD_NOT_REFILE =
-  'Something went wrong refiling this transaction. Please try again.';
+const COULD_NOT_REFILE = 'Something went wrong refiling this transaction. Please try again.';
 
 /**
  * What the refile form edits. The amount and the direction are not here — they
@@ -136,9 +118,7 @@ export class RefileTransactionForm {
   private readonly allCategories = signal<readonly Category[]>([]);
 
   /** True while the Transaction being corrected is a Transfer — no Category field, none sent. */
-  protected readonly isTransfer = computed(
-    () => this.transaction().direction === 'transfer'
-  );
+  protected readonly isTransfer = computed(() => this.transaction().direction === 'transfer');
 
   /**
    * The Categories the picker offers: active ones of this Transaction's
@@ -148,14 +128,12 @@ export class RefileTransactionForm {
    */
   protected readonly categoryOptions = computed(() => {
     const direction = this.transaction().direction;
-    const active = this.categories().filter(
-      (category) => category.kind === direction
-    );
+    const active = this.categories().filter((category) => category.kind === direction);
     return keepSavedFilingCategory(
       active,
       this.allCategories(),
       this.transaction().categoryId,
-      this.model().categoryId
+      this.model().categoryId,
     );
   });
 
@@ -184,10 +162,7 @@ export class RefileTransactionForm {
   protected readonly submitting = signal(false);
 
   /** The form-level banner. Linked to the model so any edit clears a stale message. */
-  protected readonly errorMessage = linkedSignal<
-    RefileTransactionModel,
-    string | null
-  >({
+  protected readonly errorMessage = linkedSignal<RefileTransactionModel, string | null>({
     source: this.model,
     computation: () => null,
   });
@@ -223,7 +198,7 @@ export class RefileTransactionForm {
               // The chips as they stand — a real replacement, so a Tag removed
               // on the field is a Tag dropped from the Transaction.
               tagIds: tags.map((tag) => tag.id),
-            } satisfies RefileTransaction)
+            } satisfies RefileTransaction),
           );
           this.refiled.emit(refiled);
           return undefined;
@@ -231,7 +206,7 @@ export class RefileTransactionForm {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_REFILE
+            COULD_NOT_REFILE,
           );
           if (boundErrors.length > 0) {
             this.refileForm().markAsTouched();

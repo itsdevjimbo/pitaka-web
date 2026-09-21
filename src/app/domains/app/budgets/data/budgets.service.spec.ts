@@ -1,8 +1,5 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
@@ -96,9 +93,7 @@ describe('BudgetsService', () => {
     it('parses startDate at local midnight, not the UTC-midnight day before', async () => {
       const result = firstValueFrom(service.list());
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets`)
-        .flush([resource({ startDate: '2026-08-01' })]);
+      http.expectOne(`${BASE_URL}/api/budgets`).flush([resource({ startDate: '2026-08-01' })]);
 
       const [budget] = await result;
       expect(budget.startDate.getFullYear()).toBe(2026);
@@ -109,9 +104,7 @@ describe('BudgetsService', () => {
     it('keeps a null endDate as null', async () => {
       const result = firstValueFrom(service.list());
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets`)
-        .flush([resource({ endDate: null })]);
+      http.expectOne(`${BASE_URL}/api/budgets`).flush([resource({ endDate: null })]);
 
       expect((await result)[0].endDate).toBeNull();
     });
@@ -129,21 +122,13 @@ describe('BudgetsService', () => {
           resource({ id: 5, period: 'Yearly' }),
         ]);
 
-      expect((await result).map((b) => b.period)).toEqual([
-        'daily',
-        'weekly',
-        'monthly',
-        'quarterly',
-        'yearly',
-      ]);
+      expect((await result).map((b) => b.period)).toEqual(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']);
     });
 
     it('reads a Budget with a null categoryId as watching all spending', async () => {
       const result = firstValueFrom(service.list());
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets`)
-        .flush([resource({ categoryId: null })]);
+      http.expectOne(`${BASE_URL}/api/budgets`).flush([resource({ categoryId: null })]);
 
       expect((await result)[0].categoryId).toBeNull();
     });
@@ -151,9 +136,7 @@ describe('BudgetsService', () => {
     it('maps the Spent figure and keeps the raw amount through', async () => {
       const result = firstValueFrom(service.list());
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets`)
-        .flush([resource({ amountSpent: 12400 })]);
+      http.expectOne(`${BASE_URL}/api/budgets`).flush([resource({ amountSpent: 12400 })]);
 
       const [budget] = await result;
       expect(budget.amountSpent).toBe(12400);
@@ -163,9 +146,7 @@ describe('BudgetsService', () => {
     it('parses the Cycle window as calendar days, not the UTC-midnight day before', async () => {
       const result = firstValueFrom(service.list());
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets`)
-        .flush([resource({ cycleStart: '2026-08-01', cycleEnd: '2026-08-31' })]);
+      http.expectOne(`${BASE_URL}/api/budgets`).flush([resource({ cycleStart: '2026-08-01', cycleEnd: '2026-08-31' })]);
 
       const [budget] = await result;
       expect(budget.cycleStart).toEqual(new Date(2026, 7, 1));
@@ -185,9 +166,7 @@ describe('BudgetsService', () => {
     it('surfaces a server failure as a normalised ApiError', async () => {
       const result = firstValueFrom(service.list());
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets`)
-        .flush(null, { status: 500, statusText: 'Server Error' });
+      http.expectOne(`${BASE_URL}/api/budgets`).flush(null, { status: 500, statusText: 'Server Error' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -228,9 +207,7 @@ describe('BudgetsService', () => {
     it('assembles startDate from local getters, not toISOString', async () => {
       // 23:30 local on 31 July is already 1 August in UTC; the calendar day the
       // person picked is 31 July and that is what must go on the wire.
-      const result = firstValueFrom(
-        service.create(newBudget({ startDate: new Date(2026, 6, 31, 23, 30) }))
-      );
+      const result = firstValueFrom(service.create(newBudget({ startDate: new Date(2026, 6, 31, 23, 30) })));
 
       const request = http.expectOne(`${BASE_URL}/api/budgets`);
       expect(request.request.body.startDate).toBe('2026-07-31');
@@ -240,9 +217,7 @@ describe('BudgetsService', () => {
     });
 
     it('sends categoryId null for a Budget over all spending', async () => {
-      const result = firstValueFrom(
-        service.create(newBudget({ categoryId: null }))
-      );
+      const result = firstValueFrom(service.create(newBudget({ categoryId: null })));
 
       const request = http.expectOne(`${BASE_URL}/api/budgets`);
       expect(request.request.body.categoryId).toBeNull();
@@ -254,11 +229,7 @@ describe('BudgetsService', () => {
     it('maps the created row back to the domain shape', async () => {
       const result = firstValueFrom(service.create(newBudget()));
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets`)
-        .flush(
-          resource({ id: 99, period: 'Monthly', startDate: '2026-08-01' })
-        );
+      http.expectOne(`${BASE_URL}/api/budgets`).flush(resource({ id: 99, period: 'Monthly', startDate: '2026-08-01' }));
 
       const created = await result;
       expect(created).toMatchObject({
@@ -274,25 +245,20 @@ describe('BudgetsService', () => {
     it('refiles the duplicate-name 409 as a name field error', async () => {
       const result = firstValueFrom(service.create(newBudget()));
 
-      http.expectOne(`${BASE_URL}/api/budgets`).flush(
-        { detail: 'A budget with this name already exists.' },
-        { status: 409, statusText: 'Conflict' }
-      );
+      http
+        .expectOne(`${BASE_URL}/api/budgets`)
+        .flush({ detail: 'A budget with this name already exists.' }, { status: 409, statusText: 'Conflict' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).status).toBe(409);
-      expect((error as ApiError).fieldErrors['name']).toEqual([
-        'A budget with this name already exists.',
-      ]);
+      expect((error as ApiError).fieldErrors['name']).toEqual(['A budget with this name already exists.']);
     });
 
     it('leaves a non-409 failure untouched — no field map invented', async () => {
       const result = firstValueFrom(service.create(newBudget()));
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets`)
-        .flush(null, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${BASE_URL}/api/budgets`).flush(null, { status: 400, statusText: 'Bad Request' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -334,9 +300,7 @@ describe('BudgetsService', () => {
     });
 
     it('carries a non-null endDate through as its own YYYY-MM-DD, not nulled', async () => {
-      const result = firstValueFrom(
-        service.adjust(10, adjustment({ endDate: new Date(2026, 11, 31) }))
-      );
+      const result = firstValueFrom(service.adjust(10, adjustment({ endDate: new Date(2026, 11, 31) })));
 
       const request = http.expectOne(`${BASE_URL}/api/budgets/10`);
       expect(request.request.body.endDate).toBe('2026-12-31');
@@ -348,12 +312,7 @@ describe('BudgetsService', () => {
     it('assembles the dates from local getters, not toISOString', async () => {
       // 23:30 local on 31 Aug is already 1 Sep in UTC; the calendar day picked
       // is 31 Aug and that is what must go on the wire.
-      const result = firstValueFrom(
-        service.adjust(
-          10,
-          adjustment({ startDate: new Date(2026, 7, 31, 23, 30) })
-        )
-      );
+      const result = firstValueFrom(service.adjust(10, adjustment({ startDate: new Date(2026, 7, 31, 23, 30) })));
 
       const request = http.expectOne(`${BASE_URL}/api/budgets/10`);
       expect(request.request.body.startDate).toBe('2026-08-31');
@@ -363,9 +322,7 @@ describe('BudgetsService', () => {
     });
 
     it('sends categoryId null for a Budget moved to watch all spending', async () => {
-      const result = firstValueFrom(
-        service.adjust(10, adjustment({ categoryId: null }))
-      );
+      const result = firstValueFrom(service.adjust(10, adjustment({ categoryId: null })));
 
       const request = http.expectOne(`${BASE_URL}/api/budgets/10`);
       expect(request.request.body.categoryId).toBeNull();
@@ -379,9 +336,7 @@ describe('BudgetsService', () => {
 
       http
         .expectOne(`${BASE_URL}/api/budgets/10`)
-        .flush(
-          resource({ id: 10, period: 'Weekly', startDate: '2026-09-01' })
-        );
+        .flush(resource({ id: 10, period: 'Weekly', startDate: '2026-09-01' }));
 
       const adjusted = await result;
       expect(adjusted).toMatchObject({
@@ -396,25 +351,20 @@ describe('BudgetsService', () => {
     it('refiles the duplicate-name 409 as a name field error', async () => {
       const result = firstValueFrom(service.adjust(10, adjustment()));
 
-      http.expectOne(`${BASE_URL}/api/budgets/10`).flush(
-        { detail: 'A budget with this name already exists.' },
-        { status: 409, statusText: 'Conflict' }
-      );
+      http
+        .expectOne(`${BASE_URL}/api/budgets/10`)
+        .flush({ detail: 'A budget with this name already exists.' }, { status: 409, statusText: 'Conflict' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).status).toBe(409);
-      expect((error as ApiError).fieldErrors['name']).toEqual([
-        'A budget with this name already exists.',
-      ]);
+      expect((error as ApiError).fieldErrors['name']).toEqual(['A budget with this name already exists.']);
     });
 
     it('leaves a non-409 failure untouched — no field map invented', async () => {
       const result = firstValueFrom(service.adjust(10, adjustment()));
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets/10`)
-        .flush(null, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${BASE_URL}/api/budgets/10`).flush(null, { status: 400, statusText: 'Bad Request' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -437,9 +387,7 @@ describe('BudgetsService', () => {
     it('surfaces a server failure as a normalised ApiError, with no block state', async () => {
       const result = firstValueFrom(service.remove(10));
 
-      http
-        .expectOne(`${BASE_URL}/api/budgets/10`)
-        .flush(null, { status: 500, statusText: 'Server Error' });
+      http.expectOne(`${BASE_URL}/api/budgets/10`).flush(null, { status: 500, statusText: 'Server Error' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);

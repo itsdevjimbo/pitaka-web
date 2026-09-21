@@ -1,11 +1,5 @@
 import { Component, inject, linkedSignal, signal } from '@angular/core';
-import {
-  email,
-  form,
-  FormField,
-  required,
-  submit,
-} from '@angular/forms/signals';
+import { email, form, FormField, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -37,13 +31,7 @@ export const RESET_LINK_REASSURANCE =
 @Component({
   selector: 'auth-forgot-password',
   templateUrl: './forgot-password.html',
-  imports: [
-    RouterLink,
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    FormField,
-  ],
+  imports: [RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule, FormField],
 })
 export default class AuthForgotPassword {
   // Dependencies

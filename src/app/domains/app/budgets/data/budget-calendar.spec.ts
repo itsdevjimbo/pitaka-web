@@ -1,11 +1,5 @@
 import { withPinnedTimezone } from '@/testing/timezone';
-import {
-  budgetPhase,
-  budgetRemaining,
-  startOfCurrentPeriod,
-  toCalendarDate,
-  toDateOnly,
-} from './budget-calendar';
+import { budgetPhase, budgetRemaining, startOfCurrentPeriod, toCalendarDate, toDateOnly } from './budget-calendar';
 
 /**
  * The pure calendar arithmetic the Budgets slice owns: the `DateOnly` wire
@@ -37,9 +31,7 @@ describe('budget-calendar', () => {
 
     it('does not roll back a day the way new Date(string) would', () => {
       // `new Date('2026-08-01')` is UTC midnight → 2026-07-31T20:00 in New York.
-      expect(toCalendarDate('2026-08-01').getDate()).not.toBe(
-        new Date('2026-08-01').getDate()
-      );
+      expect(toCalendarDate('2026-08-01').getDate()).not.toBe(new Date('2026-08-01').getDate());
       expect(toCalendarDate('2026-08-01').getDate()).toBe(1);
     });
 
@@ -71,56 +63,36 @@ describe('budget-calendar', () => {
 
   describe('startOfCurrentPeriod', () => {
     it('daily: the reference day at midnight', () => {
-      expect(startOfCurrentPeriod('daily', new Date(2026, 7, 17, 14, 30))).toEqual(
-        new Date(2026, 7, 17)
-      );
+      expect(startOfCurrentPeriod('daily', new Date(2026, 7, 17, 14, 30))).toEqual(new Date(2026, 7, 17));
     });
 
     it('weekly: back to Monday, with Monday as the week start', () => {
       // 2026-08-19 is a Wednesday → Monday is 2026-08-17.
-      expect(
-        startOfCurrentPeriod('weekly', new Date(2026, 7, 19, 9, 0))
-      ).toEqual(new Date(2026, 7, 17));
+      expect(startOfCurrentPeriod('weekly', new Date(2026, 7, 19, 9, 0))).toEqual(new Date(2026, 7, 17));
     });
 
     it('weekly: a Sunday belongs to the week that began the previous Monday', () => {
       // 2026-08-23 is a Sunday → its Monday is 2026-08-17, not 2026-08-24.
-      expect(startOfCurrentPeriod('weekly', new Date(2026, 7, 23))).toEqual(
-        new Date(2026, 7, 17)
-      );
+      expect(startOfCurrentPeriod('weekly', new Date(2026, 7, 23))).toEqual(new Date(2026, 7, 17));
     });
 
     it('weekly: a Monday is already the start', () => {
-      expect(startOfCurrentPeriod('weekly', new Date(2026, 7, 17))).toEqual(
-        new Date(2026, 7, 17)
-      );
+      expect(startOfCurrentPeriod('weekly', new Date(2026, 7, 17))).toEqual(new Date(2026, 7, 17));
     });
 
     it('monthly: the first of the reference month', () => {
-      expect(startOfCurrentPeriod('monthly', new Date(2026, 7, 31))).toEqual(
-        new Date(2026, 7, 1)
-      );
+      expect(startOfCurrentPeriod('monthly', new Date(2026, 7, 31))).toEqual(new Date(2026, 7, 1));
     });
 
     it('quarterly: the first day of the calendar quarter', () => {
-      expect(startOfCurrentPeriod('quarterly', new Date(2026, 0, 15))).toEqual(
-        new Date(2026, 0, 1)
-      );
-      expect(startOfCurrentPeriod('quarterly', new Date(2026, 4, 20))).toEqual(
-        new Date(2026, 3, 1)
-      );
-      expect(startOfCurrentPeriod('quarterly', new Date(2026, 7, 9))).toEqual(
-        new Date(2026, 6, 1)
-      );
-      expect(startOfCurrentPeriod('quarterly', new Date(2026, 11, 31))).toEqual(
-        new Date(2026, 9, 1)
-      );
+      expect(startOfCurrentPeriod('quarterly', new Date(2026, 0, 15))).toEqual(new Date(2026, 0, 1));
+      expect(startOfCurrentPeriod('quarterly', new Date(2026, 4, 20))).toEqual(new Date(2026, 3, 1));
+      expect(startOfCurrentPeriod('quarterly', new Date(2026, 7, 9))).toEqual(new Date(2026, 6, 1));
+      expect(startOfCurrentPeriod('quarterly', new Date(2026, 11, 31))).toEqual(new Date(2026, 9, 1));
     });
 
     it('yearly: the first of January', () => {
-      expect(startOfCurrentPeriod('yearly', new Date(2026, 6, 4))).toEqual(
-        new Date(2026, 0, 1)
-      );
+      expect(startOfCurrentPeriod('yearly', new Date(2026, 6, 4))).toEqual(new Date(2026, 0, 1));
     });
   });
 
@@ -130,61 +102,34 @@ describe('budget-calendar', () => {
     const today = () => new Date(2026, 7, 15, 11, 0);
 
     it('is not-started when the start date is in the future', () => {
-      expect(
-        budgetPhase({ startDate: new Date(2026, 8, 1), endDate: null }, today())
-      ).toBe('not-started');
+      expect(budgetPhase({ startDate: new Date(2026, 8, 1), endDate: null }, today())).toBe('not-started');
     });
 
     it('is live when the start date has passed and there is no end', () => {
-      expect(
-        budgetPhase({ startDate: new Date(2026, 6, 1), endDate: null }, today())
-      ).toBe('live');
+      expect(budgetPhase({ startDate: new Date(2026, 6, 1), endDate: null }, today())).toBe('live');
     });
 
     it('is live on the start day itself', () => {
-      expect(
-        budgetPhase(
-          { startDate: new Date(2026, 7, 15), endDate: null },
-          today()
-        )
-      ).toBe('live');
+      expect(budgetPhase({ startDate: new Date(2026, 7, 15), endDate: null }, today())).toBe('live');
     });
 
     it('is live while today is inside the window', () => {
-      expect(
-        budgetPhase(
-          { startDate: new Date(2026, 6, 1), endDate: new Date(2026, 8, 30) },
-          today()
-        )
-      ).toBe('live');
+      expect(budgetPhase({ startDate: new Date(2026, 6, 1), endDate: new Date(2026, 8, 30) }, today())).toBe('live');
     });
 
     it('is live on the end day itself — the last day still counts', () => {
-      expect(
-        budgetPhase(
-          { startDate: new Date(2026, 6, 1), endDate: new Date(2026, 7, 15) },
-          today()
-        )
-      ).toBe('live');
+      expect(budgetPhase({ startDate: new Date(2026, 6, 1), endDate: new Date(2026, 7, 15) }, today())).toBe('live');
     });
 
     it('is finished once the end date is past', () => {
-      expect(
-        budgetPhase(
-          { startDate: new Date(2026, 6, 1), endDate: new Date(2026, 7, 14) },
-          today()
-        )
-      ).toBe('finished');
+      expect(budgetPhase({ startDate: new Date(2026, 6, 1), endDate: new Date(2026, 7, 14) }, today())).toBe(
+        'finished',
+      );
     });
 
     it('compares on calendar days, ignoring the time of day on the reference', () => {
       const lateInDay = new Date(2026, 7, 15, 23, 59);
-      expect(
-        budgetPhase(
-          { startDate: new Date(2026, 7, 15), endDate: new Date(2026, 7, 15) },
-          lateInDay
-        )
-      ).toBe('live');
+      expect(budgetPhase({ startDate: new Date(2026, 7, 15), endDate: new Date(2026, 7, 15) }, lateInDay)).toBe('live');
     });
   });
 

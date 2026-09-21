@@ -1,14 +1,6 @@
 import { MediaMatcher } from '@angular/cdk/layout';
 import { isPlatformBrowser } from '@angular/common';
-import {
-  DestroyRef,
-  inject,
-  Injectable,
-  PLATFORM_ID,
-  signal,
-  Signal,
-  WritableSignal,
-} from '@angular/core';
+import { DestroyRef, inject, Injectable, PLATFORM_ID, signal, Signal, WritableSignal } from '@angular/core';
 
 type MediaQueryObserver = {
   matches: WritableSignal<boolean>;

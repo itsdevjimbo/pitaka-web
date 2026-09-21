@@ -16,11 +16,7 @@ import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService } from '@/app/core/auth';
-import {
-  BoundServerError,
-  partitionServerError,
-  ServerErrorControls,
-} from '@/app/core/forms';
+import { BoundServerError, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Session } from '@/app/core/session';
 
 const EMAIL_MAX = 255;
@@ -59,22 +55,26 @@ export class ProfileEmail {
       if (this.mode() === 'resend') return undefined;
       const value = context.value().trim();
       if (!value) return { kind: 'required', message: 'Enter an email address' };
-      if (value.length > EMAIL_MAX) return { kind: 'maxLength', message: `The email address must be ${EMAIL_MAX} characters or fewer` };
+      if (value.length > EMAIL_MAX)
+        return { kind: 'maxLength', message: `The email address must be ${EMAIL_MAX} characters or fewer` };
       if (!/^\S+@\S+\.\S+$/.test(value)) return { kind: 'email', message: 'Enter a valid email address' };
-      if (value.toLocaleLowerCase() === this.profile()?.email.toLocaleLowerCase()) return { kind: 'unchanged', message: 'This is already your email address' };
-      if (value.toLocaleLowerCase() === this.pendingEmail()?.toLocaleLowerCase()) return { kind: 'pending', message: 'This address is already awaiting confirmation. Use Send another link instead.' };
+      if (value.toLocaleLowerCase() === this.profile()?.email.toLocaleLowerCase())
+        return { kind: 'unchanged', message: 'This is already your email address' };
+      if (value.toLocaleLowerCase() === this.pendingEmail()?.toLocaleLowerCase())
+        return {
+          kind: 'pending',
+          message: 'This address is already awaiting confirmation. Use Send another link instead.',
+        };
       return undefined;
     });
     validate(form.currentPassword, (context) =>
-      context.value() ? undefined : { kind: 'required', message: 'Enter your current password' }
+      context.value() ? undefined : { kind: 'required', message: 'Enter your current password' },
     );
   });
 
   protected pendingEmail(): string | null {
     const localPendingEmail = this.localPendingEmail();
-    return localPendingEmail === undefined
-      ? (this.profile()?.pendingEmail ?? null)
-      : localPendingEmail;
+    return localPendingEmail === undefined ? (this.profile()?.pendingEmail ?? null) : localPendingEmail;
   }
 
   protected beginRequest(): void {
@@ -136,36 +136,42 @@ export class ProfileEmail {
     this.errorMessage.set(null);
     this.successMessage.set(null);
     try {
-      await firstValueFrom(
-        this.injector.get(AuthService).requestEmailChange(newEmail, this.model().currentPassword)
-      );
+      await firstValueFrom(this.injector.get(AuthService).requestEmailChange(newEmail, this.model().currentPassword));
       this.localPendingEmail.set(newEmail);
       this.mode.set('closed');
       this.model.set({ newEmail: '', currentPassword: '' });
       this.successMessage.set(
-        isResend
-          ? `Another confirmation email sent to ${newEmail}`
-          : `Confirmation email sent to ${newEmail}`
+        isResend ? `Another confirmation email sent to ${newEmail}` : `Confirmation email sent to ${newEmail}`,
       );
       await this.reconcile();
     } catch (error) {
       const { boundErrors, bannerMessage } = partitionServerError(
         error,
         this.serverErrorControls(),
-        COULD_NOT_CHANGE_EMAIL
+        COULD_NOT_CHANGE_EMAIL,
       );
       const attributedErrors =
         error instanceof ApiError && error.status === 401
-          ? [{ fieldTree: this.emailForm.currentPassword, kind: 'server' as const, message: 'Your current password is incorrect.' }]
+          ? [
+              {
+                fieldTree: this.emailForm.currentPassword,
+                kind: 'server' as const,
+                message: 'Your current password is incorrect.',
+              },
+            ]
           : error instanceof ApiError && error.status === 409
-            ? [{ fieldTree: this.emailForm.newEmail, kind: 'server' as const, message: 'That email address is already in use. Choose a different address.' }]
+            ? [
+                {
+                  fieldTree: this.emailForm.newEmail,
+                  kind: 'server' as const,
+                  message: 'That email address is already in use. Choose a different address.',
+                },
+              ]
             : boundErrors;
       if (attributedErrors.length > 0) {
         this.emailForm().markAsTouched();
         this.focusAfterRender(
-          error instanceof ApiError && error.status === 401
-            ? this.passwordInput
-            : this.newEmailInput
+          error instanceof ApiError && error.status === 401 ? this.passwordInput : this.newEmailInput,
         );
         return attributedErrors;
       } else {

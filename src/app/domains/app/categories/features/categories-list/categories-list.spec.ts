@@ -62,9 +62,9 @@ describe('CategoriesList', () => {
         .filter((node) => node.nodeType === Node.TEXT_NODE)
         .map((node) => node.textContent?.trim())
         .join('');
-    const section = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('section')
-    ).find((el) => headingText(el.querySelector('h2')) === heading);
+    const section = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('section')).find(
+      (el) => headingText(el.querySelector('h2')) === heading,
+    );
     if (!section) {
       throw new Error(`No pane headed "${heading}"`);
     }
@@ -72,21 +72,12 @@ describe('CategoriesList', () => {
       el: section,
       text: () => section.textContent ?? '',
       button: (label: string) =>
-        Array.from(section.querySelectorAll('button')).find((b) =>
-          (b.textContent ?? '').includes(label)
-        ),
+        Array.from(section.querySelectorAll('button')).find((b) => (b.textContent ?? '').includes(label)),
       actionsFor: (name: string) =>
-        section.querySelector<HTMLButtonElement>(
-          `button[aria-label="Actions for ${name}"]`
-        ),
-      addButton: () =>
-        section.querySelector<HTMLButtonElement>(
-          `button[aria-label^="Add "][aria-label$=" category"]`
-        ),
+        section.querySelector<HTMLButtonElement>(`button[aria-label="Actions for ${name}"]`),
+      addButton: () => section.querySelector<HTMLButtonElement>(`button[aria-label^="Add "][aria-label$=" category"]`),
       switchTo: (label: 'Active' | 'Retired' | 'All') => {
-        const b = Array.from(section.querySelectorAll('button')).find(
-          (el) => (el.textContent ?? '').trim() === label
-        );
+        const b = Array.from(section.querySelectorAll('button')).find((el) => (el.textContent ?? '').trim() === label);
         if (!b) {
           throw new Error(`No "${label}" switch in the ${heading} pane`);
         }
@@ -94,9 +85,7 @@ describe('CategoriesList', () => {
         fixture.detectChanges();
       },
       search: (value: string) => {
-        const input = section.querySelector<HTMLInputElement>(
-          'input[type="search"]'
-        )!;
+        const input = section.querySelector<HTMLInputElement>('input[type="search"]')!;
         input.value = value;
         input.dispatchEvent(new Event('input'));
         fixture.detectChanges();
@@ -114,7 +103,7 @@ describe('CategoriesList', () => {
 
   function overlayButton(label: string): HTMLButtonElement {
     const button = Array.from(overlay().querySelectorAll('button')).find((el) =>
-      (el.textContent ?? '').includes(label)
+      (el.textContent ?? '').includes(label),
     );
     if (!button) {
       throw new Error(`No overlay button labelled "${label}"`);
@@ -125,7 +114,7 @@ describe('CategoriesList', () => {
   async function openRowMenu(
     fixture: ComponentFixture<CategoriesList>,
     pane: ReturnType<typeof paneFor>,
-    name: string
+    name: string,
   ) {
     pane.actionsFor(name)!.click();
     await settle(fixture);
@@ -138,28 +127,20 @@ describe('CategoriesList', () => {
     expect(pane('Expense').text()).toContain('Groceries');
     expect(pane('Expense').text()).toContain('Rent');
     expect(pane('Expense').text()).not.toContain('Motoring');
-    expect(
-      pane('Expense')
-        .el.querySelector('header span')
-        ?.textContent?.replace(/\D/g, '')
-    ).toBe('3');
+    expect(pane('Expense').el.querySelector('header span')?.textContent?.replace(/\D/g, '')).toBe('3');
 
     expect(pane('Income').text()).toContain('Salary');
     expect(pane('Income').text()).toContain('Gifts');
-    expect(
-      pane('Income')
-        .el.querySelector('header span')
-        ?.textContent?.replace(/\D/g, '')
-    ).toBe('2');
+    expect(pane('Income').el.querySelector('header span')?.textContent?.replace(/\D/g, '')).toBe('2');
   });
 
   it('orders rows alphabetically with retired sunk to the bottom', () => {
     const { pane } = setup(() => of(EVERYTHING));
 
     pane('Expense').switchTo('All');
-    const names = Array.from(
-      pane('Expense').el.querySelectorAll('li .font-medium')
-    ).map((el) => el.textContent?.trim());
+    const names = Array.from(pane('Expense').el.querySelectorAll('li .font-medium')).map((el) =>
+      el.textContent?.trim(),
+    );
 
     expect(names).toEqual(['Dining out', 'Groceries', 'Rent', 'Motoring']);
   });
@@ -226,20 +207,14 @@ describe('CategoriesList', () => {
     let attempt = 0;
     const readAll = vi.fn(() => {
       attempt += 1;
-      return attempt === 1
-        ? throwError(() => new ApiError('Could not reach the server.', 0))
-        : of(EVERYTHING);
+      return attempt === 1 ? throwError(() => new ApiError('Could not reach the server.', 0)) : of(EVERYTHING);
     });
-    const { fixture, text } = setup(
-      readAll as unknown as CategoriesService['readAll']
-    );
+    const { fixture, text } = setup(readAll as unknown as CategoriesService['readAll']);
 
     expect(text()).toContain('Could not reach the server.');
     expect(text()).not.toContain('Expense');
 
-    Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-    )
+    Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
       .find((b) => (b.textContent ?? '').includes('Try again'))!
       .click();
     await settle(fixture);
@@ -257,9 +232,7 @@ describe('CategoriesList', () => {
 
       expect(overlayText()).toContain('New expense category');
       expect(overlayText()).not.toContain('Kind');
-      expect(
-        overlay().querySelector<HTMLInputElement>('#add-category-name')!.value
-      ).toBe('');
+      expect(overlay().querySelector<HTMLInputElement>('#add-category-name')!.value).toBe('');
     });
 
     it('creates with the pane’s kind, then re-reads', async () => {
@@ -270,16 +243,13 @@ describe('CategoriesList', () => {
         return attempt === 1 ? of(EVERYTHING) : of([...EVERYTHING, created]);
       });
       const create = vi.fn(() => of(created));
-      const { fixture, pane } = setup(
-        readAll as unknown as CategoriesService['readAll'],
-        { create: create as unknown as CategoriesService['create'] }
-      );
+      const { fixture, pane } = setup(readAll as unknown as CategoriesService['readAll'], {
+        create: create as unknown as CategoriesService['create'],
+      });
 
       pane('Expense').addButton()!.click();
       await settle(fixture);
-      const input = overlay().querySelector<HTMLInputElement>(
-        '#add-category-name'
-      )!;
+      const input = overlay().querySelector<HTMLInputElement>('#add-category-name')!;
       input.value = 'Holidays';
       input.dispatchEvent(new Event('input'));
       await settle(fixture);
@@ -297,8 +267,8 @@ describe('CategoriesList', () => {
           () =>
             new ApiError('A category with this name already exists.', 409, {
               name: ['A category with this name already exists.'],
-            })
-        )
+            }),
+        ),
       );
       const { fixture, pane, overlayText } = setup(() => of(EVERYTHING), {
         create: create as unknown as CategoriesService['create'],
@@ -306,9 +276,7 @@ describe('CategoriesList', () => {
 
       pane('Income').addButton()!.click();
       await settle(fixture);
-      const input = overlay().querySelector<HTMLInputElement>(
-        '#add-category-name'
-      )!;
+      const input = overlay().querySelector<HTMLInputElement>('#add-category-name')!;
       input.value = 'Groceries';
       input.dispatchEvent(new Event('input'));
       await settle(fixture);
@@ -316,9 +284,7 @@ describe('CategoriesList', () => {
       await settle(fixture);
 
       expect(overlay().querySelector('[role="dialog"]')).not.toBeNull();
-      expect(overlayText()).toContain(
-        'You already have a category called “Groceries”'
-      );
+      expect(overlayText()).toContain('You already have a category called “Groceries”');
     });
   });
 
@@ -329,19 +295,11 @@ describe('CategoriesList', () => {
       attempt += 1;
       return attempt === 1
         ? of(EVERYTHING)
-        : of([
-            { ...GROCERIES, isActive: false },
-            RENT,
-            DINING,
-            MOTORING,
-            SALARY,
-            GIFTS,
-          ]);
+        : of([{ ...GROCERIES, isActive: false }, RENT, DINING, MOTORING, SALARY, GIFTS]);
     });
-    const { fixture, pane } = setup(
-      readAll as unknown as CategoriesService['readAll'],
-      { setActive: setActive as unknown as CategoriesService['setActive'] }
-    );
+    const { fixture, pane } = setup(readAll as unknown as CategoriesService['readAll'], {
+      setActive: setActive as unknown as CategoriesService['setActive'],
+    });
 
     await openRowMenu(fixture, pane('Expense'), 'Groceries');
     overlayButton('Retire').click();
@@ -359,14 +317,11 @@ describe('CategoriesList', () => {
     let attempt = 0;
     const readAll = vi.fn(() => {
       attempt += 1;
-      return attempt === 1
-        ? of(EVERYTHING)
-        : throwError(() => new ApiError('Server error', 500));
+      return attempt === 1 ? of(EVERYTHING) : throwError(() => new ApiError('Server error', 500));
     });
-    const { fixture, pane, text } = setup(
-      readAll as unknown as CategoriesService['readAll'],
-      { setActive: setActive as unknown as CategoriesService['setActive'] }
-    );
+    const { fixture, pane, text } = setup(readAll as unknown as CategoriesService['readAll'], {
+      setActive: setActive as unknown as CategoriesService['setActive'],
+    });
 
     await openRowMenu(fixture, pane('Expense'), 'Rent');
     overlayButton('Retire').click();
@@ -399,10 +354,7 @@ describe('CategoriesList', () => {
 
   it('offers Retire as the way out when a delete is refused for an in-use active Category', async () => {
     const remove = vi.fn(() =>
-      throwError(
-        () =>
-          new CategoryInUseError('This category is in use and cannot be deleted.')
-      )
+      throwError(() => new CategoryInUseError('This category is in use and cannot be deleted.')),
     );
     const { fixture, pane } = setup(() => of(EVERYTHING), {
       remove: remove as unknown as CategoriesService['remove'],
@@ -414,18 +366,13 @@ describe('CategoriesList', () => {
     pane('Expense').button('Delete')!.click();
     await settle(fixture);
 
-    expect(pane('Expense').text()).toContain(
-      'Something still uses this category'
-    );
+    expect(pane('Expense').text()).toContain('Something still uses this category');
     expect(pane('Expense').text()).toContain('Retire instead');
   });
 
   it('gives a refused delete on an already-retired Category the message alone, no button', async () => {
     const remove = vi.fn(() =>
-      throwError(
-        () =>
-          new CategoryInUseError('This category is in use and cannot be deleted.')
-      )
+      throwError(() => new CategoryInUseError('This category is in use and cannot be deleted.')),
     );
     const { fixture, pane } = setup(() => of(EVERYTHING), {
       remove: remove as unknown as CategoriesService['remove'],
@@ -438,9 +385,7 @@ describe('CategoriesList', () => {
     pane('Expense').button('Delete')!.click();
     await settle(fixture);
 
-    expect(pane('Expense').text()).toContain(
-      'Something still uses this category'
-    );
+    expect(pane('Expense').text()).toContain('Something still uses this category');
     expect(pane('Expense').text()).not.toContain('Retire instead');
   });
 
@@ -454,9 +399,7 @@ describe('CategoriesList', () => {
 
       expect(overlayText()).toContain('Rename expense category');
       expect(overlayText()).not.toContain('Kind');
-      expect(
-        overlay().querySelector<HTMLInputElement>('#rename-category-name')!.value
-      ).toBe('Groceries');
+      expect(overlay().querySelector<HTMLInputElement>('#rename-category-name')!.value).toBe('Groceries');
     });
 
     it('shows a duplicate name its cross-kind message and keeps the dialog open', async () => {
@@ -465,8 +408,8 @@ describe('CategoriesList', () => {
           () =>
             new ApiError('A category with this name already exists.', 409, {
               name: ['A category with this name already exists.'],
-            })
-        )
+            }),
+        ),
       );
       const { fixture, pane, overlayText } = setup(() => of(EVERYTHING), {
         rename: rename as unknown as CategoriesService['rename'],
@@ -475,18 +418,14 @@ describe('CategoriesList', () => {
       await openRowMenu(fixture, pane('Expense'), 'Groceries');
       overlayButton('Rename').click();
       await settle(fixture);
-      const input = overlay().querySelector<HTMLInputElement>(
-        '#rename-category-name'
-      )!;
+      const input = overlay().querySelector<HTMLInputElement>('#rename-category-name')!;
       input.value = 'Gifts';
       input.dispatchEvent(new Event('input'));
       overlayButton('Save').click();
       await settle(fixture);
 
       expect(overlay().querySelector('[role="dialog"]')).not.toBeNull();
-      expect(overlayText()).toContain(
-        'You already have a category called “Gifts”'
-      );
+      expect(overlayText()).toContain('You already have a category called “Gifts”');
     });
 
     it('re-reads the list on a successful rename', async () => {
@@ -498,17 +437,14 @@ describe('CategoriesList', () => {
           : of([{ ...GROCERIES, name: 'Food' }, RENT, DINING, MOTORING, SALARY, GIFTS]);
       });
       const rename = vi.fn(() => of({ ...GROCERIES, name: 'Food' }));
-      const { fixture, pane } = setup(
-        readAll as unknown as CategoriesService['readAll'],
-        { rename: rename as unknown as CategoriesService['rename'] }
-      );
+      const { fixture, pane } = setup(readAll as unknown as CategoriesService['readAll'], {
+        rename: rename as unknown as CategoriesService['rename'],
+      });
 
       await openRowMenu(fixture, pane('Expense'), 'Groceries');
       overlayButton('Rename').click();
       await settle(fixture);
-      const input = overlay().querySelector<HTMLInputElement>(
-        '#rename-category-name'
-      )!;
+      const input = overlay().querySelector<HTMLInputElement>('#rename-category-name')!;
       input.value = 'Food';
       input.dispatchEvent(new Event('input'));
       overlayButton('Save').click();
@@ -531,9 +467,7 @@ describe('CategoriesList', () => {
 
   it('gives an empty Active view an honest line rather than a bare pane', () => {
     // Every Expense Category of this person's is retired; Income is untouched.
-    const { pane } = setup(() =>
-      of([{ ...GROCERIES, isActive: false }, MOTORING, SALARY, GIFTS])
-    );
+    const { pane } = setup(() => of([{ ...GROCERIES, isActive: false }, MOTORING, SALARY, GIFTS]));
 
     expect(pane('Expense').text()).toContain('No active expense categories');
     expect(pane('Expense').text()).not.toContain('No categories match');
@@ -547,12 +481,8 @@ describe('CategoriesList', () => {
 
     for (const heading of ['Expense', 'Income']) {
       const el = pane(heading).el;
-      expect(
-        el.querySelector<HTMLInputElement>('input[type="search"]')!.value
-      ).toBe('');
-      const active = Array.from(el.querySelectorAll('button')).find(
-        (b) => (b.textContent ?? '').trim() === 'Active'
-      )!;
+      expect(el.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe('');
+      const active = Array.from(el.querySelectorAll('button')).find((b) => (b.textContent ?? '').trim() === 'Active')!;
       expect(active.getAttribute('aria-pressed')).toBe('true');
     }
   });

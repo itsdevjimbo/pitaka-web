@@ -1,18 +1,5 @@
-import {
-  Component,
-  inject,
-  input,
-  linkedSignal,
-  output,
-  signal,
-} from '@angular/core';
-import {
-  form,
-  FormField,
-  maxLength,
-  required,
-  submit,
-} from '@angular/forms/signals';
+import { Component, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { form, FormField, maxLength, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -23,8 +10,7 @@ import { Category, CATEGORY_NAME_MAX } from '../data/category';
 import { duplicateNameBinding } from './duplicate-name';
 
 /** The banner line for a rename that failed before it could be attributed. */
-const COULD_NOT_RENAME =
-  'Something went wrong renaming your category. Please try again.';
+const COULD_NOT_RENAME = 'Something went wrong renaming your category. Please try again.';
 
 /**
  * The inline "rename this Category" editor: one field, pre-filled with the
@@ -75,10 +61,7 @@ export class RenameCategoryForm {
   protected readonly submitting = signal(false);
 
   /** The banner. Linked to the model so any edit clears a now-stale message. */
-  protected readonly errorMessage = linkedSignal<
-    { name: string },
-    string | null
-  >({
+  protected readonly errorMessage = linkedSignal<{ name: string }, string | null>({
     source: this.model,
     computation: () => null,
   });
@@ -92,17 +75,11 @@ export class RenameCategoryForm {
         this.errorMessage.set(null);
 
         try {
-          const renamed = await firstValueFrom(
-            this.service.rename(this.category().id, this.model().name.trim())
-          );
+          const renamed = await firstValueFrom(this.service.rename(this.category().id, this.model().name.trim()));
           this.renamed.emit(renamed);
           return undefined;
         } catch (error) {
-          const conflict = duplicateNameBinding(
-            error,
-            this.renameForm.name,
-            this.model().name.trim()
-          );
+          const conflict = duplicateNameBinding(error, this.renameForm.name, this.model().name.trim());
           if (conflict) {
             this.renameForm().markAsTouched();
             return conflict;
@@ -110,7 +87,7 @@ export class RenameCategoryForm {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             { name: this.renameForm.name },
-            COULD_NOT_RENAME
+            COULD_NOT_RENAME,
           );
           if (boundErrors.length > 0) {
             this.renameForm().markAsTouched();

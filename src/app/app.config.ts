@@ -1,15 +1,8 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  ApplicationConfig,
-  provideBrowserGlobalErrorListeners,
-} from '@angular/core';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideNativeDateAdapter } from '@angular/material/core';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
-import {
-  provideRouter,
-  withComponentInputBinding,
-  withInMemoryScrolling,
-} from '@angular/router';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
 import { errorInterceptor, provideApiBaseUrl } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons/provider';
@@ -27,11 +20,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
     provideApiBaseUrl(environment.apiBaseUrl),
     provideSession(),
-    provideRouter(
-      routes,
-      withComponentInputBinding(),
-      withInMemoryScrolling({ scrollPositionRestoration: 'enabled' })
-    ),
+    provideRouter(routes, withComponentInputBinding(), withInMemoryScrolling({ scrollPositionRestoration: 'enabled' })),
 
     // Material
     {

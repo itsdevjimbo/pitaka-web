@@ -1,11 +1,5 @@
 import { isPlatformServer } from '@angular/common';
-import {
-  inject,
-  Injectable,
-  makeStateKey,
-  PLATFORM_ID,
-  TransferState,
-} from '@angular/core';
+import { inject, Injectable, makeStateKey, PLATFORM_ID, TransferState } from '@angular/core';
 
 const STORAGE_STATE_KEY = makeStateKey<[string, string][]>('APP_STORAGE_STATE');
 
@@ -21,11 +15,9 @@ export class LocalStorage {
   constructor() {
     // Initialize the localStorage with the transfer state
     if (!this.isServer) {
-      new Map(this.transferState.get(STORAGE_STATE_KEY, [])).forEach(
-        (value, key) => {
-          localStorage.setItem(key, value);
-        }
-      );
+      new Map(this.transferState.get(STORAGE_STATE_KEY, [])).forEach((value, key) => {
+        localStorage.setItem(key, value);
+      });
     }
   }
 

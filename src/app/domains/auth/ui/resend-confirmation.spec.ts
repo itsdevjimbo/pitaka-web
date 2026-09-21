@@ -1,11 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
-import {
-  RESEND_COOLDOWN_SECONDS,
-  RESEND_REASSURANCE,
-  ResendConfirmation,
-} from './resend-confirmation';
+import { RESEND_COOLDOWN_SECONDS, RESEND_REASSURANCE, ResendConfirmation } from './resend-confirmation';
 
 /**
  * The control's own seam. Its three hosts — the check-your-inbox state, sign-in's
@@ -14,9 +10,7 @@ import {
  * over (ADR 0015).
  */
 describe('ResendConfirmation', () => {
-  function setup(
-    resendConfirmation: AuthService['resendConfirmation'] = () => of(undefined)
-  ) {
+  function setup(resendConfirmation: AuthService['resendConfirmation'] = () => of(undefined)) {
     TestBed.configureTestingModule({
       imports: [ResendConfirmation],
       providers: [{ provide: AuthService, useValue: { resendConfirmation } }],
@@ -45,9 +39,7 @@ describe('ResendConfirmation', () => {
   // The countdown's own timer and the clock it counts against. `setTimeout` is
   // deliberately left real: Angular's zoneless scheduler runs on it, and faking
   // it too leaves `whenStable()` waiting forever.
-  beforeEach(() =>
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
-  );
+  beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] }));
   afterEach(() => vi.useRealTimers());
 
   it('asks the service to resend to the address it was given', async () => {
@@ -74,9 +66,7 @@ describe('ResendConfirmation', () => {
    * failing case is held to the identical line, not merely to "some" message.
    */
   it('says the same line when the request fails', async () => {
-    const error = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const fixture = setup(() => throwError(() => new Error('offline')));
 
     await click(fixture);

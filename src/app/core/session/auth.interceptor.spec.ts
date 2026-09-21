@@ -1,15 +1,8 @@
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import {
-  API_BASE_URL,
-  errorInterceptor,
-  handlesOwn401,
-} from '@/app/core/api';
+import { API_BASE_URL, errorInterceptor, handlesOwn401 } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { authInterceptor } from './auth.interceptor';
 import { Session } from './session';
@@ -69,9 +62,7 @@ describe('authInterceptor', () => {
     configure('a.b.c');
 
     const result = firstValueFrom(client.get(`${BASE_URL}/api/accounts`));
-    http
-      .expectOne(`${BASE_URL}/api/accounts`)
-      .flush(null, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne(`${BASE_URL}/api/accounts`).flush(null, { status: 401, statusText: 'Unauthorized' });
 
     await result.catch(() => undefined);
     expect(session.expire).toHaveBeenCalledTimes(1);
@@ -80,12 +71,8 @@ describe('authInterceptor', () => {
   it('does not treat a 401 on boot verification as a lapse', async () => {
     configure('a.b.c');
 
-    const result = firstValueFrom(
-      client.get(`${BASE_URL}/api/profile`, { context: handlesOwn401() })
-    );
-    http
-      .expectOne(`${BASE_URL}/api/profile`)
-      .flush(null, { status: 401, statusText: 'Unauthorized' });
+    const result = firstValueFrom(client.get(`${BASE_URL}/api/profile`, { context: handlesOwn401() }));
+    http.expectOne(`${BASE_URL}/api/profile`).flush(null, { status: 401, statusText: 'Unauthorized' });
 
     await result.catch(() => undefined);
     expect(session.expire).not.toHaveBeenCalled();
@@ -94,15 +81,11 @@ describe('authInterceptor', () => {
   it('does not treat a 401 on the sign-in request as a lapse', async () => {
     configure(null);
 
-    const result = firstValueFrom(
-      client.post(`${BASE_URL}/api/auth/login`, {}, { context: handlesOwn401() })
-    );
-    http
-      .expectOne(`${BASE_URL}/api/auth/login`)
-      .flush('Invalid email or password.', {
-        status: 401,
-        statusText: 'Unauthorized',
-      });
+    const result = firstValueFrom(client.post(`${BASE_URL}/api/auth/login`, {}, { context: handlesOwn401() }));
+    http.expectOne(`${BASE_URL}/api/auth/login`).flush('Invalid email or password.', {
+      status: 401,
+      statusText: 'Unauthorized',
+    });
 
     await result.catch(() => undefined);
     expect(session.expire).not.toHaveBeenCalled();
@@ -114,9 +97,7 @@ describe('authInterceptor', () => {
     // Same endpoint as boot verification, but built without the flag: an
     // ordinary caller's 401 there is still a lapse.
     const result = firstValueFrom(client.get(`${BASE_URL}/api/profile`));
-    http
-      .expectOne(`${BASE_URL}/api/profile`)
-      .flush(null, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne(`${BASE_URL}/api/profile`).flush(null, { status: 401, statusText: 'Unauthorized' });
 
     await result.catch(() => undefined);
     expect(session.expire).toHaveBeenCalledTimes(1);

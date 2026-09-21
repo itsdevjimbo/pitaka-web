@@ -41,9 +41,7 @@ export class TonalPalette {
 
     // Tweaks may be passed in, otherwise use defaults
     const colorHue = config.hue ?? 600;
-    const hues = config.hues ?? [
-      0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950, 1000,
-    ];
+    const hues = config.hues ?? [0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950, 1000];
     const colorMode = config.colorMode ?? 'perceived';
     const h = config.h ?? 0;
     const s = config.s ?? 0;
@@ -113,8 +111,7 @@ export class TonalPalette {
       const range = rightAnchor.hue - leftAnchor.hue;
       const position = hue - leftAnchor.hue;
       const ratio = position / range;
-      const tweak =
-        leftAnchor.tweak + (rightAnchor.tweak - leftAnchor.tweak) * ratio;
+      const tweak = leftAnchor.tweak + (rightAnchor.tweak - leftAnchor.tweak) * ratio;
 
       return { hue, tweak: Math.round(tweak) };
     });

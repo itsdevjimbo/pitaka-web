@@ -1,17 +1,11 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { withPinnedTimezone } from '@/testing/timezone';
-import {
-  TransactionHasLinkedContributionsError,
-  TransactionRemovalConcurrentStateError,
-} from './transaction-removal';
+import { TransactionHasLinkedContributionsError, TransactionRemovalConcurrentStateError } from './transaction-removal';
 import { TransactionsService } from './transactions.service';
 
 /** One Transaction row shaped the way the API sends it, with sane defaults. */
@@ -142,9 +136,9 @@ describe('TransactionsService', () => {
     it('reads a person-recorded naive timestamp as UTC, converting to local time', async () => {
       const result = firstValueFrom(service.list(3));
 
-      http.expectOne(`${BASE_URL}/api/accounts/3/transactions`).flush([
-        resource({ recurringTransactionId: null, transactionDate: '2026-08-29T05:00:00' }),
-      ]);
+      http
+        .expectOne(`${BASE_URL}/api/accounts/3/transactions`)
+        .flush([resource({ recurringTransactionId: null, transactionDate: '2026-08-29T05:00:00' })]);
 
       // 05:00 UTC is 13:00 in Manila — the 1 PM the person entered, not 5 AM.
       const [tx] = await result;
@@ -155,9 +149,9 @@ describe('TransactionsService', () => {
     it('reads a generated naive timestamp as a local wall-clock day', async () => {
       const result = firstValueFrom(service.list(3));
 
-      http.expectOne(`${BASE_URL}/api/accounts/3/transactions`).flush([
-        resource({ recurringTransactionId: 88, transactionDate: '2026-08-29T00:00:00' }),
-      ]);
+      http
+        .expectOne(`${BASE_URL}/api/accounts/3/transactions`)
+        .flush([resource({ recurringTransactionId: 88, transactionDate: '2026-08-29T00:00:00' })]);
 
       // The bare midnight day is kept as written, never pulled UTC-wards.
       const [tx] = await result;
@@ -179,9 +173,7 @@ describe('TransactionsService', () => {
   it('surfaces a server failure as a normalised ApiError', async () => {
     const result = firstValueFrom(service.list(3));
 
-    http
-      .expectOne(`${BASE_URL}/api/accounts/3/transactions`)
-      .flush(null, { status: 404, statusText: 'Not Found' });
+    http.expectOne(`${BASE_URL}/api/accounts/3/transactions`).flush(null, { status: 404, statusText: 'Not Found' });
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
@@ -238,11 +230,7 @@ describe('TransactionsService', () => {
     });
 
     it('sends an expense as its own type, still Category-filed, offset-stamped', async () => {
-      const result = firstValueFrom(
-        service.record(
-          newTx({ direction: 'expense', amount: 120.5, categoryId: 4 })
-        )
-      );
+      const result = firstValueFrom(service.record(newTx({ direction: 'expense', amount: 120.5, categoryId: 4 })));
 
       const request = http.expectOne(`${BASE_URL}/api/transactions`);
       expect(request.request.body).toEqual({
@@ -266,8 +254,8 @@ describe('TransactionsService', () => {
             direction: 'transfer',
             categoryId: 4,
             transferToAccountId: 9,
-          })
-        )
+          }),
+        ),
       );
 
       const request = http.expectOne(`${BASE_URL}/api/transactions`);
@@ -283,15 +271,13 @@ describe('TransactionsService', () => {
           type: 'Transfer',
           categoryId: null,
           transferToAccountId: 9,
-        })
+        }),
       );
       await result;
     });
 
     it('forces transferToAccountId to null on an income or expense', async () => {
-      const result = firstValueFrom(
-        service.record(newTx({ direction: 'income', transferToAccountId: 9 }))
-      );
+      const result = firstValueFrom(service.record(newTx({ direction: 'income', transferToAccountId: 9 })));
 
       const request = http.expectOne(`${BASE_URL}/api/transactions`);
       expect(request.request.body).toMatchObject({
@@ -311,8 +297,8 @@ describe('TransactionsService', () => {
             amount: 750,
             categoryId: null,
             transferToAccountId: 9,
-          })
-        )
+          }),
+        ),
       );
 
       const request = http.expectOne(`${BASE_URL}/api/transactions`);
@@ -332,7 +318,7 @@ describe('TransactionsService', () => {
           type: 'Transfer',
           categoryId: null,
           transferToAccountId: 9,
-        })
+        }),
       );
       await result;
     });
@@ -342,9 +328,7 @@ describe('TransactionsService', () => {
 
       http
         .expectOne(`${BASE_URL}/api/transactions`)
-        .flush(
-          resource({ id: 99, type: 'Income', amount: 5000, categoryId: 2 })
-        );
+        .flush(resource({ id: 99, type: 'Income', amount: 5000, categoryId: 2 }));
 
       await expect(result).resolves.toMatchObject({
         id: 99,
@@ -357,9 +341,7 @@ describe('TransactionsService', () => {
     it('surfaces a rejection with no body as a form-level ApiError with an empty field map', async () => {
       const result = firstValueFrom(service.record(newTx()));
 
-      http
-        .expectOne(`${BASE_URL}/api/transactions`)
-        .flush(null, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${BASE_URL}/api/transactions`).flush(null, { status: 400, statusText: 'Bad Request' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -404,9 +386,7 @@ describe('TransactionsService', () => {
     }
 
     it('PUTs the by-id endpoint with the whole mutable set and an offset-stamped date', async () => {
-      const result = firstValueFrom(
-        service.refile(existing(), correction({ categoryId: 7 }))
-      );
+      const result = firstValueFrom(service.refile(existing(), correction({ categoryId: 7 })));
 
       const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
       expect(request.request.method).toBe('PUT');
@@ -429,8 +409,8 @@ describe('TransactionsService', () => {
             categoryId: 9,
             description: 'Flat white',
             tagIds: [2],
-          })
-        )
+          }),
+        ),
       );
 
       const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
@@ -447,10 +427,7 @@ describe('TransactionsService', () => {
 
     it('sends categoryId and description as explicit keys even when cleared', async () => {
       const result = firstValueFrom(
-        service.refile(
-          existing(),
-          correction({ categoryId: null, description: null, tagIds: [] })
-        )
+        service.refile(existing(), correction({ categoryId: null, description: null, tagIds: [] })),
       );
 
       const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
@@ -469,27 +446,21 @@ describe('TransactionsService', () => {
       const result = firstValueFrom(
         service.refile(
           existing({ direction: 'transfer', transferToAccountId: 9, categoryId: null }),
-          correction({ categoryId: 4 })
-        )
+          correction({ categoryId: 4 }),
+        ),
       );
 
       const request = http.expectOne(`${BASE_URL}/api/transactions/42`);
       expect(request.request.body).toMatchObject({ categoryId: null });
 
-      request.flush(
-        resource({ id: 42, type: 'Transfer', categoryId: null, transferToAccountId: 9 })
-      );
+      request.flush(resource({ id: 42, type: 'Transfer', categoryId: null, transferToAccountId: 9 }));
       await result;
     });
 
     it('maps the refiled row back to the domain shape', async () => {
-      const result = firstValueFrom(
-        service.refile(existing(), correction({ categoryId: 7 }))
-      );
+      const result = firstValueFrom(service.refile(existing(), correction({ categoryId: 7 })));
 
-      http
-        .expectOne(`${BASE_URL}/api/transactions/42`)
-        .flush(resource({ id: 42, type: 'Expense', categoryId: 7 }));
+      http.expectOne(`${BASE_URL}/api/transactions/42`).flush(resource({ id: 42, type: 'Expense', categoryId: 7 }));
 
       await expect(result).resolves.toMatchObject({
         id: 42,
@@ -499,12 +470,7 @@ describe('TransactionsService', () => {
     });
 
     it('keeps a generated transaction generated after a refile', async () => {
-      const result = firstValueFrom(
-        service.refile(
-          existing({ generated: true }),
-          correction({ categoryId: 7 })
-        )
-      );
+      const result = firstValueFrom(service.refile(existing({ generated: true }), correction({ categoryId: 7 })));
 
       http
         .expectOne(`${BASE_URL}/api/transactions/42`)
@@ -514,13 +480,9 @@ describe('TransactionsService', () => {
     });
 
     it('surfaces a bodyless rejection as a form-level ApiError with an empty field map', async () => {
-      const result = firstValueFrom(
-        service.refile(existing(), correction())
-      );
+      const result = firstValueFrom(service.refile(existing(), correction()));
 
-      http
-        .expectOne(`${BASE_URL}/api/transactions/42`)
-        .flush(null, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${BASE_URL}/api/transactions/42`).flush(null, { status: 400, statusText: 'Bad Request' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -544,9 +506,7 @@ describe('TransactionsService', () => {
     it('collapses a 404 — the Transaction is gone or was never ours — to one not-found ApiError', async () => {
       const result = firstValueFrom(service.remove(42));
 
-      http
-        .expectOne(`${BASE_URL}/api/transactions/42`)
-        .flush(null, { status: 404, statusText: 'Not Found' });
+      http.expectOne(`${BASE_URL}/api/transactions/42`).flush(null, { status: 404, statusText: 'Not Found' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -557,24 +517,20 @@ describe('TransactionsService', () => {
     it('gives a 403 the same not-found wording, never leaking that the row exists', async () => {
       const result = firstValueFrom(service.remove(42));
 
-      http
-        .expectOne(`${BASE_URL}/api/transactions/42`)
-        .flush(null, { status: 403, statusText: 'Forbidden' });
+      http.expectOne(`${BASE_URL}/api/transactions/42`).flush(null, { status: 403, statusText: 'Forbidden' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).status).toBe(403);
       expect((error as ApiError).message).toBe(
-        "We couldn't find that. It may have been deleted, or it may not be yours."
+        "We couldn't find that. It may have been deleted, or it may not be yours.",
       );
     });
 
     it('surfaces a server failure as a normalised ApiError the caller can show', async () => {
       const result = firstValueFrom(service.remove(42));
 
-      http
-        .expectOne(`${BASE_URL}/api/transactions/42`)
-        .flush(null, { status: 500, statusText: 'Server Error' });
+      http.expectOne(`${BASE_URL}/api/transactions/42`).flush(null, { status: 500, statusText: 'Server Error' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -638,9 +594,7 @@ describe('TransactionsService', () => {
           status: 409,
           reason: 'transaction_has_linked_contributions',
           transactionId: 99,
-          linkedContributions: [
-            { contributionId: 91, goalId: 2, goalName: 'Emergency fund' },
-          ],
+          linkedContributions: [{ contributionId: 91, goalId: 2, goalName: 'Emergency fund' }],
         },
         { status: 409, statusText: 'Conflict' },
       );
@@ -666,9 +620,7 @@ describe('TransactionsService', () => {
     it('GETs the un-scoped endpoint with only page for empty criteria', async () => {
       const result = firstValueFrom(service.search({}, 1));
 
-      const request = http.expectOne(
-        (req) => req.url === `${BASE_URL}/api/transactions`
-      );
+      const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
       expect(request.request.method).toBe('GET');
       expect(request.request.params.keys().sort()).toEqual(['page']);
       expect(request.request.params.get('page')).toBe('1');
@@ -680,13 +632,8 @@ describe('TransactionsService', () => {
     it('emits no parameter at all for an axis criteria leaves unset', async () => {
       const result = firstValueFrom(service.search({ accountId: 3 }, 2));
 
-      const request = http.expectOne(
-        (req) => req.url === `${BASE_URL}/api/transactions`
-      );
-      expect(request.request.params.keys().sort()).toEqual([
-        'accountId',
-        'page',
-      ]);
+      const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
+      expect(request.request.params.keys().sort()).toEqual(['accountId', 'page']);
       expect(request.request.params.get('accountId')).toBe('3');
       expect(request.request.params.get('page')).toBe('2');
 
@@ -697,13 +644,8 @@ describe('TransactionsService', () => {
     it('maps the product Schedule criterion to recurringTransactionId', async () => {
       const result = firstValueFrom(service.search({ scheduleId: 12 }, 1));
 
-      const request = http.expectOne(
-        (req) => req.url === `${BASE_URL}/api/transactions`
-      );
-      expect(request.request.params.keys().sort()).toEqual([
-        'page',
-        'recurringTransactionId',
-      ]);
+      const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
+      expect(request.request.params.keys().sort()).toEqual(['page', 'recurringTransactionId']);
       expect(request.request.params.get('recurringTransactionId')).toBe('12');
 
       request.flush(envelope());
@@ -711,22 +653,10 @@ describe('TransactionsService', () => {
     });
 
     it('serialises every axis when all three are set', async () => {
-      const result = firstValueFrom(
-        service.search(
-          { direction: 'expense', accountId: 3, categoryId: 4 },
-          1
-        )
-      );
+      const result = firstValueFrom(service.search({ direction: 'expense', accountId: 3, categoryId: 4 }, 1));
 
-      const request = http.expectOne(
-        (req) => req.url === `${BASE_URL}/api/transactions`
-      );
-      expect(request.request.params.keys().sort()).toEqual([
-        'accountId',
-        'categoryId',
-        'page',
-        'type',
-      ]);
+      const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
+      expect(request.request.params.keys().sort()).toEqual(['accountId', 'categoryId', 'page', 'type']);
       expect(request.request.params.get('accountId')).toBe('3');
       expect(request.request.params.get('categoryId')).toBe('4');
       expect(request.request.params.get('type')).toBe('Expense');
@@ -743,9 +673,7 @@ describe('TransactionsService', () => {
       ] as const) {
         const result = firstValueFrom(service.search({ direction }, 1));
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
         expect(request.request.params.get('type')).toBe(wireType);
 
         request.flush(envelope());
@@ -755,17 +683,10 @@ describe('TransactionsService', () => {
 
     describe('the note search (#64)', () => {
       it('sends the note as the description parameter, verbatim', async () => {
-        const result = firstValueFrom(
-          service.search({ description: 'flat white' }, 1)
-        );
+        const result = firstValueFrom(service.search({ description: 'flat white' }, 1));
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
-        expect(request.request.params.keys().sort()).toEqual([
-          'description',
-          'page',
-        ]);
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
+        expect(request.request.params.keys().sort()).toEqual(['description', 'page']);
         expect(request.request.params.get('description')).toBe('flat white');
 
         request.flush(envelope());
@@ -775,9 +696,7 @@ describe('TransactionsService', () => {
       it('emits no description parameter when the axis is unset', async () => {
         const result = firstValueFrom(service.search({ accountId: 3 }, 1));
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
         expect(request.request.params.has('description')).toBe(false);
 
         request.flush(envelope());
@@ -785,22 +704,10 @@ describe('TransactionsService', () => {
       });
 
       it('combines with the other axes', async () => {
-        const result = firstValueFrom(
-          service.search(
-            { direction: 'expense', accountId: 3, description: 'coffee' },
-            1
-          )
-        );
+        const result = firstValueFrom(service.search({ direction: 'expense', accountId: 3, description: 'coffee' }, 1));
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
-        expect(request.request.params.keys().sort()).toEqual([
-          'accountId',
-          'description',
-          'page',
-          'type',
-        ]);
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
+        expect(request.request.params.keys().sort()).toEqual(['accountId', 'description', 'page', 'type']);
         expect(request.request.params.get('description')).toBe('coffee');
 
         request.flush(envelope());
@@ -816,36 +723,21 @@ describe('TransactionsService', () => {
       beforeEach(() => pinTimezone('America/Panama')); // fixed −05:00, no DST
 
       it('sends the inclusive calendar days as offset-bearing bounds, with to exclusive', async () => {
-        const result = firstValueFrom(
-          service.search(
-            { from: new Date(2026, 8, 1), to: new Date(2026, 8, 30) },
-            1
-          )
-        );
+        const result = firstValueFrom(service.search({ from: new Date(2026, 8, 1), to: new Date(2026, 8, 30) }, 1));
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
-        expect(request.request.params.get('from')).toBe(
-          '2026-09-01T00:00:00-05:00'
-        );
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
+        expect(request.request.params.get('from')).toBe('2026-09-01T00:00:00-05:00');
         // The inclusive 30 September goes out as 1 October — `to` is exclusive.
-        expect(request.request.params.get('to')).toBe(
-          '2026-10-01T00:00:00-05:00'
-        );
+        expect(request.request.params.get('to')).toBe('2026-10-01T00:00:00-05:00');
 
         request.flush(envelope());
         await result;
       });
 
       it('carries a ±HH:MM offset, never a Z — a toISOString() refactor must fail loudly', async () => {
-        const result = firstValueFrom(
-          service.search({ from: new Date(2026, 8, 1) }, 1)
-        );
+        const result = firstValueFrom(service.search({ from: new Date(2026, 8, 1) }, 1));
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
         const from = request.request.params.get('from')!;
         expect(from).not.toContain('Z');
         expect(from).toMatch(/[+-]\d{2}:\d{2}$/);
@@ -855,33 +747,20 @@ describe('TransactionsService', () => {
       });
 
       it('keeps each end independently optional', async () => {
-        const result = firstValueFrom(
-          service.search({ to: new Date(2026, 8, 30) }, 1)
-        );
+        const result = firstValueFrom(service.search({ to: new Date(2026, 8, 30) }, 1));
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
         expect(request.request.params.keys().sort()).toEqual(['page', 'to']);
-        expect(request.request.params.get('to')).toBe(
-          '2026-10-01T00:00:00-05:00'
-        );
+        expect(request.request.params.get('to')).toBe('2026-10-01T00:00:00-05:00');
 
         request.flush(envelope());
         await result;
       });
 
       it('drops both ends when the range is inverted, so no 400 reaches the screen', async () => {
-        const result = firstValueFrom(
-          service.search(
-            { from: new Date(2026, 8, 30), to: new Date(2026, 8, 1) },
-            1
-          )
-        );
+        const result = firstValueFrom(service.search({ from: new Date(2026, 8, 30), to: new Date(2026, 8, 1) }, 1));
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
         expect(request.request.params.keys().sort()).toEqual(['page']);
 
         request.flush(envelope());
@@ -897,20 +776,12 @@ describe('TransactionsService', () => {
               from: new Date(2026, 8, 1),
               to: new Date(2026, 8, 30),
             },
-            1
-          )
+            1,
+          ),
         );
 
-        const request = http.expectOne(
-          (req) => req.url === `${BASE_URL}/api/transactions`
-        );
-        expect(request.request.params.keys().sort()).toEqual([
-          'accountId',
-          'from',
-          'page',
-          'to',
-          'type',
-        ]);
+        const request = http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`);
+        expect(request.request.params.keys().sort()).toEqual(['accountId', 'from', 'page', 'to', 'type']);
 
         request.flush(envelope());
         await result;
@@ -926,7 +797,7 @@ describe('TransactionsService', () => {
           envelope({
             data: [resource({ id: 10 }), resource({ id: 11 })],
             totalCount: 37,
-          })
+          }),
         );
 
       const { transactions, totalCount } = await result;
@@ -951,7 +822,7 @@ describe('TransactionsService', () => {
               }),
             ],
             totalCount: 1,
-          })
+          }),
         );
 
       const [tx] = (await result).transactions;
@@ -977,7 +848,7 @@ describe('TransactionsService', () => {
               }),
             ],
             totalCount: 1,
-          })
+          }),
         );
 
       expect((await result).transactions).toHaveLength(1);
@@ -986,9 +857,7 @@ describe('TransactionsService', () => {
     it('yields an empty list and a truthful totalCount for a page beyond the end', async () => {
       const result = firstValueFrom(service.search({}, 5));
 
-      http
-        .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
-        .flush(envelope({ data: [], totalCount: 3 }));
+      http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`).flush(envelope({ data: [], totalCount: 3 }));
 
       const { transactions, totalCount } = await result;
       expect(transactions).toEqual([]);
@@ -998,9 +867,7 @@ describe('TransactionsService', () => {
     it('yields an empty list, not an error, for a Profile with no Transactions', async () => {
       const result = firstValueFrom(service.search({}, 1));
 
-      http
-        .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
-        .flush(envelope({ data: [], totalCount: 0 }));
+      http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`).flush(envelope({ data: [], totalCount: 0 }));
 
       await expect(result).resolves.toEqual({
         transactions: [],
@@ -1028,17 +895,19 @@ describe('TransactionsService', () => {
       it('reads a person-recorded naive timestamp as UTC, converting to local time', async () => {
         const result = firstValueFrom(service.search({}, 1));
 
-        http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`).flush(
-          envelope({
-            data: [
-              resource({
-                recurringTransactionId: null,
-                transactionDate: '2026-08-29T05:00:00',
-              }),
-            ],
-            totalCount: 1,
-          })
-        );
+        http
+          .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
+          .flush(
+            envelope({
+              data: [
+                resource({
+                  recurringTransactionId: null,
+                  transactionDate: '2026-08-29T05:00:00',
+                }),
+              ],
+              totalCount: 1,
+            }),
+          );
 
         const [tx] = (await result).transactions;
         expect(tx.date.getHours()).toBe(13);
@@ -1048,17 +917,19 @@ describe('TransactionsService', () => {
       it('reads a generated naive timestamp as a local wall-clock day', async () => {
         const result = firstValueFrom(service.search({}, 1));
 
-        http.expectOne((req) => req.url === `${BASE_URL}/api/transactions`).flush(
-          envelope({
-            data: [
-              resource({
-                recurringTransactionId: 88,
-                transactionDate: '2026-08-29T00:00:00',
-              }),
-            ],
-            totalCount: 1,
-          })
-        );
+        http
+          .expectOne((req) => req.url === `${BASE_URL}/api/transactions`)
+          .flush(
+            envelope({
+              data: [
+                resource({
+                  recurringTransactionId: 88,
+                  transactionDate: '2026-08-29T00:00:00',
+                }),
+              ],
+              totalCount: 1,
+            }),
+          );
 
         const [tx] = (await result).transactions;
         expect(tx.date.getFullYear()).toBe(2026);

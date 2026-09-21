@@ -9,22 +9,18 @@ import { DeadLink } from './dead-link';
  * control — unlike its other hosts, nothing here already knows an address.
  */
 describe('DeadLink', () => {
-  function setup(
-    {
-      resendConfirmation = () => of(undefined),
-      forgotPassword = () => of(undefined),
-      kind,
-    }: {
-      resendConfirmation?: AuthService['resendConfirmation'];
-      forgotPassword?: AuthService['forgotPassword'];
-      kind?: 'confirm-email' | 'reset-password';
-    } = {}
-  ) {
+  function setup({
+    resendConfirmation = () => of(undefined),
+    forgotPassword = () => of(undefined),
+    kind,
+  }: {
+    resendConfirmation?: AuthService['resendConfirmation'];
+    forgotPassword?: AuthService['forgotPassword'];
+    kind?: 'confirm-email' | 'reset-password';
+  } = {}) {
     TestBed.configureTestingModule({
       imports: [DeadLink],
-      providers: [
-        { provide: AuthService, useValue: { resendConfirmation, forgotPassword } },
-      ],
+      providers: [{ provide: AuthService, useValue: { resendConfirmation, forgotPassword } }],
     });
 
     const fixture = TestBed.createComponent(DeadLink);
@@ -39,18 +35,14 @@ describe('DeadLink', () => {
     return fixture.nativeElement.querySelector('input#email');
   }
 
-  function resendButton(
-    fixture: ReturnType<typeof setup>
-  ): HTMLButtonElement | null {
+  function resendButton(fixture: ReturnType<typeof setup>): HTMLButtonElement | null {
     return fixture.nativeElement.querySelector('button');
   }
 
   it('says the link is no longer valid', () => {
     const fixture = setup();
 
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
-      'This link is no longer valid'
-    );
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('This link is no longer valid');
   });
 
   it('withholds the resend control until an email address is valid', () => {
@@ -96,9 +88,7 @@ describe('DeadLink', () => {
     input(fixture).dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
-      'Send new reset link'
-    );
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Send new reset link');
 
     resendButton(fixture)?.click();
     await fixture.whenStable();

@@ -23,50 +23,38 @@ export class GoalsService {
 
   /** Every Goal, freshly read because each row carries its current money figure. */
   list(): Observable<Goal[]> {
-    return this.http
-      .get<GoalResource[]>(`${this.baseUrl}/api/goals`)
-      .pipe(map((resources) => resources.map(toGoal)));
+    return this.http.get<GoalResource[]>(`${this.baseUrl}/api/goals`).pipe(map((resources) => resources.map(toGoal)));
   }
 
   /** One Goal and its server-computed current amount. */
   get(id: number): Observable<Goal> {
-    return this.http
-      .get<GoalResource>(`${this.baseUrl}/api/goals/${id}`)
-      .pipe(map(toGoal));
+    return this.http.get<GoalResource>(`${this.baseUrl}/api/goals/${id}`).pipe(map(toGoal));
   }
 
   /** Create a Goal; a duplicate name becomes a field-bound API error. */
   create(goal: NewGoal): Observable<Goal> {
-    return this.http
-      .post<GoalResource>(`${this.baseUrl}/api/goals`, toGoalRequest(goal))
-      .pipe(
-        map(toGoal),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
-      );
+    return this.http.post<GoalResource>(`${this.baseUrl}/api/goals`, toGoalRequest(goal)).pipe(
+      map(toGoal),
+      catchError((error: unknown) => throwError(() => asNameConflict(error))),
+    );
   }
 
   /** Replace a Goal's editable fields; duplicate-name failures bind to `name`. */
   update(id: number, goal: UpdateGoal): Observable<Goal> {
-    return this.http
-      .put<GoalResource>(`${this.baseUrl}/api/goals/${id}`, toGoalRequest(goal))
-      .pipe(
-        map(toGoal),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
-      );
+    return this.http.put<GoalResource>(`${this.baseUrl}/api/goals/${id}`, toGoalRequest(goal)).pipe(
+      map(toGoal),
+      catchError((error: unknown) => throwError(() => asNameConflict(error))),
+    );
   }
 
   /** Set the explicit Goal lifecycle state. */
   setStatus(id: number, status: GoalStatus): Observable<Goal> {
-    return this.http
-      .patch<GoalResource>(`${this.baseUrl}/api/goals/${id}/status`, { status })
-      .pipe(map(toGoal));
+    return this.http.patch<GoalResource>(`${this.baseUrl}/api/goals/${id}/status`, { status }).pipe(map(toGoal));
   }
 
   /** Delete a Goal and its Contributions; callers reconcile with fresh reads. */
   delete(id: number): Observable<void> {
-    return this.http
-      .delete<void>(`${this.baseUrl}/api/goals/${id}`)
-      .pipe(map(() => undefined));
+    return this.http.delete<void>(`${this.baseUrl}/api/goals/${id}`).pipe(map(() => undefined));
   }
 }
 
@@ -78,8 +66,7 @@ function toGoalRequest(goal: NewGoal): {
   return {
     name: goal.name,
     targetAmount: goal.targetAmount,
-    targetDate:
-      goal.targetDate === null ? null : toGoalDateOnly(goal.targetDate),
+    targetDate: goal.targetDate === null ? null : toGoalDateOnly(goal.targetDate),
   };
 }
 
@@ -97,10 +84,7 @@ function toGoal(resource: GoalResource): Goal {
     id: resource.id,
     name: resource.name,
     targetAmount: resource.targetAmount,
-    targetDate:
-      resource.targetDate === null
-        ? null
-        : toGoalCalendarDate(resource.targetDate),
+    targetDate: resource.targetDate === null ? null : toGoalCalendarDate(resource.targetDate),
     status: resource.status,
     currentAmount: resource.currentAmount,
   };

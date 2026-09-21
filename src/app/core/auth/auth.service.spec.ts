@@ -1,16 +1,8 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import {
-  ApiError,
-  API_BASE_URL,
-  errorInterceptor,
-  HANDLES_OWN_401,
-} from '@/app/core/api';
+import { ApiError, API_BASE_URL, errorInterceptor, HANDLES_OWN_401 } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import {
   AuthService,
@@ -44,9 +36,7 @@ describe('AuthService', () => {
   afterEach(() => http.verify());
 
   it('POSTs credentials to /api/auth/login and renames the identity to `profile`', async () => {
-    const result = firstValueFrom(
-      service.login({ email: 'ada@example.com', password: 'secret12' })
-    );
+    const result = firstValueFrom(service.login({ email: 'ada@example.com', password: 'secret12' }));
 
     const request = http.expectOne(`${BASE_URL}/api/auth/login`);
     expect(request.request.method).toBe('POST');
@@ -68,16 +58,12 @@ describe('AuthService', () => {
   it('turns the bare-string login failure into one clear message of our own', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    const result = firstValueFrom(
-      service.login({ email: 'ada@example.com', password: 'wrong' })
-    );
+    const result = firstValueFrom(service.login({ email: 'ada@example.com', password: 'wrong' }));
 
-    http
-      .expectOne(`${BASE_URL}/api/auth/login`)
-      .flush('Invalid email or password.', {
-        status: 401,
-        statusText: 'Unauthorized',
-      });
+    http.expectOne(`${BASE_URL}/api/auth/login`).flush('Invalid email or password.', {
+      status: 401,
+      statusText: 'Unauthorized',
+    });
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
@@ -85,9 +71,7 @@ describe('AuthService', () => {
     expect((error as ApiError).fieldErrors).toEqual({});
     // Ours, not the server's text, and not the generic "session has ended"
     // wording a 401 gets anywhere else.
-    expect((error as ApiError).message).toBe(
-      'That email and password do not match. Please try again.'
-    );
+    expect((error as ApiError).message).toBe('That email and password do not match. Please try again.');
 
     warn.mockRestore();
   });
@@ -100,14 +84,14 @@ describe('AuthService', () => {
   it('turns a 403 unconfirmed-email login failure into an EmailNotConfirmedError naming the address', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    const result = firstValueFrom(
-      service.login({ email: 'ada@example.com', password: 'wrong-too' })
-    );
+    const result = firstValueFrom(service.login({ email: 'ada@example.com', password: 'wrong-too' }));
 
-    http.expectOne(`${BASE_URL}/api/auth/login`).flush(
-      { title: 'Forbidden', status: 403, detail: 'Email not confirmed.' },
-      { status: 403, statusText: 'Forbidden' }
-    );
+    http
+      .expectOne(`${BASE_URL}/api/auth/login`)
+      .flush(
+        { title: 'Forbidden', status: 403, detail: 'Email not confirmed.' },
+        { status: 403, statusText: 'Forbidden' },
+      );
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(EmailNotConfirmedError);
@@ -119,27 +103,19 @@ describe('AuthService', () => {
   });
 
   it('turns a 423 locked-out login failure into our own wording, with no invented countdown', async () => {
-    const result = firstValueFrom(
-      service.login({ email: 'ada@example.com', password: 'wrong' })
-    );
+    const result = firstValueFrom(service.login({ email: 'ada@example.com', password: 'wrong' }));
 
-    http
-      .expectOne(`${BASE_URL}/api/auth/login`)
-      .flush(null, { status: 423, statusText: 'Locked' });
+    http.expectOne(`${BASE_URL}/api/auth/login`).flush(null, { status: 423, statusText: 'Locked' });
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(423);
-    expect((error as ApiError).message).toBe(
-      'Too many failed attempts. Please wait a few minutes and try again.'
-    );
+    expect((error as ApiError).message).toBe('Too many failed attempts. Please wait a few minutes and try again.');
     expect((error as ApiError).message).not.toMatch(/\d+\s*(minute|second)/i);
   });
 
   it('marks its four guest-or-boot requests as handling their own 401', () => {
-    firstValueFrom(service.login({ email: 'a@b.co', password: 'x' })).catch(
-      () => undefined
-    );
+    firstValueFrom(service.login({ email: 'a@b.co', password: 'x' })).catch(() => undefined);
     const login = http.expectOne(`${BASE_URL}/api/auth/login`);
     expect(login.request.context.get(HANDLES_OWN_401)).toBe(true);
     login.flush({ token: 't', user: { id: 1, name: 'A', email: 'a@b.co', pendingEmail: null } });
@@ -161,9 +137,7 @@ describe('AuthService', () => {
   });
 
   it('normalises a ValidationProblemDetails response into the same error type, camelCasing keys', async () => {
-    const result = firstValueFrom(
-      service.login({ email: '', password: '' })
-    );
+    const result = firstValueFrom(service.login({ email: '', password: '' }));
 
     http.expectOne(`${BASE_URL}/api/auth/login`).flush(
       {
@@ -174,7 +148,7 @@ describe('AuthService', () => {
           Password: ['The Password field is required.'],
         },
       },
-      { status: 400, statusText: 'Bad Request' }
+      { status: 400, statusText: 'Bad Request' },
     );
 
     const error = await result.catch((e: unknown) => e);
@@ -184,9 +158,7 @@ describe('AuthService', () => {
       password: ['The Password field is required.'],
     });
     // Not the server's raw "One or more validation errors occurred." title.
-    expect((error as ApiError).message).toBe(
-      'Please correct the highlighted fields and try again.'
-    );
+    expect((error as ApiError).message).toBe('Please correct the highlighted fields and try again.');
   });
 
   it('POSTs registration to /api/auth/register and unwraps the Profile — no token (ADR 0015)', async () => {
@@ -195,7 +167,7 @@ describe('AuthService', () => {
         name: 'Ada',
         email: 'ada@example.com',
         password: 'secret12',
-      })
+      }),
     );
 
     const request = http.expectOne(`${BASE_URL}/api/auth/register`);
@@ -207,7 +179,7 @@ describe('AuthService', () => {
     });
     request.flush(
       { user: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null } },
-      { status: 201, statusText: 'Created' }
+      { status: 201, statusText: 'Created' },
     );
 
     await expect(result).resolves.toEqual({
@@ -245,14 +217,14 @@ describe('AuthService', () => {
   });
 
   it('turns only the password endpoint’s incorrect-current-password response into a semantic error', async () => {
-    const result = firstValueFrom(
-      service.changePassword('wrong-password', 'new-password')
-    );
+    const result = firstValueFrom(service.changePassword('wrong-password', 'new-password'));
 
-    http.expectOne(`${BASE_URL}/api/profile/password`).flush(
-      { title: 'Unauthorized', status: 401, detail: 'Your current password is incorrect.' },
-      { status: 401, statusText: 'Unauthorized' }
-    );
+    http
+      .expectOne(`${BASE_URL}/api/profile/password`)
+      .flush(
+        { title: 'Unauthorized', status: 401, detail: 'Your current password is incorrect.' },
+        { status: 401, statusText: 'Unauthorized' },
+      );
 
     await expect(result).rejects.toBeInstanceOf(IncorrectCurrentPasswordError);
   });
@@ -263,7 +235,7 @@ describe('AuthService', () => {
         name: 'Ada',
         email: 'taken@example.com',
         password: 'secret12',
-      })
+      }),
     );
 
     http.expectOne(`${BASE_URL}/api/auth/register`).flush(
@@ -272,7 +244,7 @@ describe('AuthService', () => {
         status: 409,
         detail: 'A user with this email already exists.',
       },
-      { status: 409, statusText: 'Conflict' }
+      { status: 409, statusText: 'Conflict' },
     );
 
     const error = await result.catch((e: unknown) => e);
@@ -280,15 +252,11 @@ describe('AuthService', () => {
     expect((error as ApiError).status).toBe(409);
     expect((error as ApiError).fieldErrors).toEqual({});
     // Ours, not the server's bare statement of fact.
-    expect((error as ApiError).message).toBe(
-      'That email is already registered. Try signing in instead.'
-    );
+    expect((error as ApiError).message).toBe('That email is already registered. Try signing in instead.');
   });
 
   it('normalises a ValidationProblemDetails register response into field errors, camelCasing keys', async () => {
-    const result = firstValueFrom(
-      service.register({ name: '', email: 'not-an-email', password: 'short12' })
-    );
+    const result = firstValueFrom(service.register({ name: '', email: 'not-an-email', password: 'short12' }));
 
     http.expectOne(`${BASE_URL}/api/auth/register`).flush(
       {
@@ -297,12 +265,10 @@ describe('AuthService', () => {
         errors: {
           Name: ['The Name field is required.'],
           Email: ['The Email field is not a valid e-mail address.'],
-          Password: [
-            'The field Password must be a string with a minimum length of 8.',
-          ],
+          Password: ['The field Password must be a string with a minimum length of 8.'],
         },
       },
-      { status: 400, statusText: 'Bad Request' }
+      { status: 400, statusText: 'Bad Request' },
     );
 
     const error = await result.catch((e: unknown) => e);
@@ -310,13 +276,9 @@ describe('AuthService', () => {
     expect((error as ApiError).fieldErrors).toEqual({
       name: ['The Name field is required.'],
       email: ['The Email field is not a valid e-mail address.'],
-      password: [
-        'The field Password must be a string with a minimum length of 8.',
-      ],
+      password: ['The field Password must be a string with a minimum length of 8.'],
     });
-    expect((error as ApiError).message).toBe(
-      'Please correct the highlighted fields and try again.'
-    );
+    expect((error as ApiError).message).toBe('Please correct the highlighted fields and try again.');
   });
 
   it('GETs the live Profile from /api/profile', async () => {
@@ -456,9 +418,7 @@ describe('AuthService', () => {
   it('lets a confirm-email failure propagate as an ApiError', async () => {
     const result = firstValueFrom(service.confirmEmail(7, 'stale-token'));
 
-    http
-      .expectOne(`${BASE_URL}/api/auth/confirm-email`)
-      .flush(null, { status: 400, statusText: 'Bad Request' });
+    http.expectOne(`${BASE_URL}/api/auth/confirm-email`).flush(null, { status: 400, statusText: 'Bad Request' });
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
@@ -474,9 +434,7 @@ describe('AuthService', () => {
   });
 
   it('POSTs the userId, token and new password to /api/auth/reset-password', async () => {
-    const result = firstValueFrom(
-      service.resetPassword(7, 'a-token', 'a-new-password')
-    );
+    const result = firstValueFrom(service.resetPassword(7, 'a-token', 'a-new-password'));
 
     const request = http.expectOne(`${BASE_URL}/api/auth/reset-password`);
     expect(request.request.method).toBe('POST');
@@ -497,13 +455,9 @@ describe('AuthService', () => {
    * `instanceof`, never `error.status === 400`.
    */
   it('turns an undifferentiated reset-password 400 into a ResetLinkRejectedError', async () => {
-    const result = firstValueFrom(
-      service.resetPassword(7, 'stale-token', 'a-new-password')
-    );
+    const result = firstValueFrom(service.resetPassword(7, 'stale-token', 'a-new-password'));
 
-    http
-      .expectOne(`${BASE_URL}/api/auth/reset-password`)
-      .flush(null, { status: 400, statusText: 'Bad Request' });
+    http.expectOne(`${BASE_URL}/api/auth/reset-password`).flush(null, { status: 400, statusText: 'Bad Request' });
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ResetLinkRejectedError);
@@ -517,30 +471,22 @@ describe('AuthService', () => {
         title: 'One or more validation errors occurred.',
         status: 400,
         errors: {
-          Password: [
-            'The field Password must be a string with a minimum length of 8.',
-          ],
+          Password: ['The field Password must be a string with a minimum length of 8.'],
         },
       },
-      { status: 400, statusText: 'Bad Request' }
+      { status: 400, statusText: 'Bad Request' },
     );
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).fieldErrors).toEqual({
-      password: [
-        'The field Password must be a string with a minimum length of 8.',
-      ],
+      password: ['The field Password must be a string with a minimum length of 8.'],
     });
-    expect((error as ApiError).message).toBe(
-      'Please correct the highlighted fields and try again.'
-    );
+    expect((error as ApiError).message).toBe('Please correct the highlighted fields and try again.');
   });
 
   it('marks reset-password as handling its own 401', () => {
-    firstValueFrom(
-      service.resetPassword(7, 'a-token', 'a-new-password')
-    ).catch(() => undefined);
+    firstValueFrom(service.resetPassword(7, 'a-token', 'a-new-password')).catch(() => undefined);
 
     const request = http.expectOne(`${BASE_URL}/api/auth/reset-password`);
     expect(request.request.context.get(HANDLES_OWN_401)).toBe(true);

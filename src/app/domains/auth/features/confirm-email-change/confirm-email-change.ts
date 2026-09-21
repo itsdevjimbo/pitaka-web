@@ -3,11 +3,7 @@ import { MatButton } from '@angular/material/button';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import {
-  AuthService,
-  EmailChangeAddressTakenError,
-  EmailChangeLinkInvalidError,
-} from '@/app/core/auth';
+import { AuthService, EmailChangeAddressTakenError, EmailChangeLinkInvalidError } from '@/app/core/auth';
 import { reasonQueryParams, Session, SIGN_IN_ROUTE } from '@/app/core/session';
 
 type ConfirmationState = 'ready' | 'confirming' | 'retry' | 'success' | 'invalid' | 'taken' | 'refresh-failed';
@@ -44,8 +40,11 @@ export default class AuthConfirmEmailChange implements OnInit {
     } catch (error) {
       this.submitted = false;
       this.state.set(
-        error instanceof EmailChangeAddressTakenError ? 'taken' :
-          error instanceof EmailChangeLinkInvalidError ? 'invalid' : 'retry'
+        error instanceof EmailChangeAddressTakenError
+          ? 'taken'
+          : error instanceof EmailChangeLinkInvalidError
+            ? 'invalid'
+            : 'retry',
       );
       return;
     }

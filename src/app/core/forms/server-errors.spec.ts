@@ -27,7 +27,7 @@ describe('partitionServerError', () => {
         email: ['That email is not registered.'],
       }),
       { email },
-      FALLBACK
+      FALLBACK,
     );
 
     expect(result.boundErrors).toEqual([
@@ -46,13 +46,11 @@ describe('partitionServerError', () => {
         tenantCode: ['That workspace is not accepting sign-ins.'],
       }),
       { email: fakeControl('email') },
-      FALLBACK
+      FALLBACK,
     );
 
     expect(result.boundErrors).toEqual([]);
-    expect(result.bannerMessage).toBe(
-      'That workspace is not accepting sign-ins.'
-    );
+    expect(result.bannerMessage).toBe('That workspace is not accepting sign-ins.');
   });
 
   it('keeps bound field errors even when an unattributed message also present', () => {
@@ -64,28 +62,21 @@ describe('partitionServerError', () => {
         tenantCode: ['Unknown workspace.'],
       }),
       { password },
-      FALLBACK
+      FALLBACK,
     );
 
-    expect(result.boundErrors).toEqual([
-      { fieldTree: password, kind: 'server', message: 'Too short.' },
-    ]);
+    expect(result.boundErrors).toEqual([{ fieldTree: password, kind: 'server', message: 'Too short.' }]);
     expect(result.bannerMessage).toBe('Unknown workspace.');
   });
 
   it('puts a field-less ApiError message straight on the banner', () => {
     const result = partitionServerError(
-      new ApiError(
-        'That email and password do not match. Please try again.',
-        401
-      ),
+      new ApiError('That email and password do not match. Please try again.', 401),
       { email: fakeControl('email'), password: fakeControl('password') },
-      FALLBACK
+      FALLBACK,
     );
 
     expect(result.boundErrors).toEqual([]);
-    expect(result.bannerMessage).toBe(
-      'That email and password do not match. Please try again.'
-    );
+    expect(result.bannerMessage).toBe('That email and password do not match. Please try again.');
   });
 });

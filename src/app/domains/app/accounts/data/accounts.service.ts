@@ -3,10 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
 import { Account, AccountCriteria, AccountType, NewAccount } from './account';
-import {
-  AccountDeleteBlockedError,
-  AccountModifiedError,
-} from './account-errors';
+import { AccountDeleteBlockedError, AccountModifiedError } from './account-errors';
 
 /**
  * The `409 Conflict` bodies these endpoints send carry their meaning only in the
@@ -96,9 +93,7 @@ export class AccountsService {
    * arrives as a normalised `ApiError`.
    */
   get(id: number): Observable<Account> {
-    return this.http
-      .get<AccountResource>(`${this.baseUrl}/api/accounts/${id}`)
-      .pipe(map(toAccount));
+    return this.http.get<AccountResource>(`${this.baseUrl}/api/accounts/${id}`).pipe(map(toAccount));
   }
 
   /**
@@ -121,7 +116,7 @@ export class AccountsService {
       })
       .pipe(
         map(toAccount),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
+        catchError((error: unknown) => throwError(() => asNameConflict(error))),
       );
   }
 
@@ -136,17 +131,15 @@ export class AccountsService {
    * {@link AccountModifiedError} the caller offers a retry for.
    */
   rename(id: number, name: string): Observable<Account> {
-    return this.http
-      .put<AccountResource>(`${this.baseUrl}/api/accounts/${id}`, { name })
-      .pipe(
-        map(toAccount),
-        catchError((error: unknown) => {
-          if (isConflict(error, CONFLICT_DETAIL.modified)) {
-            return throwError(() => new AccountModifiedError(error.message));
-          }
-          return throwError(() => asNameConflict(error));
-        })
-      );
+    return this.http.put<AccountResource>(`${this.baseUrl}/api/accounts/${id}`, { name }).pipe(
+      map(toAccount),
+      catchError((error: unknown) => {
+        if (isConflict(error, CONFLICT_DETAIL.modified)) {
+          return throwError(() => new AccountModifiedError(error.message));
+        }
+        return throwError(() => asNameConflict(error));
+      }),
+    );
   }
 
   /**
@@ -161,7 +154,7 @@ export class AccountsService {
       })
       .pipe(
         map(toAccount),
-        catchError((error: unknown) => throwError(() => asModified(error)))
+        catchError((error: unknown) => throwError(() => asModified(error))),
       );
   }
 
@@ -174,20 +167,16 @@ export class AccountsService {
    * {@link AccountModifiedError}.
    */
   remove(id: number): Observable<void> {
-    return this.http
-      .delete<void>(`${this.baseUrl}/api/accounts/${id}`)
-      .pipe(
-        map(() => undefined),
-        catchError((error: unknown) => throwError(() => asDeleteFailure(error)))
-      );
+    return this.http.delete<void>(`${this.baseUrl}/api/accounts/${id}`).pipe(
+      map(() => undefined),
+      catchError((error: unknown) => throwError(() => asDeleteFailure(error))),
+    );
   }
 }
 
 /** Narrow to an `ApiError` that is a 409 whose `detail` matches `pattern`. */
 function isConflict(error: unknown, pattern: RegExp): error is ApiError {
-  return (
-    error instanceof ApiError && error.status === 409 && pattern.test(error.message)
-  );
+  return error instanceof ApiError && error.status === 409 && pattern.test(error.message);
 }
 
 /** Refile a duplicate-name 409 as a `name` field error; pass anything else on. */

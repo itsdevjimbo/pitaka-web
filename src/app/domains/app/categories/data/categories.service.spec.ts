@@ -1,8 +1,5 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
@@ -18,7 +15,7 @@ function resource(
     type: 'Income' | 'Expense';
     isDefault: boolean;
     isActive: boolean;
-  }> = {}
+  }> = {},
 ) {
   return {
     id,
@@ -72,10 +69,7 @@ describe('CategoriesService', () => {
 
       const request = http.expectOne(CATEGORIES_URL);
       expect(request.request.method).toBe('GET');
-      request.flush([
-        resource(1, 'Groceries'),
-        resource(2, 'Motoring', { isActive: false }),
-      ]);
+      request.flush([resource(1, 'Groceries'), resource(2, 'Motoring', { isActive: false })]);
 
       const names = await result;
       expect(names.get(1)).toBe('Groceries');
@@ -102,16 +96,13 @@ describe('CategoriesService', () => {
 
     it('refreshList() drops a warm cache and returns the current active Categories', async () => {
       const warm = firstValueFrom(service.list());
-      http
-        .expectOne(`${BASE_URL}/api/categories`)
-        .flush([resource(1, 'Old name')]);
+      http.expectOne(`${BASE_URL}/api/categories`).flush([resource(1, 'Old name')]);
       await warm;
 
       const refreshed = firstValueFrom(service.refreshList());
-      http.expectOne(`${BASE_URL}/api/categories`).flush([
-        resource(1, 'New name'),
-        resource(2, 'Retired', { isActive: false }),
-      ]);
+      http
+        .expectOne(`${BASE_URL}/api/categories`)
+        .flush([resource(1, 'New name'), resource(2, 'Retired', { isActive: false })]);
 
       await expect(refreshed).resolves.toEqual([
         expect.objectContaining({
@@ -143,10 +134,7 @@ describe('CategoriesService', () => {
 
       http
         .expectOne(CATEGORIES_URL)
-        .flush([
-          resource(1, 'Groceries', { isDefault: true }),
-          resource(2, 'Holidays', { isDefault: false }),
-        ]);
+        .flush([resource(1, 'Groceries', { isDefault: true }), resource(2, 'Holidays', { isDefault: false })]);
 
       await expect(result).resolves.toEqual([
         { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: true },
@@ -163,9 +151,7 @@ describe('CategoriesService', () => {
       const list = await firstValueFrom(service.list());
       http.expectNone(CATEGORIES_URL);
       expect(names.get(1)).toBe('Groceries');
-      expect(list).toEqual([
-        { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
-      ]);
+      expect(list).toEqual([{ id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false }]);
     });
 
     it('readAll() is cold — it re-requests even when the cache is warm', async () => {
@@ -174,10 +160,7 @@ describe('CategoriesService', () => {
       await warm;
 
       const cold = firstValueFrom(service.readAll());
-      http.expectOne(CATEGORIES_URL).flush([
-        resource(1, 'Groceries'),
-        resource(3, 'Motoring', { isActive: false }),
-      ]);
+      http.expectOne(CATEGORIES_URL).flush([resource(1, 'Groceries'), resource(3, 'Motoring', { isActive: false })]);
 
       await expect(cold).resolves.toEqual([
         { id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false },
@@ -209,9 +192,7 @@ describe('CategoriesService', () => {
     it('surfaces a server failure as a normalised ApiError', async () => {
       const result = firstValueFrom(service.names());
 
-      http
-        .expectOne(CATEGORIES_URL)
-        .flush(null, { status: 500, statusText: 'Internal Server Error' });
+      http.expectOne(CATEGORIES_URL).flush(null, { status: 500, statusText: 'Internal Server Error' });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -219,9 +200,7 @@ describe('CategoriesService', () => {
 
     it('does not cache a failed fetch — the next read retries', async () => {
       const failed = firstValueFrom(service.names());
-      http
-        .expectOne(CATEGORIES_URL)
-        .flush(null, { status: 503, statusText: 'Service Unavailable' });
+      http.expectOne(CATEGORIES_URL).flush(null, { status: 503, statusText: 'Service Unavailable' });
       await failed.catch(() => undefined);
 
       const retried = firstValueFrom(service.names());
@@ -233,9 +212,7 @@ describe('CategoriesService', () => {
 
   describe('create', () => {
     it('POSTs the name and the raised kind, and returns the created Category', async () => {
-      const result = firstValueFrom(
-        service.create({ name: 'Holidays', kind: 'expense' })
-      );
+      const result = firstValueFrom(service.create({ name: 'Holidays', kind: 'expense' }));
 
       const request = http.expectOne(CATEGORIES_URL);
       expect(request.request.method).toBe('POST');
@@ -258,16 +235,12 @@ describe('CategoriesService', () => {
     });
 
     it('re-files a duplicate-name 409 as a name field error', async () => {
-      const result = firstValueFrom(
-        service.create({ name: 'Groceries', kind: 'expense' })
-      );
+      const result = firstValueFrom(service.create({ name: 'Groceries', kind: 'expense' }));
 
-      http
-        .expectOne(CATEGORIES_URL)
-        .flush(problem('A category with this name already exists.'), {
-          status: 409,
-          statusText: 'Conflict',
-        });
+      http.expectOne(CATEGORIES_URL).flush(problem('A category with this name already exists.'), {
+        status: 409,
+        statusText: 'Conflict',
+      });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -278,9 +251,7 @@ describe('CategoriesService', () => {
     });
 
     it('camelCases a PascalCase validation error so it binds to the name control', async () => {
-      const result = firstValueFrom(
-        service.create({ name: '', kind: 'income' })
-      );
+      const result = firstValueFrom(service.create({ name: '', kind: 'income' }));
 
       http.expectOne(CATEGORIES_URL).flush(
         {
@@ -288,7 +259,7 @@ describe('CategoriesService', () => {
           status: 400,
           errors: { Name: ['The Name field is required.'] },
         },
-        { status: 400, statusText: 'Bad Request' }
+        { status: 400, statusText: 'Bad Request' },
       );
 
       const error = await result.catch((e: unknown) => e);
@@ -319,12 +290,10 @@ describe('CategoriesService', () => {
     it('re-files a duplicate-name 409 as a name field error', async () => {
       const result = firstValueFrom(service.rename(7, 'Groceries'));
 
-      http
-        .expectOne(`${CATEGORIES_URL}/7`)
-        .flush(problem('A category with this name already exists.'), {
-          status: 409,
-          statusText: 'Conflict',
-        });
+      http.expectOne(`${CATEGORIES_URL}/7`).flush(problem('A category with this name already exists.'), {
+        status: 409,
+        statusText: 'Conflict',
+      });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
@@ -377,18 +346,14 @@ describe('CategoriesService', () => {
     it('re-files an in-use 409 as a CategoryInUseError, distinct from a name clash', async () => {
       const result = firstValueFrom(service.remove(7));
 
-      http
-        .expectOne(`${CATEGORIES_URL}/7`)
-        .flush(problem('This category is in use and cannot be deleted.'), {
-          status: 409,
-          statusText: 'Conflict',
-        });
+      http.expectOne(`${CATEGORIES_URL}/7`).flush(problem('This category is in use and cannot be deleted.'), {
+        status: 409,
+        statusText: 'Conflict',
+      });
 
       const error = await result.catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CategoryInUseError);
-      expect((error as CategoryInUseError).message).toBe(
-        'This category is in use and cannot be deleted.'
-      );
+      expect((error as CategoryInUseError).message).toBe('This category is in use and cannot be deleted.');
       expect(error).not.toBeInstanceOf(ApiError);
     });
   });
@@ -413,12 +378,8 @@ describe('CategoriesService', () => {
     it('create drops it', async () => {
       await warmCache();
 
-      const created = firstValueFrom(
-        service.create({ name: 'Holidays', kind: 'expense' })
-      );
-      http
-        .expectOne(CATEGORIES_URL)
-        .flush(resource(7, 'Holidays'), { status: 201, statusText: 'Created' });
+      const created = firstValueFrom(service.create({ name: 'Holidays', kind: 'expense' }));
+      http.expectOne(CATEGORIES_URL).flush(resource(7, 'Holidays'), { status: 201, statusText: 'Created' });
       await created;
 
       await expectReadRefetches();
@@ -438,9 +399,7 @@ describe('CategoriesService', () => {
       await warmCache();
 
       const retired = firstValueFrom(service.setActive(1, false));
-      http
-        .expectOne(`${CATEGORIES_URL}/1/status`)
-        .flush(resource(1, 'Groceries', { isActive: false }));
+      http.expectOne(`${CATEGORIES_URL}/1/status`).flush(resource(1, 'Groceries', { isActive: false }));
       await retired;
 
       await expectReadRefetches();
@@ -450,9 +409,7 @@ describe('CategoriesService', () => {
       await warmCache();
 
       const reactivated = firstValueFrom(service.setActive(1, true));
-      http
-        .expectOne(`${CATEGORIES_URL}/1/status`)
-        .flush(resource(1, 'Groceries', { isActive: true }));
+      http.expectOne(`${CATEGORIES_URL}/1/status`).flush(resource(1, 'Groceries', { isActive: true }));
       await reactivated;
 
       await expectReadRefetches();
@@ -462,9 +419,7 @@ describe('CategoriesService', () => {
       await warmCache();
 
       const removed = firstValueFrom(service.remove(1));
-      http
-        .expectOne(`${CATEGORIES_URL}/1`)
-        .flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne(`${CATEGORIES_URL}/1`).flush(null, { status: 204, statusText: 'No Content' });
       await removed;
 
       await expectReadRefetches();
@@ -473,15 +428,11 @@ describe('CategoriesService', () => {
     it('a failed write leaves the cache intact', async () => {
       await warmCache();
 
-      const failed = firstValueFrom(
-        service.create({ name: 'Groceries', kind: 'expense' })
-      );
-      http
-        .expectOne(CATEGORIES_URL)
-        .flush(problem('A category with this name already exists.'), {
-          status: 409,
-          statusText: 'Conflict',
-        });
+      const failed = firstValueFrom(service.create({ name: 'Groceries', kind: 'expense' }));
+      http.expectOne(CATEGORIES_URL).flush(problem('A category with this name already exists.'), {
+        status: 409,
+        statusText: 'Conflict',
+      });
       await failed.catch(() => undefined);
 
       await firstValueFrom(service.all());

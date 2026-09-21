@@ -7,21 +7,24 @@ reviewable changes. Preserve existing behavior and useful test coverage.
 
 The inspection baseline on 2026-09-20 found 165 source files differing from the
 existing Prettier configuration and 24 fixture-internals double assertions across
-23 files. Counts are a starting inventory, not permanent allowances.
+23 files. The migrations below refreshed those inventories before changing them;
+the historical counts were starting points, not permanent allowances.
 
 ## 1. Formatting pass
 
-Tracked in [#251](https://github.com/itsdevjimbo/pitaka-web/issues/251), blocked by
-the component-test migration [#250](https://github.com/itsdevjimbo/pitaka-web/issues/250).
-Formatting legacy specs makes them subject to the zero-warning changed-file gate,
-so resolve their existing warnings before starting the full formatting pass.
+Completed in [#251](https://github.com/itsdevjimbo/pitaka-web/issues/251), after the
+component-test migration [#250](https://github.com/itsdevjimbo/pitaka-web/issues/250).
+The refreshed inventory found 143 of 295 TypeScript and HTML source files needing
+formatting. They were normalized mechanically with the existing Prettier policy,
+with enforcement and documentation kept in a separate commit for review.
+One raw `textContent` assertion was aligned with formatter-normalized template
+whitespace in its own commit; rendered wording and application behavior are unchanged.
 
-Make one formatting-only change across `src/**/*.{ts,html}` using the existing
-Prettier configuration. Keep behavioral edits out of that change so reviewers can
-verify the diff is mechanical. Run the formatter check, full lint, tests, and build.
-
-Done when the entire source tree passes Prettier. Then add a full-source format
-check in CI; keep the changed-file command useful for local feedback.
+The full source tree now passes `npm run check:format`, and CI runs that check after
+installing dependencies. The changed-file checker remains in CI and available for
+local formatting and zero-warning lint feedback. Completion was verified with the
+full-source format check, standards enforcement tests, changed-file checks, full
+lint, application tests, and the production build.
 
 ## 2. Component test migrations
 
@@ -89,8 +92,8 @@ formatting and comment changes.
 
 ## Completion
 
-The cleanup is complete when full-source formatting passes, fixture-cast diagnostics
-are resolved or individually justified, documentation agrees with the implemented
-boundaries, and every resource domain has been audited. Record completed batches
-and their verification here as they land; do not mark a batch complete from a
-search count alone.
+The cleanup is complete when fixture-cast diagnostics are resolved or individually
+justified, documentation agrees with the implemented boundaries, and every resource
+domain has been audited. Full-source formatting now passes and is enforced in CI.
+Record completed batches and their verification here as they land; do not mark a
+batch complete from a search count alone.

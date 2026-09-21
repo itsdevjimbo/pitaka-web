@@ -1,7 +1,5 @@
 <div class="flex flex-auto">
-  <div
-    class="flex flex-auto items-center justify-center bg-white p-4 sm:p-12 dark:bg-neutral-950"
-  >
+  <div class="flex flex-auto items-center justify-center bg-white p-4 sm:p-12 dark:bg-neutral-950">
     <div class="flex w-full max-w-80 flex-col sm:min-w-80">
       <!-- Logo -->
       <img
@@ -11,9 +9,7 @@
       />
 
       <!-- Title -->
-      <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">
-        Sign in
-      </div>
+      <div class="leading-tight mt-8 text-4xl font-extrabold tracking-tight">Sign in</div>
       <div class="mt-0.5 flex items-baseline font-medium">
         <div class="text-neutral-500">New to Pitaka?</div>
         <a
@@ -68,9 +64,7 @@
               [formField]="signInForm.email"
             />
             <mat-error>
-              @if (
-                signInForm.email().touched() && signInForm.email().invalid()
-              ) {
+              @if (signInForm.email().touched() && signInForm.email().invalid()) {
                 @for (error of signInForm.email().errors(); track error) {
                   {{ error.message }}
                 }
@@ -95,9 +89,7 @@
               matIconButton
               type="button"
               (click)="
-                passwordField.type === 'password'
-                  ? (passwordField.type = 'text')
-                  : (passwordField.type = 'password')
+                passwordField.type === 'password' ? (passwordField.type = 'text') : (passwordField.type = 'password')
               "
               matSuffix
             >
@@ -115,10 +107,7 @@
               }
             </button>
             <mat-error>
-              @if (
-                signInForm.password().touched() &&
-                signInForm.password().invalid()
-              ) {
+              @if (signInForm.password().touched() && signInForm.password().invalid()) {
                 @for (error of signInForm.password().errors(); track error) {
                   {{ error.message }}
                 }

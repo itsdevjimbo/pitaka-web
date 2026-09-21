@@ -1,24 +1,16 @@
 import { TestBed } from '@angular/core/testing';
-import {
-  ActivatedRouteSnapshot,
-  provideRouter,
-  RouterStateSnapshot,
-  UrlTree,
-} from '@angular/router';
+import { ActivatedRouteSnapshot, provideRouter, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { guestGuard } from './guest.guard';
 import { Session } from './session';
 
 describe('guestGuard', () => {
   function run(authenticated: boolean, url: string) {
     TestBed.configureTestingModule({
-      providers: [
-        provideRouter([]),
-        { provide: Session, useValue: { isAuthenticated: () => authenticated } },
-      ],
+      providers: [provideRouter([]), { provide: Session, useValue: { isAuthenticated: () => authenticated } }],
     });
 
     return TestBed.runInInjectionContext(() =>
-      guestGuard({} as ActivatedRouteSnapshot, { url } as RouterStateSnapshot)
+      guestGuard({} as ActivatedRouteSnapshot, { url } as RouterStateSnapshot),
     );
   }
 

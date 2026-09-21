@@ -25,8 +25,7 @@ import { AdjustBudgetForm } from './adjust-budget-form';
   `,
 })
 export class AdjustBudgetDialog {
-  protected readonly dialogRef =
-    inject<MatDialogRef<AdjustBudgetDialog, Budget>>(MatDialogRef);
+  protected readonly dialogRef = inject<MatDialogRef<AdjustBudgetDialog, Budget>>(MatDialogRef);
 
   /** The Budget being adjusted, handed in when the dialog was opened. */
   protected readonly budget = inject<Budget>(MAT_DIALOG_DATA);

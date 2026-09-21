@@ -31,8 +31,9 @@
     <span
       matTextPrefix
       aria-hidden="true"
-      >₱&nbsp;</span
     >
+      ₱&nbsp;
+    </span>
     <input
       id="transaction-amount"
       matInput
@@ -108,14 +109,8 @@
         }
       </mat-select>
       <mat-error>
-        @if (
-          recordForm.transferToAccountId().touched() &&
-          recordForm.transferToAccountId().invalid()
-        ) {
-          @for (
-            error of recordForm.transferToAccountId().errors();
-            track error
-          ) {
+        @if (recordForm.transferToAccountId().touched() && recordForm.transferToAccountId().invalid()) {
+          @for (error of recordForm.transferToAccountId().errors(); track error) {
             {{ error.message }}
           }
         }
@@ -131,9 +126,7 @@
         }
       </mat-select>
       <mat-error>
-        @if (
-          recordForm.categoryId().touched() && recordForm.categoryId().invalid()
-        ) {
+        @if (recordForm.categoryId().touched() && recordForm.categoryId().invalid()) {
           @for (error of recordForm.categoryId().errors(); track error) {
             {{ error.message }}
           }

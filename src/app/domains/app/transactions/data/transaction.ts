@@ -219,11 +219,8 @@ export const CRITERIA_AXES = [
  * range counts as one axis whether one end is set or both.
  */
 export function activeCriteriaCount(criteria: TransactionCriteria): number {
-  const singleValue = CRITERIA_AXES.filter(
-    (axis) => criteria[axis] !== undefined
-  ).length;
-  const dateRange =
-    criteria.from !== undefined || criteria.to !== undefined ? 1 : 0;
+  const singleValue = CRITERIA_AXES.filter((axis) => criteria[axis] !== undefined).length;
+  const dateRange = criteria.from !== undefined || criteria.to !== undefined ? 1 : 0;
   return singleValue + dateRange;
 }
 

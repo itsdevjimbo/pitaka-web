@@ -1,8 +1,5 @@
 import { EnvironmentProviders, makeEnvironmentProviders } from '@angular/core';
-import {
-  MAT_DIALOG_DEFAULT_OPTIONS,
-  MatDialogConfig,
-} from '@angular/material/dialog';
+import { MAT_DIALOG_DEFAULT_OPTIONS, MatDialogConfig } from '@angular/material/dialog';
 
 /**
  * The class every app dialog's overlay panel carries. `material.css` keys the

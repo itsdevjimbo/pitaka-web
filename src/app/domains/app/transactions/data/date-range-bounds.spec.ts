@@ -45,12 +45,8 @@ describe('toRequestDateBounds', () => {
     });
 
     it('rolls the exclusive end across a month and a year boundary through local getters', () => {
-      expect(toRequestDateBounds(null, day(2026, 1, 31)).to).toBe(
-        '2026-02-01T00:00:00-05:00'
-      );
-      expect(toRequestDateBounds(null, day(2026, 12, 31)).to).toBe(
-        '2027-01-01T00:00:00-05:00'
-      );
+      expect(toRequestDateBounds(null, day(2026, 1, 31)).to).toBe('2026-02-01T00:00:00-05:00');
+      expect(toRequestDateBounds(null, day(2026, 12, 31)).to).toBe('2027-01-01T00:00:00-05:00');
     });
 
     it('keeps each end independently optional', () => {

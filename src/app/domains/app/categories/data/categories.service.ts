@@ -1,13 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import {
-  catchError,
-  map,
-  Observable,
-  shareReplay,
-  tap,
-  throwError,
-} from 'rxjs';
+import { catchError, map, Observable, shareReplay, tap, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
 import { Category, CategoryKind, NewCategory } from './category';
 import { CategoryInUseError } from './category-errors';
@@ -65,10 +58,7 @@ export class CategoriesService {
    */
   names(): Observable<ReadonlyMap<number, string>> {
     return this.categories().pipe(
-      map(
-        (categories) =>
-          new Map(categories.map((category) => [category.id, category.name]))
-      )
+      map((categories) => new Map(categories.map((category) => [category.id, category.name]))),
     );
   }
 
@@ -81,9 +71,7 @@ export class CategoriesService {
    * Shares the one cached request with {@link names} and {@link all}.
    */
   list(): Observable<Category[]> {
-    return this.categories().pipe(
-      map((categories) => categories.filter((category) => category.isActive))
-    );
+    return this.categories().pipe(map((categories) => categories.filter((category) => category.isActive)));
   }
 
   /**
@@ -142,7 +130,7 @@ export class CategoriesService {
       .pipe(
         map(toCategory),
         tap(() => this.invalidate()),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
+        catchError((error: unknown) => throwError(() => asNameConflict(error))),
       );
   }
 
@@ -153,13 +141,11 @@ export class CategoriesService {
    * duplicate name — and is re-filed the same way, as a `name` field error.
    */
   rename(id: number, name: string): Observable<Category> {
-    return this.http
-      .put<CategoryResource>(`${this.baseUrl}/api/categories/${id}`, { name })
-      .pipe(
-        map(toCategory),
-        tap(() => this.invalidate()),
-        catchError((error: unknown) => throwError(() => asNameConflict(error)))
-      );
+    return this.http.put<CategoryResource>(`${this.baseUrl}/api/categories/${id}`, { name }).pipe(
+      map(toCategory),
+      tap(() => this.invalidate()),
+      catchError((error: unknown) => throwError(() => asNameConflict(error))),
+    );
   }
 
   /**
@@ -179,7 +165,7 @@ export class CategoriesService {
       })
       .pipe(
         map(toCategory),
-        tap(() => this.invalidate())
+        tap(() => this.invalidate()),
       );
   }
 
@@ -191,13 +177,11 @@ export class CategoriesService {
    * caller words as a dead end with *Retire* as the way out.
    */
   remove(id: number): Observable<void> {
-    return this.http
-      .delete<void>(`${this.baseUrl}/api/categories/${id}`)
-      .pipe(
-        map(() => undefined),
-        tap(() => this.invalidate()),
-        catchError((error: unknown) => throwError(() => asInUse(error)))
-      );
+    return this.http.delete<void>(`${this.baseUrl}/api/categories/${id}`).pipe(
+      map(() => undefined),
+      tap(() => this.invalidate()),
+      catchError((error: unknown) => throwError(() => asInUse(error))),
+    );
   }
 
   /** Drop the cache so the next reader re-fetches. Called from inside every write. */
@@ -212,7 +196,7 @@ export class CategoriesService {
       catchError((error: unknown) => {
         this.cached = null;
         return throwError(() => error);
-      })
+      }),
     );
     return this.cached;
   }

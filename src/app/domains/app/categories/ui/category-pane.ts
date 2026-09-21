@@ -1,12 +1,4 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  input,
-  output,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -44,8 +36,7 @@ const DELETE_BLOCKED_ACTIVE =
   'Something still uses this category, so it can’t be deleted. You can retire it instead — it stays on everything already filed under it.';
 
 /** The same, once the Category is already retired: the first sentence alone, no way-out button. */
-const DELETE_BLOCKED_RETIRED =
-  'Something still uses this category, so it can’t be deleted.';
+const DELETE_BLOCKED_RETIRED = 'Something still uses this category, so it can’t be deleted.';
 
 /** A message pinned to one row after a retire / reactivate / delete failed. */
 type RowNoticeState = {
@@ -88,13 +79,7 @@ type MovedAck = {
 @Component({
   selector: 'categories-category-pane',
   templateUrl: './category-pane.html',
-  imports: [
-    MatButtonModule,
-    MatIconModule,
-    MatMenuModule,
-    MatTooltipModule,
-    RowNotice,
-  ],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, RowNotice],
 })
 export class CategoryPane {
   // Dependencies
@@ -147,22 +132,14 @@ export class CategoryPane {
    * it failed, because the moved row is then still in this view and the screen's
    * stale-list notice should stand alone rather than be contradicted.
    */
-  protected readonly movedAck = computed(() =>
-    this.refreshFailed() ? null : this.moved()
-  );
+  protected readonly movedAck = computed(() => (this.refreshFailed() ? null : this.moved()));
 
   /** "Expense" / "Income" — the pane's heading. */
-  protected readonly heading = computed(() =>
-    this.kind() === 'expense' ? 'Expense' : 'Income'
-  );
+  protected readonly heading = computed(() => (this.kind() === 'expense' ? 'Expense' : 'Income'));
 
   /** Alphabetical by name, retired sunk to the bottom. Ordering is ours (#107). */
   private readonly sorted = computed(() =>
-    [...this.categories()].sort(
-      (a, b) =>
-        Number(!a.isActive) - Number(!b.isActive) ||
-        a.name.localeCompare(b.name)
-    )
+    [...this.categories()].sort((a, b) => Number(!a.isActive) - Number(!b.isActive) || a.name.localeCompare(b.name)),
   );
 
   /** The switch-scoped set, before search narrows it — what the count measures. */
@@ -187,22 +164,16 @@ export class CategoryPane {
     if (!query) {
       return this.switched();
     }
-    return this.switched().filter((category) =>
-      category.name.toLocaleLowerCase().includes(query)
-    );
+    return this.switched().filter((category) => category.name.toLocaleLowerCase().includes(query));
   });
 
   /** The count beside the heading — the switch view, not the search-narrowed one. */
   protected readonly count = computed(() => this.switched().length);
 
-  protected readonly hasSearch = computed(
-    () => this.trimmedSearch().length > 0
-  );
+  protected readonly hasSearch = computed(() => this.trimmedSearch().length > 0);
 
   /** The search matched nothing — offers a clear-search action, never read as an empty history. */
-  protected readonly noMatch = computed(
-    () => this.hasSearch() && this.visible().length === 0
-  );
+  protected readonly noMatch = computed(() => this.hasSearch() && this.visible().length === 0);
 
   /**
    * The pane's honest zero state when the emptiness is *not* a search miss: a
@@ -289,9 +260,7 @@ export class CategoryPane {
 
   /** Retire an active Category, or bring a retired one back — fired directly, no confirmation. */
   protected setActive(category: Category, isActive: boolean): void {
-    const hiddenAfter =
-      (isActive && this.filter() === 'retired') ||
-      (!isActive && this.filter() === 'active');
+    const hiddenAfter = (isActive && this.filter() === 'retired') || (!isActive && this.filter() === 'active');
 
     this.runRowWrite(
       category.id,
@@ -309,10 +278,10 @@ export class CategoryPane {
                 segment: isActive ? 'Active' : 'Retired',
                 verb: isActive ? 'reactivated' : 'retired',
               }
-            : null
+            : null,
         );
         this.changed.emit();
-      }
+      },
     );
   }
 
@@ -336,7 +305,7 @@ export class CategoryPane {
       () => {
         this.moved.set(null);
         this.changed.emit();
-      }
+      },
     );
   }
 
@@ -349,7 +318,7 @@ export class CategoryPane {
     id: number,
     write$: Observable<unknown>,
     noticeFor: (error: unknown) => RowNoticeState,
-    onSuccess: () => void
+    onSuccess: () => void,
   ): void {
     this.notice.set(null);
     this.busyId.set(id);
@@ -367,10 +336,7 @@ export class CategoryPane {
   }
 
   /** Turn a failed delete into a row notice with the right way forward. */
-  private noticeForFailedDelete(
-    category: Category,
-    error: unknown
-  ): RowNoticeState {
+  private noticeForFailedDelete(category: Category, error: unknown): RowNoticeState {
     if (error instanceof CategoryInUseError) {
       if (category.isActive) {
         return {

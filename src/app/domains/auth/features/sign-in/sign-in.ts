@@ -7,18 +7,11 @@ import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EmailNotConfirmedError } from '@/app/core/auth';
 import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
-import {
-  APP_HOME_ROUTE,
-  reasonMessage,
-  safeReturnUrl,
-  Session,
-  SIGN_IN_REASON_PARAM,
-} from '@/app/core/session';
+import { APP_HOME_ROUTE, reasonMessage, safeReturnUrl, Session, SIGN_IN_REASON_PARAM } from '@/app/core/session';
 import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation';
 
 /** The banner line for a sign-in that failed before it could be attributed. */
-const COULD_NOT_SIGN_IN =
-  'Something went wrong signing you in. Please try again.';
+const COULD_NOT_SIGN_IN = 'Something went wrong signing you in. Please try again.';
 
 @Component({
   selector: 'auth-sign-in',
@@ -62,17 +55,14 @@ export default class AuthSignIn {
    * sign-in attempt so a failed attempt never stacks two banners.
    */
   protected sessionNotice = signal<string | null>(
-    reasonMessage(this.route.snapshot.queryParamMap.get(SIGN_IN_REASON_PARAM))
+    reasonMessage(this.route.snapshot.queryParamMap.get(SIGN_IN_REASON_PARAM)),
   );
 
   /**
    * The form-level banner. Linked to the model so any edit clears it: a message
    * about the values the person has since changed is worse than none.
    */
-  protected errorMessage = linkedSignal<
-    { email: string; password: string },
-    string | null
-  >({
+  protected errorMessage = linkedSignal<{ email: string; password: string }, string | null>({
     source: this.signInFormModel,
     computation: () => null,
   });
@@ -84,10 +74,7 @@ export default class AuthSignIn {
    * for the same reason `errorMessage` is: an edit means the person is trying
    * again, not still looking at the last failure.
    */
-  protected unconfirmedEmail = linkedSignal<
-    { email: string; password: string },
-    string | null
-  >({
+  protected unconfirmedEmail = linkedSignal<{ email: string; password: string }, string | null>({
     source: this.signInFormModel,
     computation: () => null,
   });
@@ -114,7 +101,7 @@ export default class AuthSignIn {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_SIGN_IN
+            COULD_NOT_SIGN_IN,
           );
           if (boundErrors.length > 0) {
             this.signInForm().markAsTouched();
@@ -132,9 +119,7 @@ export default class AuthSignIn {
         // only logged; the shell is one nav away.
         await this.router
           .navigateByUrl(this.landingUrl())
-          .catch((error: unknown) =>
-            console.error('[sign-in] navigation after sign-in failed', error)
-          );
+          .catch((error: unknown) => console.error('[sign-in] navigation after sign-in failed', error));
         return undefined;
       },
     });

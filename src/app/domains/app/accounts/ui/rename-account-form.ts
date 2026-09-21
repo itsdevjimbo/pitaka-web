@@ -1,11 +1,4 @@
-import {
-  Component,
-  inject,
-  input,
-  linkedSignal,
-  output,
-  signal,
-} from '@angular/core';
+import { Component, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { form, FormField, maxLength, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -17,8 +10,7 @@ import { AccountModifiedError } from '../data/account-errors';
 import { AccountsService } from '../data/accounts.service';
 
 /** The banner line for a rename that failed before it could be attributed. */
-const COULD_NOT_RENAME =
-  'Something went wrong renaming your account. Please try again.';
+const COULD_NOT_RENAME = 'Something went wrong renaming your account. Please try again.';
 
 /**
  * The inline "rename this Account" editor: one field, pre-filled with the
@@ -33,12 +25,7 @@ const COULD_NOT_RENAME =
 @Component({
   selector: 'accounts-rename-account-form',
   templateUrl: './rename-account-form.html',
-  imports: [
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    FormField,
-  ],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, FormField],
 })
 export class RenameAccountForm {
   // Dependencies
@@ -80,9 +67,7 @@ export class RenameAccountForm {
         this.errorMessage.set(null);
 
         try {
-          const renamed = await firstValueFrom(
-            this.service.rename(this.account().id, this.model().name.trim())
-          );
+          const renamed = await firstValueFrom(this.service.rename(this.account().id, this.model().name.trim()));
           this.renamed.emit(renamed);
           return undefined;
         } catch (error) {
@@ -93,7 +78,7 @@ export class RenameAccountForm {
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
-            COULD_NOT_RENAME
+            COULD_NOT_RENAME,
           );
           if (boundErrors.length > 0) {
             this.renameForm().markAsTouched();

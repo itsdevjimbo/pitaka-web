@@ -1,13 +1,4 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  effect,
-  inject,
-  input,
-  model,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, model, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
@@ -60,9 +51,10 @@ export type FilterCategoryOption = {
 };
 
 /** The directions the bar offers, in reading order, labelled from the canonical record. */
-const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map(
-  (value) => ({ value, label: TRANSACTION_DIRECTIONS[value].label })
-);
+const DIRECTION_OPTIONS = (['income', 'expense', 'transfer'] as const).map((value) => ({
+  value,
+  label: TRANSACTION_DIRECTIONS[value].label,
+}));
 
 /**
  * Below this width the bar's controls fold behind a disclosure (#42); at it and
@@ -118,14 +110,7 @@ const PHONE_QUERY = '(max-width: 640px)';
 @Component({
   selector: 'transactions-filter-bar',
   templateUrl: './transactions-filter-bar.html',
-  imports: [
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatButtonModule,
-    MatIconModule,
-    MatDatepickerModule,
-  ],
+  imports: [MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatDatepickerModule],
   host: {
     class: 'block',
   },
@@ -153,9 +138,7 @@ export class TransactionsFilterBar {
   protected readonly directionOptions = DIRECTION_OPTIONS;
 
   /** How many axes are narrowed — shown beside Clear filters, and gates it. */
-  protected readonly activeCount = computed(() =>
-    activeCriteriaCount(this.criteria())
-  );
+  protected readonly activeCount = computed(() => activeCriteriaCount(this.criteria()));
 
   /** True below {@link PHONE_QUERY} — the width at which the controls collapse. */
   protected readonly isPhone = this.media.match(PHONE_QUERY);
@@ -176,9 +159,7 @@ export class TransactionsFilterBar {
    * rather than removing them — so the disclosure's `aria-controls` always
    * resolves and a mid-edit `mat-select` keeps its state across a toggle.
    */
-  protected readonly showControls = computed(
-    () => !this.isPhone() || this.isOpen()
-  );
+  protected readonly showControls = computed(() => !this.isPhone() || this.isOpen());
 
   /**
    * Every raw keystroke in the note field. Debounced and trimmed before it
@@ -201,7 +182,7 @@ export class TransactionsFilterBar {
       .pipe(
         debounceTime(NOTE_DEBOUNCE_MS),
         map((raw) => raw.trim()),
-        takeUntilDestroyed(this.destroyRef)
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((note) => {
         // De-dupe against the criteria itself, not the last keystroke: after
@@ -262,10 +243,7 @@ export class TransactionsFilterBar {
    * keeps `{}` the honest shape of no filters and the adapter free of an empty
    * parameter.
    */
-  private patch<K extends keyof TransactionCriteria>(
-    key: K,
-    value: TransactionCriteria[K] | null
-  ): void {
+  private patch<K extends keyof TransactionCriteria>(key: K, value: TransactionCriteria[K] | null): void {
     const next = { ...this.criteria() };
     if (value === null) {
       delete next[key];

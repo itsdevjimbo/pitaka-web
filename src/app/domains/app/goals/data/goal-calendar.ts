@@ -11,9 +11,5 @@ export function toGoalCalendarDate(value: string): Date {
 /** Reassemble a DateOnly string from local calendar fields, never UTC. */
 export function toGoalDateOnly(date: Date): string {
   const pad = (value: number): string => String(value).padStart(2, '0');
-  return (
-    `${date.getFullYear()}-` +
-    `${pad(date.getMonth() + 1)}-` +
-    `${pad(date.getDate())}`
-  );
+  return `${date.getFullYear()}-` + `${pad(date.getMonth() + 1)}-` + `${pad(date.getDate())}`;
 }

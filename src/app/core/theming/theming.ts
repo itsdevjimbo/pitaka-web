@@ -1,12 +1,5 @@
 import { DOCUMENT, isPlatformServer } from '@angular/common';
-import {
-  computed,
-  effect,
-  inject,
-  Injectable,
-  PLATFORM_ID,
-  signal,
-} from '@angular/core';
+import { computed, effect, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
 import { LocalStorage } from '@/app/core/local-storage/local-storage';
 import { Media } from '@/app/core/media/media';
 import { TonalPalette } from '@/app/core/theming/palette';
@@ -29,16 +22,10 @@ export class Theming {
     primary: this.themeConfig.primary,
     error: this.themeConfig.error,
   });
-  scheme = signal<Scheme>(
-    (this.localStorage.getItem('scheme') as Scheme) || this.themeConfig.scheme
-  );
+  scheme = signal<Scheme>((this.localStorage.getItem('scheme') as Scheme) || this.themeConfig.scheme);
   theme = computed<Theme>(() => this.generateTheme(this.colors()));
 
-  isDark = computed(
-    () =>
-      this.scheme() === 'dark' ||
-      (this.scheme() === 'system' && this.prefersDarkMode)
-  );
+  isDark = computed(() => this.scheme() === 'dark' || (this.scheme() === 'system' && this.prefersDarkMode));
   isLight = computed(() => !this.isDark());
 
   // DOM
@@ -62,8 +49,7 @@ export class Theming {
       const prefersDarkMode = this.prefersDarkMode();
 
       // Figure out if the scheme is 'dark'
-      const isDark =
-        scheme === 'dark' || (scheme === 'system' && prefersDarkMode);
+      const isDark = scheme === 'dark' || (scheme === 'system' && prefersDarkMode);
 
       // Add the 'dark' or 'light' class to the html element
       this.rootEl.classList.toggle('scheme-dark', isDark);

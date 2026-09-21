@@ -1,11 +1,5 @@
 import { DatePipe } from '@angular/common';
-import {
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -17,18 +11,12 @@ import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
 import { CategoriesService } from '@/app/domains/app/categories';
 import { Budget, BudgetWithSpend, PERIODS } from '../../data/budget';
-import {
-  budgetPhase,
-  BudgetPhase,
-  budgetRemaining,
-  BudgetRemaining,
-} from '../../data/budget-calendar';
+import { budgetPhase, BudgetPhase, budgetRemaining, BudgetRemaining } from '../../data/budget-calendar';
 import { BudgetsService } from '../../data/budgets.service';
 import { AdjustBudgetDialog } from '../../ui/adjust-budget-dialog';
 import { NewBudgetDialog } from '../../ui/new-budget-dialog';
 
-const LOAD_FAILED =
-  'Something went wrong loading your budgets. Please try again.';
+const LOAD_FAILED = 'Something went wrong loading your budgets. Please try again.';
 
 /** The person-facing line for a removal that failed with nothing to say about why. */
 const ACTION_FAILED = 'Something went wrong. Please try again.';
@@ -109,14 +97,7 @@ type RowNoticeState = {
 @Component({
   selector: 'budget-list',
   templateUrl: './budget-list.html',
-  imports: [
-    DatePipe,
-    MatButtonModule,
-    MatIconModule,
-    MatMenuModule,
-    PesoPipe,
-    RowNotice,
-  ],
+  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, PesoPipe, RowNotice],
   host: {
     class: 'flex flex-auto flex-col',
   },
@@ -130,9 +111,7 @@ export default class BudgetList {
 
   // State
   protected readonly budgets = signal<readonly BudgetWithSpend[] | null>(null);
-  protected readonly categoryNames = signal<ReadonlyMap<number, string>>(
-    new Map()
-  );
+  protected readonly categoryNames = signal<ReadonlyMap<number, string>>(new Map());
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
 
@@ -162,24 +141,18 @@ export default class BudgetList {
 
     const names = this.categoryNames();
     const now = new Date();
-    const rows: (BudgetRow & { phase: BudgetPhase })[] = budgets.map(
-      (budget) => ({
-        budget,
-        phase: budgetPhase(budget, now),
-        categoryLabel:
-          budget.categoryId === null
-            ? ALL_SPENDING_LABEL
-            : (names.get(budget.categoryId) ?? UNKNOWN_CATEGORY_LABEL),
-        remaining: budgetRemaining(budget),
-      })
-    );
+    const rows: (BudgetRow & { phase: BudgetPhase })[] = budgets.map((budget) => ({
+      budget,
+      phase: budgetPhase(budget, now),
+      categoryLabel:
+        budget.categoryId === null ? ALL_SPENDING_LABEL : (names.get(budget.categoryId) ?? UNKNOWN_CATEGORY_LABEL),
+      remaining: budgetRemaining(budget),
+    }));
 
     return PHASE_ORDER.map(({ phase, label }) => ({
       phase,
       label,
-      rows: rows
-        .filter((row) => row.phase === phase)
-        .sort((a, b) => a.budget.name.localeCompare(b.budget.name)),
+      rows: rows.filter((row) => row.phase === phase).sort((a, b) => a.budget.name.localeCompare(b.budget.name)),
     })).filter((group) => group.rows.length > 0);
   });
 
@@ -212,9 +185,7 @@ export default class BudgetList {
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          this.errorMessage.set(
-            error instanceof ApiError ? error.message : LOAD_FAILED
-          );
+          this.errorMessage.set(error instanceof ApiError ? error.message : LOAD_FAILED);
           this.loading.set(false);
         },
       });
@@ -229,10 +200,7 @@ export default class BudgetList {
    * its server-resolved Spent figure and window (ADR 0006; ADR 0012).
    */
   protected openNewBudgetDialog(): void {
-    this.afterDialog(
-      this.dialog.open<NewBudgetDialog, undefined, Budget>(NewBudgetDialog),
-      () => this.reconcile()
-    );
+    this.afterDialog(this.dialog.open<NewBudgetDialog, undefined, Budget>(NewBudgetDialog), () => this.reconcile());
   }
 
   /**
@@ -250,7 +218,7 @@ export default class BudgetList {
       this.dialog.open<AdjustBudgetDialog, Budget, Budget>(AdjustBudgetDialog, {
         data: budget,
       }),
-      () => this.reconcile()
+      () => this.reconcile(),
     );
   }
 
@@ -259,10 +227,7 @@ export default class BudgetList {
    * it closes with none (Cancel, the close control, Escape). Torn down with the
    * component. The move `AccountList.onDialogResult` makes.
    */
-  private afterDialog(
-    ref: MatDialogRef<unknown, Budget>,
-    handle: () => void
-  ): void {
+  private afterDialog(ref: MatDialogRef<unknown, Budget>, handle: () => void): void {
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -324,8 +289,7 @@ export default class BudgetList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (budgets) => this.budgets.set(budgets),
-        error: (error: unknown) =>
-          console.error('[budgets] reconcile after write failed', error),
+        error: (error: unknown) => console.error('[budgets] reconcile after write failed', error),
       });
   }
 }

@@ -23,6 +23,5 @@ import { NewBudgetForm } from './new-budget-form';
   `,
 })
 export class NewBudgetDialog {
-  protected readonly dialogRef =
-    inject<MatDialogRef<NewBudgetDialog, Budget>>(MatDialogRef);
+  protected readonly dialogRef = inject<MatDialogRef<NewBudgetDialog, Budget>>(MatDialogRef);
 }

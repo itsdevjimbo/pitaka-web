@@ -188,7 +188,7 @@ describe('AdjustBudgetForm', () => {
 
     TestBed.resetTestingModule();
     fixture = setup(vi.fn(), { ...BUDGET, categoryId: 9 });
-    expect(await categoryOptions(fixture)).toEqual(['All spending', 'Groceries', 'Rent', 'Holidays  · Retired']);
+    expect(await categoryOptions(fixture)).toEqual(['All spending', 'Groceries', 'Rent', 'Holidays · Retired']);
   });
 
   it('drops a saved exceptional Category once the selection moves off it', async () => {

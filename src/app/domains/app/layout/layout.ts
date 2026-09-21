@@ -1,11 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import {
-  MatSidenav,
-  MatSidenavContainer,
-  MatSidenavContent,
-} from '@angular/material/sidenav';
+import { MatSidenav, MatSidenavContainer, MatSidenavContent } from '@angular/material/sidenav';
 import { RouterOutlet } from '@angular/router';
 import { Media } from '@/app/core/media';
 import { SchemeSwitcher } from '@/app/domains/app/layout/ui/scheme-switcher';
@@ -55,9 +51,7 @@ import { AppSidebar } from '@/app/domains/app/layout/ui/sidebar';
         </div>
 
         <!-- Content -->
-        <div
-          class="flex flex-col lg:min-h-0 lg:flex-auto lg:overflow-auto print:overflow-visible"
-        >
+        <div class="flex flex-col lg:min-h-0 lg:flex-auto lg:overflow-auto print:overflow-visible">
           <router-outlet />
         </div>
       </mat-sidenav-content>
@@ -69,7 +63,5 @@ export class AppLayout {
   private media = inject(Media);
 
   // State
-  protected isMobile = computed(() =>
-    this.media.match(`(max-width: 1023px)`)()
-  );
+  protected isMobile = computed(() => this.media.match(`(max-width: 1023px)`)());
 }

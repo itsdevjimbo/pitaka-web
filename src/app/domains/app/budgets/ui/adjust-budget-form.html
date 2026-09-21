@@ -35,8 +35,9 @@
     <span
       matTextPrefix
       aria-hidden="true"
-      >₱&nbsp;</span
     >
+      ₱&nbsp;
+    </span>
     <input
       id="budget-amount"
       matInput
@@ -47,9 +48,7 @@
     />
     <mat-hint>The most you plan to spend in one period.</mat-hint>
     <mat-error>
-      @if (
-        budgetForm.amountLimit().touched() && budgetForm.amountLimit().invalid()
-      ) {
+      @if (budgetForm.amountLimit().touched() && budgetForm.amountLimit().invalid()) {
         @for (error of budgetForm.amountLimit().errors(); track error) {
           {{ error.message }}
         }
@@ -90,9 +89,7 @@
     <mat-datepicker #startPicker />
     <mat-hint>Cycles follow the calendar from here.</mat-hint>
     <mat-error>
-      @if (
-        budgetForm.startDate().touched() && budgetForm.startDate().invalid()
-      ) {
+      @if (budgetForm.startDate().touched() && budgetForm.startDate().invalid()) {
         @for (error of budgetForm.startDate().errors(); track error) {
           {{ error.message }}
         }
@@ -106,8 +103,8 @@
     That is not hidden: it is said here, and the figure is re-read on save.
   -->
   <p class="-mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-    Changing the period or start date moves the cycle, so what’s been spent
-    against this budget may read differently afterwards.
+    Changing the period or start date moves the cycle, so what’s been spent against this budget may read differently
+    afterwards.
   </p>
 
   <!-- Category: "All spending" first; active expense Categories only, plus the
@@ -121,9 +118,7 @@
         <mat-option [value]="option.id">
           {{ option.name }}
           @if (!option.isActive) {
-            <span class="text-neutral-500 dark:text-neutral-400">
-              · Retired</span
-            >
+            <span class="text-neutral-500 dark:text-neutral-400">· Retired</span>
           }
         </mat-option>
       }

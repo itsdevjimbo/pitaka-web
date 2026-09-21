@@ -50,16 +50,14 @@ const WRONG_CREDENTIALS = 'That email and password do not match. Please try agai
  * but not the way out; the wording that points the person at signing in is
  * settled here, the one place that knows which endpoint was called (ADR 0002).
  */
-const EMAIL_ALREADY_REGISTERED =
-  'That email is already registered. Try signing in instead.';
+const EMAIL_ALREADY_REGISTERED = 'That email is already registered. Try signing in instead.';
 
 /**
  * A 423 from `POST /api/auth/login` means too many recent failures. No
  * countdown: Identity's lockout duration is a server default the response
  * does not carry, and a guessed figure would be a fabrication (ADR 0015).
  */
-const TOO_MANY_ATTEMPTS =
-  'Too many failed attempts. Please wait a few minutes and try again.';
+const TOO_MANY_ATTEMPTS = 'Too many failed attempts. Please wait a few minutes and try again.';
 
 /**
  * A 403 from `POST /api/auth/login` means the Profile has not confirmed its
@@ -74,9 +72,7 @@ export class EmailNotConfirmedError extends Error {
   readonly email: string;
 
   constructor(email: string) {
-    super(
-      'Confirm your email before signing in. Check your inbox for the link.'
-    );
+    super('Confirm your email before signing in. Check your inbox for the link.');
     this.name = 'EmailNotConfirmedError';
     this.email = email;
   }
@@ -162,9 +158,7 @@ export class AuthService {
         map((response) => ({ token: response.token, profile: response.user })),
         catchError((error: unknown) => {
           if (error instanceof ApiError && error.status === 403) {
-            return throwError(
-              () => new EmailNotConfirmedError(credentials.email)
-            );
+            return throwError(() => new EmailNotConfirmedError(credentials.email));
           }
           if (error instanceof ApiError && error.status === 401) {
             return throwError(() => new ApiError(WRONG_CREDENTIALS, error.status));
@@ -173,7 +167,7 @@ export class AuthService {
             return throwError(() => new ApiError(TOO_MANY_ATTEMPTS, error.status));
           }
           return throwError(() => error);
-        })
+        }),
       );
   }
 
@@ -185,18 +179,16 @@ export class AuthService {
    * wording.
    */
   register(registration: Registration): Observable<Profile> {
-    return this.http
-      .post<RegisterResponse>(`${this.baseUrl}/api/auth/register`, registration)
-      .pipe(
-        map((response) => response.user),
-        catchError((error: unknown) =>
-          throwError(() =>
-            error instanceof ApiError && error.status === 409
-              ? new ApiError(EMAIL_ALREADY_REGISTERED, error.status)
-              : error
-          )
-        )
-      );
+    return this.http.post<RegisterResponse>(`${this.baseUrl}/api/auth/register`, registration).pipe(
+      map((response) => response.user),
+      catchError((error: unknown) =>
+        throwError(() =>
+          error instanceof ApiError && error.status === 409
+            ? new ApiError(EMAIL_ALREADY_REGISTERED, error.status)
+            : error,
+        ),
+      ),
+    );
   }
 
   /**
@@ -215,17 +207,13 @@ export class AuthService {
    */
   resendConfirmation(email: string): Observable<void> {
     return this.http
-      .post<void>(
-        `${this.baseUrl}/api/auth/resend-confirmation`,
-        { email },
-        { context: handlesOwn401() }
-      )
+      .post<void>(`${this.baseUrl}/api/auth/resend-confirmation`, { email }, { context: handlesOwn401() })
       .pipe(
         map(() => undefined),
         catchError((error: unknown) => {
           console.warn('[api] resend-confirmation failed, swallowed', error);
           return of(undefined);
-        })
+        }),
       );
   }
 
@@ -244,17 +232,13 @@ export class AuthService {
    */
   forgotPassword(email: string): Observable<void> {
     return this.http
-      .post<void>(
-        `${this.baseUrl}/api/auth/forgot-password`,
-        { email },
-        { context: handlesOwn401() }
-      )
+      .post<void>(`${this.baseUrl}/api/auth/forgot-password`, { email }, { context: handlesOwn401() })
       .pipe(
         map(() => undefined),
         catchError((error: unknown) => {
           console.warn('[api] forgot-password failed, swallowed', error);
           return of(undefined);
-        })
+        }),
       );
   }
 
@@ -273,11 +257,7 @@ export class AuthService {
    */
   confirmEmail(userId: number, token: string): Observable<void> {
     return this.http
-      .post<void>(
-        `${this.baseUrl}/api/auth/confirm-email`,
-        { userId, token },
-        { context: handlesOwn401() }
-      )
+      .post<void>(`${this.baseUrl}/api/auth/confirm-email`, { userId, token }, { context: handlesOwn401() })
       .pipe(map(() => undefined));
   }
 
@@ -298,23 +278,15 @@ export class AuthService {
    */
   resetPassword(userId: number, token: string, password: string): Observable<void> {
     return this.http
-      .post<void>(
-        `${this.baseUrl}/api/auth/reset-password`,
-        { userId, token, password },
-        { context: handlesOwn401() }
-      )
+      .post<void>(`${this.baseUrl}/api/auth/reset-password`, { userId, token, password }, { context: handlesOwn401() })
       .pipe(
         map(() => undefined),
         catchError((error: unknown) => {
-          if (
-            error instanceof ApiError &&
-            error.status === 400 &&
-            Object.keys(error.fieldErrors).length === 0
-          ) {
+          if (error instanceof ApiError && error.status === 400 && Object.keys(error.fieldErrors).length === 0) {
             return throwError(() => new ResetLinkRejectedError());
           }
           return throwError(() => error);
-        })
+        }),
       );
   }
 
@@ -344,7 +316,7 @@ export class AuthService {
       .post<void>(
         `${this.baseUrl}/api/profile/email-change`,
         { newEmail, currentPassword },
-        { context: handlesOwn401() }
+        { context: handlesOwn401() },
       )
       .pipe(map(() => undefined));
   }
@@ -356,11 +328,7 @@ export class AuthService {
    */
   changePassword(oldPassword: string, newPassword: string): Observable<void> {
     return this.http
-      .post<void>(
-        `${this.baseUrl}/api/profile/password`,
-        { oldPassword, newPassword },
-        { context: handlesOwn401() }
-      )
+      .post<void>(`${this.baseUrl}/api/profile/password`, { oldPassword, newPassword }, { context: handlesOwn401() })
       .pipe(
         map(() => undefined),
         catchError((error: unknown) => {
@@ -375,18 +343,14 @@ export class AuthService {
             return throwError(() => new IncorrectCurrentPasswordError());
           }
           return throwError(() => error);
-        })
+        }),
       );
   }
 
   /** Redeem an anonymous email-change link without disturbing a live session. */
   confirmEmailChange(userId: number, token: string): Observable<void> {
     return this.http
-      .post<void>(
-        `${this.baseUrl}/api/profile/email-change/confirm`,
-        { userId, token },
-        { context: handlesOwn401() }
-      )
+      .post<void>(`${this.baseUrl}/api/profile/email-change/confirm`, { userId, token }, { context: handlesOwn401() })
       .pipe(
         map(() => undefined),
         catchError((error: unknown) => {
@@ -397,14 +361,12 @@ export class AuthService {
             return throwError(() => new EmailChangeAddressTakenError());
           }
           return throwError(() => error);
-        })
+        }),
       );
   }
 
   /** Cancel this Profile's pending email change; the endpoint is idempotent. */
   cancelEmailChange(): Observable<void> {
-    return this.http
-      .post<void>(`${this.baseUrl}/api/profile/email-change/cancel`, null)
-      .pipe(map(() => undefined));
+    return this.http.post<void>(`${this.baseUrl}/api/profile/email-change/cancel`, null).pipe(map(() => undefined));
   }
 }

@@ -25,7 +25,7 @@ describe('AuthConfirmEmail', () => {
     }: {
       confirmEmail?: AuthService['confirmEmail'];
       isAuthenticated?: boolean;
-    } = {}
+    } = {},
   ) {
     const navigate = vi.fn(() => Promise.resolve(true));
     const navigateByUrl = vi.fn(() => Promise.resolve(true));
@@ -67,10 +67,7 @@ describe('AuthConfirmEmail', () => {
   });
 
   it('shows a spinner while the confirm is in flight', () => {
-    const { fixture } = setup(
-      { userId: '7', token: 'a-token' },
-      { confirmEmail: () => new Subject() }
-    );
+    const { fixture } = setup({ userId: '7', token: 'a-token' }, { confirmEmail: () => new Subject() });
 
     fixture.detectChanges();
 
@@ -78,10 +75,7 @@ describe('AuthConfirmEmail', () => {
   });
 
   it('sends a signed-out visitor to sign-in, told why they are back', async () => {
-    const { fixture, navigate } = setup(
-      { userId: '7', token: 'a-token' },
-      { isAuthenticated: false }
-    );
+    const { fixture, navigate } = setup({ userId: '7', token: 'a-token' }, { isAuthenticated: false });
 
     fixture.detectChanges();
     await fixture.whenStable();
@@ -92,10 +86,7 @@ describe('AuthConfirmEmail', () => {
   });
 
   it('sends someone who already has a session into the app, not to sign-in', async () => {
-    const { fixture, navigateByUrl, navigate } = setup(
-      { userId: '7', token: 'a-token' },
-      { isAuthenticated: true }
-    );
+    const { fixture, navigateByUrl, navigate } = setup({ userId: '7', token: 'a-token' }, { isAuthenticated: true });
 
     fixture.detectChanges();
     await fixture.whenStable();
@@ -108,7 +99,7 @@ describe('AuthConfirmEmail', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture } = setup(
       { userId: '7', token: 'stale-token' },
-      { confirmEmail: () => throwError(() => new Error('gone')) }
+      { confirmEmail: () => throwError(() => new Error('gone')) },
     );
 
     fixture.detectChanges();
@@ -140,10 +131,7 @@ describe('AuthConfirmEmail', () => {
    */
   it('lands on the dead-link state for a non-integer userId, without calling the API', async () => {
     const confirmEmail = vi.fn(() => of(undefined));
-    const { fixture } = setup(
-      { userId: 'not-a-number', token: 'a-token' },
-      { confirmEmail }
-    );
+    const { fixture } = setup({ userId: 'not-a-number', token: 'a-token' }, { confirmEmail });
 
     fixture.detectChanges();
     await fixture.whenStable();

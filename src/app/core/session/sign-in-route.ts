@@ -37,8 +37,7 @@ const EMAIL_CONFIRMED_MESSAGE = 'Your email is confirmed. Sign in to continue.';
 const EMAIL_CHANGED_MESSAGE = 'Email address changed. Sign in with your new address.';
 
 /** The line shown after a reset link has just set a new password (issue #71). */
-const PASSWORD_RESET_MESSAGE =
-  'Your password was changed. Sign in with your new password.';
+const PASSWORD_RESET_MESSAGE = 'Your password was changed. Sign in with your new password.';
 
 const REASON_MESSAGES: Record<SignInReason, string> = {
   'session-expired': SESSION_ENDED_MESSAGE,
@@ -75,7 +74,7 @@ export function reasonMessage(reason: string | null | undefined): string | null 
  */
 export function signInRedirect(
   returnUrl: string,
-  { reason }: { reason?: SignInReason } = {}
+  { reason }: { reason?: SignInReason } = {},
 ): [commands: string[], extras: UrlCreationOptions] {
   const queryParams: Record<string, string> = { returnUrl };
   if (reason) {
@@ -95,9 +94,7 @@ export function signInRedirect(
  * because the value comes off a query string and the caller should not have to
  * know which flavour of nothing its router API hands back.
  */
-export function safeReturnUrl(
-  returnUrl: string | null | undefined
-): string | null {
+export function safeReturnUrl(returnUrl: string | null | undefined): string | null {
   if (!returnUrl || !returnUrl.startsWith('/')) {
     return null;
   }

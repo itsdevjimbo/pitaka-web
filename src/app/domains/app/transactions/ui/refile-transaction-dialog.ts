@@ -31,8 +31,7 @@ export type RefileTransactionDialogData = {
   `,
 })
 export class RefileTransactionDialog {
-  protected readonly dialogRef =
-    inject<MatDialogRef<RefileTransactionDialog, Transaction>>(MatDialogRef);
+  protected readonly dialogRef = inject<MatDialogRef<RefileTransactionDialog, Transaction>>(MatDialogRef);
 
   private readonly data = inject<RefileTransactionDialogData>(MAT_DIALOG_DATA);
 

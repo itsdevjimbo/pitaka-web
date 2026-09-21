@@ -1,12 +1,4 @@
-import {
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  input,
-  OnInit,
-  signal,
-} from '@angular/core';
+import { Component, computed, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -31,8 +23,7 @@ import {
 import { Account, ACCOUNT_TYPES } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
 
-const LOAD_FAILED =
-  'Something went wrong loading this account. Please try again.';
+const LOAD_FAILED = 'Something went wrong loading this account. Please try again.';
 
 /**
  * One Account opened up: its current balance, and the Transactions recorded
@@ -66,13 +57,7 @@ const LOAD_FAILED =
 @Component({
   selector: 'account-detail',
   templateUrl: './account-detail.html',
-  imports: [
-    MatButtonModule,
-    MatIconModule,
-    RouterLink,
-    PesoPipe,
-    TransactionRow,
-  ],
+  imports: [MatButtonModule, MatIconModule, RouterLink, PesoPipe, TransactionRow],
   host: {
     class: 'flex flex-auto flex-col',
   },
@@ -120,14 +105,12 @@ export default class AccountDetail implements OnInit {
    * with an unattributable rejection. Excluding both here — the screen's job, not
    * the form's — closes both by construction before the form ever opens.
    */
-  protected readonly destinations = computed<readonly TransferDestinationAccount[]>(
-    () => {
-      const current = this.accountId();
-      return this.accountsList()
-        .filter((account) => account.isActive && account.id !== current)
-        .map((account) => ({ id: account.id, name: account.name }));
-    }
-  );
+  protected readonly destinations = computed<readonly TransferDestinationAccount[]>(() => {
+    const current = this.accountId();
+    return this.accountsList()
+      .filter((account) => account.isActive && account.id !== current)
+      .map((account) => ({ id: account.id, name: account.name }));
+  });
 
   /** True once a load has succeeded and the Account has no Transactions. */
   protected readonly isEmpty = computed(() => this.rows()?.length === 0);
@@ -172,13 +155,12 @@ export default class AccountDetail implements OnInit {
    * control, or Escape. Only ever reachable for an active Account.
    */
   protected openRecordDialog(): void {
-    const ref = this.dialog.open<
+    const ref = this.dialog.open<RecordTransactionDialog, RecordTransactionDialogData, Transaction>(
       RecordTransactionDialog,
-      RecordTransactionDialogData,
-      Transaction
-    >(RecordTransactionDialog, {
-      data: { fromAccountId: this.accountId(), destinations: this.destinations() },
-    });
+      {
+        data: { fromAccountId: this.accountId(), destinations: this.destinations() },
+      },
+    );
 
     ref
       .afterClosed()
@@ -205,11 +187,10 @@ export default class AccountDetail implements OnInit {
    * for a Transfer seen from the side it landed on.
    */
   protected openRefileDialog(transaction: Transaction): void {
-    const ref = this.dialog.open<
+    const ref = this.dialog.open<RefileTransactionDialog, RefileTransactionDialogData, Transaction>(
       RefileTransactionDialog,
-      RefileTransactionDialogData,
-      Transaction
-    >(RefileTransactionDialog, { data: { transaction } });
+      { data: { transaction } },
+    );
 
     ref
       .afterClosed()
@@ -252,11 +233,7 @@ export default class AccountDetail implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => this.apply(result),
-        error: (error: unknown) =>
-          console.error(
-            `[account-detail] refresh after ${after} failed`,
-            error
-          ),
+        error: (error: unknown) => console.error(`[account-detail] refresh after ${after} failed`, error),
       });
   }
 
@@ -285,13 +262,7 @@ export default class AccountDetail implements OnInit {
   }): void {
     this.account.set(result.account);
     this.accountsList.set(result.accounts);
-    const accountNames = new Map(
-      result.accounts.map((account) => [account.id, account.name])
-    );
-    this.rows.set(
-      result.transactions.map((t) =>
-        toAccountRow(t, result.names, this.accountId(), accountNames)
-      )
-    );
+    const accountNames = new Map(result.accounts.map((account) => [account.id, account.name]));
+    this.rows.set(result.transactions.map((t) => toAccountRow(t, result.names, this.accountId(), accountNames)));
   }
 }

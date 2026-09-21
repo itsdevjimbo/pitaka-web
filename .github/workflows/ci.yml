@@ -21,6 +21,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run check:format
+
       - run: npm run test:standards
 
       - run: npm run check:changed -- "$BASE_OPTION" "$BASE_REF"

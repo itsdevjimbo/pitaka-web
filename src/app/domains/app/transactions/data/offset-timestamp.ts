@@ -24,14 +24,8 @@ export function toOffsetTimestamp(moment: Date): string {
   const sign = offsetMinutes < 0 ? '-' : '+';
   const magnitude = Math.abs(offsetMinutes);
 
-  const date =
-    `${moment.getFullYear()}-` +
-    `${pad(moment.getMonth() + 1)}-` +
-    `${pad(moment.getDate())}`;
-  const time =
-    `${pad(moment.getHours())}:` +
-    `${pad(moment.getMinutes())}:` +
-    `${pad(moment.getSeconds())}`;
+  const date = `${moment.getFullYear()}-` + `${pad(moment.getMonth() + 1)}-` + `${pad(moment.getDate())}`;
+  const time = `${pad(moment.getHours())}:` + `${pad(moment.getMinutes())}:` + `${pad(moment.getSeconds())}`;
   const offset = `${sign}${pad(Math.trunc(magnitude / 60))}:${pad(magnitude % 60)}`;
 
   return `${date}T${time}${offset}`;

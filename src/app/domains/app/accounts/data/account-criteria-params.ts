@@ -9,9 +9,7 @@ const TYPE_PARAM = 'type';
  * Converts Account criteria to their readable URL form. Active and all types
  * are the default view, so their keys are deliberately absent from a link.
  */
-export function criteriaToQueryParams(
-  criteria: AccountCriteria
-): Record<string, string> {
+export function criteriaToQueryParams(criteria: AccountCriteria): Record<string, string> {
   const params: Record<string, string> = {};
   if (criteria.isActive === false) {
     params[STATUS_PARAM] = 'retired';
@@ -50,19 +48,14 @@ export function sameCriteria(a: AccountCriteria, b: AccountCriteria): boolean {
   const left = criteriaToQueryParams(a);
   const right = criteriaToQueryParams(b);
   const keys = Object.keys(left);
-  return (
-    keys.length === Object.keys(right).length &&
-    keys.every((key) => left[key] === right[key])
-  );
+  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 }
 
 function accountTypeFromUrl(value: string | null): AccountType | null {
   if (value === null) {
     return null;
   }
-  const match = Object.keys(ACCOUNT_TYPES).find(
-    (type) => type.toLowerCase() === value
-  );
+  const match = Object.keys(ACCOUNT_TYPES).find((type) => type.toLowerCase() === value);
   return match === undefined ? null : (match as AccountType);
 }
 

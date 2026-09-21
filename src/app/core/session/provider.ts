@@ -1,9 +1,4 @@
-import {
-  EnvironmentProviders,
-  inject,
-  makeEnvironmentProviders,
-  provideAppInitializer,
-} from '@angular/core';
+import { EnvironmentProviders, inject, makeEnvironmentProviders, provideAppInitializer } from '@angular/core';
 import { Session } from './session';
 
 /**
@@ -12,6 +7,4 @@ import { Session } from './session';
  * (ADR 0004).
  */
 export const provideSession = (): EnvironmentProviders =>
-  makeEnvironmentProviders([
-    provideAppInitializer(() => inject(Session).verifyBoot()),
-  ]);
+  makeEnvironmentProviders([provideAppInitializer(() => inject(Session).verifyBoot())]);

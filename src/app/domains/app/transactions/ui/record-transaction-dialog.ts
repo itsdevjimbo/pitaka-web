@@ -36,8 +36,7 @@ export type RecordTransactionDialogData = {
   `,
 })
 export class RecordTransactionDialog {
-  protected readonly dialogRef =
-    inject<MatDialogRef<RecordTransactionDialog, Transaction>>(MatDialogRef);
+  protected readonly dialogRef = inject<MatDialogRef<RecordTransactionDialog, Transaction>>(MatDialogRef);
 
   private readonly data = inject<RecordTransactionDialogData>(MAT_DIALOG_DATA);
 
