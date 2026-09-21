@@ -9,7 +9,7 @@ const VALIDATION_MESSAGE = 'Please correct the highlighted fields and try again.
  * bounces someone to sign-in. Exported so the sentence lives in one place
  * rather than being written twice.
  */
-export const SESSION_ENDED_MESSAGE = 'Your session has ended. Please sign in again.';
+export const SESSION_ENDED_MESSAGE = 'Your session expired. Sign in again.';
 
 /**
  * One honest "not found" for both 404 and 403, so the app never leaks whether

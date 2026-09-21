@@ -16,7 +16,7 @@ export type NavigationItem = {
 export const NAVIGATION: NavigationItem[] = [
   {
     id: 'main',
-    label: 'Main',
+    label: 'Day to day',
     children: [
       {
         id: 'accounts',
@@ -32,6 +32,13 @@ export const NAVIGATION: NavigationItem[] = [
         icon: 'receipt-text',
         activeOptions: { exact: false },
       },
+    ],
+  },
+
+  {
+    id: 'plan',
+    label: 'Plan ahead',
+    children: [
       {
         id: 'budgets',
         label: 'Budgets',
@@ -46,14 +53,21 @@ export const NAVIGATION: NavigationItem[] = [
         icon: 'target',
         activeOptions: { exact: false },
       },
+      {
+        id: 'schedules',
+        label: 'Schedules',
+        route: '/app/schedules',
+        icon: 'calendar-clock',
+        activeOptions: { exact: false },
+      },
     ],
   },
 
   // Reference data and standing instructions — visited deliberately, not part
   // of "where does my money stand" (#107, #206).
   {
-    id: 'manage',
-    label: 'Manage',
+    id: 'organize',
+    label: 'Organize',
     children: [
       {
         id: 'categories',
@@ -67,13 +81,6 @@ export const NAVIGATION: NavigationItem[] = [
         label: 'Tags',
         route: '/app/tags',
         icon: 'tag',
-        activeOptions: { exact: false },
-      },
-      {
-        id: 'schedules',
-        label: 'Schedules',
-        route: '/app/schedules',
-        icon: 'calendar-clock',
         activeOptions: { exact: false },
       },
     ],

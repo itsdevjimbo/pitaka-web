@@ -6,6 +6,7 @@ import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
+import { focusFirstInvalidField } from '@/app/core/forms';
 
 /**
  * The one line this screen says, whatever came back. `POST /api/auth/forgot-password`
@@ -62,6 +63,7 @@ export default class AuthForgotPassword {
 
   askForLink(event: Event) {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.forgotPasswordForm, {
       action: async () => {
@@ -93,5 +95,9 @@ export default class AuthForgotPassword {
         return undefined;
       },
     });
+
+    if (this.forgotPasswordForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 }

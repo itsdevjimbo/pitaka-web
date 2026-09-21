@@ -316,13 +316,13 @@
   /* ------------------------------------------------------------------------ */
   /* Button                                                                   */
   /* ------------------------------------------------------------------------ */
-  --mat-button-text-container-shape: 0.5rem;
+  --mat-button-text-container-shape: var(--control-border-radius);
   --mat-button-text-container-height: 2.25rem;
   --mat-button-text-horizontal-padding: 0.75rem;
   --mat-button-text-with-icon-horizontal-padding: 0.75rem;
   --mat-button-text-icon-offset: 0rem;
 
-  --mat-button-outlined-container-shape: 0.5rem;
+  --mat-button-outlined-container-shape: var(--control-border-radius);
   --mat-button-outlined-container-height: 2.25rem;
   --mat-button-outlined-horizontal-padding: 0.75rem;
   --mat-button-outlined-icon-offset: 0rem;
@@ -339,17 +339,17 @@
     color-mix(in oklch, var(--color-white) 10%, transparent)
   );
 
-  --mat-button-tonal-container-shape: 0.5rem;
+  --mat-button-tonal-container-shape: var(--control-border-radius);
   --mat-button-tonal-container-height: 2.25rem;
   --mat-button-tonal-horizontal-padding: 0.75rem;
   --mat-button-tonal-icon-offset: 0rem;
 
-  --mat-button-filled-container-shape: 0.5rem;
+  --mat-button-filled-container-shape: var(--control-border-radius);
   --mat-button-filled-container-height: 2.25rem;
   --mat-button-filled-horizontal-padding: 0.75rem;
   --mat-button-filled-icon-offset: 0rem;
 
-  --mat-button-protected-container-shape: 0.5rem;
+  --mat-button-protected-container-shape: var(--control-border-radius);
   --mat-button-protected-container-height: 2.25rem;
   --mat-button-protected-horizontal-padding: 0.75rem;
   --mat-button-protected-icon-offset: 0rem;
@@ -681,6 +681,7 @@
 
           /* Native input element */
           .mat-mdc-input-element {
+            min-block-size: var(--form-field-line-height);
             color: var(--form-field-text-color);
             caret-color: currentColor;
 
@@ -848,13 +849,13 @@
     --form-field-font-smoothing: var(--font-smoothing);
 
     --form-field-font-size: var(--text-base); /* 14px */
-    --form-field-line-height: var(--leading-5); /* 20px */
+    --form-field-line-height: var(--leading-6); /* 24px */
     --form-field-font-weight: var(--font-weight-normal);
     --form-field-letter-spacing: var(--tracking-normal);
 
     --form-field-label-font-size: var(--text-base); /* 14px */
     --form-field-label-line-height: var(--leading-5); /* 20px */
-    --form-field-label-font-weight: var(--font-weight-medium);
+    --form-field-label-font-weight: var(--font-weight-semibold);
     --form-field-label-letter-spacing: var(--tracking-normal);
 
     --form-field-subscript-font-size: var(--text-xs); /* 12px */
@@ -863,9 +864,11 @@
     --form-field-subscript-letter-spacing: var(--tracking-normal);
 
     /* Size */
-    --form-field-border-radius: 0.5rem; /* 8px */
+    --form-field-border-radius: var(--control-border-radius);
     --form-field-margin-top: 1.5rem; /* 24px */
-    --form-field-padding-y: 0.5rem; /* 8px */
+    --form-field-padding-y: calc(
+      (var(--control-height) - var(--form-field-line-height)) / 2
+    );
     --form-field-padding-x: 0.75rem; /* 12px */
     --form-field-gap-y: 0.5rem; /* 8px */
     --form-field-gap-x: 0.5rem; /* 8px */
@@ -873,28 +876,15 @@
     --form-field-icon-margin-x: -0.125rem; /* -2px */
 
     /* Color */
-    --form-field-text-color: light-dark(
-      var(--color-neutral-950),
-      var(--color-white)
-    );
-    --form-field-text-color-error: var(--color-error-500);
-    --form-field-hint-color: var(--color-neutral-500);
-    --form-field-placeholder-color: var(--color-neutral-500);
-    --form-field-affix-color: var(--color-neutral-500);
+    --form-field-text-color: var(--color-text);
+    --form-field-text-color-error: var(--color-danger);
+    --form-field-hint-color: var(--color-secondary);
+    --form-field-placeholder-color: var(--color-secondary);
+    --form-field-affix-color: var(--color-secondary);
 
-    --form-field-bg-color: light-dark(
-      var(--color-white),
-      var(--color-neutral-800)
-    );
-
-    --form-field-border-color: light-dark(
-      var(--color-neutral-300),
-      var(--color-neutral-700)
-    );
-    --form-field-border-color-error: light-dark(
-      var(--color-error-600),
-      var(--color-error-500)
-    );
+    --form-field-bg-color: var(--color-surface);
+    --form-field-border-color: var(--color-essential-outline);
+    --form-field-border-color-error: var(--color-danger);
 
     --form-field-shadow-color: color-mix(
       in oklch,
@@ -905,7 +895,7 @@
 
     /* Focus */
     &.mat-focused {
-      --form-field-outline-color: var(--color-primary-600);
+      --form-field-outline-color: light-dark(var(--color-primary-600), var(--color-primary-200));
     }
 
     /* Suffix & Prefix */
@@ -1188,4 +1178,51 @@
   /* ------------------------------------------------------------------------ */
   /* Tree                                                                     */
   /* ------------------------------------------------------------------------ */
+}
+
+/* Pocket Pop owns Material's public system roles so overlays and controls use
+   the same curated surfaces as utility-styled content. */
+#pitaka {
+  --mat-sys-background: var(--color-canvas);
+  --mat-sys-on-background: var(--color-text);
+  --mat-sys-surface: var(--color-surface);
+  --mat-sys-on-surface: var(--color-text);
+  --mat-sys-surface-dim: var(--color-canvas);
+  --mat-sys-surface-bright: var(--color-raised);
+  --mat-sys-surface-variant: var(--color-soft);
+  --mat-sys-surface-container-lowest: var(--color-canvas);
+  --mat-sys-surface-container-low: var(--color-surface);
+  --mat-sys-surface-container: var(--color-surface);
+  --mat-sys-surface-container-high: var(--color-raised);
+  --mat-sys-surface-container-highest: var(--color-soft);
+  --mat-sys-on-surface-variant: var(--color-secondary);
+  --mat-sys-primary: light-dark(var(--color-primary-600), var(--color-primary-200));
+  --mat-sys-on-primary: light-dark(#ffffff, #12172f);
+  --mat-sys-primary-container: var(--color-soft);
+  --mat-sys-on-primary-container: var(--color-text);
+  --mat-sys-secondary: light-dark(var(--color-primary-600), var(--color-primary-200));
+  --mat-sys-tertiary: light-dark(var(--color-primary-600), var(--color-primary-200));
+  --mat-sys-error: var(--color-danger);
+  --mat-sys-on-error: light-dark(#ffffff, #12172f);
+  --mat-sys-error-container: var(--color-danger-container);
+  --mat-sys-on-error-container: var(--color-danger);
+  --mat-sys-outline: var(--color-essential-outline);
+  --mat-sys-outline-variant: var(--color-divider);
+  --mat-sys-inverse-surface: var(--color-raised);
+  --mat-sys-inverse-on-surface: var(--color-text);
+  --mat-sys-inverse-primary: light-dark(var(--color-primary-600), var(--color-primary-200));
+  --mat-sys-body-medium: 400 0.875rem / 1.375rem var(--font-sans);
+  --mat-sys-body-medium-size: 0.875rem;
+  --mat-sys-body-medium-line-height: 1.375rem;
+  --mat-sys-label-large: 600 0.875rem / 1.25rem var(--font-sans);
+  --mat-sys-label-large-weight: 600;
+  --mat-sys-headline-small: 750 1.75rem / 2rem var(--font-display);
+  --mat-sys-headline-small-font: var(--font-display);
+  --mat-sys-headline-small-weight: 750;
+  --mat-button-filled-container-height: var(--control-height);
+  --mat-button-outlined-container-height: var(--control-height);
+  --mat-button-text-container-height: var(--control-height);
+  --mat-icon-button-state-layer-size: var(--control-height);
+  --mat-dialog-container-shape: 1.5rem;
+  --mat-menu-container-shape: 1rem;
 }

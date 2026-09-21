@@ -6,7 +6,7 @@
   --font-sans: Geist, system-ui;
   --font-sans--font-feature-settings: 'salt';
 
-  --font-display: Geist, system-ui;
+  --font-display: Outfit, Geist, system-ui;
   --font-display--font-feature-settings: 'salt';
 
   --font-mono: 'Geist Mono', ui-monospace;
@@ -15,6 +15,10 @@
   /* Font configuration */
   --font-smoothing: antialiased;
   --font-optical-sizing: auto;
+
+  /* Control size */
+  --control-height: 2.75rem; /* 44px */
+  --control-border-radius: 0.5rem; /* 8px */
 
   /* Font weight */
   --font-weight-normal: 400;
@@ -52,18 +56,18 @@
   --text-2xs--font-weight: var(--font-weight-normal);
   --text-2xs--letter-spacing: var(--tracking-normal);
 
-  --text-xs: 0.6875rem; /* 11px */
-  --text-xs--line-height: var(--leading-4);
+  --text-xs: 0.75rem; /* 12px */
+  --text-xs--line-height: 1.125rem; /* 18px */
   --text-xs--font-weight: var(--font-weight-normal);
   --text-xs--letter-spacing: var(--tracking-normal);
 
-  --text-sm: 0.75rem; /* 12px */
-  --text-sm--line-height: var(--leading-4);
+  --text-sm: 0.875rem; /* 14px */
+  --text-sm--line-height: 1.375rem; /* 22px */
   --text-sm--font-weight: var(--font-weight-normal);
   --text-sm--letter-spacing: var(--tracking-normal);
 
-  --text-base: 0.8125rem; /* 13px */
-  --text-base--line-height: var(--leading-5);
+  --text-base: 0.875rem; /* 14px */
+  --text-base--line-height: 1.375rem; /* 22px */
   --text-base--font-weight: var(--font-weight-normal);
   --text-base--letter-spacing: var(--tracking-normal);
 
@@ -73,7 +77,7 @@
   --text-md--letter-spacing: var(--tracking-normal);
 
   --text-lg: 1rem; /* 16px */
-  --text-lg--line-height: var(--leading-5);
+  --text-lg--line-height: var(--leading-6);
   --text-lg--font-weight: var(--font-weight-normal);
   --text-lg--letter-spacing: var(--tracking-normal);
 
@@ -144,4 +148,22 @@
   --color-error-800: var(--theme-color-error-800);
   --color-error-900: var(--theme-color-error-900);
   --color-error-950: var(--theme-color-error-950);
+
+  /* Pocket Pop semantic roles. Keep these names stable across schemes. */
+  --color-canvas: light-dark(#f1f3ff, #12172f);
+  --color-surface: light-dark(#ffffff, #1d2443);
+  --color-raised: light-dark(#ffffff, #283153);
+  --color-soft: light-dark(#e0e6ff, #303b66);
+  --color-text: light-dark(#1c2763, #f0f2ff);
+  --color-secondary: light-dark(#596189, #b4bedf);
+  --color-essential-outline: light-dark(#7681af, #7e8cb8);
+  --color-divider: light-dark(#cbd3f1, #43527e);
+  --color-success: light-dark(#047454, #34d399);
+  --color-success-container: light-dark(#e6f5ed, #153b32);
+  --color-danger: light-dark(#b91c1c, #ff8585);
+  --color-danger-container: light-dark(#feecec, #442832);
+  --color-warning: light-dark(#855600, #f8cb62);
+  --color-warning-container: light-dark(#fff4da, #3b3320);
+  --color-disabled: light-dark(#596189, #a6afcb);
+  --color-disabled-fill: light-dark(#e6e9f3, #303956);
 }

@@ -1,4 +1,15 @@
 /* -------------------------------------------------------------------------- */
+/* Outfit                                                                     */
+/* -------------------------------------------------------------------------- */
+@font-face {
+  font-family: Outfit;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/identity/outfit.ttf') format('truetype');
+}
+
+/* -------------------------------------------------------------------------- */
 /* Geist                                                                      */
 /* -------------------------------------------------------------------------- */
 @font-face {
@@ -48,7 +59,22 @@
 
   body {
     font-size: var(--text-base);
-    line-height: var(--leading-5);
+    line-height: var(--leading-6);
     font-weight: var(--font-weight-normal);
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: 750;
+    letter-spacing: -0.025em;
+  }
+
+  .tabular-nums,
+  [data-financial-amount] {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
   }
 }

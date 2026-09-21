@@ -62,3 +62,23 @@ Fuse demonstration.
   does not reach for `text-emerald-*` directly.
 - If pesos ever stop being the only currency, or a fourth direction appears, the
   token set in `semantic.css` is where it is added.
+
+## Amendment (2026-09-21): curate Pocket Pop surfaces and split font roles
+
+The generated-primary-family decision remains, now seeded by Pocket Pop cobalt
+`#304BC6`. Light uses generated step 600 and Dark uses generated step 200
+(`#BBC0F5`); a single step is not reused across schemes.
+
+Surface colors are no longer stock Fuse neutrals. They are deliberate product
+roles: Light canvas/card/raised/soft are `#F1F3FF` / `#FFFFFF` / `#FFFFFF` /
+`#E0E6FF`; Dark uses `#12172F` / `#1D2443` / `#283153` / `#303B66`. Text,
+secondary text, outlines, dividers, disabled states, and operational feedback
+likewise use the reviewed values in the global theme. Material system roles and
+utility tokens both map to those roles so CDK overlays do not fall back to a
+different surface family.
+
+The Geist-only clause is superseded. Outfit 750 owns the Pitaka wordmark and
+display, page, and section headings. Geist remains the UI face for body text,
+labels, controls, and complete financial amounts. Financial digits are tabular;
+the peso sign stays in the same Geist run. The independent money-role rule and
+direction-neutral Account balances above remain unchanged.

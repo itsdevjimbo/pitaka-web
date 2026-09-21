@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService, Registration } from '@/app/core/auth';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { passwordRules } from '@/app/domains/auth/password-rules';
 import { ResendConfirmation } from '@/app/domains/auth/ui/resend-confirmation/resend-confirmation';
 
@@ -71,6 +71,7 @@ export default class AuthSignUp {
 
   signUp(event: Event) {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.signUpForm, {
       action: async () => {
@@ -105,6 +106,10 @@ export default class AuthSignUp {
         return undefined;
       },
     });
+
+    if (this.signUpForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   /**

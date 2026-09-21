@@ -16,12 +16,12 @@ import { NAVIGATION, NavigationItem } from '@/app/domains/app/layout/data/naviga
       @for (section of navigation(); track section.id) {
         <div class="flex flex-col px-4">
           <!-- Section title -->
-          <div class="px-2.5 py-1.5 text-sm font-semibold text-blue-400">
+          <div class="px-2.5 py-1.5 text-sm font-semibold text-secondary">
             {{ section.label }}
 
             <!-- Section description -->
             @if (section.description) {
-              <div class="text-xs font-medium text-neutral-400">
+              <div class="text-xs font-medium text-secondary">
                 {{ section.description }}
               </div>
             }
@@ -53,8 +53,8 @@ import { NAVIGATION, NavigationItem } from '@/app/domains/app/layout/data/naviga
               <a
                 cdkMonitorElementFocus
                 ngTreeItem
-                routerLinkActive="bg-neutral-700/10 dark:bg-neutral-300/10"
-                class="navigation-item flex cursor-pointer items-center gap-x-2 rounded-lg px-2.5 py-2 select-none hover:bg-neutral-700/10 dark:hover:bg-neutral-300/10"
+                routerLinkActive="bg-soft text-text"
+                class="navigation-item flex min-h-11 cursor-pointer items-center gap-x-2 rounded-xl px-2.5 py-2 text-secondary select-none hover:bg-soft hover:text-text"
                 [parent]="parent"
                 [value]="node.id"
                 [label]="node.label"

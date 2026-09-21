@@ -21,7 +21,10 @@ describe('User', () => {
         provideRouter([]),
         provideIcons(),
         { provide: Session, useValue: { profile: signal(profile), signOut } },
-        { provide: Theming, useValue: { scheme: signal('system') } },
+        {
+          provide: Theming,
+          useValue: { scheme: signal('system'), persistenceNotice: signal(null), setScheme: vi.fn() },
+        },
       ],
     });
 

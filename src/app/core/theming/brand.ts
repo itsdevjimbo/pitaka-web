@@ -7,4 +7,4 @@
  * income and expense where money is shown. Full rationale and the semantic
  * money colours are in ADR 0008 / `styles/base/semantic.css`.
  */
-export const BRAND_ACCENT = '#4F46E5';
+export const BRAND_ACCENT = '#304BC6';

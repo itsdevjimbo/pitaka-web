@@ -12,10 +12,10 @@ import { Scheme, Theming } from '@/app/core/theming';
   imports: [MatDivider, MatIcon, MatMenu, MatMenuItem, MatPseudoCheckbox, MatMenuTrigger, RouterLink],
   template: `
     <button
-      class="flex w-full cursor-pointer items-center gap-x-3 rounded-xl p-2 text-left hover:bg-neutral-700/10 dark:hover:bg-neutral-300/10"
+      class="flex w-full cursor-pointer items-center gap-x-3 rounded-xl p-2 text-left hover:bg-soft"
       [matMenuTriggerFor]="userMenu"
     >
-      <span class="flex size-9 items-center justify-center rounded-lg bg-neutral-700/10 dark:bg-neutral-300/10">
+      <span class="flex size-9 items-center justify-center rounded-lg bg-soft">
         <mat-icon
           class="size-5"
           svgIcon="user-round"
@@ -23,7 +23,7 @@ import { Scheme, Theming } from '@/app/core/theming';
       </span>
       <div class="flex min-w-0 flex-auto flex-col select-none">
         <div class="truncate font-medium">{{ profile()?.name }}</div>
-        <div class="truncate text-sm text-neutral-500 dark:text-neutral-400">
+        <div class="truncate text-sm text-secondary">
           {{ profile()?.email }}
         </div>
       </div>
@@ -78,6 +78,15 @@ import { Scheme, Theming } from '@/app/core/theming';
         </button>
       }
     </mat-menu>
+
+    @if (persistenceNotice(); as message) {
+      <p
+        class="fixed right-4 bottom-20 z-100 rounded-2xl bg-raised px-4 py-3 text-sm text-text shadow-lg lg:bottom-4"
+        role="status"
+      >
+        {{ message }}
+      </p>
+    }
   `,
 })
 export class User {
@@ -88,6 +97,7 @@ export class User {
   // State
   protected profile = this.session.profile;
   protected scheme = computed(() => this.theming.scheme());
+  protected persistenceNotice = this.theming.persistenceNotice;
   protected schemes: { label: string; value: Scheme }[] = [
     { label: 'Light', value: 'light' },
     { label: 'Dark', value: 'dark' },
@@ -95,7 +105,7 @@ export class User {
   ];
 
   updateScheme(scheme: Scheme) {
-    this.theming.scheme.set(scheme);
+    this.theming.setScheme(scheme);
   }
 
   /** Leave deliberately: the session clears client-side and returns to sign-in. */

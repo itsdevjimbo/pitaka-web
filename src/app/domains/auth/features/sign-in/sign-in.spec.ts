@@ -60,6 +60,26 @@ describe('AuthSignIn', () => {
     return (fixture.nativeElement as HTMLElement).textContent ?? '';
   }
 
+  it('keeps invalid Sign in enabled, reveals errors, and focuses the first invalid field', async () => {
+    const signIn = vi.fn().mockResolvedValue(undefined);
+    const { fixture } = setup(signIn);
+    enter(fixture, '#email', '');
+    enter(fixture, '#password', '');
+    const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (candidate) => candidate.textContent?.trim() === 'Sign in',
+    );
+    if (!button) {
+      throw new Error('No Sign in button');
+    }
+
+    expect(button.disabled).toBe(false);
+    await submitAndSettle(fixture);
+
+    expect(text(fixture)).toContain('You must enter an email address');
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#email'));
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
   it('binds server-blamed fields onto the matching form controls', async () => {
     const { fixture } = setup(() =>
       Promise.reject(
@@ -200,7 +220,7 @@ describe('AuthSignIn', () => {
       reason: 'session-expired',
     });
 
-    expect(text(fixture)).toContain('Your session has ended. Please sign in again.');
+    expect(text(fixture)).toContain('Your session expired. Sign in again. Unsaved changes were discarded.');
   });
 
   it('shows no notice for a bare returnUrl with no lapse marker', () => {
@@ -208,13 +228,13 @@ describe('AuthSignIn', () => {
       returnUrl: '/app/accounts',
     });
 
-    expect(text(fixture)).not.toContain('Your session has ended. Please sign in again.');
+    expect(text(fixture)).not.toContain('Your session expired. Sign in again.');
   });
 
   it('shows no notice for an unrecognised reason value', () => {
     const { fixture } = setup(() => Promise.resolve(), { reason: 'expired' });
 
-    expect(text(fixture)).not.toContain('Your session has ended. Please sign in again.');
+    expect(text(fixture)).not.toContain('Your session expired. Sign in again.');
   });
 
   it('dismisses the session notice on a sign-in attempt so banners never stack', async () => {
@@ -222,11 +242,11 @@ describe('AuthSignIn', () => {
       () => Promise.reject(new ApiError('That email and password do not match. Please try again.', 401)),
       { returnUrl: '/app/accounts', reason: 'session-expired' },
     );
-    expect(text(fixture)).toContain('Your session has ended. Please sign in again.');
+    expect(text(fixture)).toContain('Your session expired. Sign in again.');
 
     await submitAndSettle(fixture);
 
-    expect(text(fixture)).not.toContain('Your session has ended. Please sign in again.');
+    expect(text(fixture)).not.toContain('Your session expired. Sign in again.');
     expect(text(fixture)).toContain('That email and password do not match. Please try again.');
   });
 

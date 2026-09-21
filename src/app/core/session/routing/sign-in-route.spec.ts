@@ -64,7 +64,9 @@ describe('reasonMessage', () => {
     const [, { queryParams }] = signInRedirect('/x', {
       reason: 'session-expired',
     });
-    expect(reasonMessage(queryParams?.['reason'] as string)).toBe('Your session has ended. Please sign in again.');
+    expect(reasonMessage(queryParams?.['reason'] as string)).toBe(
+      'Your session expired. Sign in again. Unsaved changes were discarded.',
+    );
   });
 
   it('gives the email-confirmed wording for its exact marker', () => {
