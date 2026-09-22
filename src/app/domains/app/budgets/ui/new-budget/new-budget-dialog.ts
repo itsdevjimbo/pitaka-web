@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal, viewChild } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
 import { Budget } from '../../data/budget';
@@ -14,14 +14,23 @@ import { NewBudgetForm } from './new-budget-form';
   selector: 'budgets-new-budget-dialog',
   imports: [DialogShell, NewBudgetForm],
   template: `
-    <app-dialog-shell heading="New budget">
+    <app-dialog-shell
+      heading="New budget"
+      [dirty]="dirty()"
+      [pending]="pending()"
+    >
       <budgets-new-budget-form
         (created)="dialogRef.close($event)"
-        (cancelled)="dialogRef.close()"
+        (cancelled)="shell().requestClose()"
+        (dirtyChange)="dirty.set($event)"
+        (pendingChange)="pending.set($event)"
       />
     </app-dialog-shell>
   `,
 })
 export class NewBudgetDialog {
   protected readonly dialogRef = inject<MatDialogRef<NewBudgetDialog, Budget>>(MatDialogRef);
+  protected readonly dirty = signal(false);
+  protected readonly pending = signal(false);
+  protected readonly shell = viewChild.required(DialogShell);
 }

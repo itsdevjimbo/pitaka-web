@@ -5,7 +5,7 @@
   <!-- Failed adjust with nothing to pin to a field -->
   @if (errorMessage(); as message) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger"
       role="alert"
     >
       {{ message }}
@@ -102,7 +102,7 @@
     changes what has been spent against the ceiling the next time this is read.
     That is not hidden: it is said here, and the figure is re-read on save.
   -->
-  <p class="-mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+  <p class="-mt-2 text-sm text-secondary">
     Changing the period or start date moves the cycle, so what’s been spent against this budget may read differently
     afterwards.
   </p>
@@ -118,7 +118,7 @@
         <mat-option [value]="option.id">
           {{ option.name }}
           @if (!option.isActive) {
-            <span class="text-neutral-500 dark:text-neutral-400">· Retired</span>
+            <span class="text-secondary">· Retired</span>
           }
         </mat-option>
       }
@@ -137,7 +137,7 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="budgetForm().invalid() || submitting()"
+      [disabled]="submitting()"
     >
       {{ submitting() ? 'Saving…' : 'Save changes' }}
     </button>

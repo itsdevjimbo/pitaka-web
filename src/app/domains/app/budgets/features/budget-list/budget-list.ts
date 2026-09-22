@@ -1,14 +1,14 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Subject, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
-import { RowNotice } from '@/app/core/notices';
+import { ResourceState, RowNotice } from '@/app/core/notices';
 import { CategoriesService } from '@/app/domains/app/categories';
 import { Budget, BudgetWithSpend, PERIODS } from '../../data/budget';
 import { budgetPhase, BudgetPhase, budgetRemaining, BudgetRemaining } from '../../data/budget-calendar';
@@ -17,6 +17,9 @@ import { AdjustBudgetDialog } from '../../ui/adjust-budget/adjust-budget-dialog'
 import { NewBudgetDialog } from '../../ui/new-budget/new-budget-dialog';
 
 const LOAD_FAILED = 'Something went wrong loading your budgets. Please try again.';
+
+/** What remains visible after a refresh cannot obtain current Cycle figures. */
+const REFRESH_FAILED = 'Couldn’t refresh. These figures may be out of date.';
 
 /** The person-facing line for a removal that failed with nothing to say about why. */
 const ACTION_FAILED = 'Something went wrong. Please try again.';
@@ -33,8 +36,8 @@ const UNKNOWN_CATEGORY_LABEL = 'Unknown category';
  * Budgets in raw database order, so the ordering here is the client's.
  */
 const PHASE_ORDER: readonly { phase: BudgetPhase; label: string }[] = [
-  { phase: 'live', label: 'Live' },
-  { phase: 'not-started', label: 'Not yet started' },
+  { phase: 'live', label: 'Current cycle' },
+  { phase: 'not-started', label: 'Future' },
   { phase: 'finished', label: 'Finished' },
 ];
 
@@ -69,6 +72,9 @@ type RowNoticeState = {
   retry: () => void;
 };
 
+/** Whether a read is an ordinary refresh or the required reread after a Budget write. */
+type RefreshReason = 'ordinary' | 'after-write';
+
 /**
  * The Budgets screen: every Budget the person has, in three groups the client
  * orders — Live, then Not yet started, then Finished — and by name within each.
@@ -97,7 +103,7 @@ type RowNoticeState = {
 @Component({
   selector: 'budget-list',
   templateUrl: './budget-list.html',
-  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, PesoPipe, RowNotice],
+  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, PesoPipe, ResourceState, RowNotice],
   host: {
     class: 'flex flex-auto flex-col',
   },
@@ -108,23 +114,33 @@ export default class BudgetList {
   private categoriesService = inject(CategoriesService);
   private destroyRef = inject(DestroyRef);
   private dialog = inject(MatDialog);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly readReset = new Subject<void>();
+  private actionMessageTimer: ReturnType<typeof setTimeout> | null = null;
 
   // State
   protected readonly budgets = signal<readonly BudgetWithSpend[] | null>(null);
   protected readonly categoryNames = signal<ReadonlyMap<number, string>>(new Map());
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly refreshError = signal<string | null>(null);
+  protected readonly savedStale = signal(false);
+  protected readonly actionMessage = signal<string | null>(null);
 
   /** The id of the Budget whose removal is awaiting confirmation, or `null`. */
   protected readonly confirmingRemoveId = signal<number | null>(null);
 
   /** The id of the Budget with a removal request in flight, or `null`. */
   protected readonly busyId = signal<number | null>(null);
+  private readonly focusAfterRemove = signal(false);
 
   /** A per-row message left by a failed removal. */
   protected readonly notice = signal<RowNoticeState | null>(null);
 
   protected readonly periods = PERIODS;
+
+  /** Actions which depend on current Cycle figures remain unavailable while stale. */
+  protected readonly stale = computed(() => this.refreshError() !== null);
 
   /**
    * The Budgets split into the three ordered groups and sorted by name within
@@ -160,6 +176,12 @@ export default class BudgetList {
   protected readonly isEmpty = computed(() => this.budgets()?.length === 0);
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      this.readReset.complete();
+      if (this.actionMessageTimer !== null) {
+        clearTimeout(this.actionMessageTimer);
+      }
+    });
     this.load();
   }
 
@@ -170,14 +192,22 @@ export default class BudgetList {
    * Bound to the error state's *Try again*.
    */
   protected load(): void {
+    if (this.budgets() !== null) {
+      this.readBudgets();
+      return;
+    }
+
     this.loading.set(true);
     this.errorMessage.set(null);
+    this.refreshError.set(null);
+    this.savedStale.set(false);
+    this.readReset.next();
 
     forkJoin({
       budgets: this.service.list(),
       categoryNames: this.categoriesService.names(),
     })
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ({ budgets, categoryNames }) => {
           this.categoryNames.set(categoryNames);
@@ -200,7 +230,10 @@ export default class BudgetList {
    * its server-resolved Spent figure and window (ADR 0006; ADR 0012).
    */
   protected openNewBudgetDialog(): void {
-    this.afterDialog(this.dialog.open<NewBudgetDialog, undefined, Budget>(NewBudgetDialog), () => this.reconcile());
+    this.afterDialog(this.dialog.open<NewBudgetDialog, undefined, Budget>(NewBudgetDialog), (budget) => {
+      this.showActionMessage(`${budget.name} added.`);
+      this.readBudgets('after-write');
+    });
   }
 
   /**
@@ -218,7 +251,10 @@ export default class BudgetList {
       this.dialog.open<AdjustBudgetDialog, Budget, Budget>(AdjustBudgetDialog, {
         data: budget,
       }),
-      () => this.reconcile(),
+      (adjusted) => {
+        this.showActionMessage(`${adjusted.name} adjusted.`);
+        this.readBudgets('after-write');
+      },
     );
   }
 
@@ -227,13 +263,13 @@ export default class BudgetList {
    * it closes with none (Cancel, the close control, Escape). Torn down with the
    * component. The move `AccountList.onDialogResult` makes.
    */
-  private afterDialog(ref: MatDialogRef<unknown, Budget>, handle: () => void): void {
+  private afterDialog(ref: MatDialogRef<unknown, Budget>, handle: (result: Budget) => void): void {
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((result) => {
         if (result) {
-          handle();
+          handle(result);
         }
       });
   }
@@ -242,6 +278,9 @@ export default class BudgetList {
   protected askRemove(budget: Budget): void {
     this.notice.set(null);
     this.confirmingRemoveId.set(budget.id);
+    queueMicrotask(() => {
+      this.host.nativeElement.querySelector<HTMLButtonElement>(`#cancel-remove-budget-${budget.id}`)?.focus();
+    });
   }
 
   protected cancelRemove(): void {
@@ -265,7 +304,9 @@ export default class BudgetList {
       .subscribe({
         next: () => {
           this.busyId.set(null);
-          this.reconcile();
+          this.focusAfterRemove.set(true);
+          this.showActionMessage(`${budget.name} removed.`);
+          this.readBudgets('after-write');
         },
         error: (error: unknown) => {
           this.busyId.set(null);
@@ -279,18 +320,61 @@ export default class BudgetList {
   }
 
   /**
-   * Re-read the list after a write (ADR 0006). A failed reconcile is logged and
-   * left — the screen keeps what it had rather than flipping to an error — the
-   * same treatment `AccountList.reconcile` gives it.
+   * Read fresh Cycle figures after a write (ADR 0006). A failed reread keeps the
+   * last figures visible and explicitly marks them stale; retry reads only and
+   * never replays the successful write.
    */
-  private reconcile(): void {
+  /** Refresh figures without clearing a settled ledger or moving focus. */
+  private readBudgets(reason: RefreshReason = 'ordinary'): void {
+    this.readReset.next();
+    this.refreshError.set(null);
     this.service
       .list()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (budgets) => this.budgets.set(budgets),
-        error: (error: unknown) => console.error('[budgets] reconcile after write failed', error),
+        next: (budgets) => {
+          this.budgets.set(budgets);
+          this.savedStale.set(false);
+          this.restoreFocusAfterRemove();
+        },
+        error: () => {
+          this.refreshError.set(REFRESH_FAILED);
+          this.savedStale.set(reason === 'after-write');
+          this.restoreFocusAfterRemove(true);
+        },
       });
+  }
+
+  private showActionMessage(message: string): void {
+    if (this.actionMessageTimer !== null) {
+      clearTimeout(this.actionMessageTimer);
+    }
+    this.actionMessage.set(message);
+    this.actionMessageTimer = setTimeout(() => {
+      this.actionMessage.set(null);
+      this.actionMessageTimer = null;
+    }, 5000);
+  }
+
+  /** After removal, put keyboard focus on the next available Budget action or the page heading. */
+  private restoreFocusAfterRemove(headingOnly = false): void {
+    if (!this.focusAfterRemove()) {
+      return;
+    }
+    this.focusAfterRemove.set(false);
+    queueMicrotask(() => {
+      const heading = this.host.nativeElement.querySelector<HTMLElement>('h1');
+      if (headingOnly) {
+        heading?.focus();
+        return;
+      }
+      const actions = this.host.nativeElement.querySelector<HTMLButtonElement>('[id^="budget-actions-"]');
+      if (actions) {
+        actions.focus();
+        return;
+      }
+      heading?.focus();
+    });
   }
 }
 

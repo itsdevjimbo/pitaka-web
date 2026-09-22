@@ -195,17 +195,17 @@ describe('BudgetList', () => {
     expect(text()).toContain('Groceries');
   });
 
-  it('groups Budgets as Live, Not yet started, Finished — in that order — and by name within a group', () => {
+  it('groups Budgets as Current cycle, Future, Finished — in that order — and by name within a group', () => {
     const { text } = setup(() => of([SUMMER, HOLIDAYS, TRANSPORT, GROCERIES]));
 
     const body = text();
-    expect(body).toContain('Live');
-    expect(body).toContain('Not yet started');
+    expect(body).toContain('Current cycle');
+    expect(body).toContain('Future');
     expect(body).toContain('Finished');
 
     // Section order.
-    expect(body.indexOf('Live')).toBeLessThan(body.indexOf('Not yet started'));
-    expect(body.indexOf('Not yet started')).toBeLessThan(body.indexOf('Finished'));
+    expect(body.indexOf('Current cycle')).toBeLessThan(body.indexOf('Future'));
+    expect(body.indexOf('Future')).toBeLessThan(body.indexOf('Finished'));
 
     // Within Live: "Groceries" before "Transport".
     expect(body.indexOf('Groceries')).toBeLessThan(body.indexOf('Transport'));
@@ -217,12 +217,12 @@ describe('BudgetList', () => {
   it('shows only the groups that have Budgets', () => {
     const { text } = setup(() => of([GROCERIES]));
 
-    expect(text()).toContain('Live');
-    expect(text()).not.toContain('Not yet started');
+    expect(text()).toContain('Current cycle');
+    expect(text()).not.toContain('Future');
     expect(text()).not.toContain('Finished');
   });
 
-  it('shows a row with the name, ceiling, Period, Category name and start date', () => {
+  it('shows a row with the name, ceiling, Period, Category name and Cycle window', () => {
     const { text } = setup(() => of([GROCERIES]));
 
     const body = text();
@@ -230,7 +230,7 @@ describe('BudgetList', () => {
     expect(body).toContain(formatPeso(20000));
     expect(body).toContain('Monthly');
     expect(body).toContain('Food');
-    expect(body).toContain('Starts');
+    expect(body).toContain('Current cycle');
     expect(body).toContain('2026');
   });
 
@@ -244,7 +244,10 @@ describe('BudgetList', () => {
     const { text } = setup(() => of([GROCERIES]));
 
     const body = text();
-    expect(body).toContain(`${formatPeso(12400)} of ${formatPeso(20000)}`);
+    expect(body).toContain('Spent');
+    expect(body).toContain(formatPeso(12400));
+    expect(body).toContain('Ceiling');
+    expect(body).toContain(formatPeso(20000));
     expect(body).toContain(`${formatPeso(7600)} left`);
   });
 
@@ -268,7 +271,7 @@ describe('BudgetList', () => {
   it('marks the overspend with the semantic expense token, but it reads without colour', () => {
     const { fixture } = setup(() => of([TRANSPORT]));
 
-    const over = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('span')).find((el) =>
+    const over = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('p, span')).find((el) =>
       (el.textContent ?? '').includes('over'),
     );
     expect(over).toBeTruthy();
@@ -284,8 +287,9 @@ describe('BudgetList', () => {
     expect(body).toContain('Starts');
     expect(body).not.toContain(formatPeso(0));
     expect(body).not.toContain('left');
-    // No spend block at all until it is live — not even the Cycle window.
-    expect(body.toLowerCase()).not.toContain('cycle');
+    // No Spent figure or server Cycle window appears until it starts.
+    expect(body).toContain('Spending begins counting on that day.');
+    expect(body).not.toContain('Spent');
   });
 
   it('renders a finished Budget as history — final Cycle total, and "under" not "left"', () => {
@@ -293,7 +297,10 @@ describe('BudgetList', () => {
 
     const body = text();
     expect(body).toContain('Final cycle');
-    expect(body).toContain(`${formatPeso(38000)} of ${formatPeso(40000)}`);
+    expect(body).toContain('Spent');
+    expect(body).toContain(formatPeso(38000));
+    expect(body).toContain('Ceiling');
+    expect(body).toContain(formatPeso(40000));
     // Framed as history: nothing more can be spent against it, so "under" the
     // ceiling rather than "left" to spend — but the figure is still there, so
     // the person does not have to subtract.
@@ -304,7 +311,7 @@ describe('BudgetList', () => {
   it('tells a Profile with no Budgets what a Budget is for', () => {
     const { text } = setup(() => of([]));
 
-    expect(text()).toContain('No budgets yet');
+    expect(text()).toContain('Set your first spending ceiling');
     expect(text().toLowerCase()).toContain('ceiling');
   });
 
@@ -320,7 +327,7 @@ describe('BudgetList', () => {
 
     expect(text()).toContain('Could not reach the server.');
 
-    clickButton(fixture, 'Try again');
+    clickButton(fixture, 'Retry');
     await settle(fixture);
 
     expect(list).toHaveBeenCalledTimes(2);
@@ -396,6 +403,32 @@ describe('BudgetList', () => {
       expect(dialog()).toBeNull();
     });
 
+    it('asks before discarding a Category-only change', async () => {
+      const { fixture, dialog, dialogText } = setup(() => of([GROCERIES]));
+
+      await openDialog(fixture);
+      const category = overlay().querySelectorAll<HTMLElement>('mat-select')[1];
+      if (!category) {
+        throw new Error('No Budget category picker');
+      }
+      category.click();
+      await settle(fixture);
+      const food = Array.from(overlay().querySelectorAll<HTMLElement>('mat-option')).find(
+        (option) => option.textContent?.trim() === 'Food',
+      );
+      if (!food) {
+        throw new Error('No Food category option');
+      }
+      food.click();
+      await settle(fixture);
+
+      pressEscape();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Discard changes?');
+    });
+
     it('on a successful create, closes the dialog, then re-reads so the Budget lands with its Cycle figures (ADR 0006)', async () => {
       let attempt = 0;
       // The write endpoint hands back the bare Budget…
@@ -457,7 +490,7 @@ describe('BudgetList', () => {
   /** Open the row's actions menu and click one of its items. */
   async function openRowAction(fixture: ComponentFixture<BudgetList>, item: string) {
     const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
-      'button[aria-label="Budget actions"]',
+      'button[aria-label^="Actions for"]',
     );
     if (!trigger) {
       throw new Error('No row actions menu');
@@ -564,7 +597,7 @@ describe('BudgetList', () => {
 
       await openRowAction(fixture, 'Remove');
 
-      expect(text()).toContain('gone for good');
+      expect(text()).toContain('This can’t be undone');
       expect(remove).not.toHaveBeenCalled();
     });
 
@@ -607,7 +640,7 @@ describe('BudgetList', () => {
 
       expect(remove).toHaveBeenCalledWith(1);
       expect(list).toHaveBeenCalledTimes(2);
-      expect(text()).not.toContain('Groceries');
+      expect((fixture.nativeElement as HTMLElement).querySelector('li')?.textContent).not.toContain('Groceries');
       expect(text()).toContain('Holidays');
     });
 
@@ -631,6 +664,31 @@ describe('BudgetList', () => {
       await settle(fixture);
 
       expect(remove).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the last ledger visible but marks it saved-stale and gates actions when the post-remove reread fails', async () => {
+      const remove = vi.fn(() => of(undefined));
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([GROCERIES]))
+        .mockReturnValueOnce(throwError(() => new Error('offline')));
+      const { fixture, text } = setup(list as unknown as BudgetsService['list'], {
+        remove: remove as unknown as BudgetsService['remove'],
+      });
+
+      await openRowAction(fixture, 'Remove');
+      clickButton(fixture, 'Remove');
+      await settle(fixture);
+
+      expect(text()).toContain('Saved, but couldn’t refresh');
+      expect(text()).toContain('Groceries');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('#budget-actions-1')?.disabled,
+      ).toBe(true);
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[matbutton="filled"]')?.disabled,
+      ).toBe(true);
+      expect((document.activeElement as HTMLElement | null)?.tagName).toBe('H1');
     });
   });
 });

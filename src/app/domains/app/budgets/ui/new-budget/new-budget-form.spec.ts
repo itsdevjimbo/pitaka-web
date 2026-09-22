@@ -216,6 +216,31 @@ describe('NewBudgetForm', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  it('releases pending and explains an uncertain create without replaying it', async () => {
+    const inFlight = new Subject<Budget>();
+    const create = vi.fn(() => inFlight.asObservable());
+    const fixture = setup(create as unknown as BudgetsService['create']);
+    const pending: boolean[] = [];
+    fixture.componentInstance.pendingChange.subscribe((value) => pending.push(value));
+    await fill(fixture);
+
+    vi.useFakeTimers();
+    try {
+      (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+      await Promise.resolve();
+      expect(pending).toEqual([true]);
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      fixture.detectChanges();
+
+      expect(text(fixture)).toContain('couldn’t confirm whether this Budget was created');
+      expect(pending).toEqual([true, false]);
+      expect(create).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('emits cancelled without touching the service', () => {
     const create = vi.fn();
     const fixture = setup(create as unknown as BudgetsService['create']);

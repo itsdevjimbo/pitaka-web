@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal, viewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
 import { Budget } from '../../data/budget';
@@ -15,11 +15,17 @@ import { AdjustBudgetForm } from './adjust-budget-form';
   selector: 'budgets-adjust-budget-dialog',
   imports: [DialogShell, AdjustBudgetForm],
   template: `
-    <app-dialog-shell heading="Adjust budget">
+    <app-dialog-shell
+      heading="Adjust budget"
+      [dirty]="dirty()"
+      [pending]="pending()"
+    >
       <budgets-adjust-budget-form
         [budget]="budget"
         (adjusted)="dialogRef.close($event)"
-        (cancelled)="dialogRef.close()"
+        (cancelled)="shell().requestClose()"
+        (dirtyChange)="dirty.set($event)"
+        (pendingChange)="pending.set($event)"
       />
     </app-dialog-shell>
   `,
@@ -29,4 +35,7 @@ export class AdjustBudgetDialog {
 
   /** The Budget being adjusted, handed in when the dialog was opened. */
   protected readonly budget = inject<Budget>(MAT_DIALOG_DATA);
+  protected readonly dirty = signal(false);
+  protected readonly pending = signal(false);
+  protected readonly shell = viewChild.required(DialogShell);
 }
