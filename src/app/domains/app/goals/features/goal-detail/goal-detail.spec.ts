@@ -211,7 +211,7 @@ describe('GoalDetail', () => {
     expect(text()).toContain('Add contribution');
   });
 
-  it('shows a neutral empty history for a finished Goal', () => {
+  it('shows a neutral empty history for a Completed Goal', () => {
     const { text } = setup({ get: () => of({ ...GOAL, status: 'Completed' }) });
     expect(text()).toContain('No Contributions');
     expect(text()).not.toContain('Add contribution');
