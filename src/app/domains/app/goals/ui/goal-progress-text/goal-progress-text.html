@@ -1,0 +1,10 @@
+<p class="font-semibold text-text tabular-nums">
+  {{ progressPercent() | number: '1.0-0' }}% funded ·
+  @if (isOver()) {
+    {{ gap() | peso }} over target
+  } @else if (gap() === 0) {
+    Target reached
+  } @else {
+    {{ gap() | peso }} to go
+  }
+</p>

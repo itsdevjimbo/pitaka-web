@@ -4,77 +4,82 @@
   class="flex min-w-0 flex-col gap-3 p-5 sm:p-6"
   [class.opacity-70]="goal().status === 'Abandoned'"
 >
-  <div class="min-w-0">
-    <div class="flex items-start gap-3">
-      <a
-        class="flex min-h-11 min-w-0 flex-auto items-center rounded-sm font-semibold break-words text-text underline-offset-4 hover:underline"
-        [routerLink]="['/app/goals', goal().id]"
-      >
-        {{ goal().name }}
-      </a>
-      <button
-        matIconButton
-        type="button"
-        class="shrink-0"
-        [attr.aria-label]="'Actions for ' + goal().name"
-        [disabled]="pending()"
-        [matMenuTriggerFor]="menu"
-      >
-        <mat-icon svgIcon="ellipsis-vertical" />
-      </button>
-      <mat-menu #menu>
-        <button
-          mat-menu-item
-          [disabled]="pending()"
-          (click)="edit.emit(goal())"
+  <div class="grid grid-cols-1 sm:grid-cols-2 sm:gap-x-4">
+    <div class="flex min-w-0 flex-col space-y-3">
+      <div class="flex items-start gap-3">
+        <a
+          class="flex min-h-11 min-w-0 flex-auto items-center rounded-sm text-2xl font-semibold wrap-break-word text-text underline-offset-4 hover:underline"
+          [routerLink]="['/app/goals', goal().id]"
         >
-          <mat-icon svgIcon="pencil" />
-          <span>Edit</span>
+          {{ goal().name }}
+        </a>
+        <button
+          matIconButton
+          type="button"
+          class="shrink-0"
+          [attr.aria-label]="'Actions for ' + goal().name"
+          [disabled]="pending()"
+          [matMenuTriggerFor]="menu"
+        >
+          <mat-icon svgIcon="ellipsis-vertical" />
         </button>
-        @if (goal().status === 'Active') {
-          @if (goal().currentAmount >= goal().targetAmount) {
+        <mat-menu #menu>
+          <button
+            mat-menu-item
+            [disabled]="pending()"
+            (click)="edit.emit(goal())"
+          >
+            <mat-icon svgIcon="pencil" />
+            <span>Edit</span>
+          </button>
+          @if (goal().status === 'Active') {
+            @if (goal().currentAmount >= goal().targetAmount) {
+              <button
+                mat-menu-item
+                [disabled]="unavailable() || pending()"
+                (click)="status.emit({ goal: goal(), status: 'Completed' })"
+              >
+                <mat-icon svgIcon="circle-check" />
+                <span>Mark complete</span>
+              </button>
+            }
             <button
               mat-menu-item
-              [disabled]="unavailable() || pending()"
-              (click)="status.emit({ goal: goal(), status: 'Completed' })"
+              [disabled]="pending()"
+              (click)="abandon.emit(goal())"
+            >
+              <mat-icon svgIcon="archive" />
+              <span>Abandon</span>
+            </button>
+          } @else {
+            <button
+              mat-menu-item
+              [disabled]="pending()"
+              (click)="status.emit({ goal: goal(), status: 'Active' })"
             >
               <mat-icon svgIcon="circle-check" />
-              <span>Mark complete</span>
+              <span>Mark active</span>
             </button>
           }
           <button
             mat-menu-item
             [disabled]="pending()"
-            (click)="abandon.emit(goal())"
+            (click)="remove.emit(goal())"
           >
-            <mat-icon svgIcon="archive" />
-            <span>Abandon</span>
+            <mat-icon svgIcon="trash-2" />
+            <span>Delete</span>
           </button>
-        } @else {
-          <button
-            mat-menu-item
-            [disabled]="pending()"
-            (click)="status.emit({ goal: goal(), status: 'Active' })"
-          >
-            <mat-icon svgIcon="circle-check" />
-            <span>Mark active</span>
-          </button>
-        }
-        <button
-          mat-menu-item
-          [disabled]="pending()"
-          (click)="remove.emit(goal())"
-        >
-          <mat-icon svgIcon="trash-2" />
-          <span>Delete</span>
-        </button>
-      </mat-menu>
+        </mat-menu>
+      </div>
+      <goals-state [goal]="goal()" />
+      <goals-progress-text
+        [goal]="goal()"
+        class="hidden sm:block"
+      />
     </div>
+
+    <goals-goal-progress [goal]="goal()" />
   </div>
-  <goals-goal-progress
-    [goal]="goal()"
-    [wide]="true"
-  />
   <a
     class="mt-auto flex min-h-11 w-fit items-center rounded-sm text-sm font-semibold text-primary-600 underline-offset-4 hover:underline dark:text-primary-200"
     [routerLink]="['/app/goals', goal().id]"

@@ -4,12 +4,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { RouterLink } from '@angular/router';
 import { Goal } from '../../data/goal';
+import { GoalProgressText } from '../goal-progress-text/goal-progress-text';
 import { GoalProgress } from '../goal-progress/goal-progress';
+import { GoalState } from '../goal-state/goal-state';
 
 /** A Goal's progress reading, shared by the list and its future detail screen. */
 @Component({
   selector: 'goals-goal-row',
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, RouterLink, GoalProgress],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule, RouterLink, GoalProgress, GoalProgressText, GoalState],
   templateUrl: './goal-row.html',
 })
 export class GoalRow {

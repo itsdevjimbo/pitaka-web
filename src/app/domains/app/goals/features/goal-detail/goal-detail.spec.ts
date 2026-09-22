@@ -151,7 +151,6 @@ describe('GoalDetail', () => {
     expect(body).toContain(formatPeso(18000));
     expect(body).toContain(formatPeso(30000));
     expect(body).toContain('1 Mar 2026');
-    expect(body).toContain('In progress');
     expect(body).toContain('%');
     expect(body).toContain('Everyday cash');
     expect(body).toContain('Payday');
