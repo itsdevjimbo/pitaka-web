@@ -26,6 +26,7 @@ import {
   RecordAccountDialog,
   type RecordAccountDialogData,
   type RecordAccountDialogResult,
+  type RecordAccountOption,
 } from '../../ui/record-account/record-account-dialog';
 import { RenameAccountDialog } from '../../ui/rename-account/rename-account-dialog';
 
@@ -235,7 +236,7 @@ export default class AccountList {
         }
       });
   }
-  private openRecordDialog(account: Account): void {
+  private openRecordDialog(account: RecordAccountOption): void {
     const destinations = this.activeAccounts()
       .filter((candidate) => candidate.id !== account.id)
       .map(({ id, name }) => ({ id, name }));

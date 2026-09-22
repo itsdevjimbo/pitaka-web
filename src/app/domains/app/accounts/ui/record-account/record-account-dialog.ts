@@ -4,13 +4,17 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { DialogShell } from '@/app/core/dialog';
-import type { Account } from '../../data/account';
-
-export type RecordAccountDialogData = {
-  accounts: readonly Account[];
+/** The Account identity a recording entry point needs to offer a choice. */
+export type RecordAccountOption = {
+  id: number;
+  name: string;
 };
 
-export type RecordAccountDialogResult = Account | 'new-account';
+export type RecordAccountDialogData = {
+  accounts: readonly RecordAccountOption[];
+};
+
+export type RecordAccountDialogResult = RecordAccountOption | 'new-account';
 
 @Component({
   selector: 'accounts-record-account-dialog',

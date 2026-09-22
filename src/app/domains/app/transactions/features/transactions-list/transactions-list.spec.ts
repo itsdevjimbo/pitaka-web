@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
+import { MatDialog } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap, ParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
@@ -170,6 +171,59 @@ describe('TransactionsList', () => {
     fixture.detectChanges();
   }
 
+  /** Complete the row's visible Remove flow, including its in-place confirmation. */
+  async function removeFirstRow(fixture: ComponentFixture<unknown>) {
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = Array.from(host.querySelectorAll('button')).find(
+      (candidate) => candidate.getAttribute('aria-label') === 'Transaction actions',
+    );
+    if (!trigger) {
+      throw new Error('Expected Transaction actions');
+    }
+    trigger.click();
+    await settle(fixture);
+
+    const removeFromMenu = Array.from(overlay().querySelectorAll('button')).find(
+      (candidate) => (candidate.textContent ?? '').trim() === 'Remove',
+    );
+    if (!removeFromMenu) {
+      throw new Error('Expected the row Remove action');
+    }
+    removeFromMenu.click();
+    await settle(fixture);
+
+    const confirm = Array.from(host.querySelectorAll('button')).find(
+      (candidate) => (candidate.textContent ?? '').trim() === 'Remove',
+    );
+    if (!confirm) {
+      throw new Error('Expected the row Remove confirmation');
+    }
+    confirm.click();
+    await settle(fixture);
+  }
+
+  /** Open Refile from the first row's visible actions menu. */
+  async function openRefileFromFirstRow(fixture: ComponentFixture<unknown>) {
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = Array.from(host.querySelectorAll('button')).find(
+      (candidate) => candidate.getAttribute('aria-label') === 'Transaction actions',
+    );
+    if (!trigger) {
+      throw new Error('Expected Transaction actions');
+    }
+    trigger.click();
+    await settle(fixture);
+
+    const refile = Array.from(overlay().querySelectorAll('button')).find(
+      (candidate) => (candidate.textContent ?? '').trim() === 'Refile',
+    );
+    if (!refile) {
+      throw new Error('Expected the row Refile action');
+    }
+    refile.click();
+    await settle(fixture);
+  }
+
   it('shows progress while the first read is in flight, then the list', () => {
     const pending = new Subject<TransactionSearchResult>();
     const { fixture, text } = setup({ search: () => pending.asObservable() });
@@ -211,6 +265,38 @@ describe('TransactionsList', () => {
     fixture.detectChanges();
 
     expect(text()).toContain('Coffee');
+  });
+
+  it('opens an Account chooser before recording from cross-Account history', async () => {
+    const { fixture, button, dialogText } = setup();
+
+    button('Record transaction')?.click();
+    await settle(fixture);
+
+    expect(dialogText()).toContain('Choose an account');
+  });
+
+  it('explains how to continue when no active Account can record', async () => {
+    const { fixture, button, dialogText, navigate } = setup({
+      accounts: () => of([{ ...ACCOUNTS[0], isActive: false } as Account]),
+    });
+
+    button('Record transaction')?.click();
+    await settle(fixture);
+
+    expect(dialogText()).toContain('An active Account is needed');
+    expect(dialogText()).toContain('New account');
+
+    const newAccount = Array.from(overlay().querySelectorAll('button')).find((candidate) =>
+      (candidate.textContent ?? '').includes('New account'),
+    );
+    if (!newAccount) {
+      throw new Error('Expected the New account action');
+    }
+    newAccount.click();
+    await settle(fixture);
+
+    expect(navigate).toHaveBeenCalledWith(['/app/accounts']);
   });
 
   it('renders a spanning row: a Transfer once, unsigned, naming both ends', () => {
@@ -499,6 +585,84 @@ describe('TransactionsList', () => {
     expect(search).toHaveBeenCalledTimes(1);
   });
 
+  it('does not let an older refresh replace a newer history read', async () => {
+    const olderRefresh = new Subject<TransactionSearchResult>();
+    let reads = 0;
+    const search = vi.fn(() => {
+      reads += 1;
+      if (reads === 2) {
+        return olderRefresh.asObservable();
+      }
+      return of(
+        page({
+          transactions: [tx({ description: reads === 3 ? 'Newest' : 'First' })],
+          totalCount: 1,
+        }),
+      );
+    });
+    const { fixture, text } = setup({
+      search: search as unknown as TransactionsService['search'],
+      remove: () => of(undefined),
+    });
+
+    await removeFirstRow(fixture);
+    await removeFirstRow(fixture);
+
+    expect(text()).toContain('Newest');
+
+    olderRefresh.next(page({ transactions: [tx({ description: 'Stale' })], totalCount: 1 }));
+    olderRefresh.complete();
+    await settle(fixture);
+
+    expect(text()).toContain('Newest');
+    expect(text()).not.toContain('Stale');
+  });
+
+  it('keeps Record hidden while a Refile form is open', async () => {
+    const { fixture, button } = setup();
+
+    await openRefileFromFirstRow(fixture);
+
+    expect(button('Record transaction')).toBeUndefined();
+    expect(button('Record')).toBeUndefined();
+
+    pressEscape();
+    await settle(fixture);
+
+    expect(button('Record transaction')).toBeDefined();
+  });
+
+  it('keeps a successful record visible as stale when its confirming read fails, then retries only the read', async () => {
+    let reads = 0;
+    const search = vi.fn(() => {
+      reads += 1;
+      return reads === 2
+        ? throwError(() => new ApiError('The confirmation read failed.', 500))
+        : of(page({ transactions: [tx({ description: reads === 3 ? 'Confirmed' : 'Existing' })], totalCount: 1 }));
+    });
+    const { fixture, button, text } = setup({
+      search: search as unknown as TransactionsService['search'],
+    });
+    const open = vi
+      .spyOn(TestBed.inject(MatDialog), 'open')
+      .mockReturnValueOnce({ afterClosed: () => of({ id: 3, name: 'Everyday cash' }) } as never)
+      .mockReturnValueOnce({ afterClosed: () => of(tx({ description: 'Recorded' })) } as never);
+
+    button('Record transaction')!.click();
+    await settle(fixture);
+
+    expect(text()).toContain('Saved, but couldn’t refresh.');
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(2);
+
+    button('Try again')!.click();
+    await settle(fixture);
+
+    expect(text()).toContain('Confirmed');
+    expect(search).toHaveBeenCalledTimes(3);
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
   it('re-runs the whole read from the top after a removal, resetting to the first page', async () => {
     const search = vi.fn((_criteria: unknown, p: number) =>
       p === 1
@@ -571,13 +735,13 @@ describe('TransactionsList', () => {
     });
 
     // The removal re-read fails: the rows stay on screen — not the full-page
-    // error state — with the failure explained inline.
+    // error state — with the completed write explained inline.
     cmp.onRemoved();
     await settle(fixture);
 
     expect(text()).toContain('First');
     expect(text()).toContain('Second');
-    expect(text()).toContain('Server fell over.');
+    expect(text()).toContain('Saved, but couldn’t refresh.');
     expect(text()).not.toContain('Loading transactions…');
 
     // The inline retry re-runs the whole read from the top and recovers.
@@ -586,7 +750,7 @@ describe('TransactionsList', () => {
 
     expect(search).toHaveBeenCalledTimes(3);
     expect(search).toHaveBeenLastCalledWith({}, 1);
-    expect(text()).not.toContain('Server fell over.');
+    expect(text()).not.toContain('Saved, but couldn’t refresh.');
     expect(text()).not.toContain('First');
     expect(text()).toContain('Second');
     expect(text()).toContain('Showing 1 of 1');
@@ -613,7 +777,7 @@ describe('TransactionsList', () => {
     await settle(fixture);
 
     expect(text()).toContain('First');
-    expect(text()).toContain('Something went wrong refreshing your transactions. Please try again.');
+    expect(text()).toContain('Saved, but couldn’t refresh.');
   });
 
   describe('refile, from the row menu', () => {
@@ -632,33 +796,21 @@ describe('TransactionsList', () => {
       });
     }
 
-    async function openRefileFromRowMenu(fixture: ComponentFixture<unknown>) {
-      const host = fixture.nativeElement as HTMLElement;
-      const trigger = Array.from(host.querySelectorAll('button')).find(
-        (b) => b.getAttribute('aria-label') === 'Transaction actions',
-      );
-      trigger!.click();
-      await settle(fixture);
-      Array.from(overlay().querySelectorAll('button'))
-        .find((b) => (b.textContent ?? '').trim() === 'Refile')
-        ?.click();
-      await settle(fixture);
-    }
-
     it('opens the shared dialog seeded with the row, leaving the list legible behind it', async () => {
       const { fixture, text, dialog, dialogText } = setup({
         search: () => of(page({ transactions: [filed()], totalCount: 1 })),
         categoryRead: () => of(CATEGORIES),
       });
-      const before = text();
-
       expect(dialog()).toBeNull();
-      await openRefileFromRowMenu(fixture);
+      await openRefileFromFirstRow(fixture);
 
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('Refile transaction');
       expect(overlay().querySelector<HTMLInputElement>('#refile-transaction-note')!.value).toBe('Coffee');
-      expect(text()).toContain(before);
+      // The sheet remains legible while its Record shortcuts deliberately hide
+      // until the competing form is closed.
+      expect(text()).toContain('Coffee');
+      expect(text()).toContain('History');
     });
 
     it('re-runs the whole read on a successful refile', async () => {
@@ -670,7 +822,7 @@ describe('TransactionsList', () => {
         categoryRead: () => of(CATEGORIES),
       });
 
-      await openRefileFromRowMenu(fixture);
+      await openRefileFromFirstRow(fixture);
       Array.from(overlay().querySelectorAll('button'))
         .find((b) => (b.textContent ?? '').trim() === 'Save')
         ?.click();
@@ -690,7 +842,7 @@ describe('TransactionsList', () => {
         categoryRead: () => of(CATEGORIES),
       });
 
-      await openRefileFromRowMenu(fixture);
+      await openRefileFromFirstRow(fixture);
       pressEscape();
       await settle(fixture);
 
