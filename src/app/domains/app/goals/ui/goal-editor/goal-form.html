@@ -4,7 +4,7 @@
 >
   @if (errorMessage(); as message) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger"
       role="alert"
     >
       {{ message }}
@@ -51,7 +51,7 @@
     </mat-error>
   </mat-form-field>
   @if (isOverTarget() && goal(); as existingGoal) {
-    <p class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+    <p class="rounded-2xl bg-warning-container px-4 py-3 text-sm text-warning">
       You’ve already contributed {{ existingGoal.currentAmount | peso }}. This Goal will be
       {{ existingGoal.currentAmount - model().targetAmount! | peso }} over its new target.
     </p>

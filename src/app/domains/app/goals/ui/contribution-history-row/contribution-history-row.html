@@ -1,11 +1,11 @@
 @let source = contribution().source;
 <div class="flex min-w-0 flex-col gap-y-1">
   <span class="font-medium tabular-nums">{{ contribution().amount | peso }}</span>
-  <span class="text-sm text-neutral-600 dark:text-neutral-300">
+  <span class="text-sm text-secondary">
     {{ contribution().contributionDate | date: 'd MMM y' }} · {{ contribution().accountName || 'Unknown account' }}
   </span>
   @if (source.kind === 'linked') {
-    <span class="text-sm text-neutral-600 dark:text-neutral-300">
+    <span class="text-sm text-secondary">
       Linked from
       {{ source.transaction?.description || 'Income Transaction #' + source.transactionId }}
       @if (source.transaction; as transaction) {
@@ -15,7 +15,7 @@
     </span>
   }
   @if (contribution().note) {
-    <span class="text-sm text-neutral-500 dark:text-neutral-400">{{ contribution().note }}</span>
+    <span class="text-sm text-secondary">{{ contribution().note }}</span>
   }
 </div>
 <!-- Edit and delete are deliberately row-owned; their lifecycle lands in #164. -->
