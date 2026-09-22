@@ -52,7 +52,7 @@ describe('ContributionForm', () => {
     ['ordinary', { ...CONTRIBUTION, transactionId: null, source: { kind: 'ordinary' as const } }],
     ['linked', CONTRIBUTION],
   ])('shows an existing %s date as settled and sends only the corrected note', async (_kind, contribution) => {
-    const update = vi.fn(() => of({ ...contribution, note: 'Revised' }));
+    const update = vi.fn<GoalContributionsService['update']>(() => of({ ...contribution, note: 'Revised' }));
     TestBed.configureTestingModule({
       imports: [ContributionForm],
       providers: [
@@ -88,9 +88,9 @@ describe('ContributionForm', () => {
   });
 
   it('releases a timed-out save and tells the person to refresh instead of retrying the Contribution', async () => {
-    const inFlight = new Subject<void>();
-    const update = vi.fn(() => inFlight.asObservable());
-    const fixture = setupExisting(update as unknown as GoalContributionsService['update']);
+    const inFlight = new Subject<GoalContributionWithAccountName>();
+    const update = vi.fn<GoalContributionsService['update']>(() => inFlight.asObservable());
+    const fixture = setupExisting(update);
     const pending: boolean[] = [];
     fixture.componentInstance.pendingChange.subscribe((value) => pending.push(value));
     const note = fixture.nativeElement.querySelector('input') as HTMLInputElement;

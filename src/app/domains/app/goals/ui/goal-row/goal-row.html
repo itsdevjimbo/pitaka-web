@@ -5,7 +5,7 @@
   <div class="min-w-0">
     <div class="flex items-start gap-3">
       <a
-        class="min-w-0 flex-auto rounded-sm font-semibold break-words text-text underline-offset-4 hover:underline"
+        class="flex min-h-11 min-w-0 flex-auto items-center rounded-sm font-semibold break-words text-text underline-offset-4 hover:underline"
         [routerLink]="['/app/goals', goal().id]"
       >
         {{ goal().name }}
@@ -63,7 +63,7 @@
         </button>
       </mat-menu>
     </div>
-    <p class="mt-3 text-sm text-secondary">{{ goal().status }}</p>
   </div>
   <goals-goal-progress [goal]="goal()" />
+  <p class="text-sm text-secondary">Lifecycle: {{ goal().status }}</p>
 </article>

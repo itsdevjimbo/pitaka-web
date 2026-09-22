@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, Injector, signal } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, Injector, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -42,6 +42,7 @@ export default class GoalList {
   private destroyRef = inject(DestroyRef);
   private injector = inject(Injector);
   private dialog = inject(MatDialog);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly goals = signal<readonly Goal[] | null>(null);
   protected readonly loading = signal(true);
@@ -131,6 +132,7 @@ export default class GoalList {
     this.notice.set(null);
     this.confirmingDelete.set(null);
     this.confirmingAbandon.set(goal);
+    this.focusSafeAction(`cancel-abandon-goal-${goal.id}`);
   }
 
   protected askDelete(goal: Goal): void {
@@ -141,7 +143,10 @@ export default class GoalList {
       .list(goal.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (items) => this.confirmingDelete.set({ goal, count: items.length }),
+        next: (items) => {
+          this.confirmingDelete.set({ goal, count: items.length });
+          this.focusSafeAction(`cancel-delete-goal-${goal.id}`);
+        },
         error: (error) => this.failed(goal.id, error, () => this.askDelete(goal)),
       });
   }
@@ -230,6 +235,10 @@ export default class GoalList {
           this.savedStale.set(reason === 'after-write');
         },
       });
+  }
+
+  private focusSafeAction(id: string): void {
+    queueMicrotask(() => this.host.nativeElement.querySelector<HTMLButtonElement>(`#${id}`)?.focus());
   }
 }
 

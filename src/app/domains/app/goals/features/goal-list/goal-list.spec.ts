@@ -155,4 +155,27 @@ describe('GoalList', () => {
     expect(text()).toContain('Holiday');
     expect(text()).not.toContain('Couldn’t refresh. These figures may be out of date');
   });
+
+  it('keeps the newest refresh when an older Goal read resolves later', async () => {
+    const older = new Subject<Goal[]>();
+    const newer = new Subject<Goal[]>();
+    const list = vi
+      .fn<GoalsService['list']>()
+      .mockReturnValueOnce(of([DENTAL]))
+      .mockReturnValueOnce(older.asObservable())
+      .mockReturnValueOnce(newer.asObservable());
+    const { fixture, text } = setup(list);
+
+    clickButton(fixture, 'Refresh');
+    clickButton(fixture, 'Refresh');
+    newer.next([HOLIDAY]);
+    newer.complete();
+    await settle(fixture);
+    older.next([DENTAL]);
+    older.complete();
+    await settle(fixture);
+
+    expect(text()).toContain('Holiday');
+    expect(text()).not.toContain('Dental work');
+  });
 });

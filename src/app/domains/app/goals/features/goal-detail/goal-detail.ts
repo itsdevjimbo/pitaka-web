@@ -1,11 +1,11 @@
-import { Component, computed, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { Router, RouterLink } from '@angular/router';
-import { forkJoin, map, Observable, of, switchMap } from 'rxjs';
+import { forkJoin, map, Observable, of, Subject, switchMap, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { ResourceState, RowNotice } from '@/app/core/notices';
@@ -54,7 +54,9 @@ export default class GoalDetail implements OnInit {
   private destroyRef = inject(DestroyRef);
   private dialog = inject(MatDialog);
   private router = inject(Router);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
   private contributionDeletion = inject(ContributionDeletionCoordinator);
+  private readonly readReset = new Subject<void>();
 
   readonly id = input.required<string>();
   private readonly goalId = computed(() => Number(this.id()));
@@ -78,6 +80,7 @@ export default class GoalDetail implements OnInit {
   protected readonly ordinaryAccountHeadroom = signal<{ accountName: string; availableAmount: number } | null>(null);
 
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => this.readReset.complete());
     this.load();
   }
 
@@ -155,6 +158,7 @@ export default class GoalDetail implements OnInit {
   protected askContributionDelete(contribution: GoalContributionWithAccountName): void {
     this.notice.set(null);
     this.confirmingContributionDelete.set(contribution);
+    this.focusSafeAction(`cancel-delete-contribution-${contribution.id}`);
   }
   protected cancelContributionDelete(): void {
     this.confirmingContributionDelete.set(null);
@@ -195,6 +199,7 @@ export default class GoalDetail implements OnInit {
     this.notice.set(null);
     this.confirmingDelete.set(null);
     this.confirmingAbandon.set(true);
+    this.focusSafeAction('cancel-abandon-goal');
   }
   protected askDelete(): void {
     const goal = this.goal();
@@ -207,7 +212,10 @@ export default class GoalDetail implements OnInit {
       .list(goal.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (items) => this.confirmingDelete.set({ count: items.length }),
+        next: (items) => {
+          this.confirmingDelete.set({ count: items.length });
+          this.focusSafeAction('cancel-delete-goal');
+        },
         error: (error) => this.failed(error, () => this.askDelete()),
       });
   }
@@ -297,9 +305,10 @@ export default class GoalDetail implements OnInit {
       this.load();
       return;
     }
+    this.readReset.next();
     this.refreshError.set(false);
     this.readContributionFacts(goal.id)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ({ goal: freshGoal, contributions, accounts, sourceTransactions }) => {
           this.goal.set(freshGoal);
@@ -319,13 +328,14 @@ export default class GoalDetail implements OnInit {
       this.load();
       return;
     }
+    this.readReset.next();
     forkJoin({
       facts: this.readContributionFacts(goal.id),
       transaction:
         deleted?.transactionId == null ? of(null) : this.transactions.linkedContributions(deleted.transactionId),
       pooledContributions: deleted && deleted.transactionId === null ? this.contributions.all() : of(null),
     })
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ({
           facts: { goal: freshGoal, contributions, accounts, sourceTransactions },
@@ -374,6 +384,10 @@ export default class GoalDetail implements OnInit {
         );
       }),
     );
+  }
+
+  private focusSafeAction(id: string): void {
+    queueMicrotask(() => this.host.nativeElement.querySelector<HTMLButtonElement>(`#${id}`)?.focus());
   }
 }
 

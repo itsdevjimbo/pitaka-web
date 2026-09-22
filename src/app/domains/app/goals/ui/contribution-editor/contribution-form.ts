@@ -7,6 +7,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { RouterLink } from '@angular/router';
 import { forkJoin, firstValueFrom, timeout, TimeoutError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
@@ -37,6 +38,7 @@ const SAVE_UNCERTAIN =
     DatePipe,
     PesoPipe,
     FormField,
+    RouterLink,
   ],
 })
 export class ContributionForm {
@@ -54,6 +56,9 @@ export class ContributionForm {
   protected readonly available = signal(new Map<number, number>());
   protected readonly loadingAccounts = signal(true);
   protected readonly submitting = signal(false);
+  protected readonly hasEligibleAccount = computed(() =>
+    this.accounts().some((account) => (this.available().get(account.id) ?? 0) > 0),
+  );
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly model = linkedSignal<GoalContributionWithAccountName | null, ContributionModel>({
     source: this.contribution,

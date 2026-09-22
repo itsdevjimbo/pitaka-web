@@ -43,8 +43,8 @@ describe('GoalForm', () => {
   }
 
   it('keeps invalid submission available, reveals validation, and focuses the first invalid field without saving', async () => {
-    const create = vi.fn();
-    const fixture = setup(create as unknown as GoalsService['create']);
+    const create = vi.fn<GoalsService['create']>();
+    const fixture = setup(create);
     const element = fixture.nativeElement as HTMLElement;
     const form = element.querySelector('form');
     const submit = Array.from(element.querySelectorAll<HTMLButtonElement>('button')).find(
@@ -66,8 +66,8 @@ describe('GoalForm', () => {
 
   it('releases a timed-out save and tells the person to refresh instead of retrying the write', async () => {
     const inFlight = new Subject<Goal>();
-    const create = vi.fn(() => inFlight.asObservable());
-    const fixture = setup(create as unknown as GoalsService['create']);
+    const create = vi.fn<GoalsService['create']>(() => inFlight.asObservable());
+    const fixture = setup(create);
     const pending: boolean[] = [];
     fixture.componentInstance.pendingChange.subscribe((value) => pending.push(value));
     enter(fixture, '#goal-name', 'Dental work');

@@ -123,6 +123,7 @@
                         <button
                           matButton
                           type="button"
+                          [id]="'cancel-abandon-goal-' + goal.id"
                           (click)="cancelPrompt()"
                         >
                           Cancel
@@ -155,6 +156,7 @@
                           <button
                             matButton
                             type="button"
+                            [id]="'cancel-delete-goal-' + goal.id"
                             (click)="cancelPrompt()"
                           >
                             Cancel
