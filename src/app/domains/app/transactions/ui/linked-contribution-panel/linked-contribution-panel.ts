@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, Injector, input, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, Injector, input, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom, forkJoin } from 'rxjs';
@@ -37,9 +38,10 @@ type LinkedContributionCreationAvailability =
   imports: [DatePipe, MatButtonModule, PesoPipe, RouterLink, RowNotice],
   providers: [ContributionDeletionCoordinator],
 })
-export class LinkedContributionPanel {
+export class LinkedContributionPanel implements OnInit {
   private readonly transactions = inject(TransactionsService);
   private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
   private snapshotRequest = 0;
 
   readonly transaction = input.required<Transaction>();
@@ -58,6 +60,12 @@ export class LinkedContributionPanel {
     contribution: TransactionLinkedContribution;
     message: string;
   } | null>(null);
+  protected readonly canShowHistory = computed(
+    () =>
+      (this.snapshot()?.linkedContributions.length ?? 0) > 0 ||
+      this.errorMessage() !== null ||
+      (this.showing() && this.loading()),
+  );
   readonly creationAvailability = computed<LinkedContributionCreationAvailability>(() => {
     if (this.loading()) {
       return { status: 'checking', explanation: null };
@@ -75,39 +83,50 @@ export class LinkedContributionPanel {
       : { status: 'unavailable', explanation: availability.explanation };
   });
 
-  protected async toggle(): Promise<void> {
+  ngOnInit(): void {
+    this.refresh();
+  }
+
+  protected toggle(): void {
     const showing = !this.showing();
     this.showing.set(showing);
     if (showing && this.snapshot() === null) {
-      await this.refresh();
+      this.refresh();
     }
   }
 
-  /** Fresh read after entry, retry, or a write because these facts carry money (ADR 0006). */
-  async refresh(): Promise<void> {
+  /** Fresh read on entry, retry, or after a write because these facts carry money (ADR 0006). */
+  refresh(): void {
     const request = ++this.snapshotRequest;
     this.loading.set(true);
     this.errorMessage.set(null);
-    try {
-      const snapshot = await firstValueFrom(this.transactions.linkedContributions(this.transaction().id));
-      if (request !== this.snapshotRequest) {
-        return;
-      }
-      this.snapshot.set(snapshot);
-    } catch (error) {
-      if (request !== this.snapshotRequest) {
-        return;
-      }
-      this.errorMessage.set(
-        error instanceof ApiError
-          ? error.message
-          : 'Something went wrong loading Linked Contributions. Please try again.',
-      );
-    } finally {
-      if (request === this.snapshotRequest) {
-        this.loading.set(false);
-      }
-    }
+    this.transactions
+      .linkedContributions(this.transaction().id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (snapshot) => {
+          if (request !== this.snapshotRequest) {
+            return;
+          }
+          this.snapshot.set(snapshot);
+        },
+        error: (error: unknown) => {
+          if (request !== this.snapshotRequest) {
+            return;
+          }
+          this.errorMessage.set(
+            error instanceof ApiError
+              ? error.message
+              : 'Something went wrong loading Linked Contributions. Please try again.',
+          );
+          this.loading.set(false);
+        },
+        complete: () => {
+          if (request === this.snapshotRequest) {
+            this.loading.set(false);
+          }
+        },
+      });
   }
 
   protected askDelete(contribution: TransactionLinkedContribution): void {

@@ -91,6 +91,22 @@ describe('TransactionsList', () => {
     const accounts = over.accounts ?? (() => of(ACCOUNTS as unknown as never));
     const refile = over.refile ?? (() => of({} as Transaction));
     const remove = over.remove ?? (() => of(undefined));
+    const linkedContributions: TransactionsService['linkedContributions'] = () =>
+      of({
+        transactionId: 0,
+        transactionAmount: 0,
+        linkedTotal: 0,
+        remainingCapacity: 0,
+        account: {
+          id: 3,
+          name: 'Everyday cash',
+          currentBalance: 0,
+          earmarkedTotal: 0,
+          availableHeadroom: 0,
+          active: true,
+        },
+        linkedContributions: [],
+      });
     const url = fakeUrl(over.queryParams ?? {});
 
     TestBed.configureTestingModule({
@@ -107,7 +123,7 @@ describe('TransactionsList', () => {
         },
         {
           provide: TransactionsService,
-          useValue: { search, refile, remove },
+          useValue: { search, refile, remove, linkedContributions },
         },
         {
           provide: CategoriesService,

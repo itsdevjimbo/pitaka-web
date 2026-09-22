@@ -70,6 +70,22 @@ describe('AccountDetail', () => {
     const record = over.record ?? (() => of({} as Transaction));
     const refile = over.refile ?? (() => of({} as Transaction));
     const remove = over.remove ?? (() => of(undefined));
+    const linkedContributions: TransactionsService['linkedContributions'] = () =>
+      of({
+        transactionId: 0,
+        transactionAmount: 0,
+        linkedTotal: 0,
+        remainingCapacity: 0,
+        account: {
+          id: 3,
+          name: 'Everyday cash',
+          currentBalance: 0,
+          earmarkedTotal: 0,
+          availableHeadroom: 0,
+          active: true,
+        },
+        linkedContributions: [],
+      });
     const categoryList = over.categoryList ?? (() => of([]));
     // Both the record and refile dialog forms read `list()` for the active
     // picker and `all()` to keep a since-retired saved Category selectable
@@ -87,7 +103,7 @@ describe('AccountDetail', () => {
         { provide: AccountsService, useValue: { get, all: accountsList } },
         {
           provide: TransactionsService,
-          useValue: { list, search, record, refile, remove },
+          useValue: { list, search, record, refile, remove, linkedContributions },
         },
         {
           provide: CategoriesService,
