@@ -152,8 +152,9 @@
           <div
             class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warning-container p-4 text-sm text-warning"
             role="alertdialog"
+            aria-labelledby="abandon-goal-title"
           >
-            <p>
+            <p id="abandon-goal-title">
               Abandon
               <span class="font-semibold">{{ currentGoal.name }}</span>
               ? You won’t be able to add Contributions until you mark it active again.
@@ -179,8 +180,9 @@
           <div
             class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-container p-4 text-sm text-danger"
             role="alertdialog"
+            aria-labelledby="delete-goal-title"
           >
-            <p>
+            <p id="delete-goal-title">
               Delete
               <span class="font-semibold">{{ currentGoal.name }}</span>
               ? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{
@@ -303,8 +305,9 @@
                   <li
                     class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-container p-4 text-sm text-danger"
                     role="alertdialog"
+                    [attr.aria-labelledby]="'delete-contribution-title-' + contribution.id"
                   >
-                    <p>
+                    <p [id]="'delete-contribution-title-' + contribution.id">
                       Delete this
                       <span class="font-semibold">{{ contribution.amount | peso }}</span>
                       Contribution? It will no longer count toward {{ currentGoal.name }}, and

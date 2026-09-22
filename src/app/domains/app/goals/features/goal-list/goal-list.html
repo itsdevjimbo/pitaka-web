@@ -152,8 +152,9 @@
                   <section
                     class="m-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warning-container p-4 text-sm text-warning"
                     role="alertdialog"
+                    [attr.aria-labelledby]="'abandon-goal-title-' + goal.id"
                   >
-                    <p>
+                    <p [id]="'abandon-goal-title-' + goal.id">
                       Abandon
                       <span class="font-semibold">{{ goal.name }}</span>
                       ? You won’t be able to add Contributions until you mark it active again.
@@ -182,8 +183,9 @@
                     <section
                       class="m-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-container p-4 text-sm text-danger"
                       role="alertdialog"
+                      [attr.aria-labelledby]="'delete-goal-title-' + goal.id"
                     >
-                      <p>
+                      <p [id]="'delete-goal-title-' + goal.id">
                         Delete
                         <span class="font-semibold">{{ goal.name }}</span>
                         ? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{

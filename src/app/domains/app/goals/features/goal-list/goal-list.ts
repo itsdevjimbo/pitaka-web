@@ -58,6 +58,7 @@ export default class GoalList {
   protected readonly selectedLifecycle = signal<GoalStatus>('Active');
   protected readonly lifecycleOptions = GROUPS;
   private readonly readReset = new Subject<void>();
+  private readonly deletePreflightReset = new Subject<void>();
   private successTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly selectedGroup = computed<GoalGroup>(() => {
@@ -77,6 +78,7 @@ export default class GoalList {
   constructor() {
     this.destroyRef.onDestroy(() => {
       this.readReset.complete();
+      this.deletePreflightReset.complete();
       if (this.successTimer) {
         clearTimeout(this.successTimer);
       }
@@ -148,12 +150,13 @@ export default class GoalList {
   }
 
   protected askDelete(goal: Goal): void {
+    this.deletePreflightReset.next();
     this.notice.set(null);
     this.confirmingAbandon.set(null);
     this.injector
       .get(GoalContributionsService)
       .list(goal.id)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.deletePreflightReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (items) => {
           this.confirmingDelete.set({ goal, count: items.length });
@@ -164,7 +167,15 @@ export default class GoalList {
   }
 
   protected cancelPrompt(): void {
+    const goal = this.confirmingAbandon() ?? this.confirmingDelete()?.goal;
     this.clearPrompts();
+    if (goal) {
+      queueMicrotask(() =>
+        this.host.nativeElement
+          .querySelector<HTMLButtonElement>(`[data-goal-id="${goal.id}"] [aria-label="Actions for ${goal.name}"]`)
+          ?.focus(),
+      );
+    }
   }
 
   protected setStatus(goal: Goal, status: GoalStatus): void {
@@ -237,6 +248,7 @@ export default class GoalList {
   }
 
   private clearPrompts(): void {
+    this.deletePreflightReset.next();
     this.confirmingAbandon.set(null);
     this.confirmingDelete.set(null);
   }

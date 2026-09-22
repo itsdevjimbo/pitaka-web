@@ -22,6 +22,7 @@
 <button
   matIconButton
   aria-label="Contribution actions"
+  [attr.data-contribution-id]="contribution().id"
   [matMenuTriggerFor]="menu"
   [disabled]="pending()"
 >

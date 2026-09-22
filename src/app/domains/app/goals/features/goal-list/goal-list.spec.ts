@@ -56,7 +56,7 @@ describe('GoalList', () => {
   const overlay = withOverlayContainer();
   function setup(
     list: GoalsService['list'],
-    over: {
+    overrides: {
       deleteGoal?: GoalsService['delete'];
       listContributions?: GoalContributionsService['list'];
     } = {},
@@ -67,10 +67,10 @@ describe('GoalList', () => {
         provideIcons(),
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: GoalsService, useValue: { list, delete: over.deleteGoal ?? (() => of(undefined)) } },
+        { provide: GoalsService, useValue: { list, delete: overrides.deleteGoal ?? (() => of(undefined)) } },
         {
           provide: GoalContributionsService,
-          useValue: { list: over.listContributions ?? (() => of([])) },
+          useValue: { list: overrides.listContributions ?? (() => of([])) },
         },
       ],
     });

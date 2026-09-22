@@ -70,7 +70,7 @@ export class GoalForm {
     effect(() => this.dirtyChange.emit(this.dirty()));
   }
 
-  save(event: Event): void {
+  protected save(event: Event): void {
     event.preventDefault();
     const formElement = event.currentTarget as HTMLFormElement;
     submit(this.goalForm, {

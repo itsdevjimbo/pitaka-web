@@ -57,6 +57,7 @@ export default class GoalDetail implements OnInit {
   private host = inject<ElementRef<HTMLElement>>(ElementRef);
   private contributionDeletion = inject(ContributionDeletionCoordinator);
   private readonly readReset = new Subject<void>();
+  private readonly deletePreflightReset = new Subject<void>();
 
   readonly id = input.required<string>();
   private readonly goalId = computed(() => Number(this.id()));
@@ -84,6 +85,7 @@ export default class GoalDetail implements OnInit {
   ngOnInit(): void {
     this.destroyRef.onDestroy(() => {
       this.readReset.complete();
+      this.deletePreflightReset.complete();
       if (this.successTimer) {
         clearTimeout(this.successTimer);
       }
@@ -168,7 +170,13 @@ export default class GoalDetail implements OnInit {
     this.focusSafeAction(`cancel-delete-contribution-${contribution.id}`);
   }
   protected cancelContributionDelete(): void {
+    const contributionId = this.confirmingContributionDelete()?.id;
     this.confirmingContributionDelete.set(null);
+    if (contributionId !== undefined) {
+      queueMicrotask(() =>
+        this.host.nativeElement.querySelector<HTMLButtonElement>(`[data-contribution-id="${contributionId}"]`)?.focus(),
+      );
+    }
   }
   protected confirmContributionDelete(): void {
     const contribution = this.confirmingContributionDelete();
@@ -210,11 +218,12 @@ export default class GoalDetail implements OnInit {
     if (!goal) {
       return;
     }
+    this.deletePreflightReset.next();
     this.notice.set(null);
     this.confirmingAbandon.set(false);
     this.contributions
       .list(goal.id)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.deletePreflightReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (items) => {
           this.confirmingDelete.set({ count: items.length });
@@ -225,6 +234,9 @@ export default class GoalDetail implements OnInit {
   }
   protected cancelPrompt(): void {
     this.clearPrompts();
+    queueMicrotask(() =>
+      this.host.nativeElement.querySelector<HTMLButtonElement>('[aria-label="Goal actions"]')?.focus(),
+    );
   }
   protected setStatus(status: Goal['status']): void {
     const goal = this.goal();
@@ -283,6 +295,7 @@ export default class GoalDetail implements OnInit {
     });
   }
   private clearPrompts(): void {
+    this.deletePreflightReset.next();
     this.confirmingAbandon.set(false);
     this.confirmingDelete.set(null);
     this.confirmingContributionDelete.set(null);
