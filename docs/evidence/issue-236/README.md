@@ -12,9 +12,9 @@ Verified on 2026-09-22 against the rendered Goal list, detail, editor, and Contr
 
 ## Automated verification
 
-- Focused Goal suites: 40 tests passed across nine files.
+- Focused Goal suites: 41 tests passed across nine files.
 - `npm run build`, `npm run lint`, and `npm run check:changed -- --base origin/main`: passed.
-- Full repository suite: 1,030 tests passed across 79 files; `npm run check:format` also passed.
+- Full repository suite: 1,031 tests passed across 79 files; `npm run check:format` also passed.
 
 ## Limits
 

@@ -364,4 +364,32 @@ describe('GoalDetail', () => {
     expect(missing.text()).toContain('Back to goals');
     expect(missing.text()).not.toContain('Try again');
   });
+
+  it('keeps the latest Contribution refresh when an older detail refresh resolves later', async () => {
+    const older = new Subject<Goal>();
+    const newer = new Subject<Goal>();
+    const get = vi
+      .fn<GoalsService['get']>()
+      .mockReturnValueOnce(of(GOAL))
+      .mockReturnValueOnce(older.asObservable())
+      .mockReturnValueOnce(newer.asObservable());
+    const { fixture, text } = setup({ get });
+    await settle(fixture);
+
+    // The UI deliberately hides ordinary refresh; direct coordinator access proves a superseded read cannot win.
+    const refresh = Reflect.get(fixture.componentInstance, 'refresh') as () => void;
+    const refreshContributionFacts = Reflect.get(fixture.componentInstance, 'refreshContributionFacts') as () => void;
+    refresh.call(fixture.componentInstance);
+    refreshContributionFacts.call(fixture.componentInstance);
+
+    newer.next({ ...GOAL, name: 'Fresh details' });
+    newer.complete();
+    await settle(fixture);
+    older.next({ ...GOAL, name: 'Stale details' });
+    older.complete();
+    await settle(fixture);
+
+    expect(text()).toContain('Fresh details');
+    expect(text()).not.toContain('Stale details');
+  });
 });
