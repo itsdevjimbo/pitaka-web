@@ -14,6 +14,7 @@ import { GoalProgress } from '../goal-progress/goal-progress';
 })
 export class GoalRow {
   readonly goal = input.required<Goal>();
+  readonly unavailable = input(false);
   readonly edit = output<Goal>();
   readonly status = output<{ goal: Goal; status: Goal['status'] }>();
   readonly abandon = output<Goal>();

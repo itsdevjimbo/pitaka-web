@@ -3,9 +3,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { Subject, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
+import { ResourceState } from '@/app/core/notices';
 import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal, GoalStatus } from '../../data/goal';
 import { GoalsService } from '../../data/goals.service';
@@ -32,7 +34,7 @@ const GROUPS: readonly Omit<GoalGroup, 'rows'>[] = [
 @Component({
   selector: 'goals-list',
   templateUrl: './goal-list.html',
-  imports: [MatButtonModule, MatIconModule, GoalRow, RowNotice, PesoPipe],
+  imports: [MatButtonModule, MatIconModule, GoalRow, ResourceState, RowNotice, PesoPipe],
   host: { class: 'flex flex-auto flex-col' },
 })
 export default class GoalList {
@@ -44,10 +46,14 @@ export default class GoalList {
   protected readonly goals = signal<readonly Goal[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly refreshError = signal(false);
+  protected readonly savedStale = signal(false);
+  protected readonly stale = computed(() => this.refreshError());
   protected readonly busyId = signal<number | null>(null);
   protected readonly notice = signal<{ id: number; message: string; retry?: () => void } | null>(null);
   protected readonly confirmingAbandon = signal<Goal | null>(null);
   protected readonly confirmingDelete = signal<{ goal: Goal; count: number } | null>(null);
+  private readonly readReset = new Subject<void>();
 
   /** All lifecycle sections stay visible after the first Goal exists. */
   protected readonly groups = computed<readonly GoalGroup[]>(() => {
@@ -67,16 +73,24 @@ export default class GoalList {
   protected readonly isEmpty = computed(() => this.goals()?.length === 0);
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.readReset.complete());
     this.load();
   }
 
   /** Read every Goal freshly: each row carries the server-computed progress total. */
   protected load(): void {
+    if (this.goals() !== null) {
+      this.readGoals();
+      return;
+    }
     this.loading.set(true);
     this.errorMessage.set(null);
+    this.refreshError.set(false);
+    this.savedStale.set(false);
+    this.readReset.next();
     this.service
       .list()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (goals) => {
           this.goals.set(goals);
@@ -96,7 +110,7 @@ export default class GoalList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((goal) => {
         if (goal) {
-          this.load();
+          this.readGoals('after-write');
         }
       });
   }
@@ -108,7 +122,7 @@ export default class GoalList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
         if (saved) {
-          this.load();
+          this.readGoals('after-write');
         }
       });
   }
@@ -141,7 +155,7 @@ export default class GoalList {
     this.write(
       goal.id,
       this.service.setStatus(goal.id, status),
-      () => this.load(),
+      () => this.readGoals('after-write'),
       () => this.setStatus(goal, status),
     );
   }
@@ -155,7 +169,7 @@ export default class GoalList {
     this.write(
       goal.id,
       this.service.delete(goal.id),
-      () => this.load(),
+      () => this.readGoals('after-write'),
       () => this.confirmDelete(goal),
     );
   }
@@ -197,6 +211,25 @@ export default class GoalList {
   private clearPrompts(): void {
     this.confirmingAbandon.set(null);
     this.confirmingDelete.set(null);
+  }
+
+  /** Refresh without hiding settled funding figures; a failed reread explicitly gates writes. */
+  private readGoals(reason: 'ordinary' | 'after-write' = 'ordinary'): void {
+    this.readReset.next();
+    this.refreshError.set(false);
+    this.service
+      .list()
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (goals) => {
+          this.goals.set(goals);
+          this.savedStale.set(false);
+        },
+        error: () => {
+          this.refreshError.set(true);
+          this.savedStale.set(reason === 'after-write');
+        },
+      });
   }
 }
 

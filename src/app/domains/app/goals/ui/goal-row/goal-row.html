@@ -1,62 +1,69 @@
-<a
-  class="flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 hover:bg-neutral-100 dark:border-neutral-800 dark:hover:bg-neutral-900"
-  [class.opacity-60]="goal().status === 'Abandoned'"
-  [routerLink]="['/app/goals', goal().id]"
+<article
+  class="flex min-w-0 flex-col gap-4 p-5 sm:p-6"
+  [class.opacity-70]="goal().status === 'Abandoned'"
 >
-  <div class="flex items-center gap-x-3">
-    <span class="min-w-0 flex-auto truncate font-medium">{{ goal().name }}</span>
-    <button
-      matIconButton
-      class="-mr-2 shrink-0"
-      aria-label="Goal actions"
-      [matMenuTriggerFor]="menu"
-      (click)="$event.preventDefault(); $event.stopPropagation()"
-    >
-      <mat-icon svgIcon="ellipsis-vertical" />
-    </button>
-    <mat-menu #menu>
-      <button
-        mat-menu-item
-        (click)="edit.emit(goal())"
+  <div class="min-w-0">
+    <div class="flex items-start gap-3">
+      <a
+        class="min-w-0 flex-auto rounded-sm font-semibold break-words text-text underline-offset-4 hover:underline"
+        [routerLink]="['/app/goals', goal().id]"
       >
-        <mat-icon svgIcon="pencil" />
-        <span>Edit</span>
+        {{ goal().name }}
+      </a>
+      <button
+        matIconButton
+        type="button"
+        class="shrink-0"
+        [attr.aria-label]="'Actions for ' + goal().name"
+        [matMenuTriggerFor]="menu"
+      >
+        <mat-icon svgIcon="ellipsis-vertical" />
       </button>
-      @if (goal().status === 'Active') {
-        @if (goal().currentAmount >= goal().targetAmount) {
+      <mat-menu #menu>
+        <button
+          mat-menu-item
+          (click)="edit.emit(goal())"
+        >
+          <mat-icon svgIcon="pencil" />
+          <span>Edit</span>
+        </button>
+        @if (goal().status === 'Active') {
+          @if (goal().currentAmount >= goal().targetAmount) {
+            <button
+              mat-menu-item
+              [disabled]="unavailable()"
+              (click)="status.emit({ goal: goal(), status: 'Completed' })"
+            >
+              <mat-icon svgIcon="circle-check" />
+              <span>Mark complete</span>
+            </button>
+          }
           <button
             mat-menu-item
-            (click)="status.emit({ goal: goal(), status: 'Completed' })"
+            (click)="abandon.emit(goal())"
+          >
+            <mat-icon svgIcon="archive" />
+            <span>Abandon</span>
+          </button>
+        } @else {
+          <button
+            mat-menu-item
+            (click)="status.emit({ goal: goal(), status: 'Active' })"
           >
             <mat-icon svgIcon="circle-check" />
-            <span>Mark complete</span>
+            <span>Mark active</span>
           </button>
         }
         <button
           mat-menu-item
-          (click)="abandon.emit(goal())"
+          (click)="remove.emit(goal())"
         >
-          <mat-icon svgIcon="archive" />
-          <span>Abandon</span>
+          <mat-icon svgIcon="trash-2" />
+          <span>Delete</span>
         </button>
-      } @else {
-        <button
-          mat-menu-item
-          (click)="status.emit({ goal: goal(), status: 'Active' })"
-        >
-          <mat-icon svgIcon="circle-check" />
-          <span>Mark active</span>
-        </button>
-      }
-      <button
-        mat-menu-item
-        (click)="remove.emit(goal())"
-      >
-        <mat-icon svgIcon="trash-2" />
-        <span>Delete</span>
-      </button>
-    </mat-menu>
+      </mat-menu>
+    </div>
+    <p class="mt-3 text-sm text-secondary">{{ goal().status }}</p>
   </div>
-
   <goals-goal-progress [goal]="goal()" />
-</a>
+</article>

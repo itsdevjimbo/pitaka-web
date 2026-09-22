@@ -1,5 +1,6 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, input } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
 import { PesoPipe } from '@/app/core/money';
 import { Goal } from '../../data/goal';
 import { toGoalDateOnly } from '../../data/goal-calendar';
@@ -7,7 +8,7 @@ import { toGoalDateOnly } from '../../data/goal-calendar';
 /** The progress facts a Goal shows consistently in list rows and its detail. */
 @Component({
   selector: 'goals-goal-progress',
-  imports: [DatePipe, PesoPipe],
+  imports: [DatePipe, DecimalPipe, MatIconModule, PesoPipe],
   templateUrl: './goal-progress.html',
 })
 export class GoalProgress {
@@ -44,7 +45,17 @@ export class GoalProgress {
     );
   }
 
-  private progressPercent(): number {
+  protected fundingLabel(): string {
+    if (this.isOver()) {
+      return 'Over target';
+    }
+    if (this.gap() === 0) {
+      return 'Target reached';
+    }
+    return 'In progress';
+  }
+
+  protected progressPercent(): number {
     const { currentAmount, targetAmount } = this.goal();
     return (currentAmount / targetAmount) * 100;
   }

@@ -89,7 +89,7 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="goalForm().invalid() || submitting()"
+      [disabled]="submitting()"
     >
       {{ submitting() ? 'Saving…' : goal() ? 'Save changes' : 'Create goal' }}
     </button>

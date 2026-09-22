@@ -1,40 +1,83 @@
-<div
-  data-goal-progress
-  class="flex h-2 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800"
-  role="img"
-  [attr.aria-label]="progressLabel()"
->
-  <span
-    class="h-full bg-income"
-    [style.width.%]="filledWidth()"
-  ></span>
+<div class="flex flex-wrap items-center gap-2">
   @if (isOver()) {
-    <span
-      class="h-full bg-transfer"
-      [style.width.%]="overflowWidth()"
-    ></span>
-  }
-</div>
-
-<div class="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
-  <span class="text-neutral-600 tabular-nums dark:text-neutral-300">
-    {{ goal().currentAmount | peso }} of {{ goal().targetAmount | peso }}
-  </span>
-  @if (isOver()) {
-    <span class="font-medium text-neutral-700 dark:text-neutral-200">{{ gap() | peso }} over</span>
+    <span class="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-soft px-3 text-sm font-semibold text-text">
+      <mat-icon
+        class="size-4"
+        svgIcon="circle-plus"
+      />
+      {{ fundingLabel() }} · {{ gap() | peso }} excess
+    </span>
   } @else if (gap() === 0) {
-    <span class="font-medium text-income">Target reached</span>
+    <span
+      class="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-success-container px-3 text-sm font-semibold text-success"
+    >
+      <mat-icon
+        class="size-4"
+        svgIcon="circle-check"
+      />
+      {{ fundingLabel() }}
+    </span>
   } @else {
-    <span class="text-neutral-500 dark:text-neutral-400">{{ gap() | peso }} to go</span>
+    <span
+      class="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-soft px-3 text-sm font-semibold text-primary-600 dark:text-primary-200"
+    >
+      <mat-icon
+        class="size-4"
+        svgIcon="target"
+      />
+      {{ fundingLabel() }}
+    </span>
+  }
+  @if (isOverdue()) {
+    <span
+      class="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-warning-container px-3 text-sm font-semibold text-warning"
+    >
+      <mat-icon
+        class="size-4"
+        svgIcon="triangle-alert"
+      />
+      Target overdue
+    </span>
   }
 </div>
 
-@if (goal().status === 'Active' && goal().targetDate) {
-  <div class="flex flex-wrap items-center gap-x-2 text-sm text-neutral-500 dark:text-neutral-400">
-    <span>By {{ goal().targetDate | date: 'd MMM y' }}</span>
-    @if (isOverdue()) {
-      <span aria-hidden="true">·</span>
-      <span class="font-medium text-expense">Overdue</span>
+<div class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+  <div class="min-w-0">
+    <div class="flex items-baseline justify-between gap-3">
+      <p class="font-sans text-2xl font-semibold break-words text-text tabular-nums">
+        {{ goal().currentAmount | peso }}
+      </p>
+      <p class="shrink-0 text-sm font-semibold text-secondary tabular-nums">
+        {{ progressPercent() | number: '1.0-0' }}%
+      </p>
+    </div>
+    <p class="mt-1 text-sm text-secondary">
+      {{ goal().currentAmount | peso }} of {{ goal().targetAmount | peso }} Goal amount
+    </p>
+    <div
+      data-goal-progress
+      class="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-soft"
+      role="img"
+      [attr.aria-label]="progressLabel()"
+    >
+      <span
+        class="h-full bg-income"
+        [style.width.%]="filledWidth()"
+      ></span>
+      @if (isOver()) {
+        <span
+          class="h-full bg-transfer"
+          [style.width.%]="overflowWidth()"
+        ></span>
+      }
+    </div>
+  </div>
+  <div class="text-sm text-secondary sm:text-right">
+    @if (goal().targetDate) {
+      <p>By</p>
+      <p class="mt-1 font-semibold text-text">{{ goal().targetDate | date: 'd MMM y' }}</p>
+    } @else {
+      <p>No date set</p>
     }
   </div>
-}
+</div>

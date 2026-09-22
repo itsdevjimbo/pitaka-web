@@ -72,6 +72,17 @@ describe('GoalList', () => {
     fixture.detectChanges();
   }
 
+  function clickButton(fixture: ComponentFixture<GoalList>, label: string) {
+    const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((element) =>
+      (element.textContent ?? '').includes(label),
+    );
+    if (!button) {
+      throw new Error(`No button labelled "${label}"`);
+    }
+    button.click();
+    fixture.detectChanges();
+  }
+
   it('shows loading, then keeps Active, Completed and Abandoned sections visible', async () => {
     const pending = new Subject<Goal[]>();
     const { fixture, text } = setup(() => pending.asObservable());
@@ -96,28 +107,52 @@ describe('GoalList', () => {
     expect(body.indexOf('Emergency fund')).toBeLessThan(body.indexOf('Holiday'));
   });
 
-  it('renders bar-led progress including reached and overflow readings', () => {
+  it('renders exact funding facts, percentages, badges, and an independent overdue warning', () => {
     const { fixture, text } = setup(() => of([DENTAL, HOLIDAY, EMERGENCY, CAR, CAMERA]));
     const body = text();
     expect(body).toContain(`${formatPeso(18000)} of ${formatPeso(30000)}`);
-    expect(body).toContain(`${formatPeso(12000 - 10000)} over`);
+    expect(body).toContain(`${formatPeso(12000 - 10000)} excess`);
+    expect(body).toContain('Over target');
+    expect(body).toContain('In progress');
     expect(body).toContain('Target reached');
-    expect(body).toContain('By 1 Mar 2026');
-    expect(body).toContain('Overdue');
-    expect(body).not.toContain('%');
+    expect(body).toContain('1 Mar 2026');
+    expect(body).toContain('Target overdue');
+    expect(body).toContain('%');
     expect((fixture.nativeElement as HTMLElement).querySelectorAll('[data-goal-progress]').length).toBe(5);
   });
 
   it('uses an explanatory New goal card only when no Goals exist', () => {
     const { text } = setup(() => of([]));
-    expect(text()).toContain('No goals yet');
-    expect(text()).toContain('A Goal is a savings target');
+    expect(text()).toContain('Start your first Goal');
+    expect(text()).toContain('A Goal helps you build');
     expect(text()).not.toContain('No active Goals.');
   });
 
   it('renders a retryable list error', () => {
     const { text } = setup(() => throwError(() => new ApiError('Goals unavailable', 500)));
     expect(text()).toContain('Goals unavailable');
-    expect(text()).toContain('Try again');
+    expect(text()).toContain('Retry');
+  });
+
+  it('keeps loaded funding visible and gates writes when refresh fails, then Retry recovers', async () => {
+    const list = vi
+      .fn<GoalsService['list']>()
+      .mockReturnValueOnce(of([DENTAL]))
+      .mockReturnValueOnce(throwError(() => new ApiError('Unavailable', 500)))
+      .mockReturnValueOnce(of([HOLIDAY]));
+    const { fixture, text } = setup(list);
+
+    clickButton(fixture, 'Refresh');
+    await settle(fixture);
+
+    expect(text()).toContain('Dental work');
+    expect(text()).toContain('Couldn’t refresh. These figures may be out of date');
+    expect(text()).toContain('Funding-based completion is unavailable until refreshed');
+
+    clickButton(fixture, 'Retry');
+    await settle(fixture);
+
+    expect(text()).toContain('Holiday');
+    expect(text()).not.toContain('Couldn’t refresh. These figures may be out of date');
   });
 });

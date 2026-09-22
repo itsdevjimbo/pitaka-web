@@ -1,6 +1,6 @@
-<div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
+<div class="mx-auto flex w-full max-w-7xl flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
   <a
-    class="flex w-fit items-center gap-x-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-100"
+    class="flex w-fit items-center gap-x-1.5 text-sm font-semibold text-primary-600 underline underline-offset-4 dark:text-primary-200"
     routerLink="/app/goals"
   >
     <mat-icon
@@ -11,16 +11,10 @@
   </a>
 
   @if (loading()) {
-    <div
-      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
-      role="status"
-    >
-      <mat-icon
-        class="size-6 animate-spin"
-        svgIcon="loader-circle"
-      />
-      <span>Loading contributions…</span>
-    </div>
+    <app-resource-state
+      kind="loading"
+      message="Loading contributions…"
+    />
   } @else if (errorMessage(); as message) {
     <div
       class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
@@ -50,19 +44,30 @@
       }
     </div>
   } @else if (goal(); as currentGoal) {
-    <header class="flex flex-col gap-y-3">
+    @if (refreshError()) {
+      <app-resource-state
+        [kind]="savedStale() ? 'saved-stale' : 'stale'"
+        [message]="'Couldn’t refresh. These figures may be out of date. Funding-based completion is unavailable until refreshed.'"
+        (retry)="load()"
+      />
+    }
+    <header class="flex min-w-0 flex-col gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6">
       <div class="flex items-center justify-between gap-x-4">
         <div class="flex items-center gap-x-2">
-          <h1 class="text-2xl font-bold tracking-tight">{{ currentGoal.name }}</h1>
-          <span
-            class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
+          <h1
+            class="font-display text-3xl tracking-tight break-words"
+            tabindex="-1"
           >
+            {{ currentGoal.name }}
+          </h1>
+          <span class="inline-flex min-h-10 items-center rounded-full bg-soft px-3 text-sm font-semibold text-text">
             {{ currentGoal.status }}
           </span>
         </div>
         @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
           <button
             matButton="filled"
+            [disabled]="stale()"
             (click)="setStatus('Completed')"
           >
             Mark complete
@@ -200,7 +205,7 @@
     </header>
 
     <section
-      class="flex flex-col gap-y-4"
+      class="grid gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6"
       aria-labelledby="contributions-heading"
     >
       <div class="flex items-center justify-between gap-x-4">

@@ -147,8 +147,9 @@ describe('GoalDetail', () => {
     const body = text();
     expect(body).toContain('Dental work');
     expect(body).toContain(`${formatPeso(18000)} of ${formatPeso(30000)}`);
-    expect(body).toContain('By 1 Mar 2026');
-    expect(body).not.toContain('%');
+    expect(body).toContain('1 Mar 2026');
+    expect(body).toContain('In progress');
+    expect(body).toContain('%');
     expect(body).toContain('Everyday cash');
     expect(body).toContain('Payday');
     expect((fixture.nativeElement as HTMLElement).querySelector('[aria-label="Goal actions"]')).not.toBeNull();

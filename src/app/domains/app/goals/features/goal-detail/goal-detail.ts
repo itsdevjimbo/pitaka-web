@@ -8,7 +8,7 @@ import { Router, RouterLink } from '@angular/router';
 import { forkJoin, map, Observable, of, switchMap } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
-import { RowNotice } from '@/app/core/notices';
+import { ResourceState, RowNotice } from '@/app/core/notices';
 import { AccountsService } from '@/app/domains/app/accounts';
 import { Transaction, TransactionLinkedContributions, TransactionsService } from '@/app/domains/app/transactions';
 import {
@@ -40,6 +40,7 @@ const LOAD_FAILED = 'Something went wrong loading this Goal. Please try again.';
     GoalProgress,
     ContributionHistoryRow,
     PesoPipe,
+    ResourceState,
     RowNotice,
   ],
   providers: [ContributionDeletionCoordinator],
@@ -62,6 +63,9 @@ export default class GoalDetail implements OnInit {
   protected readonly history = signal<readonly GoalContributionWithAccountName[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly refreshError = signal(false);
+  protected readonly savedStale = signal(false);
+  protected readonly stale = computed(() => this.refreshError());
   protected readonly notFound = signal(false);
   protected readonly isEmpty = computed(() => this.history()?.length === 0);
   protected readonly busy = signal(false);
@@ -79,6 +83,10 @@ export default class GoalDetail implements OnInit {
 
   /** Read the Goal, its entire history, and the names that make it legible together. */
   protected load(): void {
+    if (this.goal() !== null) {
+      this.refresh();
+      return;
+    }
     this.loading.set(true);
     this.errorMessage.set(null);
     this.notFound.set(false);
@@ -116,7 +124,7 @@ export default class GoalDetail implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
         if (saved) {
-          this.load();
+          this.refresh('after-write');
         }
       });
   }
@@ -214,7 +222,7 @@ export default class GoalDetail implements OnInit {
     this.clearPrompts();
     this.write(
       this.goals.setStatus(goal.id, status),
-      () => this.load(),
+      () => this.refresh('after-write'),
       () => this.setStatus(status),
     );
   }
@@ -281,6 +289,29 @@ export default class GoalDetail implements OnInit {
       this.load();
     }
   }
+
+  /** Keep the last complete Goal reading visible while a later read resolves. */
+  private refresh(reason: 'ordinary' | 'after-write' = 'ordinary'): void {
+    const goal = this.goal();
+    if (!goal) {
+      this.load();
+      return;
+    }
+    this.refreshError.set(false);
+    this.readContributionFacts(goal.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ goal: freshGoal, contributions, accounts, sourceTransactions }) => {
+          this.goal.set(freshGoal);
+          this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
+          this.savedStale.set(false);
+        },
+        error: () => {
+          this.refreshError.set(true);
+          this.savedStale.set(reason === 'after-write');
+        },
+      });
+  }
   /** Reconcile every server-derived Goal fact after a Contribution write without hiding the last readable screen. */
   private refreshContributionFacts(deleted: GoalContributionWithAccountName | null = null): void {
     const goal = this.goal();
@@ -302,6 +333,8 @@ export default class GoalDetail implements OnInit {
           pooledContributions,
         }) => {
           this.goal.set(freshGoal);
+          this.refreshError.set(false);
+          this.savedStale.set(false);
           this.linkedSourceSnapshot.set(transaction);
           this.ordinaryAccountHeadroom.set(
             deleted && pooledContributions
@@ -310,11 +343,14 @@ export default class GoalDetail implements OnInit {
           );
           this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
         },
-        error: () =>
+        error: () => {
+          this.refreshError.set(true);
+          this.savedStale.set(true);
           this.notice.set({
             message: 'The Contribution changed but the latest Goal details could not be loaded.',
             retry: () => this.refreshContributionFacts(deleted),
-          }),
+          });
+        },
       });
   }
 
