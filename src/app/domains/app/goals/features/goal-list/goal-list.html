@@ -1,4 +1,4 @@
-<div class="mx-auto flex w-full max-w-7xl flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
+<div class="flex w-full flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="min-w-0">
       <h1
@@ -98,9 +98,9 @@
           @if (group.rows.length === 0) {
             <p class="px-1 text-sm text-secondary">{{ group.emptyLabel }}</p>
           } @else {
-            <ul class="min-w-0 overflow-hidden rounded-2xl border border-divider bg-surface">
+            <ul class="grid min-w-0 gap-5 md:grid-cols-2">
               @for (goal of group.rows; track goal.id) {
-                <li class="border-b border-divider last:border-b-0">
+                <li class="min-w-0 overflow-hidden rounded-2xl border border-divider bg-surface">
                   <goals-goal-row
                     [goal]="goal"
                     [unavailable]="stale()"

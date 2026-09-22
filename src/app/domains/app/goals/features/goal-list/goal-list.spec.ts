@@ -110,7 +110,8 @@ describe('GoalList', () => {
   it('renders exact funding facts, percentages, badges, and an independent overdue warning', () => {
     const { fixture, text } = setup(() => of([DENTAL, HOLIDAY, EMERGENCY, CAR, CAMERA]));
     const body = text();
-    expect(body).toContain(`${formatPeso(18000)} of ${formatPeso(30000)}`);
+    expect(body).toContain(formatPeso(18000));
+    expect(body).toContain(formatPeso(30000));
     expect(body).toContain(`${formatPeso(12000 - 10000)} excess`);
     expect(body).toContain('Over target');
     expect(body).toContain('In progress');
@@ -119,6 +120,23 @@ describe('GoalList', () => {
     expect(body).toContain('Target overdue');
     expect(body).toContain('%');
     expect((fixture.nativeElement as HTMLElement).querySelectorAll('[data-goal-progress]').length).toBe(5);
+  });
+
+  it('renders the approved Goal cards with separate amounts and a Contributions action', () => {
+    const { fixture, text } = setup(() => of([DENTAL, HOLIDAY]));
+    const element = fixture.nativeElement as HTMLElement;
+
+    expect(element.querySelectorAll('[data-goal-card]')).toHaveLength(2);
+    expect(text()).toContain('Contributed');
+    expect(text()).toContain('Target');
+    expect(text()).toContain('60% funded');
+    expect(text()).toContain(`${formatPeso(12000)} to go`);
+
+    const contributionLinks = Array.from(element.querySelectorAll<HTMLAnchorElement>('a')).filter((link) =>
+      link.textContent?.includes('View Contributions'),
+    );
+    expect(contributionLinks).toHaveLength(2);
+    expect(contributionLinks[0]?.getAttribute('href')).toBe('/app/goals/1');
   });
 
   it('uses an explanatory New goal card only when no Goals exist', () => {

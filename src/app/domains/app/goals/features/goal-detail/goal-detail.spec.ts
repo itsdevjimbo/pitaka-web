@@ -146,7 +146,8 @@ describe('GoalDetail', () => {
 
     const body = text();
     expect(body).toContain('Dental work');
-    expect(body).toContain(`${formatPeso(18000)} of ${formatPeso(30000)}`);
+    expect(body).toContain(formatPeso(18000));
+    expect(body).toContain(formatPeso(30000));
     expect(body).toContain('1 Mar 2026');
     expect(body).toContain('In progress');
     expect(body).toContain('%');

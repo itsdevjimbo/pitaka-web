@@ -1,5 +1,6 @@
 <article
-  class="flex min-w-0 flex-col gap-4 p-5 sm:p-6"
+  data-goal-card
+  class="flex min-w-0 flex-col gap-3 p-5 sm:p-6"
   [class.opacity-70]="goal().status === 'Abandoned'"
 >
   <div class="min-w-0">
@@ -64,6 +65,13 @@
       </mat-menu>
     </div>
   </div>
+  <p class="text-sm text-secondary">{{ goal().status }} Goal</p>
   <goals-goal-progress [goal]="goal()" />
-  <p class="text-sm text-secondary">Lifecycle: {{ goal().status }}</p>
+  <a
+    class="mt-auto flex min-h-11 w-fit items-center rounded-sm text-sm font-semibold text-primary-600 underline-offset-4 hover:underline dark:text-primary-200"
+    [routerLink]="['/app/goals', goal().id]"
+  >
+    View Contributions
+    <span aria-hidden="true">→</span>
+  </a>
 </article>
