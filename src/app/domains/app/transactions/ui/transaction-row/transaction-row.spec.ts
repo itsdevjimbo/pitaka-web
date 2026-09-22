@@ -396,6 +396,73 @@ describe('TransactionRow', () => {
     expect(goalLinks.map((link) => link.getAttribute('href'))).toEqual(['/app/goals/2', '/app/goals/2']);
   });
 
+  it('does not show contribution history when the Transaction has no Linked Contributions', async () => {
+    const linkedRead = vi.fn<TransactionsService['linkedContributions']>(() =>
+      of({
+        ...linkedSnapshot(),
+        linkedTotal: 0,
+        remainingCapacity: 500,
+        linkedContributions: [],
+      }),
+    );
+    const fixture = renderFixture(
+      toSpanningRow(tx({ id: 42, direction: 'income', amount: 500, categoryId: 2 }), NAMES, ACCOUNT_NAMES),
+      () => of(undefined),
+      linkedRead,
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(rowButton(host, 'Show contributions')).toBeUndefined();
+    expect(linkedRead).toHaveBeenCalledWith(42);
+  });
+
+  it('waits for the initial Linked Contribution snapshot before showing its history control', async () => {
+    const pending = new Subject<TransactionLinkedContributions>();
+    const fixture = renderFixture(
+      toSpanningRow(tx({ id: 42, direction: 'income', amount: 500, categoryId: 2 }), NAMES, ACCOUNT_NAMES),
+      () => of(undefined),
+      () => pending.asObservable(),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(rowButton(host, 'Show contributions')).toBeUndefined();
+
+    pending.next(linkedSnapshot());
+    pending.complete();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(rowButton(host, 'Show contributions')).toBeDefined();
+  });
+
+  it('retries the initial Linked Contribution read after it fails', async () => {
+    const linkedRead = vi
+      .fn<TransactionsService['linkedContributions']>()
+      .mockReturnValueOnce(throwError(() => new ApiError('Contribution history is unavailable.', 503)))
+      .mockReturnValueOnce(throwError(() => new ApiError('Contribution history is unavailable.', 503)))
+      .mockReturnValueOnce(of(linkedSnapshot()));
+    const fixture = renderFixture(
+      toSpanningRow(tx({ id: 42, direction: 'income', amount: 500, categoryId: 2 }), NAMES, ACCOUNT_NAMES),
+      () => of(undefined),
+      linkedRead,
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    rowButton(host, 'Show contributions')?.click();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('Contribution history is unavailable.');
+    rowButton(host, 'Try again')?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(linkedRead).toHaveBeenCalledTimes(3);
+    expect(host.querySelectorAll('[data-linked-contribution]').length).toBe(2);
+  });
+
   it('confirms an individual deletion, disables it while pending, and refreshes every affected fact', async () => {
     const pending = new Subject<void>();
     const removeContribution = vi.fn(() => pending.asObservable());
@@ -815,7 +882,11 @@ describe('TransactionRow', () => {
     it('keeps the newest capacity when overlapping menu reads finish out of order', async () => {
       const older = new Subject<TransactionLinkedContributions>();
       const newer = new Subject<TransactionLinkedContributions>();
-      const linkedRead = vi.fn().mockReturnValueOnce(older).mockReturnValueOnce(newer);
+      const linkedRead = vi
+        .fn()
+        .mockReturnValueOnce(of(linkedSnapshot()))
+        .mockReturnValueOnce(older)
+        .mockReturnValueOnce(newer);
       const fixture = renderFixture(
         toAccountRow(tx({ direction: 'income', categoryId: 2 }), NAMES, 3),
         () => of(undefined),
@@ -839,7 +910,7 @@ describe('TransactionRow', () => {
         Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')),
         'Contribute to a Goal',
       );
-      expect(linkedRead).toHaveBeenCalledTimes(2);
+      expect(linkedRead).toHaveBeenCalledTimes(3);
       expect(action?.disabled).toBe(true);
       expect(action?.textContent).toContain('This Transaction has no remaining capacity');
     });
@@ -859,14 +930,14 @@ describe('TransactionRow', () => {
       menuItem(await openMenuWithAvailability(fixture), 'Contribute to a Goal')?.click();
       fixture.detectChanges();
       expect(open).toHaveBeenCalledOnce();
-      expect(linkedRead).toHaveBeenCalledOnce();
+      expect(linkedRead).toHaveBeenCalledTimes(2);
 
       closed.next(true);
       closed.complete();
       await fixture.whenStable();
       fixture.detectChanges();
 
-      expect(linkedRead).toHaveBeenCalledTimes(2);
+      expect(linkedRead).toHaveBeenCalledTimes(3);
       expect(linkedRead).toHaveBeenLastCalledWith(1);
     });
 
@@ -895,7 +966,7 @@ describe('TransactionRow', () => {
         .find((button) => button.textContent?.trim() === 'Create contributions')!
         .click();
       fixture.detectChanges();
-      expect(linkedRead).toHaveBeenCalledTimes(2);
+      expect(linkedRead).toHaveBeenCalledTimes(3);
 
       dialog.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
       await fixture.whenStable();
@@ -912,7 +983,7 @@ describe('TransactionRow', () => {
       });
       pending.complete();
 
-      await vi.waitFor(() => expect(linkedRead).toHaveBeenCalledTimes(4));
+      await vi.waitFor(() => expect(linkedRead).toHaveBeenCalledTimes(5));
       expect(linkedRead).toHaveBeenLastCalledWith(1);
     });
 

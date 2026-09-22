@@ -311,6 +311,19 @@ describe('TransactionsFilterBar', () => {
   });
 
   describe('the date range (#65)', () => {
+    it('keeps both placeholders visible before either date is chosen', () => {
+      const { fixture } = setup();
+      const host = fixture.nativeElement as HTMLElement;
+
+      const start = host.querySelector<HTMLInputElement>('input[aria-label="Filter from date"]')!;
+      const end = host.querySelector<HTMLInputElement>('input[aria-label="Filter to date"]')!;
+      const field = start.closest('mat-form-field')!;
+
+      expect(field.classList).not.toContain('mat-form-field-hide-placeholder');
+      expect(start.placeholder).toBe('Start date');
+      expect(end.placeholder).toBe('End date');
+    });
+
     it('folds a picked start and end into the criteria as the chosen calendar days', () => {
       const { cmp, emitted } = setup();
 

@@ -7,3 +7,9 @@ export type { Account, AccountCriteria, AccountType, NewAccount } from './data/a
 export { AccountDeleteBlockedError, AccountModifiedError } from './data/account-errors';
 export type { DeleteBlockReason } from './data/account-errors';
 export { AccountsService } from './data/accounts.service';
+export { RecordAccountDialog } from './ui/record-account/record-account-dialog';
+export type {
+  RecordAccountDialogData,
+  RecordAccountDialogResult,
+  RecordAccountOption,
+} from './ui/record-account/record-account-dialog';

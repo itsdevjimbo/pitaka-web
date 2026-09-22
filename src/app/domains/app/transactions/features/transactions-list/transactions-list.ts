@@ -6,9 +6,22 @@ import { MatIconModule } from '@angular/material/icon';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { forkJoin, Observable, Subject, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { AccountsService } from '@/app/domains/app/accounts';
+import { ResourceState } from '@/app/core/notices';
+import {
+  AccountsService,
+  RecordAccountDialog,
+  type RecordAccountDialogData,
+  type RecordAccountDialogResult,
+  type RecordAccountOption,
+} from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
-import { activeCriteriaCount, Transaction, TransactionCriteria, TransactionSearchResult } from '../../data/transaction';
+import {
+  activeCriteriaCount,
+  Transaction,
+  TransactionCriteria,
+  TransactionSearchResult,
+  TransferDestinationAccount,
+} from '../../data/transaction';
 import {
   criteriaFromQueryParams,
   criteriaToQueryParams,
@@ -16,6 +29,10 @@ import {
   sameCriteria,
 } from '../../data/transaction-criteria-params';
 import { TransactionsService } from '../../data/transactions.service';
+import {
+  RecordTransactionDialog,
+  type RecordTransactionDialogData,
+} from '../../ui/record-transaction/record-transaction-dialog';
 import {
   RefileTransactionDialog,
   RefileTransactionDialogData,
@@ -128,7 +145,7 @@ function toAccountOptions(accounts: readonly ListedAccount[]): FilterAccountOpti
 @Component({
   selector: 'transactions-list',
   templateUrl: './transactions-list.html',
-  imports: [MatButtonModule, MatIconModule, TransactionRow, TransactionsFilterBar],
+  imports: [MatButtonModule, MatIconModule, ResourceState, TransactionRow, TransactionsFilterBar],
   host: {
     class: 'flex flex-auto flex-col',
   },
@@ -150,6 +167,10 @@ export default class TransactionsList {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly loadingMore = signal(false);
   protected readonly loadMoreError = signal<string | null>(null);
+  protected readonly dialogOpen = signal(false);
+
+  /** A completed financial write whose confirming history read failed. */
+  protected readonly savedStale = signal(false);
 
   /**
    * The active filter criteria, hydrated from the query string on entry and
@@ -173,6 +194,13 @@ export default class TransactionsList {
 
   /** The Account options the filter bar offers — retired ones included, marked. */
   protected readonly accountOptions = signal<readonly FilterAccountOption[]>([]);
+
+  /** Only active Accounts can accept a new Transaction. */
+  protected readonly activeAccounts = computed<readonly RecordAccountOption[]>(() =>
+    this.accountOptions()
+      .filter((account) => !account.retired)
+      .map(({ id, name }) => ({ id, name })),
+  );
 
   /** The Category options the filter bar offers — flat, retired ones included and marked. */
   protected readonly categoryOptions = signal<readonly FilterCategoryOption[]>([]);
@@ -288,26 +316,37 @@ export default class TransactionsList {
    * retry, the same contract as a failed *Load more*, rather than replacing a
    * good list with the whole-page error state.
    */
-  protected load(): void {
+  protected load(savedStale = false): void {
     this.resetToFirstPage();
     this.errorMessage.set(null);
     this.refreshError.set(null);
     this.filterError.set(null);
     this.filtering.set(false);
+    this.savedStale.set(false);
 
     const refreshing = this.rows() !== null;
     this.loading.set(!refreshing);
 
     this.read()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      // A newer full refresh supersedes this one just as it supersedes an
+      // appended page or a filter read. Without this, a slower earlier read
+      // could replace the confirmed result of a later write.
+      .pipe(takeUntil(this.reset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
           this.apply(result);
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          const message = error instanceof ApiError ? error.message : refreshing ? REFRESH_FAILED : LOAD_FAILED;
+          const message = savedStale
+            ? REFRESH_FAILED
+            : error instanceof ApiError
+              ? error.message
+              : refreshing
+                ? REFRESH_FAILED
+                : LOAD_FAILED;
           (refreshing ? this.refreshError : this.errorMessage).set(message);
+          this.savedStale.set(savedStale && refreshing);
           this.loading.set(false);
         },
       });
@@ -443,6 +482,46 @@ export default class TransactionsList {
       });
   }
 
+  /** Open the Account choice required before cross-Account history can record. */
+  protected openRecordAccountDialog(): void {
+    this.dialogOpen.set(true);
+    this.dialog
+      .open<RecordAccountDialog, RecordAccountDialogData, RecordAccountDialogResult>(RecordAccountDialog, {
+        data: { accounts: this.activeAccounts() },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((result) => {
+        if (result === 'new-account') {
+          this.dialogOpen.set(false);
+          void this.router.navigate(['/app/accounts']);
+        } else if (result) {
+          this.openRecordDialog(result);
+        } else {
+          this.dialogOpen.set(false);
+        }
+      });
+  }
+
+  /** Open the existing recorder after the person has chosen the active Account it records against. */
+  private openRecordDialog(account: RecordAccountOption): void {
+    const destinations: readonly TransferDestinationAccount[] = this.activeAccounts()
+      .filter((candidate) => candidate.id !== account.id)
+      .map(({ id, name }) => ({ id, name }));
+    this.dialog
+      .open<RecordTransactionDialog, RecordTransactionDialogData, Transaction>(RecordTransactionDialog, {
+        data: { fromAccountId: account.id, destinations },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((recorded) => {
+        this.dialogOpen.set(false);
+        if (recorded) {
+          this.load(true);
+        }
+      });
+  }
+
   /**
    * Open the *Refile transaction* dialog over this screen, seeded with the
    * Transaction as it stands. The list behind it does not reflow. A successful
@@ -450,6 +529,7 @@ export default class TransactionsList {
    * nothing.
    */
   protected openRefileDialog(transaction: Transaction): void {
+    this.dialogOpen.set(true);
     this.dialog
       .open<RefileTransactionDialog, RefileTransactionDialogData, Transaction>(RefileTransactionDialog, {
         data: { transaction },
@@ -457,8 +537,9 @@ export default class TransactionsList {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((refiled) => {
+        this.dialogOpen.set(false);
         if (refiled) {
-          this.load();
+          this.load(true);
         }
       });
   }
@@ -469,7 +550,7 @@ export default class TransactionsList {
    * shows one, so there is only the list to refresh.
    */
   protected onRemoved(): void {
-    this.load();
+    this.load(true);
   }
 
   /**

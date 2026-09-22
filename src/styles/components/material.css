@@ -680,7 +680,8 @@
           }
 
           /* Native input element */
-          .mat-mdc-input-element {
+          .mat-mdc-input-element,
+          .mat-date-range-input-inner {
             min-block-size: var(--form-field-line-height);
             color: var(--form-field-text-color);
             caret-color: currentColor;

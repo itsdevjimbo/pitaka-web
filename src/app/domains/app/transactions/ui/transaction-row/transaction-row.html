@@ -24,7 +24,7 @@
       <span>{{ directions[row().direction].label }}</span>
       @if (row().direction !== 'transfer') {
         <span aria-hidden="true">·</span>
-        <span class="truncate">{{ row().categoryName }}</span>
+        <span class="min-w-0 break-words">{{ row().categoryName }}</span>
       }
       @if (reading.kind === 'account') {
         <!-- A Transfer seen from where it landed: name the Account it was
@@ -32,7 +32,7 @@
              on (ADR 0010). -->
         @if (reading.recordedAgainst; as home) {
           <span aria-hidden="true">·</span>
-          <span class="truncate">
+          <span class="min-w-0 break-words">
             Recorded against
             <a
               class="font-medium underline hover:no-underline"
@@ -47,7 +47,7 @@
              Transfer as the movement between them (ADR 0010). The names link;
              the row itself does not. -->
         <span aria-hidden="true">·</span>
-        <span class="truncate">
+        <span class="min-w-0 break-words">
           <a
             class="font-medium underline hover:no-underline"
             [routerLink]="['/app/accounts', reading.account.id]"
