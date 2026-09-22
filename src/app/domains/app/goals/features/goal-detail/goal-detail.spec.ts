@@ -8,7 +8,10 @@ import { formatPeso } from '@/app/core/money';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { Transaction, TransactionsService } from '@/app/domains/app/transactions';
 import { withOverlayContainer } from '@/testing/overlay';
-import { Goal, GoalContribution, GoalContributionsService, GoalsService } from '../../index';
+import { GoalContribution } from '../../data/contributions/goal-contribution';
+import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
+import { Goal } from '../../data/goal';
+import { GoalsService } from '../../data/goals.service';
 import GoalDetail from './goal-detail';
 
 const GOAL: Goal = {
