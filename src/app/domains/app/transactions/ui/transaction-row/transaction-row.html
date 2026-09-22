@@ -1,9 +1,11 @@
 @let reading = row().reading;
 
-<div class="flex items-center gap-x-3">
+<div
+  class="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)_auto_2.75rem] items-start gap-3 max-sm:grid-cols-[2.5rem_minmax(0,1fr)_2.75rem]"
+>
   <!-- Direction: the icon and colour carry it without leaning on the label -->
   <span
-    class="flex size-9 shrink-0 items-center justify-center rounded-lg"
+    class="flex size-9 shrink-0 items-center justify-center rounded-xl"
     [class]="directions[row().direction].accent.chip"
   >
     <mat-icon
@@ -12,9 +14,9 @@
     />
   </span>
 
-  <div class="flex min-w-0 flex-auto flex-col">
-    <span class="truncate font-medium">{{ row().headline }}</span>
-    <span class="flex flex-wrap items-center gap-x-1.5 text-sm text-neutral-500 dark:text-neutral-400">
+  <div class="flex min-w-0 flex-col">
+    <span class="font-semibold break-words text-text">{{ row().headline }}</span>
+    <span class="flex flex-wrap items-center gap-x-1.5 text-sm text-secondary">
       <!-- Local time (ADR 0007). A generated transaction carries only a
            wall-clock day, so it shows the date alone. -->
       <span>{{ row().date | date: (row().generated ? 'd MMM y' : 'd MMM y, h:mm a') }}</span>
@@ -64,9 +66,7 @@
         </span>
       }
       @if (row().generated) {
-        <span
-          class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
-        >
+        <span class="rounded-full bg-soft px-2 py-1 text-2xs font-semibold tracking-wide text-text uppercase">
           Generated
         </span>
       }
@@ -78,7 +78,7 @@
        where the money lands, subtracting where it leaves; with none in view a
        Transfer shows no sign, since it is neither incoming nor outgoing. -->
   <span
-    class="shrink-0 font-semibold tabular-nums"
+    class="shrink-0 text-right font-semibold break-words tabular-nums max-sm:col-start-2 max-sm:row-start-2 max-sm:text-left"
     [class]="directions[row().direction].accent.amount"
   >
     @switch (amountSign()) {
@@ -101,8 +101,10 @@
     <button
       matIconButton
       type="button"
-      class="shrink-0"
+      [id]="'transaction-actions-' + row().id"
+      class="shrink-0 justify-self-end"
       aria-label="Transaction actions"
+      [disabled]="actionsDisabled()"
       [matMenuTriggerFor]="rowMenu"
       (menuOpened)="checkContributionAvailability()"
     >
@@ -146,13 +148,9 @@
 </div>
 
 @if (row().tags.length) {
-  <div class="flex flex-wrap gap-1.5 pl-12">
+  <div class="flex flex-wrap gap-1.5 pl-13">
     @for (tag of row().tags; track tag.id) {
-      <span
-        class="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
-      >
-        #{{ tag.name }}
-      </span>
+      <span class="rounded-full bg-soft px-2 py-1 text-xs text-secondary">#{{ tag.name }}</span>
     }
   </div>
 }
@@ -165,18 +163,27 @@
   <!-- Confirm on the row: the amount and date about to be erased are still
        visible above this prompt. Nothing is sent until "Remove" here. -->
   <div
-    class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
+    class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-container p-4 text-danger"
     role="alertdialog"
-    aria-label="Confirm remove"
+    [attr.aria-labelledby]="'remove-transaction-' + row().id"
   >
-    <p class="text-sm text-neutral-700 dark:text-neutral-200">
-      Removing this transaction moves the balance back by
-      {{ row().amount | peso }}. This can’t be undone.
-    </p>
+    <div>
+      <h3
+        class="font-semibold"
+        [id]="'remove-transaction-' + row().id"
+      >
+        Remove {{ row().headline }}?
+      </h3>
+      <p class="mt-1 text-sm">
+        Removing this Transaction moves the balance back by
+        {{ row().amount | peso }}. This can’t be undone.
+      </p>
+    </div>
     <div class="flex gap-x-2">
       <button
         matButton
         type="button"
+        [id]="'keep-transaction-' + row().id"
         [disabled]="removing()"
         (click)="cancelRemove()"
       >
@@ -206,6 +213,20 @@
         (click)="confirmRemove()"
       >
         {{ removing() ? 'Removing…' : 'Try again' }}
+      </button>
+    </div>
+  </app-row-notice>
+}
+
+@if (canActOnHere() && removeUncertain()) {
+  <app-row-notice [message]="removeUncertainMessage">
+    <div row-notice-actions>
+      <button
+        matButton
+        type="button"
+        (click)="requestRefresh()"
+      >
+        Refresh history
       </button>
     </div>
   </app-row-notice>

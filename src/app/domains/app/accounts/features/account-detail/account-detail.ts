@@ -1,12 +1,13 @@
-import { Component, computed, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Observable, Subject, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
+import { ResourceState } from '@/app/core/notices';
 import { CategoriesService } from '@/app/domains/app/categories';
 import {
   RecordTransactionDialog,
@@ -14,6 +15,7 @@ import {
   RefileTransactionDialog,
   RefileTransactionDialogData,
   Transaction,
+  TransactionSearchResult,
   TransactionRow,
   TransactionRowModel,
   TransactionsService,
@@ -24,6 +26,14 @@ import { Account, ACCOUNT_TYPES } from '../../data/account';
 import { AccountsService } from '../../data/accounts.service';
 
 const LOAD_FAILED = 'Something went wrong loading this account. Please try again.';
+const LOAD_MORE_FAILED = 'Something went wrong loading more transactions. Please try again.';
+
+type AccountDetailRead = {
+  account: Account;
+  firstPage: TransactionSearchResult;
+  names: ReadonlyMap<number, string>;
+  accounts: readonly Account[];
+};
 
 /**
  * One Account opened up: its current balance, and the Transactions recorded
@@ -57,7 +67,7 @@ const LOAD_FAILED = 'Something went wrong loading this account. Please try again
 @Component({
   selector: 'account-detail',
   templateUrl: './account-detail.html',
-  imports: [MatButtonModule, MatIconModule, RouterLink, PesoPipe, TransactionRow],
+  imports: [MatButtonModule, MatIconModule, RouterLink, PesoPipe, ResourceState, TransactionRow],
   host: {
     class: 'flex flex-auto flex-col',
   },
@@ -69,6 +79,10 @@ export default class AccountDetail implements OnInit {
   private categories = inject(CategoriesService);
   private destroyRef = inject(DestroyRef);
   private dialog = inject(MatDialog);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly firstPageReset = new Subject<void>();
+  private readonly paginationReset = new Subject<void>();
+  private actionMessageTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** The Account id from the route (`accounts/:id`), bound by the router. */
   readonly id = input.required<string>();
@@ -88,6 +102,22 @@ export default class AccountDetail implements OnInit {
   protected readonly rows = signal<readonly TransactionRowModel[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly refreshError = signal(false);
+  protected readonly savedStale = signal(false);
+  protected readonly refreshing = signal(false);
+  protected readonly actionsUnavailable = computed(() => this.refreshing() || this.refreshError());
+  protected readonly loadingMore = signal(false);
+  protected readonly loadMoreError = signal<string | null>(null);
+  protected readonly totalCount = signal(0);
+  protected readonly shownCount = computed(() => this.rows()?.length ?? 0);
+  private readonly reachedEnd = signal(false);
+  protected readonly hasMore = computed(() => !this.reachedEnd() && this.shownCount() < this.totalCount());
+  protected readonly dialogOpen = signal(false);
+  protected readonly actionMessage = signal<string | null>(null);
+  private readonly lastPage = signal(1);
+  private categoryNames: ReadonlyMap<number, string> = new Map();
+  private accountNames: ReadonlyMap<number, string> = new Map();
+  private readonly focusAfterRemove = signal<number | 'heading' | null>(null);
 
   /**
    * True when the load failed with a 404: the Account is gone or was never the
@@ -119,6 +149,13 @@ export default class AccountDetail implements OnInit {
   // after construction — so this kicks off from `ngOnInit`, not the constructor
   // the sibling `AccountList` uses.
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => {
+      this.firstPageReset.complete();
+      this.paginationReset.complete();
+      if (this.actionMessageTimer !== null) {
+        clearTimeout(this.actionMessageTimer);
+      }
+    });
     this.load();
   }
 
@@ -127,12 +164,16 @@ export default class AccountDetail implements OnInit {
    * together, behind the full-page loading state and error state.
    */
   protected load(): void {
+    this.firstPageReset.next();
+    this.resetPagination();
     this.loading.set(true);
     this.errorMessage.set(null);
+    this.refreshError.set(false);
+    this.savedStale.set(false);
     this.notFound.set(false);
 
     this.read()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.firstPageReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
           this.apply(result);
@@ -155,6 +196,7 @@ export default class AccountDetail implements OnInit {
    * control, or Escape. Only ever reachable for an active Account.
    */
   protected openRecordDialog(): void {
+    this.dialogOpen.set(true);
     const ref = this.dialog.open<RecordTransactionDialog, RecordTransactionDialogData, Transaction>(
       RecordTransactionDialog,
       {
@@ -166,6 +208,7 @@ export default class AccountDetail implements OnInit {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((recorded) => {
+        this.dialogOpen.set(false);
         if (recorded) {
           this.onRecorded();
         }
@@ -174,7 +217,8 @@ export default class AccountDetail implements OnInit {
 
   /** A Transaction was recorded: refresh the balance and list in place (ADR 0006). */
   protected onRecorded(): void {
-    this.refreshInPlace('record');
+    this.showActionMessage('Transaction recorded.');
+    this.refreshInPlace(true);
   }
 
   /**
@@ -187,6 +231,7 @@ export default class AccountDetail implements OnInit {
    * for a Transfer seen from the side it landed on.
    */
   protected openRefileDialog(transaction: Transaction): void {
+    this.dialogOpen.set(true);
     const ref = this.dialog.open<RefileTransactionDialog, RefileTransactionDialogData, Transaction>(
       RefileTransactionDialog,
       { data: { transaction } },
@@ -196,6 +241,7 @@ export default class AccountDetail implements OnInit {
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((refiled) => {
+        this.dialogOpen.set(false);
         if (refiled) {
           this.onRefiled();
         }
@@ -209,7 +255,8 @@ export default class AccountDetail implements OnInit {
    * even though refiling never moves one.
    */
   protected onRefiled(): void {
-    this.refreshInPlace('refile');
+    this.showActionMessage('Transaction refiled.');
+    this.refreshInPlace(true);
   }
 
   /**
@@ -218,22 +265,71 @@ export default class AccountDetail implements OnInit {
    * the server's re-read, not local arithmetic (ADR 0006), and the rows stay
    * visible rather than blanking to the spinner.
    */
-  protected onRemoved(): void {
-    this.refreshInPlace('remove');
+  protected onRemoved(removed: TransactionRowModel): void {
+    const rows = this.rows() ?? [];
+    const index = rows.findIndex((row) => row.id === removed.id);
+    this.focusAfterRemove.set(rows[index + 1]?.id ?? rows[index - 1]?.id ?? 'heading');
+    this.showActionMessage('Transaction removed.');
+    this.refreshInPlace(true);
   }
 
   /**
    * Re-read the balance and list from the server (ADR 0006 — never patch a
    * balance locally) *without* tearing the screen down to the spinner: the rows
-   * stay put and refresh in place. A failed re-read is logged and the screen
-   * keeps what it had.
+   * stay put and refresh in place. A failed re-read keeps what the screen had,
+   * marks those figures stale, and gates writes until this same read succeeds.
    */
-  private refreshInPlace(after: 'record' | 'refile' | 'remove'): void {
+  protected retryRefresh(): void {
+    this.refreshInPlace();
+  }
+
+  protected checkUncertainRemoval(): void {
+    this.refreshInPlace(false);
+  }
+
+  private refreshInPlace(savedStale = this.savedStale()): void {
+    this.firstPageReset.next();
+    this.resetPagination();
+    this.refreshError.set(false);
+    this.savedStale.set(savedStale);
+    this.refreshing.set(true);
     this.read()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.firstPageReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (result) => this.apply(result),
-        error: (error: unknown) => console.error(`[account-detail] refresh after ${after} failed`, error),
+        next: (result) => {
+          this.apply(result);
+          this.refreshing.set(false);
+          this.savedStale.set(false);
+        },
+        error: () => {
+          this.refreshing.set(false);
+          this.refreshError.set(true);
+        },
+      });
+  }
+
+  protected loadMore(): void {
+    if (this.actionsUnavailable() || this.loadingMore() || !this.hasMore()) {
+      return;
+    }
+    this.loadingMore.set(true);
+    this.loadMoreError.set(null);
+    const page = this.lastPage() + 1;
+    this.transactions
+      .search({ accountId: this.accountId() }, page)
+      .pipe(takeUntil(this.paginationReset), takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (result) => {
+          this.rows.update((rows) => [...(rows ?? []), ...this.toRows(result.transactions)]);
+          this.totalCount.set(result.totalCount);
+          this.lastPage.set(page);
+          this.reachedEnd.set(result.transactions.length === 0);
+          this.loadingMore.set(false);
+        },
+        error: (error: unknown) => {
+          this.loadMoreError.set(error instanceof ApiError ? error.message : LOAD_MORE_FAILED);
+          this.loadingMore.set(false);
+        },
       });
   }
 
@@ -244,25 +340,62 @@ export default class AccountDetail implements OnInit {
    * for the Account it was recorded against (ADR 0010). It is re-read on every
    * entry like the balance beside it (ADR 0006).
    */
-  private read() {
+  private read(): Observable<AccountDetailRead> {
     return forkJoin({
       account: this.accounts.get(this.accountId()),
-      transactions: this.transactions.list(this.accountId()),
+      firstPage: this.transactions.search({ accountId: this.accountId() }, 1),
       names: this.categories.names(),
       accounts: this.accounts.all(),
     });
   }
 
   /** Push a completed read into the screen's signals. */
-  private apply(result: {
-    account: Account;
-    transactions: readonly Transaction[];
-    names: ReadonlyMap<number, string>;
-    accounts: readonly Account[];
-  }): void {
+  private apply(result: AccountDetailRead): void {
     this.account.set(result.account);
     this.accountsList.set(result.accounts);
-    const accountNames = new Map(result.accounts.map((account) => [account.id, account.name]));
-    this.rows.set(result.transactions.map((t) => toAccountRow(t, result.names, this.accountId(), accountNames)));
+    this.categoryNames = result.names;
+    this.accountNames = new Map(result.accounts.map((account) => [account.id, account.name]));
+    this.rows.set(this.toRows(result.firstPage.transactions));
+    this.totalCount.set(result.firstPage.totalCount);
+    this.reachedEnd.set(result.firstPage.transactions.length === 0);
+    this.refreshError.set(false);
+    this.restoreFocusAfterRemove();
+  }
+
+  private toRows(transactions: readonly Transaction[]): TransactionRowModel[] {
+    return transactions.map((transaction) =>
+      toAccountRow(transaction, this.categoryNames, this.accountId(), this.accountNames),
+    );
+  }
+
+  private resetPagination(): void {
+    this.paginationReset.next();
+    this.lastPage.set(1);
+    this.reachedEnd.set(false);
+    this.loadingMore.set(false);
+    this.loadMoreError.set(null);
+  }
+
+  private showActionMessage(message: string): void {
+    if (this.actionMessageTimer !== null) {
+      clearTimeout(this.actionMessageTimer);
+    }
+    this.actionMessage.set(message);
+    this.actionMessageTimer = setTimeout(() => {
+      this.actionMessage.set(null);
+      this.actionMessageTimer = null;
+    }, 5000);
+  }
+
+  private restoreFocusAfterRemove(): void {
+    const target = this.focusAfterRemove();
+    if (target === null) {
+      return;
+    }
+    this.focusAfterRemove.set(null);
+    queueMicrotask(() => {
+      const selector = target === 'heading' ? '#transaction-history-heading' : `#transaction-actions-${target}`;
+      this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus();
+    });
   }
 }

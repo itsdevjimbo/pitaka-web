@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
-import { of, Subject, throwError } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
@@ -239,9 +239,11 @@ describe('RefileTransactionForm', () => {
     const refile = vi.fn();
     const fixture = setup(refile as unknown as TransactionsService['refile']);
     enter(fixture, selector, '');
+    expect((fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
     await submit(fixture);
     expect(refile).not.toHaveBeenCalled();
     expect(text(fixture)).toContain(message);
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector(selector));
   });
 
   it('sends exactly one request while a refile is in flight', async () => {
@@ -253,6 +255,53 @@ describe('RefileTransactionForm', () => {
     form.dispatchEvent(new Event('submit'));
     await fixture.whenStable();
     expect(refile).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports changed and pending state to the dialog shell', async () => {
+    const pending = new Subject<Transaction>();
+    const fixture = setup(() => pending);
+    const dirty: boolean[] = [];
+    const saving: boolean[] = [];
+    fixture.componentInstance.dirtyChange.subscribe((value) => dirty.push(value));
+    fixture.componentInstance.pendingChange.subscribe((value) => saving.push(value));
+
+    enter(fixture, '#refile-transaction-note', 'Flat white');
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+
+    expect(dirty).toContain(true);
+    expect(saving).toEqual([true]);
+
+    pending.next(existing({ description: 'Flat white' }));
+    pending.complete();
+    await fixture.whenStable();
+    expect(saving).toEqual([true, false]);
+  });
+
+  it('releases the busy state after an uncertain timeout without retrying', async () => {
+    vi.useFakeTimers();
+    try {
+      let attempts = 0;
+      const refile: TransactionsService['refile'] = () => {
+        attempts += 1;
+        return NEVER;
+      };
+      const fixture = setup(refile);
+      const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+      form.dispatchEvent(new Event('submit'));
+      fixture.detectChanges();
+      expect((fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(attempts).toBe(1);
+      expect(text(fixture)).toContain('couldn’t confirm whether this Transaction was refiled');
+      expect((fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows unattributed and field-attributed failures in the right place', async () => {
