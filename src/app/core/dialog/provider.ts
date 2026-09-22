@@ -14,12 +14,11 @@ export const APP_DIALOG_PANEL_CLASS = 'app-dialog-panel';
  * the dialog behaves. See ADR 0013.
  *
  * `disableClose` is on because the backdrop must be inert — a stray click
- * outside a half-typed form must not discard it. Navigation also leaves the
- * editor mounted, so browser history cannot silently throw its state away. It
- * also silences Escape, which must keep working, so `DialogShell` re-enables
- * Escape on the dialog's own key events; every dialog picks that up by rendering
- * the shell. Initial focus skips shell controls and lands on the first editable
- * field.
+ * outside a half-typed form must not discard it. Material navigation closing is
+ * also disabled so `DialogShell` can distinguish untouched, dirty, and pending
+ * editors before allowing the destination. `disableClose` also silences Escape,
+ * which the shell re-enables on the dialog's own key events. Initial focus skips
+ * shell controls and lands on the first editable field.
  */
 export const provideDialogDefaults = (): EnvironmentProviders =>
   makeEnvironmentProviders([

@@ -4,6 +4,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { NavigationStart, Router } from '@angular/router';
+import { filter } from 'rxjs';
 
 /**
  * The frame every app dialog renders inside. It supplies the chrome the dialogs
@@ -90,6 +92,7 @@ export class DialogShell {
   // Dependencies
   private dialogRef = inject<MatDialogRef<unknown>>(MatDialogRef);
   private host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private router = inject(Router);
 
   /** The dialog's title, announced with it and shown at the top of the panel. */
   readonly heading = input.required<string>();
@@ -101,6 +104,8 @@ export class DialogShell {
   protected readonly pendingFeedback = signal(false);
   private readonly closeButton = viewChild('closeButton', { read: ElementRef<HTMLButtonElement> });
   private readonly keepEditingButton = viewChild('keepEditingButton', { read: ElementRef<HTMLButtonElement> });
+  private pendingNavigationUrl: string | null = null;
+  private resumedNavigationUrl: string | null = null;
 
   constructor() {
     this.dialogRef
@@ -112,6 +117,12 @@ export class DialogShell {
           this.requestClose();
         }
       });
+    this.router.events
+      .pipe(
+        filter((event): event is NavigationStart => event instanceof NavigationStart),
+        takeUntilDestroyed(),
+      )
+      .subscribe((event) => this.requestNavigation(event));
   }
 
   requestClose(): void {
@@ -119,7 +130,7 @@ export class DialogShell {
       this.pendingFeedback.set(true);
       return;
     }
-    if (this.dirty() || this.host.nativeElement.querySelector('form.ng-dirty, [data-editor-dirty="true"]')) {
+    if (this.hasChanges()) {
       this.confirmingDiscard.set(true);
       queueMicrotask(() => this.keepEditingButton()?.nativeElement.focus());
       return;
@@ -128,11 +139,46 @@ export class DialogShell {
   }
 
   protected keepEditing(): void {
+    this.pendingNavigationUrl = null;
     this.confirmingDiscard.set(false);
     queueMicrotask(() => this.closeButton()?.nativeElement.focus());
   }
 
   protected discard(): void {
+    const destination = this.pendingNavigationUrl;
+    this.pendingNavigationUrl = null;
     this.dialogRef.close();
+    if (destination) {
+      this.resumedNavigationUrl = destination;
+      queueMicrotask(() => void this.router.navigateByUrl(destination));
+    }
+  }
+
+  private requestNavigation(event: NavigationStart): void {
+    if (event.url === this.resumedNavigationUrl) {
+      this.resumedNavigationUrl = null;
+      return;
+    }
+    const navigation = this.router.currentNavigation();
+    if (!navigation) {
+      return;
+    }
+    if (this.pending()) {
+      navigation.abort();
+      this.pendingFeedback.set(true);
+      return;
+    }
+    if (this.hasChanges()) {
+      navigation.abort();
+      this.pendingNavigationUrl = event.url;
+      this.confirmingDiscard.set(true);
+      queueMicrotask(() => this.keepEditingButton()?.nativeElement.focus());
+      return;
+    }
+    this.dialogRef.close();
+  }
+
+  private hasChanges(): boolean {
+    return Boolean(this.dirty() || this.host.nativeElement.querySelector('form.ng-dirty, [data-editor-dirty="true"]'));
   }
 }

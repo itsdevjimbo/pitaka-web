@@ -1,0 +1,44 @@
+<div class="flex flex-wrap items-center gap-2">
+  @if (isOver()) {
+    <span
+      class="inline-flex items-center gap-1.5 rounded-lg border border-current bg-soft px-2.5 py-1.5 text-sm font-semibold text-secondary"
+    >
+      <mat-icon
+        class="size-4"
+        svgIcon="circle-plus"
+      />
+      {{ fundingLabel() }} · {{ gap() | peso }} excess
+    </span>
+  } @else if (gap() === 0) {
+    <span
+      class="inline-flex items-center gap-1.5 rounded-lg border border-current bg-surface px-2.5 py-1.5 text-sm font-semibold text-success"
+    >
+      <mat-icon
+        class="size-4"
+        svgIcon="circle-check"
+      />
+      {{ fundingLabel() }}
+    </span>
+  } @else {
+    <span
+      class="inline-flex items-center gap-1.5 rounded-lg border border-current bg-surface px-2.5 py-1.5 text-sm font-semibold text-secondary"
+    >
+      <mat-icon
+        class="size-4"
+        svgIcon="target"
+      />
+      {{ fundingLabel() }}
+    </span>
+  }
+  @if (isOverdue()) {
+    <span
+      class="inline-flex items-center gap-1.5 rounded-lg border border-current bg-surface px-2.5 py-1.5 text-sm font-semibold text-warning"
+    >
+      <mat-icon
+        class="size-4"
+        svgIcon="triangle-alert"
+      />
+      Target overdue
+    </span>
+  }
+</div>

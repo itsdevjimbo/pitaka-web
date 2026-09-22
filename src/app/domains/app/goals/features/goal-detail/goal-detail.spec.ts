@@ -52,6 +52,7 @@ describe('GoalDetail', () => {
       linked?: TransactionsService['linkedContributions'];
       allContributions?: GoalContributionsService['all'];
       deleteContribution?: GoalContributionsService['delete'];
+      setStatus?: GoalsService['setStatus'];
       id?: string;
     } = {},
   ) {
@@ -62,6 +63,7 @@ describe('GoalDetail', () => {
     const linked = over.linked ?? (() => of({} as never));
     const allContributions = over.allContributions ?? (() => of<GoalContribution[]>([]));
     const deleteContribution = over.deleteContribution ?? (() => of(undefined));
+    const setStatus = over.setStatus ?? (() => of(GOAL));
 
     TestBed.configureTestingModule({
       imports: [GoalDetail],
@@ -70,7 +72,7 @@ describe('GoalDetail', () => {
         provideNativeDateAdapter(),
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: GoalsService, useValue: { get } },
+        { provide: GoalsService, useValue: { get, setStatus } },
         { provide: GoalContributionsService, useValue: { list, all: allContributions, delete: deleteContribution } },
         { provide: AccountsService, useValue: { all: accounts } },
         { provide: TransactionsService, useValue: { list: transactions, linkedContributions: linked } },
@@ -146,9 +148,12 @@ describe('GoalDetail', () => {
 
     const body = text();
     expect(body).toContain('Dental work');
-    expect(body).toContain(`${formatPeso(18000)} of ${formatPeso(30000)}`);
-    expect(body).toContain('By 1 Mar 2026');
-    expect(body).not.toContain('%');
+    expect(body).toContain(formatPeso(18000));
+    expect(body).toContain(formatPeso(30000));
+    expect(body).toContain('1 Mar 2026');
+    expect(body).toContain('%');
+    expect(body).toContain('In progress');
+    expect(body).toContain('Target overdue');
     expect(body).toContain('Everyday cash');
     expect(body).toContain('Payday');
     expect((fixture.nativeElement as HTMLElement).querySelector('[aria-label="Goal actions"]')).not.toBeNull();
@@ -157,6 +162,25 @@ describe('GoalDetail', () => {
     );
     expect(body.indexOf(formatPeso(900))).toBeLessThan(body.indexOf(formatPeso(800)));
     expect(body.indexOf(formatPeso(800))).toBeLessThan(body.indexOf(formatPeso(500)));
+  });
+
+  it('keeps the Goal hierarchy in the page header and places the summary beside Contributions at the wide breakpoint', () => {
+    const { fixture } = setup({ list: () => of([contribution()]) });
+    const element = fixture.nativeElement as HTMLElement;
+    const pageHeader = element.querySelector<HTMLElement>('[data-goal-page-header]');
+    const workspace = element.querySelector<HTMLElement>('[data-goal-workspace]');
+    const summary = element.querySelector<HTMLElement>('[data-goal-summary]');
+    const contributions = element.querySelector<HTMLElement>('[aria-labelledby="contributions-heading"]');
+    if (!pageHeader || !workspace || !summary || !contributions) {
+      throw new Error('Expected the Goal page header, summary, and Contributions workspace');
+    }
+
+    expect(pageHeader.querySelector('h1')?.textContent).toContain('Dental work');
+    expect(pageHeader.querySelector('[aria-label="Goal actions"]')).not.toBeNull();
+    expect(summary.querySelector('h1')).toBeNull();
+    expect(workspace.contains(summary)).toBe(true);
+    expect(workspace.contains(contributions)).toBe(true);
+    expect(workspace.classList.contains('xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]')).toBe(true);
   });
 
   it('identifies a Linked Contribution by its source income Transaction and Account', () => {
@@ -189,7 +213,7 @@ describe('GoalDetail', () => {
     expect(text()).toContain('Add contribution');
   });
 
-  it('shows a neutral empty history for a finished Goal', () => {
+  it('shows a neutral empty history for a Completed Goal', () => {
     const { text } = setup({ get: () => of({ ...GOAL, status: 'Completed' }) });
     expect(text()).toContain('No Contributions');
     expect(text()).not.toContain('Add contribution');
@@ -284,13 +308,15 @@ describe('GoalDetail', () => {
 
     pending.next();
     pending.complete();
-    fixture.detectChanges();
+    await settle(fixture);
 
     expect(remove).toHaveBeenCalledWith(item.id);
     expect(text()).toContain('No Contributions yet');
+    expect(text()).toContain('Contribution deleted.');
     expect(accounts).toHaveBeenCalledTimes(2);
     expect(allContributions).toHaveBeenCalledOnce();
     expect(text()).toContain(`${formatPeso(-1000)} remains available in ${ACCOUNT.name}`);
+    expect((fixture.nativeElement as HTMLElement).ownerDocument.activeElement?.id).toBe('contributions-heading');
   });
 
   it('treats an initial deletion 404 as stale history and refreshes the ordinary row away', async () => {
@@ -310,19 +336,13 @@ describe('GoalDetail', () => {
     expect(text()).toContain('No Contributions yet');
   });
 
-  it('keeps an ordinary row after an ambiguous failure until retrying confirms absence', async () => {
+  it('checks current facts after an ambiguous delete without replaying the write', async () => {
     const item = contribution();
     const list = vi
       .fn()
       .mockReturnValueOnce(of([item]))
       .mockReturnValueOnce(of([]));
-    let attempts = 0;
-    const remove = vi.fn(() => {
-      attempts += 1;
-      return throwError(() =>
-        attempts === 1 ? new ApiError('The request timed out.', 504) : new ApiError('Missing', 404),
-      );
-    });
+    const remove = vi.fn(() => throwError(() => new ApiError('The request timed out.', 504)));
     const { fixture, text } = setup({ list, deleteContribution: remove });
 
     await askToDeleteContribution(fixture);
@@ -337,8 +357,80 @@ describe('GoalDetail', () => {
     retry?.click();
     fixture.detectChanges();
 
-    expect(remove).toHaveBeenCalledTimes(2);
+    expect(remove).toHaveBeenCalledOnce();
+    expect(list).toHaveBeenCalledTimes(2);
     expect(text()).toContain('No Contributions yet');
+  });
+
+  it('gates funding-dependent actions after a failed reread and restores them after Retry', async () => {
+    const item = contribution();
+    const reached = { ...GOAL, currentAmount: GOAL.targetAmount };
+    const get = vi
+      .fn<GoalsService['get']>()
+      .mockReturnValueOnce(of(reached))
+      .mockReturnValueOnce(throwError(() => new ApiError('Unavailable', 500)))
+      .mockReturnValueOnce(of(reached));
+    const list = vi
+      .fn<GoalContributionsService['list']>()
+      .mockReturnValueOnce(of([item]))
+      .mockReturnValueOnce(of([]))
+      .mockReturnValueOnce(of([]));
+    const { fixture, text } = setup({ get, list });
+
+    await askToDeleteContribution(fixture);
+    await confirmContributionDelete(fixture);
+
+    expect(text()).toContain('Saved, but couldn’t refresh');
+    const staleButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    );
+    expect(staleButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(true);
+    expect(staleButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(true);
+
+    staleButtons.find((button) => button.textContent?.includes('Retry'))?.click();
+    await settle(fixture);
+
+    expect(text()).not.toContain('Saved, but couldn’t refresh');
+    const freshButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    );
+    expect(freshButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(false);
+    expect(freshButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(false);
+  });
+
+  it('replaces a Goal that becomes unavailable during refresh with a return to Goals', async () => {
+    const reached = { ...GOAL, currentAmount: GOAL.targetAmount };
+    const get = vi
+      .fn<GoalsService['get']>()
+      .mockReturnValueOnce(of(reached))
+      .mockReturnValueOnce(throwError(() => new ApiError('This Goal is no longer available.', 404)));
+    const { fixture, text } = setup({ get, setStatus: () => of({ ...reached, status: 'Completed' }) });
+    const complete = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    ).find((button) => button.textContent?.includes('Mark complete'));
+
+    complete?.click();
+    await settle(fixture);
+
+    expect(text()).toContain('This Goal is no longer available.');
+    expect(text()).toContain('Back to goals');
+    expect(text()).not.toContain('Edit goal');
+  });
+
+  it('prevents duplicate lifecycle submissions while a status write is pending', () => {
+    const pending = new Subject<Goal>();
+    const setStatus = vi.fn(() => pending.asObservable());
+    const { fixture } = setup({ get: () => of({ ...GOAL, currentAmount: GOAL.targetAmount }), setStatus });
+    const complete = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    ).find((button) => button.textContent?.includes('Mark complete'));
+
+    complete?.click();
+    fixture.detectChanges();
+    complete?.click();
+
+    expect(setStatus).toHaveBeenCalledOnce();
+    expect(complete?.disabled).toBe(true);
   });
 
   it('short-circuits an invalid id to not-found without making requests', () => {
@@ -362,5 +454,33 @@ describe('GoalDetail', () => {
     expect(missing.text()).toContain('Gone');
     expect(missing.text()).toContain('Back to goals');
     expect(missing.text()).not.toContain('Try again');
+  });
+
+  it('keeps the latest Contribution refresh when an older detail refresh resolves later', async () => {
+    const older = new Subject<Goal>();
+    const newer = new Subject<Goal>();
+    const get = vi
+      .fn<GoalsService['get']>()
+      .mockReturnValueOnce(of(GOAL))
+      .mockReturnValueOnce(older.asObservable())
+      .mockReturnValueOnce(newer.asObservable());
+    const { fixture, text } = setup({ get });
+    await settle(fixture);
+
+    // The UI deliberately hides ordinary refresh; direct coordinator access proves a superseded read cannot win.
+    const refresh = Reflect.get(fixture.componentInstance, 'refresh') as () => void;
+    const refreshContributionFacts = Reflect.get(fixture.componentInstance, 'refreshContributionFacts') as () => void;
+    refresh.call(fixture.componentInstance);
+    refreshContributionFacts.call(fixture.componentInstance);
+
+    newer.next({ ...GOAL, name: 'Fresh details' });
+    newer.complete();
+    await settle(fixture);
+    older.next({ ...GOAL, name: 'Stale details' });
+    older.complete();
+    await settle(fixture);
+
+    expect(text()).toContain('Fresh details');
+    expect(text()).not.toContain('Stale details');
   });
 });

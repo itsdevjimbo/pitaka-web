@@ -1,14 +1,14 @@
-import { Component, computed, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { Router, RouterLink } from '@angular/router';
-import { forkJoin, map, Observable, of, switchMap } from 'rxjs';
+import { forkJoin, map, Observable, of, Subject, switchMap, takeUntil } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
-import { RowNotice } from '@/app/core/notices';
+import { ResourceState, RowNotice } from '@/app/core/notices';
 import { AccountsService } from '@/app/domains/app/accounts';
 import { Transaction, TransactionLinkedContributions, TransactionsService } from '@/app/domains/app/transactions';
 import {
@@ -24,7 +24,9 @@ import { AddContributionDialog } from '../../ui/contribution-editor/add-contribu
 import { EditContributionDialog } from '../../ui/contribution-editor/edit-contribution-dialog';
 import { ContributionHistoryRow } from '../../ui/contribution-history-row/contribution-history-row';
 import { EditGoalDialog } from '../../ui/goal-editor/edit-goal-dialog';
+import { GoalProgressText } from '../../ui/goal-progress-text/goal-progress-text';
 import { GoalProgress } from '../../ui/goal-progress/goal-progress';
+import { GoalState } from '../../ui/goal-state/goal-state';
 
 const LOAD_FAILED = 'Something went wrong loading this Goal. Please try again.';
 
@@ -38,8 +40,11 @@ const LOAD_FAILED = 'Something went wrong loading this Goal. Please try again.';
     MatMenuModule,
     RouterLink,
     GoalProgress,
+    GoalProgressText,
+    GoalState,
     ContributionHistoryRow,
     PesoPipe,
+    ResourceState,
     RowNotice,
   ],
   providers: [ContributionDeletionCoordinator],
@@ -53,7 +58,10 @@ export default class GoalDetail implements OnInit {
   private destroyRef = inject(DestroyRef);
   private dialog = inject(MatDialog);
   private router = inject(Router);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
   private contributionDeletion = inject(ContributionDeletionCoordinator);
+  private readonly readReset = new Subject<void>();
+  private readonly deletePreflightReset = new Subject<void>();
 
   readonly id = input.required<string>();
   private readonly goalId = computed(() => Number(this.id()));
@@ -62,23 +70,39 @@ export default class GoalDetail implements OnInit {
   protected readonly history = signal<readonly GoalContributionWithAccountName[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly refreshError = signal(false);
+  protected readonly savedStale = signal(false);
+  protected readonly stale = computed(() => this.refreshError());
   protected readonly notFound = signal(false);
   protected readonly isEmpty = computed(() => this.history()?.length === 0);
   protected readonly busy = signal(false);
   protected readonly notice = signal<{ message: string; retry?: () => void } | null>(null);
+  protected readonly successMessage = signal<string | null>(null);
   protected readonly confirmingAbandon = signal(false);
   protected readonly confirmingDelete = signal<{ count: number } | null>(null);
   protected readonly confirmingContributionDelete = signal<GoalContributionWithAccountName | null>(null);
   protected readonly deletingContributionId = signal<number | null>(null);
   protected readonly linkedSourceSnapshot = signal<TransactionLinkedContributions | null>(null);
   protected readonly ordinaryAccountHeadroom = signal<{ accountName: string; availableAmount: number } | null>(null);
+  private successTimer: ReturnType<typeof setTimeout> | null = null;
 
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => {
+      this.readReset.complete();
+      this.deletePreflightReset.complete();
+      if (this.successTimer) {
+        clearTimeout(this.successTimer);
+      }
+    });
     this.load();
   }
 
   /** Read the Goal, its entire history, and the names that make it legible together. */
   protected load(): void {
+    if (this.goal() !== null) {
+      this.refresh();
+      return;
+    }
     this.loading.set(true);
     this.errorMessage.set(null);
     this.notFound.set(false);
@@ -116,7 +140,7 @@ export default class GoalDetail implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
         if (saved) {
-          this.load();
+          this.refresh('after-write', () => this.announceSuccess('Goal updated.'));
         }
       });
   }
@@ -147,9 +171,16 @@ export default class GoalDetail implements OnInit {
   protected askContributionDelete(contribution: GoalContributionWithAccountName): void {
     this.notice.set(null);
     this.confirmingContributionDelete.set(contribution);
+    this.focusSafeAction(`cancel-delete-contribution-${contribution.id}`);
   }
   protected cancelContributionDelete(): void {
+    const contributionId = this.confirmingContributionDelete()?.id;
     this.confirmingContributionDelete.set(null);
+    if (contributionId !== undefined) {
+      queueMicrotask(() =>
+        this.host.nativeElement.querySelector<HTMLButtonElement>(`[data-contribution-id="${contributionId}"]`)?.focus(),
+      );
+    }
   }
   protected confirmContributionDelete(): void {
     const contribution = this.confirmingContributionDelete();
@@ -165,7 +196,7 @@ export default class GoalDetail implements OnInit {
         next: () => {
           this.deletingContributionId.set(null);
           this.confirmingContributionDelete.set(null);
-          this.refreshContributionFacts(contribution);
+          this.refreshContributionFacts(contribution, true);
         },
         error: (error) => {
           this.deletingContributionId.set(null);
@@ -174,11 +205,8 @@ export default class GoalDetail implements OnInit {
             message:
               error instanceof ApiError
                 ? error.message
-                : 'We could not confirm whether this Contribution was deleted. Retry safely to check.',
-            retry: () => {
-              this.confirmingContributionDelete.set(contribution);
-              this.confirmContributionDelete();
-            },
+                : 'We could not confirm whether this Contribution was deleted. Refresh safely to check.',
+            retry: () => this.refreshContributionFacts(contribution, true),
           });
         },
       });
@@ -187,34 +215,42 @@ export default class GoalDetail implements OnInit {
     this.notice.set(null);
     this.confirmingDelete.set(null);
     this.confirmingAbandon.set(true);
+    this.focusSafeAction('cancel-abandon-goal');
   }
   protected askDelete(): void {
     const goal = this.goal();
     if (!goal) {
       return;
     }
+    this.deletePreflightReset.next();
     this.notice.set(null);
     this.confirmingAbandon.set(false);
     this.contributions
       .list(goal.id)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.deletePreflightReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (items) => this.confirmingDelete.set({ count: items.length }),
+        next: (items) => {
+          this.confirmingDelete.set({ count: items.length });
+          this.focusSafeAction('cancel-delete-goal');
+        },
         error: (error) => this.failed(error, () => this.askDelete()),
       });
   }
   protected cancelPrompt(): void {
     this.clearPrompts();
+    queueMicrotask(() =>
+      this.host.nativeElement.querySelector<HTMLButtonElement>('[aria-label="Goal actions"]')?.focus(),
+    );
   }
   protected setStatus(status: Goal['status']): void {
     const goal = this.goal();
-    if (!goal) {
+    if (!goal || this.busy()) {
       return;
     }
     this.clearPrompts();
     this.write(
       this.goals.setStatus(goal.id, status),
-      () => this.load(),
+      () => this.refresh('after-write', () => this.announceSuccess(`Goal marked ${status.toLowerCase()}.`)),
       () => this.setStatus(status),
     );
   }
@@ -263,13 +299,14 @@ export default class GoalDetail implements OnInit {
     });
   }
   private clearPrompts(): void {
+    this.deletePreflightReset.next();
     this.confirmingAbandon.set(false);
     this.confirmingDelete.set(null);
     this.confirmingContributionDelete.set(null);
   }
   private afterContributionDialog(result: 'saved' | 'missing' | 'abandoned' | undefined): void {
     if (result === 'saved') {
-      this.refreshContributionFacts();
+      this.refreshContributionFacts(null, false, () => this.announceSuccess('Contribution saved.'));
       return;
     }
     if (result === 'abandoned') {
@@ -281,27 +318,66 @@ export default class GoalDetail implements OnInit {
       this.load();
     }
   }
-  /** Reconcile every server-derived Goal fact after a Contribution write without hiding the last readable screen. */
-  private refreshContributionFacts(deleted: GoalContributionWithAccountName | null = null): void {
+
+  /** Keep the last complete Goal reading visible while a later read resolves. */
+  private refresh(reason: 'ordinary' | 'after-write' = 'ordinary', afterRead?: () => void): void {
     const goal = this.goal();
     if (!goal) {
       this.load();
       return;
     }
+    this.readReset.next();
+    this.refreshError.set(false);
+    this.readContributionFacts(goal.id)
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ goal: freshGoal, contributions, accounts, sourceTransactions }) => {
+          this.goal.set(freshGoal);
+          this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
+          this.savedStale.set(false);
+          afterRead?.();
+        },
+        error: (error: unknown) => {
+          if (this.showUnavailableGoal(error)) {
+            return;
+          }
+          this.refreshError.set(true);
+          this.savedStale.set(reason === 'after-write');
+        },
+      });
+  }
+  /** Reconcile every server-derived Goal fact after a Contribution write without hiding the last readable screen. */
+  private refreshContributionFacts(
+    deleted: GoalContributionWithAccountName | null = null,
+    focusAfterDelete = false,
+    afterRead?: () => void,
+  ): void {
+    const goal = this.goal();
+    if (!goal) {
+      this.load();
+      return;
+    }
+    this.readReset.next();
     forkJoin({
       facts: this.readContributionFacts(goal.id),
       transaction:
         deleted?.transactionId == null ? of(null) : this.transactions.linkedContributions(deleted.transactionId),
       pooledContributions: deleted && deleted.transactionId === null ? this.contributions.all() : of(null),
     })
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.readReset), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ({
           facts: { goal: freshGoal, contributions, accounts, sourceTransactions },
           transaction,
           pooledContributions,
         }) => {
+          const deletedIndex = deleted
+            ? Math.max(this.history()?.findIndex((item) => item.id === deleted.id) ?? 0, 0)
+            : 0;
+          this.notice.set(null);
           this.goal.set(freshGoal);
+          this.refreshError.set(false);
+          this.savedStale.set(false);
           this.linkedSourceSnapshot.set(transaction);
           this.ordinaryAccountHeadroom.set(
             deleted && pooledContributions
@@ -309,13 +385,39 @@ export default class GoalDetail implements OnInit {
               : null,
           );
           this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
+          if (deleted && focusAfterDelete) {
+            this.focusAfterContributionDelete(deletedIndex);
+            this.announceSuccess('Contribution deleted.');
+          }
+          afterRead?.();
         },
-        error: () =>
+        error: (error: unknown) => {
+          if (this.showUnavailableGoal(error)) {
+            return;
+          }
+          this.refreshError.set(true);
+          this.savedStale.set(true);
           this.notice.set({
             message: 'The Contribution changed but the latest Goal details could not be loaded.',
-            retry: () => this.refreshContributionFacts(deleted),
-          }),
+            retry: () => this.refreshContributionFacts(deleted, focusAfterDelete, afterRead),
+          });
+        },
       });
+  }
+
+  private showUnavailableGoal(error: unknown): boolean {
+    if (!(error instanceof ApiError) || (error.status !== 403 && error.status !== 404)) {
+      return false;
+    }
+    this.clearPrompts();
+    this.goal.set(null);
+    this.history.set(null);
+    this.refreshError.set(false);
+    this.savedStale.set(false);
+    this.errorMessage.set(error.message);
+    this.notFound.set(true);
+    this.loading.set(false);
+    return true;
   }
 
   private readContributionFacts(goalId: number) {
@@ -338,6 +440,33 @@ export default class GoalDetail implements OnInit {
         );
       }),
     );
+  }
+
+  private focusSafeAction(id: string): void {
+    queueMicrotask(() => this.host.nativeElement.querySelector<HTMLButtonElement>(`#${id}`)?.focus());
+  }
+
+  private focusAfterContributionDelete(previousIndex: number): void {
+    queueMicrotask(() => {
+      const actions = this.host.nativeElement.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Contribution actions"]',
+      );
+      actions[Math.min(previousIndex, actions.length - 1)]?.focus();
+      if (actions.length === 0) {
+        this.host.nativeElement.querySelector<HTMLElement>('#contributions-heading')?.focus();
+      }
+    });
+  }
+
+  private announceSuccess(message: string): void {
+    if (this.successTimer) {
+      clearTimeout(this.successTimer);
+    }
+    this.successMessage.set(message);
+    this.successTimer = setTimeout(() => {
+      this.successMessage.set(null);
+      this.successTimer = null;
+    }, 5_000);
   }
 }
 

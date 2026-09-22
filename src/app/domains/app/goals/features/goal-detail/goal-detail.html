@@ -1,6 +1,6 @@
-<div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
+<div class="mx-auto flex w-full max-w-7xl flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
   <a
-    class="flex w-fit items-center gap-x-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-100"
+    class="flex min-h-11 w-fit items-center gap-x-1.5 text-sm font-semibold text-primary-600 underline underline-offset-4 dark:text-primary-200"
     routerLink="/app/goals"
   >
     <mat-icon
@@ -11,16 +11,10 @@
   </a>
 
   @if (loading()) {
-    <div
-      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
-      role="status"
-    >
-      <mat-icon
-        class="size-6 animate-spin"
-        svgIcon="loader-circle"
-      />
-      <span>Loading contributions…</span>
-    </div>
+    <app-resource-state
+      kind="loading"
+      message="Loading contributions…"
+    />
   } @else if (errorMessage(); as message) {
     <div
       class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
@@ -50,22 +44,62 @@
       }
     </div>
   } @else if (goal(); as currentGoal) {
-    <header class="flex flex-col gap-y-3">
-      <div class="flex items-center justify-between gap-x-4">
-        <div class="flex items-center gap-x-2">
-          <h1 class="text-2xl font-bold tracking-tight">{{ currentGoal.name }}</h1>
-          <span
-            class="rounded bg-neutral-200 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-neutral-600 uppercase dark:bg-neutral-700 dark:text-neutral-300"
-          >
-            {{ currentGoal.status }}
-          </span>
-        </div>
+    @if (refreshError()) {
+      <app-resource-state
+        [kind]="savedStale() ? 'saved-stale' : 'stale'"
+        [message]="'Couldn’t refresh. These figures may be out of date. Funding-based completion is unavailable until refreshed.'"
+        (retry)="load()"
+      />
+    }
+    @if (successMessage(); as message) {
+      <p
+        class="rounded-2xl bg-success-container p-4 text-sm text-success"
+        role="status"
+      >
+        {{ message }}
+      </p>
+    }
+    <header
+      data-goal-page-header
+      class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"
+    >
+      <div class="grid min-w-0 gap-2">
+        <h1
+          class="font-display text-3xl tracking-tight break-words"
+          tabindex="-1"
+        >
+          {{ currentGoal.name }}
+        </h1>
+        <span class="inline-flex min-h-10 w-fit items-center rounded-full bg-soft px-3 text-sm font-semibold text-text">
+          {{ currentGoal.status }}
+        </span>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          matButton
+          [disabled]="busy()"
+          (click)="openEdit(currentGoal)"
+        >
+          <mat-icon svgIcon="pencil" />
+          Edit goal
+        </button>
         @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
           <button
             matButton="filled"
+            [disabled]="stale() || busy()"
             (click)="setStatus('Completed')"
           >
             Mark complete
+          </button>
+        }
+        @if (currentGoal.status === 'Active') {
+          <button
+            matButton="filled"
+            [disabled]="stale() || busy()"
+            (click)="openAdd(currentGoal)"
+          >
+            <mat-icon svgIcon="plus" />
+            Add contribution
           </button>
         }
         <button
@@ -77,13 +111,6 @@
           <mat-icon svgIcon="ellipsis-vertical" />
         </button>
         <mat-menu #goalMenu>
-          <button
-            mat-menu-item
-            (click)="openEdit(currentGoal)"
-          >
-            <mat-icon svgIcon="pencil" />
-            <span>Edit</span>
-          </button>
           @if (currentGoal.status === 'Active') {
             <button
               mat-menu-item
@@ -110,189 +137,213 @@
           </button>
         </mat-menu>
       </div>
-      <goals-goal-progress [goal]="currentGoal" />
-      @if (confirmingAbandon()) {
-        <div
-          class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
-          role="alertdialog"
-        >
-          <p>
-            Abandon
-            <span class="font-semibold">{{ currentGoal.name }}</span>
-            ? You won’t be able to add Contributions until you mark it active again.
-          </p>
-          <div class="flex gap-x-2">
-            <button
-              matButton
-              (click)="cancelPrompt()"
-            >
-              Cancel
-            </button>
-            <button
-              matButton="filled"
-              (click)="confirmAbandon()"
-            >
-              Abandon
-            </button>
-          </div>
-        </div>
-      }
-      @if (confirmingDelete(); as confirmation) {
-        <div
-          class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200"
-          role="alertdialog"
-        >
-          <p>
-            Delete
-            <span class="font-semibold">{{ currentGoal.name }}</span>
-            ? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{
-              confirmation.count === 1 ? '' : 's'
-            }}, releasing their earmarks. The {{ currentGoal.currentAmount | peso }} remains in its Accounts but will no
-            longer count toward a Goal.
-          </p>
-          <div class="flex gap-x-2">
-            <button
-              matButton
-              (click)="cancelPrompt()"
-            >
-              Cancel
-            </button>
-            <button
-              matButton="filled"
-              (click)="confirmDelete()"
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      }
-      @if (notice(); as n) {
-        <app-row-notice [message]="n.message">
-          @if (n.retry; as retry) {
-            <div row-notice-actions>
-              <button
-                matButton
-                (click)="retry()"
-              >
-                Try again
-              </button>
-            </div>
-          }
-        </app-row-notice>
-      }
-      @if (linkedSourceSnapshot(); as source) {
-        <p
-          class="text-sm text-neutral-600 dark:text-neutral-300"
-          role="status"
-        >
-          The source Transaction now has {{ source.remainingCapacity | peso }} remaining capacity, and
-          {{ source.account.availableHeadroom | peso }} remains available in {{ source.account.name }}.
-        </p>
-      }
-      @if (ordinaryAccountHeadroom(); as account) {
-        <p
-          class="text-sm text-neutral-600 dark:text-neutral-300"
-          role="status"
-        >
-          {{ account.availableAmount | peso }} remains available in {{ account.accountName }}.
-        </p>
-      }
     </header>
 
-    <section
-      class="flex flex-col gap-y-4"
-      aria-labelledby="contributions-heading"
+    <div
+      data-goal-workspace
+      class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start"
     >
-      <div class="flex items-center justify-between gap-x-4">
-        <h2
-          id="contributions-heading"
-          class="text-lg font-semibold"
-        >
-          Contributions
-        </h2>
-        @if (currentGoal.status === 'Active' && !isEmpty()) {
-          <!-- The Contribution write lifecycle attaches this detail-only action. -->
-          <button
-            matButton="filled"
-            (click)="openAdd(currentGoal)"
-          >
-            <mat-icon svgIcon="plus" />
-            Add contribution
-          </button>
-        }
-      </div>
-
-      @if (isEmpty()) {
-        @if (currentGoal.status === 'Active') {
+      <section
+        data-goal-summary
+        class="flex min-w-0 flex-col gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6"
+      >
+        <goals-state [goal]="currentGoal" />
+        <goals-progress-text
+          [goal]="currentGoal"
+          class="hidden sm:block"
+        />
+        <goals-goal-progress [goal]="currentGoal" />
+        @if (confirmingAbandon()) {
           <div
-            class="flex flex-col items-center gap-y-3 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warning-container p-4 text-sm text-warning"
+            role="alertdialog"
+            aria-labelledby="abandon-goal-title"
           >
-            <mat-icon
-              class="size-10 text-neutral-400"
-              svgIcon="wallet-cards"
-            />
-            <p class="text-lg font-semibold">No Contributions yet</p>
-            <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
-              Add the first Contribution to start building toward this Goal.
+            <p id="abandon-goal-title">
+              Abandon
+              <span class="font-semibold">{{ currentGoal.name }}</span>
+              ? You won’t be able to add Contributions until you mark it active again.
             </p>
-            <button
-              matButton="filled"
-              (click)="openAdd(currentGoal)"
-            >
-              <mat-icon svgIcon="plus" />
-              Add contribution
-            </button>
+            <div class="flex gap-x-2">
+              <button
+                matButton
+                id="cancel-abandon-goal"
+                (click)="cancelPrompt()"
+              >
+                Cancel
+              </button>
+              <button
+                matButton="filled"
+                (click)="confirmAbandon()"
+              >
+                Abandon
+              </button>
+            </div>
           </div>
-        } @else {
-          <p class="text-sm text-neutral-500 dark:text-neutral-400">No Contributions</p>
         }
-      } @else {
-        <ul class="flex flex-col gap-y-2">
-          @for (contribution of history(); track contribution.id) {
-            <li
-              goals-contribution-history-row
-              class="flex items-start justify-between gap-x-4 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800"
-              [contribution]="contribution"
-              [pending]="deletingContributionId() === contribution.id"
-              (edit)="openContributionEdit($event)"
-              (delete)="askContributionDelete($event)"
-            ></li>
-            @if (confirmingContributionDelete(); as pendingDelete) {
-              @if (pendingDelete.id === contribution.id) {
-                <li
-                  class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200"
-                  role="alertdialog"
+        @if (confirmingDelete(); as confirmation) {
+          <div
+            class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-container p-4 text-sm text-danger"
+            role="alertdialog"
+            aria-labelledby="delete-goal-title"
+          >
+            <p id="delete-goal-title">
+              Delete
+              <span class="font-semibold">{{ currentGoal.name }}</span>
+              ? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{
+                confirmation.count === 1 ? '' : 's'
+              }}, releasing their earmarks. The {{ currentGoal.currentAmount | peso }} remains in its Accounts but will
+              no longer count toward a Goal.
+            </p>
+            <div class="flex gap-x-2">
+              <button
+                matButton
+                id="cancel-delete-goal"
+                (click)="cancelPrompt()"
+              >
+                Cancel
+              </button>
+              <button
+                matButton="filled"
+                (click)="confirmDelete()"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        }
+        @if (notice(); as n) {
+          <app-row-notice [message]="n.message">
+            @if (n.retry; as retry) {
+              <div row-notice-actions>
+                <button
+                  matButton
+                  (click)="retry()"
                 >
-                  <p>
-                    Delete this
-                    <span class="font-semibold">{{ contribution.amount | peso }}</span>
-                    Contribution? It will no longer count toward {{ currentGoal.name }}, and
-                    {{ contribution.amount | peso }} will no longer be earmarked in
-                    {{ contribution.accountName || 'this Account' }}. The money stays in the Account. This cannot be
-                    undone.
-                  </p>
-                  <div class="flex gap-x-2">
-                    <button
-                      matButton
-                      [disabled]="deletingContributionId() !== null"
-                      (click)="cancelContributionDelete()"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      matButton="filled"
-                      [disabled]="deletingContributionId() !== null"
-                      (click)="confirmContributionDelete()"
-                    >
-                      {{ deletingContributionId() === contribution.id ? 'Deleting…' : 'Delete' }}
-                    </button>
-                  </div>
-                </li>
+                  Try again
+                </button>
+              </div>
+            }
+          </app-row-notice>
+        }
+        @if (linkedSourceSnapshot(); as source) {
+          <p
+            class="text-sm text-secondary"
+            role="status"
+          >
+            The source Transaction now has {{ source.remainingCapacity | peso }} remaining capacity, and
+            {{ source.account.availableHeadroom | peso }} remains available in {{ source.account.name }}.
+          </p>
+        }
+        @if (ordinaryAccountHeadroom(); as account) {
+          <p
+            class="text-sm text-secondary"
+            role="status"
+          >
+            {{ account.availableAmount | peso }} remains available in {{ account.accountName }}.
+          </p>
+        }
+        <p class="text-sm text-secondary">Contributions earmark money already in your Accounts. They do not move it.</p>
+      </section>
+
+      <section
+        class="grid gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6"
+        aria-labelledby="contributions-heading"
+      >
+        <div class="flex items-center justify-between gap-x-4">
+          <h2
+            id="contributions-heading"
+            class="font-display text-xl"
+            tabindex="-1"
+          >
+            Contributions
+          </h2>
+        </div>
+
+        @if (isEmpty()) {
+          @if (currentGoal.status === 'Active') {
+            <div
+              class="flex flex-col items-center gap-y-3 rounded-[1.5rem_1.5rem_3.5rem_1.5rem] bg-soft px-6 py-16 text-center"
+            >
+              <span
+                class="grid size-16 place-items-center rounded-2xl bg-surface"
+                aria-hidden="true"
+              >
+                <img
+                  class="size-10 dark:hidden"
+                  src="/images/logo/logo.svg"
+                  alt=""
+                />
+                <img
+                  class="hidden size-10 dark:block"
+                  src="/images/logo/logo-on-dark.svg"
+                  alt=""
+                />
+              </span>
+              <p class="text-lg font-semibold">No Contributions yet</p>
+              <p class="max-w-xs text-secondary">Add the first Contribution to start building toward this Goal.</p>
+              <button
+                matButton="filled"
+                [disabled]="stale() || busy()"
+                (click)="openAdd(currentGoal)"
+              >
+                <mat-icon svgIcon="plus" />
+                Add contribution
+              </button>
+            </div>
+          } @else {
+            <p class="text-sm text-secondary">No Contributions</p>
+          }
+        } @else {
+          <ul class="flex flex-col gap-y-2">
+            @for (contribution of history(); track contribution.id) {
+              <li
+                goals-contribution-history-row
+                class="flex items-start justify-between gap-x-4 rounded-2xl border border-divider px-4 py-3"
+                [contribution]="contribution"
+                [pending]="stale() || deletingContributionId() === contribution.id"
+                (edit)="openContributionEdit($event)"
+                (delete)="askContributionDelete($event)"
+              ></li>
+              @if (confirmingContributionDelete(); as pendingDelete) {
+                @if (pendingDelete.id === contribution.id) {
+                  <li
+                    class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-container p-4 text-sm text-danger"
+                    role="alertdialog"
+                    [attr.aria-labelledby]="'delete-contribution-title-' + contribution.id"
+                  >
+                    <p [id]="'delete-contribution-title-' + contribution.id">
+                      Delete this
+                      <span class="font-semibold">{{ contribution.amount | peso }}</span>
+                      Contribution? It will no longer count toward {{ currentGoal.name }}, and
+                      {{ contribution.amount | peso }} will no longer be earmarked in
+                      {{ contribution.accountName || 'this Account' }}. The money stays in the Account. This cannot be
+                      undone.
+                    </p>
+                    <div class="flex gap-x-2">
+                      <button
+                        matButton
+                        [id]="'cancel-delete-contribution-' + contribution.id"
+                        [disabled]="deletingContributionId() !== null"
+                        (click)="cancelContributionDelete()"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        matButton="filled"
+                        [disabled]="deletingContributionId() !== null"
+                        (click)="confirmContributionDelete()"
+                      >
+                        {{ deletingContributionId() === contribution.id ? 'Deleting…' : 'Delete' }}
+                      </button>
+                    </div>
+                  </li>
+                }
               }
             }
-          }
-        </ul>
-      }
-    </section>
+          </ul>
+        }
+      </section>
+    </div>
   }
 </div>

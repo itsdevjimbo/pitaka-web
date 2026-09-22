@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, DestroyRef, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField, max, min, required, submit, validate } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,9 +7,10 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { forkJoin, firstValueFrom } from 'rxjs';
+import { RouterLink } from '@angular/router';
+import { forkJoin, firstValueFrom, timeout, TimeoutError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { formatPeso, PesoPipe, sumPesos } from '@/app/core/money';
 import { Account, AccountModifiedError, AccountsService } from '@/app/domains/app/accounts';
 import { accountHeadroom } from '../../data/contributions/account-headroom';
@@ -19,6 +20,10 @@ import { GoalContributionsService } from '../../data/contributions/goal-contribu
 import { Goal, GOAL_AMOUNT_MAX, GOAL_AMOUNT_MIN } from '../../data/goal';
 
 type ContributionModel = { accountId: number | null; amount: number | null; contributionDate: Date; note: string };
+
+const SAVE_TIMEOUT_MS = 15_000;
+const SAVE_UNCERTAIN =
+  'We couldn’t confirm whether this Contribution was saved. Refresh this Goal before trying again.';
 
 /** The separate Add and Edit surfaces for one Goal Contribution. */
 @Component({
@@ -33,6 +38,7 @@ type ContributionModel = { accountId: number | null; amount: number | null; cont
     DatePipe,
     PesoPipe,
     FormField,
+    RouterLink,
   ],
 })
 export class ContributionForm {
@@ -44,10 +50,15 @@ export class ContributionForm {
   readonly saved = output<void>();
   readonly cancelled = output<void>();
   readonly unavailable = output<'missing' | 'abandoned'>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
   protected readonly accounts = signal<readonly Account[]>([]);
   protected readonly available = signal(new Map<number, number>());
   protected readonly loadingAccounts = signal(true);
   protected readonly submitting = signal(false);
+  protected readonly hasEligibleAccount = computed(() =>
+    this.accounts().some((account) => (this.available().get(account.id) ?? 0) > 0),
+  );
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly model = linkedSignal<GoalContributionWithAccountName | null, ContributionModel>({
     source: this.contribution,
@@ -60,6 +71,16 @@ export class ContributionForm {
             note: item.note ?? '',
           }
         : { accountId: null, amount: null, contributionDate: today(), note: '' },
+  });
+  private readonly dirty = computed(() => {
+    const model = this.model();
+    const contribution = this.contribution();
+    return contribution
+      ? model.note !== (contribution.note ?? '')
+      : model.accountId !== null ||
+          model.amount !== null ||
+          model.note !== '' ||
+          model.contributionDate.getTime() !== today().getTime();
   });
   protected readonly contributionForm = form(this.model, (path) => {
     required(path.contributionDate, { message: 'You must enter a date' });
@@ -84,6 +105,7 @@ export class ContributionForm {
   });
 
   constructor() {
+    effect(() => this.dirtyChange.emit(this.dirty()));
     if (!this.contribution()) {
       this.reloadAccounts();
     }
@@ -107,35 +129,43 @@ export class ContributionForm {
   }
   protected save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
     submit(this.contributionForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
         try {
           const value = this.model();
           const existing = this.contribution();
           if (existing) {
             await firstValueFrom(
-              this.contributions.update(existing.id, {
-                note: value.note.trim() || null,
-              } satisfies UpdateGoalContribution),
+              this.contributions
+                .update(existing.id, {
+                  note: value.note.trim() || null,
+                } satisfies UpdateGoalContribution)
+                .pipe(timeout({ first: SAVE_TIMEOUT_MS })),
             );
           } else {
             await firstValueFrom(
-              this.contributions.create({
-                goalId: this.goal().id,
-                accountId: value.accountId!,
-                transactionId: null,
-                amount: value.amount!,
-                contributionDate: value.contributionDate,
-                note: value.note.trim() || null,
-              } satisfies NewGoalContribution),
+              this.contributions
+                .create({
+                  goalId: this.goal().id,
+                  accountId: value.accountId!,
+                  transactionId: null,
+                  amount: value.amount!,
+                  contributionDate: value.contributionDate,
+                  note: value.note.trim() || null,
+                } satisfies NewGoalContribution)
+                .pipe(timeout({ first: SAVE_TIMEOUT_MS })),
             );
           }
           this.saved.emit();
           return undefined;
         } catch (error) {
-          if (error instanceof AccountModifiedError) {
+          if (error instanceof TimeoutError) {
+            this.errorMessage.set(SAVE_UNCERTAIN);
+          } else if (error instanceof AccountModifiedError) {
             this.reloadAccounts();
             this.errorMessage.set('This Account’s available amount changed. Review the amount and try again.');
           } else if (error instanceof ApiError && /does not exist|inactive/i.test(error.message)) {
@@ -162,9 +192,14 @@ export class ContributionForm {
           return undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.contributionForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
   protected cancel(): void {
     this.cancelled.emit();

@@ -116,3 +116,22 @@ cannot drift apart. Editors report only whether they are changed or pending;
 they continue to own validation and writes. Session expiry is the deliberate
 exception: `Session` closes protected overlays immediately, clears private
 state, and sign-in explains that unsaved work was discarded.
+
+## Amendment (2026-09-22): app navigation follows the editor dismissal policy
+
+App and browser-history navigation now follows the same untouched, changed,
+and pending rules as Escape and the close control. Material's automatic
+navigation close stays disabled because it cannot ask before discarding.
+Instead, `DialogShell` observes Router navigation while an editor is open:
+
+- an untouched editor closes and navigation continues;
+- a changed editor aborts the in-flight navigation and asks the person to Keep
+  editing or Discard changes;
+- a pending editor aborts navigation and explains that saving must finish.
+
+If the person discards, the shell closes and resumes the exact captured URL.
+The resumed navigation is explicitly allowed through while the closing
+animation may still keep the shell alive. This central policy prevents each
+editor from implementing its own router/history interception and keeps direct
+links, browser Back, and in-dialog prerequisite links consistent. Session
+expiry remains the exception described above and may discard immediately.

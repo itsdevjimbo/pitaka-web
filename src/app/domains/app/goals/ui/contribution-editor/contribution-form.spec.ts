@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { provideIcons } from '@/app/core/icons';
 import { AccountsService } from '@/app/domains/app/accounts';
 import { GoalContributionWithAccountName } from '../../data/contributions/contribution-account-name';
@@ -30,11 +30,29 @@ const CONTRIBUTION: GoalContributionWithAccountName = {
 };
 
 describe('ContributionForm', () => {
+  function setupExisting(update: GoalContributionsService['update']) {
+    TestBed.configureTestingModule({
+      imports: [ContributionForm],
+      providers: [
+        provideIcons(),
+        provideNativeDateAdapter(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: AccountsService, useValue: { all: () => of([]) } },
+        { provide: GoalContributionsService, useValue: { all: () => of([]), update } },
+      ],
+    });
+    const fixture = TestBed.createComponent(ContributionForm);
+    fixture.componentRef.setInput('goal', GOAL);
+    fixture.componentRef.setInput('contribution', CONTRIBUTION);
+    fixture.detectChanges();
+    return fixture;
+  }
+
   it.each([
     ['ordinary', { ...CONTRIBUTION, transactionId: null, source: { kind: 'ordinary' as const } }],
     ['linked', CONTRIBUTION],
   ])('shows an existing %s date as settled and sends only the corrected note', async (_kind, contribution) => {
-    const update = vi.fn(() => of({ ...contribution, note: 'Revised' }));
+    const update = vi.fn<GoalContributionsService['update']>(() => of({ ...contribution, note: 'Revised' }));
     TestBed.configureTestingModule({
       imports: [ContributionForm],
       providers: [
@@ -67,5 +85,33 @@ describe('ContributionForm', () => {
     await fixture.whenStable();
 
     expect(update).toHaveBeenCalledWith(9, { note: 'Revised' });
+  });
+
+  it('releases a timed-out save and tells the person to refresh instead of retrying the Contribution', async () => {
+    const inFlight = new Subject<GoalContributionWithAccountName>();
+    const update = vi.fn<GoalContributionsService['update']>(() => inFlight.asObservable());
+    const fixture = setupExisting(update);
+    const pending: boolean[] = [];
+    fixture.componentInstance.pendingChange.subscribe((value) => pending.push(value));
+    const note = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    note.value = 'Revised';
+    note.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    vi.useFakeTimers();
+    try {
+      (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+      await Promise.resolve();
+      expect(pending).toEqual([true]);
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('couldn’t confirm whether this Contribution was saved');
+      expect(pending).toEqual([true, false]);
+      expect(update).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
