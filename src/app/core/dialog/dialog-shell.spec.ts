@@ -219,4 +219,15 @@ describe('DialogShell', () => {
     expect(abortNavigation).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledOnce();
   });
+
+  it('blocks app navigation while a save is pending', () => {
+    const { fixture, host } = setupHost(PendingHost);
+
+    routerEvents.next(new NavigationStart(10, '/app/goals'));
+    fixture.detectChanges();
+
+    expect(abortNavigation).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Saving in progress');
+  });
 });
