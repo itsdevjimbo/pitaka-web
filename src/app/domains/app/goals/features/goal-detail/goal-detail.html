@@ -147,6 +147,11 @@
         data-goal-summary
         class="flex min-w-0 flex-col gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6"
       >
+        <goals-state [goal]="currentGoal" />
+        <goals-progress-text
+          [goal]="currentGoal"
+          class="hidden sm:block"
+        />
         <goals-goal-progress [goal]="currentGoal" />
         @if (confirmingAbandon()) {
           <div

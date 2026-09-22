@@ -24,7 +24,9 @@ import { AddContributionDialog } from '../../ui/contribution-editor/add-contribu
 import { EditContributionDialog } from '../../ui/contribution-editor/edit-contribution-dialog';
 import { ContributionHistoryRow } from '../../ui/contribution-history-row/contribution-history-row';
 import { EditGoalDialog } from '../../ui/goal-editor/edit-goal-dialog';
+import { GoalProgressText } from '../../ui/goal-progress-text/goal-progress-text';
 import { GoalProgress } from '../../ui/goal-progress/goal-progress';
+import { GoalState } from '../../ui/goal-state/goal-state';
 
 const LOAD_FAILED = 'Something went wrong loading this Goal. Please try again.';
 
@@ -38,6 +40,8 @@ const LOAD_FAILED = 'Something went wrong loading this Goal. Please try again.';
     MatMenuModule,
     RouterLink,
     GoalProgress,
+    GoalProgressText,
+    GoalState,
     ContributionHistoryRow,
     PesoPipe,
     ResourceState,
@@ -333,7 +337,10 @@ export default class GoalDetail implements OnInit {
           this.savedStale.set(false);
           afterRead?.();
         },
-        error: () => {
+        error: (error: unknown) => {
+          if (this.showUnavailableGoal(error)) {
+            return;
+          }
           this.refreshError.set(true);
           this.savedStale.set(reason === 'after-write');
         },
@@ -384,7 +391,10 @@ export default class GoalDetail implements OnInit {
           }
           afterRead?.();
         },
-        error: () => {
+        error: (error: unknown) => {
+          if (this.showUnavailableGoal(error)) {
+            return;
+          }
           this.refreshError.set(true);
           this.savedStale.set(true);
           this.notice.set({
@@ -393,6 +403,21 @@ export default class GoalDetail implements OnInit {
           });
         },
       });
+  }
+
+  private showUnavailableGoal(error: unknown): boolean {
+    if (!(error instanceof ApiError) || (error.status !== 403 && error.status !== 404)) {
+      return false;
+    }
+    this.clearPrompts();
+    this.goal.set(null);
+    this.history.set(null);
+    this.refreshError.set(false);
+    this.savedStale.set(false);
+    this.errorMessage.set(error.message);
+    this.notFound.set(true);
+    this.loading.set(false);
+    return true;
   }
 
   private readContributionFacts(goalId: number) {

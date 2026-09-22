@@ -152,6 +152,8 @@ describe('GoalDetail', () => {
     expect(body).toContain(formatPeso(30000));
     expect(body).toContain('1 Mar 2026');
     expect(body).toContain('%');
+    expect(body).toContain('In progress');
+    expect(body).toContain('Target overdue');
     expect(body).toContain('Everyday cash');
     expect(body).toContain('Payday');
     expect((fixture.nativeElement as HTMLElement).querySelector('[aria-label="Goal actions"]')).not.toBeNull();
@@ -394,6 +396,25 @@ describe('GoalDetail', () => {
     );
     expect(freshButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(false);
     expect(freshButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(false);
+  });
+
+  it('replaces a Goal that becomes unavailable during refresh with a return to Goals', async () => {
+    const reached = { ...GOAL, currentAmount: GOAL.targetAmount };
+    const get = vi
+      .fn<GoalsService['get']>()
+      .mockReturnValueOnce(of(reached))
+      .mockReturnValueOnce(throwError(() => new ApiError('This Goal is no longer available.', 404)));
+    const { fixture, text } = setup({ get, setStatus: () => of({ ...reached, status: 'Completed' }) });
+    const complete = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    ).find((button) => button.textContent?.includes('Mark complete'));
+
+    complete?.click();
+    await settle(fixture);
+
+    expect(text()).toContain('This Goal is no longer available.');
+    expect(text()).toContain('Back to goals');
+    expect(text()).not.toContain('Edit goal');
   });
 
   it('prevents duplicate lifecycle submissions while a status write is pending', () => {
