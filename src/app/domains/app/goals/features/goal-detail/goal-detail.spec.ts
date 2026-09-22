@@ -52,6 +52,7 @@ describe('GoalDetail', () => {
       linked?: TransactionsService['linkedContributions'];
       allContributions?: GoalContributionsService['all'];
       deleteContribution?: GoalContributionsService['delete'];
+      setStatus?: GoalsService['setStatus'];
       id?: string;
     } = {},
   ) {
@@ -62,6 +63,7 @@ describe('GoalDetail', () => {
     const linked = over.linked ?? (() => of({} as never));
     const allContributions = over.allContributions ?? (() => of<GoalContribution[]>([]));
     const deleteContribution = over.deleteContribution ?? (() => of(undefined));
+    const setStatus = over.setStatus ?? (() => of(GOAL));
 
     TestBed.configureTestingModule({
       imports: [GoalDetail],
@@ -70,7 +72,7 @@ describe('GoalDetail', () => {
         provideNativeDateAdapter(),
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: GoalsService, useValue: { get } },
+        { provide: GoalsService, useValue: { get, setStatus } },
         { provide: GoalContributionsService, useValue: { list, all: allContributions, delete: deleteContribution } },
         { provide: AccountsService, useValue: { all: accounts } },
         { provide: TransactionsService, useValue: { list: transactions, linkedContributions: linked } },
@@ -286,13 +288,14 @@ describe('GoalDetail', () => {
 
     pending.next();
     pending.complete();
-    fixture.detectChanges();
+    await settle(fixture);
 
     expect(remove).toHaveBeenCalledWith(item.id);
     expect(text()).toContain('No Contributions yet');
     expect(accounts).toHaveBeenCalledTimes(2);
     expect(allContributions).toHaveBeenCalledOnce();
     expect(text()).toContain(`${formatPeso(-1000)} remains available in ${ACCOUNT.name}`);
+    expect((fixture.nativeElement as HTMLElement).ownerDocument.activeElement?.id).toBe('contributions-heading');
   });
 
   it('treats an initial deletion 404 as stale history and refreshes the ordinary row away', async () => {
@@ -312,19 +315,13 @@ describe('GoalDetail', () => {
     expect(text()).toContain('No Contributions yet');
   });
 
-  it('keeps an ordinary row after an ambiguous failure until retrying confirms absence', async () => {
+  it('checks current facts after an ambiguous delete without replaying the write', async () => {
     const item = contribution();
     const list = vi
       .fn()
       .mockReturnValueOnce(of([item]))
       .mockReturnValueOnce(of([]));
-    let attempts = 0;
-    const remove = vi.fn(() => {
-      attempts += 1;
-      return throwError(() =>
-        attempts === 1 ? new ApiError('The request timed out.', 504) : new ApiError('Missing', 404),
-      );
-    });
+    const remove = vi.fn(() => throwError(() => new ApiError('The request timed out.', 504)));
     const { fixture, text } = setup({ list, deleteContribution: remove });
 
     await askToDeleteContribution(fixture);
@@ -339,8 +336,61 @@ describe('GoalDetail', () => {
     retry?.click();
     fixture.detectChanges();
 
-    expect(remove).toHaveBeenCalledTimes(2);
+    expect(remove).toHaveBeenCalledOnce();
+    expect(list).toHaveBeenCalledTimes(2);
     expect(text()).toContain('No Contributions yet');
+  });
+
+  it('gates funding-dependent actions after a failed reread and restores them after Retry', async () => {
+    const item = contribution();
+    const reached = { ...GOAL, currentAmount: GOAL.targetAmount };
+    const get = vi
+      .fn<GoalsService['get']>()
+      .mockReturnValueOnce(of(reached))
+      .mockReturnValueOnce(throwError(() => new ApiError('Unavailable', 500)))
+      .mockReturnValueOnce(of(reached));
+    const list = vi
+      .fn<GoalContributionsService['list']>()
+      .mockReturnValueOnce(of([item]))
+      .mockReturnValueOnce(of([]))
+      .mockReturnValueOnce(of([]));
+    const { fixture, text } = setup({ get, list });
+
+    await askToDeleteContribution(fixture);
+    await confirmContributionDelete(fixture);
+
+    expect(text()).toContain('Saved, but couldn’t refresh');
+    const staleButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    );
+    expect(staleButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(true);
+    expect(staleButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(true);
+
+    staleButtons.find((button) => button.textContent?.includes('Retry'))?.click();
+    await settle(fixture);
+
+    expect(text()).not.toContain('Saved, but couldn’t refresh');
+    const freshButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    );
+    expect(freshButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(false);
+    expect(freshButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(false);
+  });
+
+  it('prevents duplicate lifecycle submissions while a status write is pending', () => {
+    const pending = new Subject<Goal>();
+    const setStatus = vi.fn(() => pending.asObservable());
+    const { fixture } = setup({ get: () => of({ ...GOAL, currentAmount: GOAL.targetAmount }), setStatus });
+    const complete = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    ).find((button) => button.textContent?.includes('Mark complete'));
+
+    complete?.click();
+    fixture.detectChanges();
+    complete?.click();
+
+    expect(setStatus).toHaveBeenCalledOnce();
+    expect(complete?.disabled).toBe(true);
   });
 
   it('short-circuits an invalid id to not-found without making requests', () => {

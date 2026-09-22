@@ -177,7 +177,7 @@ export default class GoalDetail implements OnInit {
         next: () => {
           this.deletingContributionId.set(null);
           this.confirmingContributionDelete.set(null);
-          this.refreshContributionFacts(contribution);
+          this.refreshContributionFacts(contribution, true);
         },
         error: (error) => {
           this.deletingContributionId.set(null);
@@ -186,11 +186,8 @@ export default class GoalDetail implements OnInit {
             message:
               error instanceof ApiError
                 ? error.message
-                : 'We could not confirm whether this Contribution was deleted. Retry safely to check.',
-            retry: () => {
-              this.confirmingContributionDelete.set(contribution);
-              this.confirmContributionDelete();
-            },
+                : 'We could not confirm whether this Contribution was deleted. Refresh safely to check.',
+            retry: () => this.refreshContributionFacts(contribution, true),
           });
         },
       });
@@ -224,7 +221,7 @@ export default class GoalDetail implements OnInit {
   }
   protected setStatus(status: Goal['status']): void {
     const goal = this.goal();
-    if (!goal) {
+    if (!goal || this.busy()) {
       return;
     }
     this.clearPrompts();
@@ -322,7 +319,10 @@ export default class GoalDetail implements OnInit {
       });
   }
   /** Reconcile every server-derived Goal fact after a Contribution write without hiding the last readable screen. */
-  private refreshContributionFacts(deleted: GoalContributionWithAccountName | null = null): void {
+  private refreshContributionFacts(
+    deleted: GoalContributionWithAccountName | null = null,
+    focusAfterDelete = false,
+  ): void {
     const goal = this.goal();
     if (!goal) {
       this.load();
@@ -342,6 +342,10 @@ export default class GoalDetail implements OnInit {
           transaction,
           pooledContributions,
         }) => {
+          const deletedIndex = deleted
+            ? Math.max(this.history()?.findIndex((item) => item.id === deleted.id) ?? 0, 0)
+            : 0;
+          this.notice.set(null);
           this.goal.set(freshGoal);
           this.refreshError.set(false);
           this.savedStale.set(false);
@@ -352,13 +356,16 @@ export default class GoalDetail implements OnInit {
               : null,
           );
           this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
+          if (deleted && focusAfterDelete) {
+            this.focusAfterContributionDelete(deletedIndex);
+          }
         },
         error: () => {
           this.refreshError.set(true);
           this.savedStale.set(true);
           this.notice.set({
             message: 'The Contribution changed but the latest Goal details could not be loaded.',
-            retry: () => this.refreshContributionFacts(deleted),
+            retry: () => this.refreshContributionFacts(deleted, focusAfterDelete),
           });
         },
       });
@@ -388,6 +395,18 @@ export default class GoalDetail implements OnInit {
 
   private focusSafeAction(id: string): void {
     queueMicrotask(() => this.host.nativeElement.querySelector<HTMLButtonElement>(`#${id}`)?.focus());
+  }
+
+  private focusAfterContributionDelete(previousIndex: number): void {
+    queueMicrotask(() => {
+      const actions = this.host.nativeElement.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Contribution actions"]',
+      );
+      actions[Math.min(previousIndex, actions.length - 1)]?.focus();
+      if (actions.length === 0) {
+        this.host.nativeElement.querySelector<HTMLElement>('#contributions-heading')?.focus();
+      }
+    });
   }
 }
 

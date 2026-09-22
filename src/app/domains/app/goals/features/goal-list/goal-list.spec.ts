@@ -5,6 +5,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
+import { withOverlayContainer } from '@/testing/overlay';
 import { Goal } from '../../data/goal';
 import { GoalsService } from '../../data/goals.service';
 import GoalList from './goal-list';
@@ -51,6 +52,7 @@ const CAMERA: Goal = {
 };
 
 describe('GoalList', () => {
+  const overlay = withOverlayContainer();
   function setup(list: GoalsService['list']) {
     TestBed.configureTestingModule({
       imports: [GoalList],
@@ -152,26 +154,43 @@ describe('GoalList', () => {
     expect(text()).toContain('Retry');
   });
 
-  it('keeps loaded funding visible and gates writes when refresh fails, then Retry recovers', async () => {
+  it('keeps loaded funding visible and gates completion when refresh fails, then Retry recovers', async () => {
     const list = vi
       .fn<GoalsService['list']>()
-      .mockReturnValueOnce(of([DENTAL]))
+      .mockReturnValueOnce(of([EMERGENCY]))
       .mockReturnValueOnce(throwError(() => new ApiError('Unavailable', 500)))
-      .mockReturnValueOnce(of([HOLIDAY]));
+      .mockReturnValueOnce(of([EMERGENCY]));
     const { fixture, text } = setup(list);
 
     clickButton(fixture, 'Refresh');
     await settle(fixture);
 
-    expect(text()).toContain('Dental work');
+    expect(text()).toContain('Emergency fund');
     expect(text()).toContain('Couldn’t refresh. These figures may be out of date');
     expect(text()).toContain('Funding-based completion is unavailable until refreshed');
+
+    const actions = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Actions for Emergency fund"]',
+    );
+    actions?.click();
+    await settle(fixture);
+    const staleComplete = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      button.textContent?.includes('Mark complete'),
+    );
+    expect(staleComplete?.disabled).toBe(true);
+    actions?.click();
+    await settle(fixture);
 
     clickButton(fixture, 'Retry');
     await settle(fixture);
 
-    expect(text()).toContain('Holiday');
     expect(text()).not.toContain('Couldn’t refresh. These figures may be out of date');
+    actions?.click();
+    await settle(fixture);
+    const freshComplete = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      button.textContent?.includes('Mark complete'),
+    );
+    expect(freshComplete?.disabled).toBe(false);
   });
 
   it('keeps the newest refresh when an older Goal read resolves later', async () => {

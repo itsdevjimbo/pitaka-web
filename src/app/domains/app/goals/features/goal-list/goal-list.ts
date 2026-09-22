@@ -156,6 +156,9 @@ export default class GoalList {
   }
 
   protected setStatus(goal: Goal, status: GoalStatus): void {
+    if (this.busyId() !== null) {
+      return;
+    }
     this.clearPrompts();
     this.write(
       goal.id,
@@ -180,6 +183,9 @@ export default class GoalList {
   }
 
   private write(id: number, write$: import('rxjs').Observable<unknown>, success: () => void, retry: () => void): void {
+    if (this.busyId() !== null) {
+      return;
+    }
     this.notice.set(null);
     this.busyId.set(id);
     write$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({

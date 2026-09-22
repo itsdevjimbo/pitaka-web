@@ -50,9 +50,15 @@
         class="grid size-16 place-items-center rounded-2xl bg-surface text-primary-600 dark:text-primary-200"
         aria-hidden="true"
       >
-        <mat-icon
-          class="size-8"
-          svgIcon="target"
+        <img
+          class="size-10 dark:hidden"
+          src="/images/logo/logo.svg"
+          alt=""
+        />
+        <img
+          class="hidden size-10 dark:block"
+          src="/images/logo/logo-on-dark.svg"
+          alt=""
         />
       </span>
       <h2 class="font-display text-xl">Start your first Goal</h2>
@@ -104,6 +110,7 @@
                   <goals-goal-row
                     [goal]="goal"
                     [unavailable]="stale()"
+                    [pending]="busyId() === goal.id"
                     (edit)="openEdit($event)"
                     (status)="setStatus($event.goal, $event.status)"
                     (abandon)="askAbandon($event)"

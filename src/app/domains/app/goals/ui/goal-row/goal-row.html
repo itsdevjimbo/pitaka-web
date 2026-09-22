@@ -16,6 +16,7 @@
         type="button"
         class="shrink-0"
         [attr.aria-label]="'Actions for ' + goal().name"
+        [disabled]="pending()"
         [matMenuTriggerFor]="menu"
       >
         <mat-icon svgIcon="ellipsis-vertical" />
@@ -23,6 +24,7 @@
       <mat-menu #menu>
         <button
           mat-menu-item
+          [disabled]="pending()"
           (click)="edit.emit(goal())"
         >
           <mat-icon svgIcon="pencil" />
@@ -32,7 +34,7 @@
           @if (goal().currentAmount >= goal().targetAmount) {
             <button
               mat-menu-item
-              [disabled]="unavailable()"
+              [disabled]="unavailable() || pending()"
               (click)="status.emit({ goal: goal(), status: 'Completed' })"
             >
               <mat-icon svgIcon="circle-check" />
@@ -41,6 +43,7 @@
           }
           <button
             mat-menu-item
+            [disabled]="pending()"
             (click)="abandon.emit(goal())"
           >
             <mat-icon svgIcon="archive" />
@@ -49,6 +52,7 @@
         } @else {
           <button
             mat-menu-item
+            [disabled]="pending()"
             (click)="status.emit({ goal: goal(), status: 'Active' })"
           >
             <mat-icon svgIcon="circle-check" />
@@ -57,6 +61,7 @@
         }
         <button
           mat-menu-item
+          [disabled]="pending()"
           (click)="remove.emit(goal())"
         >
           <mat-icon svgIcon="trash-2" />
@@ -65,7 +70,6 @@
       </mat-menu>
     </div>
   </div>
-  <p class="text-sm text-secondary">{{ goal().status }} Goal</p>
   <goals-goal-progress [goal]="goal()" />
   <a
     class="mt-auto flex min-h-11 w-fit items-center rounded-sm text-sm font-semibold text-primary-600 underline-offset-4 hover:underline dark:text-primary-200"
