@@ -292,6 +292,7 @@ describe('GoalDetail', () => {
 
     expect(remove).toHaveBeenCalledWith(item.id);
     expect(text()).toContain('No Contributions yet');
+    expect(text()).toContain('Contribution deleted.');
     expect(accounts).toHaveBeenCalledTimes(2);
     expect(allContributions).toHaveBeenCalledOnce();
     expect(text()).toContain(`${formatPeso(-1000)} remains available in ${ACCOUNT.name}`);

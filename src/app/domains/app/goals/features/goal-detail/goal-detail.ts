@@ -72,15 +72,22 @@ export default class GoalDetail implements OnInit {
   protected readonly isEmpty = computed(() => this.history()?.length === 0);
   protected readonly busy = signal(false);
   protected readonly notice = signal<{ message: string; retry?: () => void } | null>(null);
+  protected readonly successMessage = signal<string | null>(null);
   protected readonly confirmingAbandon = signal(false);
   protected readonly confirmingDelete = signal<{ count: number } | null>(null);
   protected readonly confirmingContributionDelete = signal<GoalContributionWithAccountName | null>(null);
   protected readonly deletingContributionId = signal<number | null>(null);
   protected readonly linkedSourceSnapshot = signal<TransactionLinkedContributions | null>(null);
   protected readonly ordinaryAccountHeadroom = signal<{ accountName: string; availableAmount: number } | null>(null);
+  private successTimer: ReturnType<typeof setTimeout> | null = null;
 
   ngOnInit(): void {
-    this.destroyRef.onDestroy(() => this.readReset.complete());
+    this.destroyRef.onDestroy(() => {
+      this.readReset.complete();
+      if (this.successTimer) {
+        clearTimeout(this.successTimer);
+      }
+    });
     this.load();
   }
 
@@ -127,7 +134,7 @@ export default class GoalDetail implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
         if (saved) {
-          this.refresh('after-write');
+          this.refresh('after-write', () => this.announceSuccess('Goal updated.'));
         }
       });
   }
@@ -227,7 +234,7 @@ export default class GoalDetail implements OnInit {
     this.clearPrompts();
     this.write(
       this.goals.setStatus(goal.id, status),
-      () => this.refresh('after-write'),
+      () => this.refresh('after-write', () => this.announceSuccess(`Goal marked ${status.toLowerCase()}.`)),
       () => this.setStatus(status),
     );
   }
@@ -282,7 +289,7 @@ export default class GoalDetail implements OnInit {
   }
   private afterContributionDialog(result: 'saved' | 'missing' | 'abandoned' | undefined): void {
     if (result === 'saved') {
-      this.refreshContributionFacts();
+      this.refreshContributionFacts(null, false, () => this.announceSuccess('Contribution saved.'));
       return;
     }
     if (result === 'abandoned') {
@@ -296,7 +303,7 @@ export default class GoalDetail implements OnInit {
   }
 
   /** Keep the last complete Goal reading visible while a later read resolves. */
-  private refresh(reason: 'ordinary' | 'after-write' = 'ordinary'): void {
+  private refresh(reason: 'ordinary' | 'after-write' = 'ordinary', afterRead?: () => void): void {
     const goal = this.goal();
     if (!goal) {
       this.load();
@@ -311,6 +318,7 @@ export default class GoalDetail implements OnInit {
           this.goal.set(freshGoal);
           this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
           this.savedStale.set(false);
+          afterRead?.();
         },
         error: () => {
           this.refreshError.set(true);
@@ -322,6 +330,7 @@ export default class GoalDetail implements OnInit {
   private refreshContributionFacts(
     deleted: GoalContributionWithAccountName | null = null,
     focusAfterDelete = false,
+    afterRead?: () => void,
   ): void {
     const goal = this.goal();
     if (!goal) {
@@ -358,14 +367,16 @@ export default class GoalDetail implements OnInit {
           this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
           if (deleted && focusAfterDelete) {
             this.focusAfterContributionDelete(deletedIndex);
+            this.announceSuccess('Contribution deleted.');
           }
+          afterRead?.();
         },
         error: () => {
           this.refreshError.set(true);
           this.savedStale.set(true);
           this.notice.set({
             message: 'The Contribution changed but the latest Goal details could not be loaded.',
-            retry: () => this.refreshContributionFacts(deleted, focusAfterDelete),
+            retry: () => this.refreshContributionFacts(deleted, focusAfterDelete, afterRead),
           });
         },
       });
@@ -407,6 +418,17 @@ export default class GoalDetail implements OnInit {
         this.host.nativeElement.querySelector<HTMLElement>('#contributions-heading')?.focus();
       }
     });
+  }
+
+  private announceSuccess(message: string): void {
+    if (this.successTimer) {
+      clearTimeout(this.successTimer);
+    }
+    this.successMessage.set(message);
+    this.successTimer = setTimeout(() => {
+      this.successMessage.set(null);
+      this.successTimer = null;
+    }, 5_000);
   }
 }
 

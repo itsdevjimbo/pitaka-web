@@ -52,9 +52,11 @@ export default class GoalList {
   protected readonly stale = computed(() => this.refreshError());
   protected readonly busyId = signal<number | null>(null);
   protected readonly notice = signal<{ id: number; message: string; retry?: () => void } | null>(null);
+  protected readonly successMessage = signal<string | null>(null);
   protected readonly confirmingAbandon = signal<Goal | null>(null);
   protected readonly confirmingDelete = signal<{ goal: Goal; count: number } | null>(null);
   private readonly readReset = new Subject<void>();
+  private successTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** All lifecycle sections stay visible after the first Goal exists. */
   protected readonly groups = computed<readonly GoalGroup[]>(() => {
@@ -74,7 +76,12 @@ export default class GoalList {
   protected readonly isEmpty = computed(() => this.goals()?.length === 0);
 
   constructor() {
-    this.destroyRef.onDestroy(() => this.readReset.complete());
+    this.destroyRef.onDestroy(() => {
+      this.readReset.complete();
+      if (this.successTimer) {
+        clearTimeout(this.successTimer);
+      }
+    });
     this.load();
   }
 
@@ -111,7 +118,7 @@ export default class GoalList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((goal) => {
         if (goal) {
-          this.readGoals('after-write');
+          this.readGoals('after-write', () => this.announceSuccess('Goal created.'));
         }
       });
   }
@@ -123,7 +130,7 @@ export default class GoalList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
         if (saved) {
-          this.readGoals('after-write');
+          this.readGoals('after-write', () => this.announceSuccess('Goal updated.'));
         }
       });
   }
@@ -163,7 +170,7 @@ export default class GoalList {
     this.write(
       goal.id,
       this.service.setStatus(goal.id, status),
-      () => this.readGoals('after-write'),
+      () => this.readGoals('after-write', () => this.announceSuccess(`Goal marked ${status.toLowerCase()}.`)),
       () => this.setStatus(goal, status),
     );
   }
@@ -173,11 +180,16 @@ export default class GoalList {
   }
 
   protected confirmDelete(goal: Goal): void {
+    const restoreFocus = this.focusAfterGoalDelete(goal);
     this.clearPrompts();
     this.write(
       goal.id,
       this.service.delete(goal.id),
-      () => this.readGoals('after-write'),
+      () =>
+        this.readGoals('after-write', () => {
+          this.announceSuccess('Goal deleted.');
+          restoreFocus();
+        }),
       () => this.confirmDelete(goal),
     );
   }
@@ -225,7 +237,7 @@ export default class GoalList {
   }
 
   /** Refresh without hiding settled funding figures; a failed reread explicitly gates writes. */
-  private readGoals(reason: 'ordinary' | 'after-write' = 'ordinary'): void {
+  private readGoals(reason: 'ordinary' | 'after-write' = 'ordinary', afterRead?: () => void): void {
     this.readReset.next();
     this.refreshError.set(false);
     this.service
@@ -235,6 +247,7 @@ export default class GoalList {
         next: (goals) => {
           this.goals.set(goals);
           this.savedStale.set(false);
+          afterRead?.();
         },
         error: () => {
           this.refreshError.set(true);
@@ -245,6 +258,32 @@ export default class GoalList {
 
   private focusSafeAction(id: string): void {
     queueMicrotask(() => this.host.nativeElement.querySelector<HTMLButtonElement>(`#${id}`)?.focus());
+  }
+
+  private focusAfterGoalDelete(goal: Goal): () => void {
+    const rows = this.groups().find((group) => group.status === goal.status)?.rows ?? [];
+    const index = rows.findIndex((row) => row.id === goal.id);
+    const nextGoalId = rows[index + 1]?.id ?? rows[index - 1]?.id;
+    return () => {
+      queueMicrotask(() => {
+        if (nextGoalId !== undefined) {
+          this.host.nativeElement.querySelector<HTMLAnchorElement>(`[data-goal-id="${nextGoalId}"] a`)?.focus();
+          return;
+        }
+        this.host.nativeElement.querySelector<HTMLElement>(`#goal-group-${goal.status}`)?.focus();
+      });
+    };
+  }
+
+  private announceSuccess(message: string): void {
+    if (this.successTimer) {
+      clearTimeout(this.successTimer);
+    }
+    this.successMessage.set(message);
+    this.successTimer = setTimeout(() => {
+      this.successMessage.set(null);
+      this.successTimer = null;
+    }, 5_000);
   }
 }
 

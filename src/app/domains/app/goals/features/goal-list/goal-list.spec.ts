@@ -6,6 +6,7 @@ import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { withOverlayContainer } from '@/testing/overlay';
+import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal } from '../../data/goal';
 import { GoalsService } from '../../data/goals.service';
 import GoalList from './goal-list';
@@ -53,14 +54,24 @@ const CAMERA: Goal = {
 
 describe('GoalList', () => {
   const overlay = withOverlayContainer();
-  function setup(list: GoalsService['list']) {
+  function setup(
+    list: GoalsService['list'],
+    over: {
+      deleteGoal?: GoalsService['delete'];
+      listContributions?: GoalContributionsService['list'];
+    } = {},
+  ) {
     TestBed.configureTestingModule({
       imports: [GoalList],
       providers: [
         provideIcons(),
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: GoalsService, useValue: { list } },
+        { provide: GoalsService, useValue: { list, delete: over.deleteGoal ?? (() => of(undefined)) } },
+        {
+          provide: GoalContributionsService,
+          useValue: { list: over.listContributions ?? (() => of([])) },
+        },
       ],
     });
     const fixture = TestBed.createComponent(GoalList);
@@ -214,5 +225,34 @@ describe('GoalList', () => {
 
     expect(text()).toContain('Holiday');
     expect(text()).not.toContain('Dental work');
+  });
+
+  it('announces deletion and moves focus to the next Goal card', async () => {
+    const list = vi
+      .fn<GoalsService['list']>()
+      .mockReturnValueOnce(of([DENTAL, HOLIDAY]))
+      .mockReturnValueOnce(of([HOLIDAY]));
+    const deleteGoal = vi.fn(() => of(undefined));
+    const { fixture, text } = setup(list, { deleteGoal });
+    const actions = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Actions for Dental work"]',
+    );
+    actions?.click();
+    await settle(fixture);
+    const menuDelete = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Delete',
+    );
+    menuDelete?.click();
+    await settle(fixture);
+    const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]');
+    const confirmDelete = Array.from(confirmation?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+      (button) => button.textContent?.trim() === 'Delete',
+    );
+    confirmDelete?.click();
+    await settle(fixture);
+
+    expect(deleteGoal).toHaveBeenCalledWith(DENTAL.id);
+    expect(text()).toContain('Goal deleted.');
+    expect((fixture.nativeElement as HTMLElement).ownerDocument.activeElement?.textContent).toContain('Holiday');
   });
 });

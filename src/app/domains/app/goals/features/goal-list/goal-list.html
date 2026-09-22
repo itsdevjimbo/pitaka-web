@@ -84,6 +84,14 @@
         (retry)="load()"
       />
     }
+    @if (successMessage(); as message) {
+      <p
+        class="rounded-2xl bg-success-container p-4 text-sm text-success"
+        role="status"
+      >
+        {{ message }}
+      </p>
+    }
     <div class="grid gap-7">
       @for (group of groups(); track group.status) {
         <section
@@ -94,6 +102,7 @@
             <h2
               class="font-display text-xl"
               [id]="'goal-group-' + group.status"
+              tabindex="-1"
             >
               {{ group.label }}
             </h2>

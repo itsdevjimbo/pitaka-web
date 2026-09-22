@@ -1,5 +1,6 @@
 <article
   data-goal-card
+  [attr.data-goal-id]="goal().id"
   class="flex min-w-0 flex-col gap-3 p-5 sm:p-6"
   [class.opacity-70]="goal().status === 'Abandoned'"
 >
