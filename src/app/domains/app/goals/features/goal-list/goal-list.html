@@ -92,54 +92,110 @@
         {{ message }}
       </p>
     }
-    <div class="grid gap-7">
-      @for (group of groups(); track group.status) {
-        <section
-          class="grid gap-3"
-          [attr.aria-labelledby]="'goal-group-' + group.status"
+    <div class="grid gap-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div
+          class="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-soft p-1"
+          aria-label="Goal lifecycle"
         >
-          <div class="flex flex-wrap items-baseline justify-between gap-2">
-            <h2
-              class="font-display text-xl"
-              [id]="'goal-group-' + group.status"
-              tabindex="-1"
+          @for (option of lifecycleOptions; track option.status) {
+            <button
+              type="button"
+              class="min-h-11 rounded-lg px-4 text-sm font-semibold whitespace-nowrap text-secondary"
+              [class.bg-surface]="selectedLifecycle() === option.status"
+              [class.text-text]="selectedLifecycle() === option.status"
+              [attr.aria-pressed]="selectedLifecycle() === option.status"
+              (click)="selectLifecycle(option.status)"
             >
-              {{ group.label }}
-            </h2>
-            @if (group.status === 'Active') {
-              <p class="text-sm text-secondary">Funding is separate from a Goal’s lifecycle.</p>
-            }
+              {{ option.label }}
+            </button>
+          }
+        </div>
+        <p class="text-sm text-secondary">
+          {{ selectedGroup().rows.length }} Goal{{ selectedGroup().rows.length === 1 ? '' : 's' }} shown
+        </p>
+      </div>
+
+      <section [attr.aria-labelledby]="'goal-group-' + selectedGroup().status">
+        <h2
+          class="sr-only"
+          [id]="'goal-group-' + selectedGroup().status"
+          tabindex="-1"
+        >
+          {{ selectedGroup().label }} Goals
+        </h2>
+        @if (selectedGroup().rows.length === 0) {
+          <div class="rounded-2xl border border-divider bg-surface px-6 py-12 text-center">
+            <p class="text-sm text-secondary">{{ selectedGroup().emptyLabel }}</p>
           </div>
-          @if (group.rows.length === 0) {
-            <p class="px-1 text-sm text-secondary">{{ group.emptyLabel }}</p>
-          } @else {
-            <ul class="grid min-w-0 gap-5 md:grid-cols-2">
-              @for (goal of group.rows; track goal.id) {
-                <li class="min-w-0 overflow-hidden rounded-2xl border border-divider bg-surface">
-                  <goals-goal-row
-                    [goal]="goal"
-                    [unavailable]="stale()"
-                    [pending]="busyId() === goal.id"
-                    (edit)="openEdit($event)"
-                    (status)="setStatus($event.goal, $event.status)"
-                    (abandon)="askAbandon($event)"
-                    (remove)="askDelete($event)"
-                  />
-                  @if (confirmingAbandon()?.id === goal.id) {
+        } @else {
+          <ul
+            data-goal-ledger
+            class="min-w-0 overflow-hidden rounded-2xl border border-divider bg-surface"
+          >
+            @for (goal of selectedGroup().rows; track goal.id; let first = $first) {
+              <li
+                class="min-w-0"
+                [class.border-t]="!first"
+                [class.border-divider]="!first"
+              >
+                <goals-goal-row
+                  [goal]="goal"
+                  [unavailable]="stale()"
+                  [pending]="busyId() === goal.id"
+                  (edit)="openEdit($event)"
+                  (status)="setStatus($event.goal, $event.status)"
+                  (abandon)="askAbandon($event)"
+                  (remove)="askDelete($event)"
+                />
+                @if (confirmingAbandon()?.id === goal.id) {
+                  <section
+                    class="m-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warning-container p-4 text-sm text-warning"
+                    role="alertdialog"
+                  >
+                    <p>
+                      Abandon
+                      <span class="font-semibold">{{ goal.name }}</span>
+                      ? You won’t be able to add Contributions until you mark it active again.
+                    </p>
+                    <div class="flex gap-2">
+                      <button
+                        matButton
+                        type="button"
+                        [id]="'cancel-abandon-goal-' + goal.id"
+                        (click)="cancelPrompt()"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        matButton="filled"
+                        type="button"
+                        (click)="confirmAbandon(goal)"
+                      >
+                        Abandon
+                      </button>
+                    </div>
+                  </section>
+                }
+                @if (confirmingDelete(); as confirmation) {
+                  @if (confirmation.goal.id === goal.id) {
                     <section
-                      class="m-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warning-container p-4 text-sm text-warning"
+                      class="m-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-container p-4 text-sm text-danger"
                       role="alertdialog"
                     >
                       <p>
-                        Abandon
+                        Delete
                         <span class="font-semibold">{{ goal.name }}</span>
-                        ? You won’t be able to add Contributions until you mark it active again.
+                        ? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{
+                          confirmation.count === 1 ? '' : 's'
+                        }}, releasing their earmarks. The {{ goal.currentAmount | peso }} remains in its Accounts but
+                        will no longer count toward a Goal.
                       </p>
                       <div class="flex gap-2">
                         <button
                           matButton
                           type="button"
-                          [id]="'cancel-abandon-goal-' + goal.id"
+                          [id]="'cancel-delete-goal-' + goal.id"
                           (click)="cancelPrompt()"
                         >
                           Cancel
@@ -147,73 +203,39 @@
                         <button
                           matButton="filled"
                           type="button"
-                          (click)="confirmAbandon(goal)"
+                          (click)="confirmDelete(goal)"
                         >
-                          Abandon
+                          Delete
                         </button>
                       </div>
                     </section>
                   }
-                  @if (confirmingDelete(); as confirmation) {
-                    @if (confirmation.goal.id === goal.id) {
-                      <section
-                        class="m-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-container p-4 text-sm text-danger"
-                        role="alertdialog"
-                      >
-                        <p>
-                          Delete
-                          <span class="font-semibold">{{ goal.name }}</span>
-                          ? This permanently deletes the Goal and its {{ confirmation.count }} Contribution{{
-                            confirmation.count === 1 ? '' : 's'
-                          }}, releasing their earmarks. The {{ goal.currentAmount | peso }} remains in its Accounts but
-                          will no longer count toward a Goal.
-                        </p>
-                        <div class="flex gap-2">
+                }
+                @if (notice(); as n) {
+                  @if (n.id === goal.id) {
+                    <app-row-notice
+                      class="m-5"
+                      [message]="n.message"
+                    >
+                      @if (n.retry; as retry) {
+                        <div row-notice-actions>
                           <button
                             matButton
                             type="button"
-                            [id]="'cancel-delete-goal-' + goal.id"
-                            (click)="cancelPrompt()"
+                            (click)="retry()"
                           >
-                            Cancel
-                          </button>
-                          <button
-                            matButton="filled"
-                            type="button"
-                            (click)="confirmDelete(goal)"
-                          >
-                            Delete
+                            Try again
                           </button>
                         </div>
-                      </section>
-                    }
+                      }
+                    </app-row-notice>
                   }
-                  @if (notice(); as n) {
-                    @if (n.id === goal.id) {
-                      <app-row-notice
-                        class="m-5"
-                        [message]="n.message"
-                      >
-                        @if (n.retry; as retry) {
-                          <div row-notice-actions>
-                            <button
-                              matButton
-                              type="button"
-                              (click)="retry()"
-                            >
-                              Try again
-                            </button>
-                          </div>
-                        }
-                      </app-row-notice>
-                    }
-                  }
-                </li>
-              }
-            </ul>
-          }
-        </section>
-      }
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
     </div>
   }
 </div>

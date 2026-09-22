@@ -163,6 +163,25 @@ describe('GoalDetail', () => {
     expect(body.indexOf(formatPeso(800))).toBeLessThan(body.indexOf(formatPeso(500)));
   });
 
+  it('keeps the Goal hierarchy in the page header and places the summary beside Contributions at the wide breakpoint', () => {
+    const { fixture } = setup({ list: () => of([contribution()]) });
+    const element = fixture.nativeElement as HTMLElement;
+    const pageHeader = element.querySelector<HTMLElement>('[data-goal-page-header]');
+    const workspace = element.querySelector<HTMLElement>('[data-goal-workspace]');
+    const summary = element.querySelector<HTMLElement>('[data-goal-summary]');
+    const contributions = element.querySelector<HTMLElement>('[aria-labelledby="contributions-heading"]');
+    if (!pageHeader || !workspace || !summary || !contributions) {
+      throw new Error('Expected the Goal page header, summary, and Contributions workspace');
+    }
+
+    expect(pageHeader.querySelector('h1')?.textContent).toContain('Dental work');
+    expect(pageHeader.querySelector('[aria-label="Goal actions"]')).not.toBeNull();
+    expect(summary.querySelector('h1')).toBeNull();
+    expect(workspace.contains(summary)).toBe(true);
+    expect(workspace.contains(contributions)).toBe(true);
+    expect(workspace.classList.contains('xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]')).toBe(true);
+  });
+
   it('identifies a Linked Contribution by its source income Transaction and Account', () => {
     const source: Transaction = {
       id: 42,

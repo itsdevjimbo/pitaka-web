@@ -30,7 +30,7 @@ const GROUPS: readonly Omit<GoalGroup, 'rows'>[] = [
   { status: 'Abandoned', label: 'Abandoned', emptyLabel: 'No abandoned Goals.' },
 ];
 
-/** The Goals overview: progress grouped by its deliberate lifecycle state. */
+/** The Goals overview: progress filtered by its deliberate lifecycle state. */
 @Component({
   selector: 'goals-list',
   templateUrl: './goal-list.html',
@@ -55,22 +55,21 @@ export default class GoalList {
   protected readonly successMessage = signal<string | null>(null);
   protected readonly confirmingAbandon = signal<Goal | null>(null);
   protected readonly confirmingDelete = signal<{ goal: Goal; count: number } | null>(null);
+  protected readonly selectedLifecycle = signal<GoalStatus>('Active');
+  protected readonly lifecycleOptions = GROUPS;
   private readonly readReset = new Subject<void>();
   private successTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** All lifecycle sections stay visible after the first Goal exists. */
-  protected readonly groups = computed<readonly GoalGroup[]>(() => {
+  protected readonly selectedGroup = computed<GoalGroup>(() => {
     const goals = this.goals();
-    if (!goals) {
-      return [];
-    }
+    const selected = GROUPS.find((group) => group.status === this.selectedLifecycle()) ?? GROUPS[0];
 
-    return GROUPS.map((group) => ({
-      ...group,
-      rows: goals
-        .filter((goal) => goal.status === group.status)
-        .sort(group.status === 'Active' ? byActiveOrder : byName),
-    }));
+    return {
+      ...selected,
+      rows: (goals ?? [])
+        .filter((goal) => goal.status === selected.status)
+        .sort(selected.status === 'Active' ? byActiveOrder : byName),
+    };
   });
 
   protected readonly isEmpty = computed(() => this.goals()?.length === 0);
@@ -121,6 +120,12 @@ export default class GoalList {
           this.readGoals('after-write', () => this.announceSuccess('Goal created.'));
         }
       });
+  }
+
+  protected selectLifecycle(status: GoalStatus): void {
+    this.selectedLifecycle.set(status);
+    this.clearPrompts();
+    this.notice.set(null);
   }
   protected openEdit(goal: Goal): void {
     this.clearPrompts();
@@ -261,7 +266,7 @@ export default class GoalList {
   }
 
   private focusAfterGoalDelete(goal: Goal): () => void {
-    const rows = this.groups().find((group) => group.status === goal.status)?.rows ?? [];
+    const rows = this.selectedGroup().rows;
     const index = rows.findIndex((row) => row.id === goal.id);
     const nextGoalId = rows[index + 1]?.id ?? rows[index - 1]?.id;
     return () => {

@@ -43,58 +43,60 @@
   }
 </div>
 
-<div class="mt-1 flex flex-wrap justify-between gap-5">
-  <div class="grid min-w-0 gap-1">
-    <span class="text-xs text-secondary">Contributed</span>
-    <strong class="font-sans text-2xl font-semibold break-words text-text tabular-nums">
-      {{ goal().currentAmount | peso }}
-    </strong>
+<div class="grid min-w-0 gap-3">
+  <div class="flex flex-wrap justify-between gap-5">
+    <div class="grid min-w-0 gap-1">
+      <span class="text-xs text-secondary">Contributed</span>
+      <strong class="font-sans text-2xl font-semibold break-words text-text tabular-nums">
+        {{ goal().currentAmount | peso }}
+      </strong>
+    </div>
+    <div class="grid min-w-0 gap-1 text-right">
+      <span class="text-xs text-secondary">Target</span>
+      <strong class="font-sans text-2xl font-semibold break-words text-text tabular-nums">
+        {{ goal().targetAmount | peso }}
+      </strong>
+    </div>
   </div>
-  <div class="grid min-w-0 gap-1 text-right">
-    <span class="text-xs text-secondary">Target</span>
-    <strong class="font-sans text-2xl font-semibold break-words text-text tabular-nums">
-      {{ goal().targetAmount | peso }}
-    </strong>
-  </div>
-</div>
 
-<div
-  data-goal-progress
-  class="mt-1 flex h-2 w-full overflow-hidden rounded-full bg-soft"
-  role="img"
-  [attr.aria-label]="progressLabel()"
->
-  <span
-    class="h-full bg-income"
-    [style.width.%]="filledWidth()"
-  ></span>
-  @if (isOver()) {
-    <span
-      class="h-full bg-transfer"
-      [style.width.%]="overflowWidth()"
-    ></span>
-  }
-</div>
-
-<p class="font-semibold text-text tabular-nums">
-  {{ progressPercent() | number: '1.0-0' }}% funded ·
-  @if (isOver()) {
-    {{ gap() | peso }} over target
-  } @else if (gap() === 0) {
-    Target reached
-  } @else {
-    {{ gap() | peso }} to go
-  }
-</p>
-
-@if (goal().targetDate) {
-  <p
-    class="text-sm font-medium"
-    [class.text-secondary]="!isOverdue()"
-    [class.text-warning]="isOverdue()"
+  <div
+    data-goal-progress
+    class="flex h-2 w-full overflow-hidden rounded-full bg-soft"
+    role="img"
+    [attr.aria-label]="progressLabel()"
   >
-    {{ isOverdue() ? 'Target overdue' : 'Target date' }} · {{ goal().targetDate | date: 'd MMM y' }}
+    <span
+      class="h-full bg-income"
+      [style.width.%]="filledWidth()"
+    ></span>
+    @if (isOver()) {
+      <span
+        class="h-full bg-transfer"
+        [style.width.%]="overflowWidth()"
+      ></span>
+    }
+  </div>
+
+  <p class="font-semibold text-text tabular-nums">
+    {{ progressPercent() | number: '1.0-0' }}% funded ·
+    @if (isOver()) {
+      {{ gap() | peso }} over target
+    } @else if (gap() === 0) {
+      Target reached
+    } @else {
+      {{ gap() | peso }} to go
+    }
   </p>
-} @else {
-  <p class="text-sm text-secondary">No target date</p>
-}
+
+  @if (goal().targetDate) {
+    <p
+      class="text-sm font-medium"
+      [class.text-secondary]="!isOverdue()"
+      [class.text-warning]="isOverdue()"
+    >
+      {{ isOverdue() ? 'Target overdue' : 'Target date' }} · {{ goal().targetDate | date: 'd MMM y' }}
+    </p>
+  } @else {
+    <p class="text-sm text-secondary">No target date</p>
+  }
+</div>

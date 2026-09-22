@@ -96,21 +96,65 @@ describe('GoalList', () => {
     fixture.detectChanges();
   }
 
-  it('shows loading, then keeps Active, Completed and Abandoned sections visible', async () => {
+  it('shows loading, then selects one lifecycle collection at a time', async () => {
     const pending = new Subject<Goal[]>();
     const { fixture, text } = setup(() => pending.asObservable());
     expect(text()).toContain('Loading your goals…');
 
-    pending.next([CAR]);
+    pending.next([DENTAL, CAR, CAMERA]);
     pending.complete();
     await settle(fixture);
 
-    expect(text()).toContain('Active');
-    expect(text()).toContain('No active Goals.');
-    expect(text()).toContain('Completed');
+    const lifecycleButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Goal lifecycle"] button',
+      ),
+    );
+    expect(lifecycleButtons.map((button) => button.textContent?.trim())).toEqual(['Active', 'Completed', 'Abandoned']);
+    expect(lifecycleButtons.map((button) => button.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']);
+    expect(text()).toContain('1 Goal shown');
+    expect(text()).toContain('Dental work');
+    expect(text()).not.toContain('Car');
+    expect(text()).not.toContain('Camera');
+
+    lifecycleButtons[1]?.click();
+    await settle(fixture);
+
+    expect(lifecycleButtons.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
     expect(text()).toContain('Car');
-    expect(text()).toContain('Abandoned');
-    expect(text()).toContain('No abandoned Goals.');
+    expect(text()).not.toContain('Dental work');
+    expect(text()).not.toContain('Camera');
+
+    lifecycleButtons[2]?.focus();
+    lifecycleButtons[2]?.click();
+    await settle(fixture);
+
+    expect(lifecycleButtons.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true']);
+    expect(text()).toContain('Camera');
+    expect(text()).not.toContain('Car');
+    expect((fixture.nativeElement as HTMLElement).ownerDocument.activeElement).toBe(lifecycleButtons[2]);
+  });
+
+  it('shows the selected lifecycle empty state and preserves the selection across refresh', async () => {
+    const list = vi.fn<GoalsService['list']>().mockReturnValue(of([DENTAL]));
+    const { fixture, text } = setup(list);
+
+    clickButton(fixture, 'Completed');
+    await settle(fixture);
+
+    expect(text()).toContain('0 Goals shown');
+    expect(text()).toContain('No completed Goals yet.');
+    expect(text()).not.toContain('Dental work');
+
+    clickButton(fixture, 'Refresh');
+    await settle(fixture);
+
+    const completed = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Goal lifecycle"] button',
+      ),
+    ).find((button) => button.textContent?.trim() === 'Completed');
+    expect(completed?.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('orders active Goals by target date then name, with undated Goals last', () => {
@@ -132,13 +176,16 @@ describe('GoalList', () => {
     expect(body).toContain('1 Mar 2026');
     expect(body).toContain('Target overdue');
     expect(body).toContain('%');
-    expect((fixture.nativeElement as HTMLElement).querySelectorAll('[data-goal-progress]').length).toBe(5);
+    expect((fixture.nativeElement as HTMLElement).querySelectorAll('[data-goal-progress]').length).toBe(3);
   });
 
-  it('renders the approved Goal cards with separate amounts and a Contributions action', () => {
+  it('renders the approved full-width continuous Goal ledger with separate amounts and a Contributions action', () => {
     const { fixture, text } = setup(() => of([DENTAL, HOLIDAY]));
     const element = fixture.nativeElement as HTMLElement;
+    const ledger = element.querySelector<HTMLElement>('[data-goal-ledger]');
 
+    expect(ledger).not.toBeNull();
+    expect(ledger?.querySelectorAll(':scope > li')).toHaveLength(2);
     expect(element.querySelectorAll('[data-goal-card]')).toHaveLength(2);
     expect(text()).toContain('Contributed');
     expect(text()).toContain('Target');

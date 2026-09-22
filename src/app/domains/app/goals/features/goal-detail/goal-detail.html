@@ -1,6 +1,6 @@
 <div class="mx-auto flex w-full max-w-7xl flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
   <a
-    class="flex w-fit items-center gap-x-1.5 text-sm font-semibold text-primary-600 underline underline-offset-4 dark:text-primary-200"
+    class="flex min-h-11 w-fit items-center gap-x-1.5 text-sm font-semibold text-primary-600 underline underline-offset-4 dark:text-primary-200"
     routerLink="/app/goals"
   >
     <mat-icon
@@ -59,71 +59,94 @@
         {{ message }}
       </p>
     }
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
-      <header class="flex min-w-0 flex-col gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <h1
-              class="font-display text-3xl tracking-tight break-words"
-              tabindex="-1"
-            >
-              {{ currentGoal.name }}
-            </h1>
-            <span class="inline-flex min-h-10 items-center rounded-full bg-soft px-3 text-sm font-semibold text-text">
-              {{ currentGoal.status }}
-            </span>
-          </div>
-          @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
+    <header
+      data-goal-page-header
+      class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"
+    >
+      <div class="grid min-w-0 gap-2">
+        <h1
+          class="font-display text-3xl tracking-tight break-words"
+          tabindex="-1"
+        >
+          {{ currentGoal.name }}
+        </h1>
+        <span class="inline-flex min-h-10 w-fit items-center rounded-full bg-soft px-3 text-sm font-semibold text-text">
+          {{ currentGoal.status }}
+        </span>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          matButton
+          [disabled]="busy()"
+          (click)="openEdit(currentGoal)"
+        >
+          <mat-icon svgIcon="pencil" />
+          Edit goal
+        </button>
+        @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
+          <button
+            matButton="filled"
+            [disabled]="stale() || busy()"
+            (click)="setStatus('Completed')"
+          >
+            Mark complete
+          </button>
+        }
+        @if (currentGoal.status === 'Active') {
+          <button
+            matButton="filled"
+            [disabled]="stale() || busy()"
+            (click)="openAdd(currentGoal)"
+          >
+            <mat-icon svgIcon="plus" />
+            Add contribution
+          </button>
+        }
+        <button
+          matIconButton
+          aria-label="Goal actions"
+          [matMenuTriggerFor]="goalMenu"
+          [disabled]="busy()"
+        >
+          <mat-icon svgIcon="ellipsis-vertical" />
+        </button>
+        <mat-menu #goalMenu>
+          @if (currentGoal.status === 'Active') {
             <button
-              matButton="filled"
-              [disabled]="stale() || busy()"
-              (click)="setStatus('Completed')"
+              mat-menu-item
+              (click)="askAbandon()"
             >
-              Mark complete
+              <mat-icon svgIcon="archive" />
+              <span>Abandon</span>
+            </button>
+          } @else {
+            <button
+              mat-menu-item
+              (click)="setStatus('Active')"
+            >
+              <mat-icon svgIcon="circle-check" />
+              <span>Mark active</span>
             </button>
           }
           <button
-            matIconButton
-            aria-label="Goal actions"
-            [matMenuTriggerFor]="goalMenu"
-            [disabled]="busy()"
+            mat-menu-item
+            (click)="askDelete()"
           >
-            <mat-icon svgIcon="ellipsis-vertical" />
+            <mat-icon svgIcon="trash-2" />
+            <span>Delete</span>
           </button>
-          <mat-menu #goalMenu>
-            <button
-              mat-menu-item
-              (click)="openEdit(currentGoal)"
-            >
-              <mat-icon svgIcon="pencil" />
-              <span>Edit</span>
-            </button>
-            @if (currentGoal.status === 'Active') {
-              <button
-                mat-menu-item
-                (click)="askAbandon()"
-              >
-                <mat-icon svgIcon="archive" />
-                <span>Abandon</span>
-              </button>
-            } @else {
-              <button
-                mat-menu-item
-                (click)="setStatus('Active')"
-              >
-                <mat-icon svgIcon="circle-check" />
-                <span>Mark active</span>
-              </button>
-            }
-            <button
-              mat-menu-item
-              (click)="askDelete()"
-            >
-              <mat-icon svgIcon="trash-2" />
-              <span>Delete</span>
-            </button>
-          </mat-menu>
-        </div>
+        </mat-menu>
+      </div>
+    </header>
+
+    <div
+      data-goal-workspace
+      class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start"
+    >
+      <section
+        data-goal-summary
+        class="flex min-w-0 flex-col gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6"
+      >
         <goals-goal-progress [goal]="currentGoal" />
         @if (confirmingAbandon()) {
           <div
@@ -213,7 +236,8 @@
             {{ account.availableAmount | peso }} remains available in {{ account.accountName }}.
           </p>
         }
-      </header>
+        <p class="text-sm text-secondary">Contributions earmark money already in your Accounts. They do not move it.</p>
+      </section>
 
       <section
         class="grid gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6"
@@ -227,17 +251,6 @@
           >
             Contributions
           </h2>
-          @if (currentGoal.status === 'Active' && !isEmpty()) {
-            <!-- The Contribution write lifecycle attaches this detail-only action. -->
-            <button
-              matButton="filled"
-              [disabled]="stale() || busy()"
-              (click)="openAdd(currentGoal)"
-            >
-              <mat-icon svgIcon="plus" />
-              Add contribution
-            </button>
-          }
         </div>
 
         @if (isEmpty()) {
