@@ -1,4 +1,4 @@
-<div class="mx-auto flex w-full max-w-7xl flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
+<div class="flex w-full flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
   <a
     class="flex min-h-11 w-fit items-center gap-x-1.5 text-sm font-semibold text-primary-600 underline underline-offset-4 dark:text-primary-200"
     routerLink="/app/goals"
@@ -65,33 +65,21 @@
     >
       <div class="grid min-w-0 gap-2">
         <h1
-          class="font-display text-3xl tracking-tight break-words"
+          class="wrap-break-words font-display text-3xl tracking-tight"
           tabindex="-1"
         >
           {{ currentGoal.name }}
         </h1>
-        <span class="inline-flex min-h-10 w-fit items-center rounded-full bg-soft px-3 text-sm font-semibold text-text">
-          {{ currentGoal.status }}
-        </span>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          matButton
-          [disabled]="busy()"
-          (click)="openEdit(currentGoal)"
-        >
-          <mat-icon svgIcon="pencil" />
-          Edit goal
-        </button>
-        @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
-          <button
-            matButton="filled"
-            [disabled]="stale() || busy()"
-            (click)="setStatus('Completed')"
+        <div class="flex flex-wrap gap-2">
+          <span
+            class="gap-1.5 rounded-lg border border-current bg-surface px-2.5 py-1.5 text-sm font-semibold text-secondary"
           >
-            Mark complete
-          </button>
-        }
+            {{ currentGoal.status }}
+          </span>
+          <goals-state [goal]="currentGoal" />
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-end gap-2">
         @if (currentGoal.status === 'Active') {
           <button
             matButton="filled"
@@ -111,6 +99,23 @@
           <mat-icon svgIcon="ellipsis-vertical" />
         </button>
         <mat-menu #goalMenu>
+          <button
+            mat-menu-item
+            [disabled]="busy()"
+            (click)="openEdit(currentGoal)"
+          >
+            <mat-icon svgIcon="pencil" />
+            Edit goal
+          </button>
+          @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
+            <button
+              mat-menu-item
+              [disabled]="stale() || busy()"
+              (click)="setStatus('Completed')"
+            >
+              Mark complete
+            </button>
+          }
           @if (currentGoal.status === 'Active') {
             <button
               mat-menu-item
@@ -141,13 +146,12 @@
 
     <div
       data-goal-workspace
-      class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start"
+      class="grid gap-6 xl:grid-cols-3 xl:items-start"
     >
       <section
         data-goal-summary
         class="flex min-w-0 flex-col gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6"
       >
-        <goals-state [goal]="currentGoal" />
         <goals-progress-text
           [goal]="currentGoal"
           class="hidden sm:block"
@@ -247,10 +251,10 @@
       </section>
 
       <section
-        class="grid gap-4 rounded-2xl border border-divider bg-surface p-5 sm:p-6"
+        class="col-span-2 grid rounded-2xl border border-divider bg-surface"
         aria-labelledby="contributions-heading"
       >
-        <div class="flex items-center justify-between gap-x-4">
+        <div class="flex items-center justify-between gap-x-4 p-5 sm:p-6">
           <h2
             id="contributions-heading"
             class="font-display text-xl"
@@ -263,7 +267,7 @@
         @if (isEmpty()) {
           @if (currentGoal.status === 'Active') {
             <div
-              class="flex flex-col items-center gap-y-3 rounded-[1.5rem_1.5rem_3.5rem_1.5rem] bg-soft px-6 py-16 text-center"
+              class="m-5 flex flex-col items-center gap-y-3 rounded-[1.5rem_1.5rem_3.5rem_1.5rem] bg-soft px-6 py-16 text-center sm:m-6"
             >
               <span
                 class="grid size-16 place-items-center rounded-2xl bg-surface"
@@ -295,12 +299,14 @@
             <p class="text-sm text-secondary">No Contributions</p>
           }
         } @else {
-          <ul class="flex flex-col gap-y-2">
-            @for (contribution of history(); track contribution.id) {
+          <ul class="flex flex-col gap-y-2 border-t border-divider">
+            @for (contribution of history(); track contribution.id; let first = $first) {
               <li
                 goals-contribution-history-row
-                class="flex items-start justify-between gap-x-4 rounded-2xl border border-divider px-4 py-3"
+                class="flex items-start justify-between gap-x-4 px-4 py-3"
                 [contribution]="contribution"
+                [class.border-t]="!first"
+                [class.border-divider]="!first"
                 [pending]="stale() || deletingContributionId() === contribution.id"
                 (edit)="openContributionEdit($event)"
                 (delete)="askContributionDelete($event)"

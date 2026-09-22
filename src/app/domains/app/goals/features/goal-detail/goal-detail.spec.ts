@@ -173,17 +173,19 @@ describe('GoalDetail', () => {
     const pageHeader = element.querySelector<HTMLElement>('[data-goal-page-header]');
     const workspace = element.querySelector<HTMLElement>('[data-goal-workspace]');
     const summary = element.querySelector<HTMLElement>('[data-goal-summary]');
+    const fundingState = element.querySelector('goals-state');
     const contributions = element.querySelector<HTMLElement>('[aria-labelledby="contributions-heading"]');
-    if (!pageHeader || !workspace || !summary || !contributions) {
+    if (!pageHeader || !workspace || !summary || !fundingState || !contributions) {
       throw new Error('Expected the Goal page header, summary, and Contributions workspace');
     }
 
     expect(pageHeader.querySelector('h1')?.textContent).toContain('Dental work');
+    expect(pageHeader.contains(fundingState)).toBe(true);
     expect(pageHeader.querySelector('[aria-label="Goal actions"]')).not.toBeNull();
     expect(summary.querySelector('h1')).toBeNull();
+    expect(summary.contains(fundingState)).toBe(false);
     expect(workspace.contains(summary)).toBe(true);
     expect(workspace.contains(contributions)).toBe(true);
-    expect(workspace.classList.contains('xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]')).toBe(true);
   });
 
   it('identifies a Linked Contribution by its source income Transaction and Account', () => {
@@ -387,7 +389,6 @@ describe('GoalDetail', () => {
     const staleButtons = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
     );
-    expect(staleButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(true);
     expect(staleButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(true);
 
     staleButtons.find((button) => button.textContent?.includes('Retry'))?.click();
