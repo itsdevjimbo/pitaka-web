@@ -6,8 +6,8 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { firstValueFrom } from 'rxjs';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { firstValueFrom, timeout, TimeoutError } from 'rxjs';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { Budget, BUDGET_AMOUNT_MIN, BUDGET_NAME_MAX, NewBudget, Period, PERIODS } from '../../data/budget';
 import { startOfCurrentPeriod } from '../../data/budget-calendar';
@@ -15,6 +15,8 @@ import { BudgetsService } from '../../data/budgets.service';
 
 /** The banner line for a create that failed before it could be attributed. */
 const COULD_NOT_CREATE = 'Something went wrong creating your budget. Please try again.';
+const CREATE_TIMEOUT_MS = 15_000;
+const CREATE_UNCERTAIN = 'We couldn’t confirm whether this Budget was created. Refresh Budgets before trying again.';
 
 /** The value the Category picker uses for a Budget that watches all spending. */
 const ALL_SPENDING = null;
@@ -74,6 +76,8 @@ export class NewBudgetForm {
   // Outputs
   readonly created = output<Budget>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   // State
   protected readonly periodOptions = PERIOD_OPTIONS;
@@ -134,6 +138,15 @@ export class NewBudgetForm {
   });
 
   constructor() {
+    effect(() =>
+      this.dirtyChange.emit(
+        this.model().name !== '' ||
+          this.model().amountLimit !== null ||
+          this.model().period !== '' ||
+          this.model().startDate !== null ||
+          this.model().categoryId !== ALL_SPENDING,
+      ),
+    );
     this.categoriesService
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -162,28 +175,36 @@ export class NewBudgetForm {
 
   save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.budgetForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
 
         try {
           const { name, amountLimit, period, startDate, categoryId } = this.model();
           const created = await firstValueFrom(
-            this.service.create({
-              name: name.trim(),
-              // `required` / `min` have ruled out a null amount, and
-              // `required(path.period)` the empty option, by the time this runs.
-              amountLimit: amountLimit as number,
-              period: period as Period,
-              startDate: startDate as Date,
-              categoryId,
-            } satisfies NewBudget),
+            this.service
+              .create({
+                name: name.trim(),
+                // `required` / `min` have ruled out a null amount, and
+                // `required(path.period)` the empty option, by the time this runs.
+                amountLimit: amountLimit as number,
+                period: period as Period,
+                startDate: startDate as Date,
+                categoryId,
+              } satisfies NewBudget)
+              .pipe(timeout({ first: CREATE_TIMEOUT_MS })),
           );
           this.created.emit(created);
           return undefined;
         } catch (error) {
+          if (error instanceof TimeoutError) {
+            this.errorMessage.set(CREATE_UNCERTAIN);
+            return undefined;
+          }
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
@@ -198,9 +219,14 @@ export class NewBudgetForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.budgetForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected cancel(): void {

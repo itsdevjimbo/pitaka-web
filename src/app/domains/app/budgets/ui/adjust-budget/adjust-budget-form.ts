@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField, maxLength, min, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,14 +6,16 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { firstValueFrom } from 'rxjs';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { firstValueFrom, timeout, TimeoutError } from 'rxjs';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { CategoriesService, Category, keepSavedFilingCategory } from '@/app/domains/app/categories';
 import { AdjustBudget, Budget, BUDGET_AMOUNT_MIN, BUDGET_NAME_MAX, Period, PERIODS } from '../../data/budget';
 import { BudgetsService } from '../../data/budgets.service';
 
 /** The banner line for an adjust that failed before it could be attributed. */
 const COULD_NOT_ADJUST = 'Something went wrong adjusting your budget. Please try again.';
+const ADJUST_TIMEOUT_MS = 15_000;
+const ADJUST_UNCERTAIN = 'We couldn’t confirm whether these changes were saved. Refresh Budgets before trying again.';
 
 /** The value the Category picker uses for a Budget that watches all spending. */
 const ALL_SPENDING = null;
@@ -74,6 +76,8 @@ export class AdjustBudgetForm {
   // Outputs
   readonly adjusted = output<Budget>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   // State
   protected readonly periodOptions = PERIOD_OPTIONS;
@@ -119,6 +123,18 @@ export class AdjustBudgetForm {
     };
   });
 
+  private readonly dirty = computed(() => {
+    const budget = this.budget();
+    const model = this.model();
+    return (
+      model.name !== budget.name ||
+      model.amountLimit !== budget.amountLimit ||
+      model.period !== budget.period ||
+      model.startDate?.getTime() !== budget.startDate.getTime() ||
+      model.categoryId !== budget.categoryId
+    );
+  });
+
   protected readonly budgetForm = form(this.model, (path) => {
     required(path.name, { message: 'You must enter a name' });
     maxLength(path.name, BUDGET_NAME_MAX, {
@@ -145,6 +161,7 @@ export class AdjustBudgetForm {
   });
 
   constructor() {
+    effect(() => this.dirtyChange.emit(this.dirty()));
     this.categoriesService
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -157,29 +174,37 @@ export class AdjustBudgetForm {
 
   save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.budgetForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
 
         try {
           const { name, amountLimit, period, startDate, categoryId } = this.model();
           const adjusted = await firstValueFrom(
-            this.service.adjust(this.budget().id, {
-              name: name.trim(),
-              // `required` / `min` have ruled out a null amount by now.
-              amountLimit: amountLimit as number,
-              period,
-              startDate: startDate as Date,
-              // Carried through untouched so the full-replacement PUT keeps it.
-              endDate: this.budget().endDate,
-              categoryId,
-            } satisfies AdjustBudget),
+            this.service
+              .adjust(this.budget().id, {
+                name: name.trim(),
+                // `required` / `min` have ruled out a null amount by now.
+                amountLimit: amountLimit as number,
+                period,
+                startDate: startDate as Date,
+                // Carried through untouched so the full-replacement PUT keeps it.
+                endDate: this.budget().endDate,
+                categoryId,
+              } satisfies AdjustBudget)
+              .pipe(timeout({ first: ADJUST_TIMEOUT_MS })),
           );
           this.adjusted.emit(adjusted);
           return undefined;
         } catch (error) {
+          if (error instanceof TimeoutError) {
+            this.errorMessage.set(ADJUST_UNCERTAIN);
+            return undefined;
+          }
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
@@ -194,9 +219,14 @@ export class AdjustBudgetForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.budgetForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected cancel(): void {
