@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
-import { of, Subject, throwError } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
@@ -1117,13 +1117,25 @@ describe('TransactionRow', () => {
 
       const host = fixture.nativeElement as HTMLElement;
       const confirm = host.querySelector('[role="alertdialog"]');
-      expect(confirm?.getAttribute('aria-label')).toBe('Confirm remove');
+      const labelledBy = confirm?.getAttribute('aria-labelledby');
+      expect(labelledBy).toBe('remove-transaction-1');
+      expect(host.querySelector(`#${labelledBy}`)?.textContent).toContain('Remove Coffee?');
       expect(host.textContent?.toLowerCase()).toContain('moves the balance back');
       expect(host.textContent).toContain(formatPeso(120.5));
       expect(host.textContent?.toLowerCase()).toContain('can’t be undone');
       // The row it belongs to is still on screen behind the prompt.
       expect(host.textContent).toContain('Coffee');
       expect(remove).not.toHaveBeenCalled();
+    });
+
+    it('moves focus to the safe action when removal confirmation opens', async () => {
+      const fixture = renderFixture(toAccountRow(tx({ description: 'Coffee' }), NAMES, 3));
+
+      menuItem(openMenu(fixture), 'Remove')?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(document.activeElement).toBe(rowButton(fixture.nativeElement as HTMLElement, 'Keep'));
     });
 
     it('declining with Keep sends nothing, emits nothing, and restores the row', () => {
@@ -1183,6 +1195,45 @@ describe('TransactionRow', () => {
       expect(remove).toHaveBeenCalledTimes(1);
       inFlight.next();
       inFlight.complete();
+    });
+
+    it('releases removal after an uncertain timeout and offers a read-only refresh', async () => {
+      vi.useFakeTimers();
+      try {
+        let attempts = 0;
+        const remove: TransactionsService['remove'] = () => {
+          attempts += 1;
+          return NEVER;
+        };
+        const fixture = renderFixture(toAccountRow(tx({ id: 7, description: 'Coffee' }), NAMES, 3), remove);
+        const refreshes: unknown[] = [];
+        fixture.componentInstance.refreshRequested.subscribe(() => refreshes.push('refresh'));
+
+        void attemptRemoval(fixture);
+        await vi.advanceTimersByTimeAsync(15_000);
+        await Promise.resolve();
+        fixture.detectChanges();
+
+        expect(attempts).toBe(1);
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+          'couldn’t confirm whether this Transaction was removed',
+        );
+        rowButton(fixture.nativeElement as HTMLElement, 'Refresh history')?.click();
+        expect(refreshes).toEqual(['refresh']);
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+          'couldn’t confirm whether this Transaction was removed',
+        );
+
+        fixture.componentRef.setInput('row', toAccountRow(tx({ id: 7, description: 'Coffee' }), NAMES, 3));
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+          'couldn’t confirm whether this Transaction was removed',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('pins a notice with Try again on a failed removal, leaves the row, and emits nothing', async () => {

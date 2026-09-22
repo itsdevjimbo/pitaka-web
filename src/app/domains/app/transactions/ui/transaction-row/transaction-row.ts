@@ -4,6 +4,7 @@ import {
   computed,
   DestroyRef,
   effect,
+  ElementRef,
   inject,
   Injector,
   input,
@@ -18,7 +19,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, TimeoutError, timeout } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { PesoPipe } from '@/app/core/money';
 import { RowNotice } from '@/app/core/notices';
@@ -37,6 +38,9 @@ import { TransactionSplitRecoveryStore } from '../transaction-split/transaction-
 const COULD_NOT_REMOVE = 'Something went wrong removing this transaction. Please try again.';
 
 const CONCURRENT_REMOVE_REFUSAL = 'The Transaction changed while removal was being checked. Review it and try again.';
+const REMOVE_UNCERTAIN =
+  'We couldn’t confirm whether this Transaction was removed. Refresh the history before trying again.';
+const REMOVE_TIMEOUT_MS = 15_000;
 
 /** A Goal named by a source-removal refusal, with every blocking Contribution. */
 type BlockingGoal = {
@@ -143,7 +147,7 @@ export type TransactionRowModel = Transaction & {
   ],
   providers: [TransactionSplitContextStore, TransactionSplitRecoveryStore],
   host: {
-    class: 'flex flex-col gap-y-2 rounded-xl border border-neutral-200 px-4 py-3 dark:border-neutral-800',
+    class: 'grid min-w-0 gap-3 border-t border-divider bg-surface px-4 py-4 sm:px-6',
   },
 })
 export class TransactionRow {
@@ -152,6 +156,7 @@ export class TransactionRow {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly viewContainerRef = inject(ViewContainerRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly linkedContributionPanel = viewChild(LinkedContributionPanel);
   private readonly splitDialogOpen = signal(false);
   private splitRecovery: TransactionSplitRecoveryStore | null = null;
@@ -159,6 +164,9 @@ export class TransactionRow {
 
   /** The finished row: domain fields plus resolved Category, headline, and sign. */
   readonly row = input.required<TransactionRowModel>();
+
+  /** Temporarily unavailable while the financial figures on screen are stale. */
+  readonly actionsDisabled = input(false);
 
   /** Asks the screen to open the refile dialog for this Transaction. */
   readonly refile = output<void>();
@@ -169,7 +177,11 @@ export class TransactionRow {
    */
   readonly removed = output<void>();
 
+  /** Requests a read-only history refresh after an uncertain removal outcome. */
+  readonly refreshRequested = output<void>();
+
   protected readonly directions = TRANSACTION_DIRECTIONS;
+  protected readonly removeUncertainMessage = REMOVE_UNCERTAIN;
 
   /**
    * Whether this row can be acted on here at all — the single condition both
@@ -227,6 +239,7 @@ export class TransactionRow {
    * matching how an Account row surfaces a failed lifecycle action.
    */
   protected readonly removeError = signal<string | null>(null);
+  protected readonly removeUncertain = signal(false);
 
   /** Structured Linked Contributions that must be deleted before this Transaction can be removed. */
   protected readonly removalBlock = signal<LinkedContributionRemovalBlock | null>(null);
@@ -234,6 +247,13 @@ export class TransactionRow {
   protected readonly contributionActionState = computed(
     () => this.linkedContributionPanel()?.creationAvailability() ?? { status: 'unchecked' as const, explanation: null },
   );
+
+  constructor() {
+    effect(() => {
+      this.row();
+      this.removeUncertain.set(false);
+    });
+  }
 
   protected checkContributionAvailability(): void {
     if (this.row().direction === 'income') {
@@ -293,13 +313,22 @@ export class TransactionRow {
   /** Reveal the inline confirmation. Sends nothing — the balance stays put. */
   protected askRemove(): void {
     this.removeError.set(null);
+    this.removeUncertain.set(false);
     this.removalBlock.set(null);
     this.confirmingRemove.set(true);
+    queueMicrotask(() => {
+      this.host.nativeElement.querySelector<HTMLButtonElement>(`#keep-transaction-${this.row().id}`)?.focus();
+    });
   }
 
   /** Dismiss the confirmation with nothing removed; leave the row as it was. */
   protected cancelRemove(): void {
     this.confirmingRemove.set(false);
+  }
+
+  /** Ask the owning screen to verify with a fresh read; a refreshed row clears the prompt. */
+  protected requestRefresh(): void {
+    this.refreshRequested.emit();
   }
 
   /**
@@ -315,13 +344,16 @@ export class TransactionRow {
     this.removing.set(true);
     this.confirmingRemove.set(false);
     this.removeError.set(null);
+    this.removeUncertain.set(false);
     this.removalBlock.set(null);
 
     try {
-      await firstValueFrom(this.service.remove(this.row().id));
+      await firstValueFrom(this.service.remove(this.row().id).pipe(timeout({ first: REMOVE_TIMEOUT_MS })));
       this.removed.emit();
     } catch (error) {
-      if (error instanceof TransactionHasLinkedContributionsError) {
+      if (error instanceof TimeoutError) {
+        this.removeUncertain.set(true);
+      } else if (error instanceof TransactionHasLinkedContributionsError) {
         this.removalBlock.set(linkedContributionRemovalBlock(error));
       } else {
         this.removeError.set(removalFailureMessage(error));

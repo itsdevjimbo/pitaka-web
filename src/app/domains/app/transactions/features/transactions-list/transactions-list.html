@@ -163,6 +163,7 @@
             [row]="row"
             (refile)="openRefileDialog(row)"
             (removed)="onRemoved()"
+            (refreshRequested)="load()"
           ></li>
         }
       </ul>

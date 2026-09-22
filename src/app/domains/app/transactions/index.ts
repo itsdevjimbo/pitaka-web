@@ -10,6 +10,7 @@ export type {
   Tag,
   Transaction,
   TransactionDirection,
+  TransactionSearchResult,
   TransferDestinationAccount,
 } from './data/transaction';
 export type {

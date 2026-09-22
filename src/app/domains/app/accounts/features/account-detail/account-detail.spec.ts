@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { provideRouter } from '@angular/router';
-import { of, Subject, throwError } from 'rxjs';
+import { map, of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
@@ -50,6 +50,7 @@ describe('AccountDetail', () => {
     get?: AccountsService['get'];
     accountsList?: AccountsService['all'];
     list?: TransactionsService['list'];
+    search?: TransactionsService['search'];
     names?: CategoriesService['names'];
     record?: TransactionsService['record'];
     refile?: TransactionsService['refile'];
@@ -59,6 +60,12 @@ describe('AccountDetail', () => {
     const get = over.get ?? (() => of(ACCOUNT));
     const accountsList = over.accountsList ?? (() => of([ACCOUNT]));
     const list = over.list ?? (() => of<Transaction[]>([]));
+    const search =
+      over.search ??
+      ((_criteria, page) =>
+        page === 1
+          ? list(3).pipe(map((transactions) => ({ transactions, totalCount: transactions.length })))
+          : of({ transactions: [], totalCount: 0 }));
     const names = over.names ?? (() => of(NAMES));
     const record = over.record ?? (() => of({} as Transaction));
     const refile = over.refile ?? (() => of({} as Transaction));
@@ -80,7 +87,7 @@ describe('AccountDetail', () => {
         { provide: AccountsService, useValue: { get, all: accountsList } },
         {
           provide: TransactionsService,
-          useValue: { list, record, refile, remove },
+          useValue: { list, search, record, refile, remove },
         },
         {
           provide: CategoriesService,
@@ -175,11 +182,41 @@ describe('AccountDetail', () => {
   });
 
   it('heads the page with the Account, its type, and its current balance', () => {
-    const { text } = setup({ list: () => of([tx()]) });
+    const { fixture, text } = setup({ list: () => of([tx()]) });
 
     expect(text()).toContain('Everyday cash');
     expect(text()).toContain('Cash');
     expect(text()).toContain(formatPeso(4200));
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[aria-label="Account summary"]')).not.toBeNull();
+    expect(host.querySelector('[aria-labelledby="transaction-history-heading"]')).not.toBeNull();
+  });
+
+  it('pages Account history and reports how much is shown', async () => {
+    const calls: [Parameters<TransactionsService['search']>[0], number][] = [];
+    const search: TransactionsService['search'] = (criteria, page) => {
+      calls.push([criteria, page]);
+      return of({
+        transactions:
+          page === 1
+            ? [tx({ id: 1, description: 'Newest' }), tx({ id: 2, description: 'Earlier' })]
+            : [tx({ id: 3, description: 'Oldest' })],
+        totalCount: 3,
+      });
+    };
+    const { fixture, text, button } = setup({ search });
+
+    expect(calls).toContainEqual([{ accountId: 3 }, 1]);
+    expect(text()).toContain('Showing 2 of 3');
+    expect(text()).not.toContain('Oldest');
+
+    button('Load more')?.click();
+    await settle(fixture);
+
+    expect(calls).toContainEqual([{ accountId: 3 }, 2]);
+    expect(text()).toContain('Showing 3 of 3');
+    expect(text()).toContain('Oldest');
+    expect(button('Load more')).toBeUndefined();
   });
 
   it('shows each row with a local date and time, an amount, a direction, and the Category name', () => {
@@ -390,7 +427,7 @@ describe('AccountDetail', () => {
     expect(text()).toContain('Something went wrong on the server.');
 
     const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((b) =>
-      (b.textContent ?? '').includes('Try again'),
+      (b.textContent ?? '').includes('Retry'),
     );
     retry?.click();
     fixture.detectChanges();
@@ -487,20 +524,27 @@ describe('AccountDetail', () => {
     expect(text()).toContain('Coffee');
   });
 
-  it('keeps the screen as it was when the post-record re-read fails', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  it('marks a failed post-record reread stale, gates actions, and retries without replaying the write', async () => {
     const get = vi
       .fn()
       .mockReturnValueOnce(of(ACCOUNT))
-      .mockReturnValueOnce(throwError(() => new Error('offline')));
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValueOnce(of({ ...ACCOUNT, currentBalance: 4079.5 }));
     const list = vi
       .fn()
       .mockReturnValueOnce(of([tx({ description: 'Lunch' })]))
-      .mockReturnValueOnce(throwError(() => new Error('offline')));
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValueOnce(of([tx({ id: 7, description: 'Coffee' })]));
+    let recordAttempts = 0;
+    const record: TransactionsService['record'] = () => {
+      recordAttempts += 1;
+      return of(tx({ id: 7, description: 'Coffee' }));
+    };
 
     const { fixture, button, text } = setup({
       get: get as unknown as AccountsService['get'],
       list: list as unknown as TransactionsService['list'],
+      record,
       categoryList: () => of([{ id: 1, name: 'Groceries', kind: 'expense', isActive: true, isDefault: false }]),
     });
 
@@ -512,8 +556,22 @@ describe('AccountDetail', () => {
     await settle(fixture);
 
     expect(text()).toContain('Lunch');
-    expect(text()).not.toContain('Please try again');
-    consoleError.mockRestore();
+    expect(text()).toContain('Saved, but couldn’t refresh');
+    expect(button('Record')?.disabled).toBe(true);
+    const actions = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (candidate) => candidate.getAttribute('aria-label') === 'Transaction actions',
+    );
+    expect(actions?.disabled).toBe(true);
+    expect(recordAttempts).toBe(1);
+
+    button('Retry refresh')?.click();
+    await settle(fixture);
+
+    expect(recordAttempts).toBe(1);
+    expect(text()).not.toContain('Saved, but couldn’t refresh');
+    expect(text()).toContain('Coffee');
+    expect(text()).toContain(formatPeso(4079.5));
+    expect(button('Record')?.disabled).toBe(false);
   });
 
   describe('record, in a dialog', () => {
@@ -735,6 +793,20 @@ describe('AccountDetail', () => {
       pressEscape();
       await settle(fixture);
       expect(dialog()).toBeNull();
+    });
+
+    it('asks before discarding a changed refile editor', async () => {
+      const { fixture, dialog, dialogText } = setup({ list: () => of([filed()]) });
+
+      await refileFromRowMenu(fixture, fixture.nativeElement as HTMLElement);
+      typeIntoOverlay('#refile-transaction-note', 'Flat white');
+      await settle(fixture);
+      pressEscape();
+      await settle(fixture);
+
+      expect(dialog()).not.toBeNull();
+      expect(dialogText()).toContain('Discard changes?');
+      expect(document.activeElement).toBe(overlayButton('Keep editing'));
     });
 
     it('moves focus into the dialog on open and back to the opener on close', async () => {
@@ -1008,6 +1080,9 @@ describe('AccountDetail', () => {
     expect(text()).not.toContain('Loading transactions…');
     expect(text()).toContain('No transactions yet');
     expect(text()).not.toContain('Coffee');
+    expect(document.activeElement).toBe(
+      (fixture.nativeElement as HTMLElement).querySelector('#transaction-history-heading'),
+    );
   });
 
   it('offers no actions menu on a Transfer seen from where it landed', () => {

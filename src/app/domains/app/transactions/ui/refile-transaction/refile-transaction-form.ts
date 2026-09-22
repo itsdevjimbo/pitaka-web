@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,8 +7,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTimepickerModule } from '@angular/material/timepicker';
-import { firstValueFrom } from 'rxjs';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { firstValueFrom, TimeoutError, timeout } from 'rxjs';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { PesoPipe } from '@/app/core/money';
 import { CategoriesService, Category, keepSavedFilingCategory } from '@/app/domains/app/categories';
 import { Tag, TagField } from '@/app/domains/app/tags';
@@ -18,6 +18,9 @@ import { TransactionsService } from '../../data/transactions.service';
 
 /** The banner line for a refile that failed before it could be attributed. */
 const COULD_NOT_REFILE = 'Something went wrong refiling this transaction. Please try again.';
+const REFILE_UNCERTAIN =
+  'We couldn’t confirm whether this Transaction was refiled. Check its history before trying again.';
+const REFILE_TIMEOUT_MS = 15_000;
 
 /**
  * What the refile form edits. The amount and the direction are not here — they
@@ -95,6 +98,8 @@ export class RefileTransactionForm {
   // Outputs
   readonly refiled = output<Transaction>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   // State
   protected readonly directions = TRANSACTION_DIRECTIONS;
@@ -151,6 +156,19 @@ export class RefileTransactionForm {
     tags: [...this.transaction().tags],
   }));
 
+  private readonly dirty = computed(() => {
+    const transaction = this.transaction();
+    const model = this.model();
+    return (
+      model.date?.getTime() !== transaction.date.getTime() ||
+      model.time?.getTime() !== transaction.date.getTime() ||
+      model.categoryId !== transaction.categoryId ||
+      model.description !== (transaction.description ?? '') ||
+      model.tags.length !== transaction.tags.length ||
+      model.tags.some((tag, index) => tag.id !== transaction.tags[index]?.id)
+    );
+  });
+
   protected readonly refileForm = form(this.model, (path) => {
     // Day and time are each compulsory — a Transaction always has both, and an
     // omitted time is not allowed to mean midnight (ADR 0007). A Category may be
@@ -168,6 +186,7 @@ export class RefileTransactionForm {
   });
 
   constructor() {
+    effect(() => this.dirtyChange.emit(this.dirty()));
     this.categoriesService
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -180,29 +199,37 @@ export class RefileTransactionForm {
 
   save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.refileForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
 
         try {
           const { date, time, categoryId, description, tags } = this.model();
           const refiled = await firstValueFrom(
-            this.service.refile(this.transaction(), {
-              // `required` has ruled out a null day or time by the time this
-              // runs; fold the two controls back into one moment.
-              date: combineDateTime(date as Date, time as Date),
-              categoryId,
-              description: description.trim() || null,
-              // The chips as they stand — a real replacement, so a Tag removed
-              // on the field is a Tag dropped from the Transaction.
-              tagIds: tags.map((tag) => tag.id),
-            } satisfies RefileTransaction),
+            this.service
+              .refile(this.transaction(), {
+                // `required` has ruled out a null day or time by the time this
+                // runs; fold the two controls back into one moment.
+                date: combineDateTime(date as Date, time as Date),
+                categoryId,
+                description: description.trim() || null,
+                // The chips as they stand — a real replacement, so a Tag removed
+                // on the field is a Tag dropped from the Transaction.
+                tagIds: tags.map((tag) => tag.id),
+              } satisfies RefileTransaction)
+              .pipe(timeout({ first: REFILE_TIMEOUT_MS })),
           );
           this.refiled.emit(refiled);
           return undefined;
         } catch (error) {
+          if (error instanceof TimeoutError) {
+            this.errorMessage.set(REFILE_UNCERTAIN);
+            return undefined;
+          }
           const { boundErrors, bannerMessage } = partitionServerError(
             error,
             this.serverErrorControls(),
@@ -217,9 +244,14 @@ export class RefileTransactionForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.refileForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected cancel(): void {

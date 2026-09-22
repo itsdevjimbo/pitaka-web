@@ -1,11 +1,12 @@
 <form
   class="flex flex-col gap-y-4"
   (submit)="save($event)"
+  (input)="dirtyChange.emit(true)"
 >
   <!-- Failed refile with nothing to pin to a field -->
   @if (errorMessage(); as message) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-danger-container p-4 text-sm font-medium text-danger"
       role="alert"
     >
       {{ message }}
@@ -14,9 +15,9 @@
 
   <!-- Amount and direction: the row's own text, not fields. What moved was
        settled at recording; only how it is filed can be corrected here. -->
-  <div class="flex flex-col gap-y-1 rounded-lg bg-neutral-50 px-4 py-3 dark:bg-neutral-900">
+  <div class="flex flex-col gap-y-1 rounded-2xl bg-soft p-4">
     <div class="flex items-baseline justify-between gap-x-3">
-      <span class="text-sm text-neutral-500 dark:text-neutral-400">
+      <span class="text-sm text-secondary">
         {{ directions[transaction().direction].label }}
       </span>
       <span
@@ -26,7 +27,7 @@
         {{ transaction().amount | peso }}
       </span>
     </div>
-    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+    <p class="text-sm text-secondary">
       The amount and direction can’t change. To fix an amount, remove this transaction and record it again.
     </p>
   </div>
@@ -86,13 +87,16 @@
          cannot silently drop the filing (#108). -->
     <mat-form-field class="w-full">
       <mat-label>Category</mat-label>
-      <mat-select [formField]="refileForm.categoryId">
+      <mat-select
+        [formField]="refileForm.categoryId"
+        (selectionChange)="dirtyChange.emit(true)"
+      >
         <mat-option [value]="null">Uncategorised</mat-option>
         @for (option of categoryOptions(); track option.id) {
           <mat-option [value]="option.id">
             {{ option.name }}
             @if (!option.isActive) {
-              <span class="text-neutral-500 dark:text-neutral-400">· Retired</span>
+              <span class="text-secondary">· Retired</span>
             }
           </mat-option>
         }
@@ -134,7 +138,7 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="refileForm().invalid() || submitting()"
+      [disabled]="submitting()"
     >
       {{ submitting() ? 'Saving…' : 'Save' }}
     </button>
