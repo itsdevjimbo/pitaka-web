@@ -7,14 +7,14 @@ Verified on 2026-09-22 against the rendered Goal list, detail, editor, and Contr
 - Goals use the original approved full-width C layout: independent cards fill a two-column workspace and stack to one column on smaller screens, without the prototype's centered width cap. Active, Completed, and Abandoned remain lifecycle groups; each card keeps Contributed and Target amounts separate, includes the explicit View Contributions action, and independently states its percentage, date, and text-and-icon badge for In progress, Target reached, or neutral Over target with the excess amount. An Active overdue Goal also carries its separate date warning.
 - Goal detail shares the exact funding/date treatment in its wide B-style workspace. Long names can wrap beside lifecycle and action controls, and Contribution history retains the distinction between an earmark and moved money.
 - First loads, initial errors, genuine empty states, refresh failures, and saved-write/failed-reread states use the shared accessible state component. A failed reread keeps the last Goal figures visible and makes funding-based completion and Contribution changes unavailable until a fresh read succeeds. Ambiguous Contribution deletion is reconciled with reads and never replays the delete. Successful changes are announced quietly, and deletion restores focus to the next item or section heading.
-- New/Edit Goal and Add/Edit Contribution editors now use the shared dirty-dismissal and pending-save guard. Invalid submit remains enabled, reveals errors, and moves focus to the first invalid field. A write that exceeds 15 seconds is not replayed; it returns to an editable state and asks the person to refresh the Goals screen first.
+- New/Edit Goal and Add/Edit Contribution editors now use the shared dirty-dismissal, app-navigation, and pending-save guard. Dirty navigation is aborted until the person chooses Keep editing or Discard changes; discard then resumes the exact destination. Invalid submit remains enabled, reveals errors, and moves focus to the first invalid field. A write that exceeds 15 seconds is not replayed; it returns to an editable state and asks the person to refresh the Goals screen first.
 - Redesigned Goal surfaces use the approved semantic card, text, feedback, warning, danger, divider, and empty-state roles rather than the prior per-screen neutral, amber, and red styles.
 
 ## Automated verification
 
 - Focused Goal suites: 45 tests passed across nine files.
 - `npm run build`, `npm run lint`, and `npm run check:changed -- --base origin/main`: passed.
-- Full repository suite: 1,035 tests passed across 79 files; `npm run check:format` also passed.
+- Full repository suite: 1,037 tests passed across 79 files; `npm run check:format` also passed.
 
 ## Limits
 
