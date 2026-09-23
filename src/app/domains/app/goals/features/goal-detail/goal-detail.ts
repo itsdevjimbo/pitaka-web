@@ -11,15 +11,12 @@ import { PesoPipe } from '@/app/core/money';
 import { ResourceState, RowNotice } from '@/app/core/notices';
 import { AccountsService } from '@/app/domains/app/accounts';
 import { Transaction, TransactionLinkedContributions, TransactionsService } from '@/app/domains/app/transactions';
-import {
-  ContributionDeletionCoordinator,
-  Goal,
-  GoalContributionWithAccountName,
-  GoalContributionsService,
-  GoalsService,
-  signedAccountHeadroom,
-  withAccountNames,
-} from '../../index';
+import { signedAccountHeadroom } from '../../data/contributions/account-headroom';
+import { GoalContributionWithAccountName, withAccountNames } from '../../data/contributions/contribution-account-name';
+import { ContributionDeletionCoordinator } from '../../data/contributions/contribution-deletion';
+import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
+import { Goal } from '../../data/goal';
+import { GoalsService } from '../../data/goals.service';
 import { AddContributionDialog } from '../../ui/contribution-editor/add-contribution-dialog';
 import { EditContributionDialog } from '../../ui/contribution-editor/edit-contribution-dialog';
 import { ContributionHistoryRow } from '../../ui/contribution-history-row/contribution-history-row';

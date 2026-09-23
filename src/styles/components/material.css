@@ -1050,23 +1050,11 @@
   /* ------------------------------------------------------------------------ */
   /* Sidenav                                                                  */
   /* ------------------------------------------------------------------------ */
-  --mat-sidenav-container-background-color: light-dark(
-    var(--color-neutral-100),
-    var(--color-neutral-950)
-  );
-  --mat-sidenav-sidenav-background-color: light-dark(
-    var(--color-neutral-100),
-    var(--color-neutral-950)
-  );
-  --mat-sidenav-content-background-color: light-dark(
-    var(--color-white),
-    var(--color-neutral-900)
-  );
+  --mat-sidenav-container-background-color: var(--color-canvas);
+  --mat-sidenav-sidenav-background-color: var(--color-surface);
+  --mat-sidenav-content-background-color: var(--color-canvas);
 
-  --mat-sidenav-container-text-color: light-dark(
-    var(--color-neutral-950),
-    var(--color-white)
-  );
+  --mat-sidenav-container-text-color: var(--color-text);
 
   --mat-sidenav-container-shape: 0;
   --mat-sidenav-container-divider-color: transparent;

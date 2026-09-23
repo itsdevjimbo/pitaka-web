@@ -49,7 +49,7 @@
   *:focus-visible:not(.cdk-program-focused),
   .cdk-keyboard-focused {
     outline: light-dark(var(--color-primary-600), var(--color-primary-200)) solid 3px;
-    outline-offset: 0.1875rem;
+    outline-offset: 0.1875rem !important;
   }
 
   /* Base colors */
