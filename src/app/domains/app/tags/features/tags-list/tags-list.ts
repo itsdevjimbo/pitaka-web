@@ -124,7 +124,6 @@ export default class TagsList {
     return this.sorted().filter((tag) => tag.name.toLocaleLowerCase().includes(query));
   });
   protected readonly hasTags = computed(() => this.sorted().length > 0);
-  protected readonly count = computed(() => this.sorted().length);
   protected readonly hasSearch = computed(() => this.trimmedSearch().length > 0);
   protected readonly noMatch = computed(() => this.hasSearch() && this.visible().length === 0);
   protected readonly addDirty = computed(() => this.addModel().name.length > 0);
