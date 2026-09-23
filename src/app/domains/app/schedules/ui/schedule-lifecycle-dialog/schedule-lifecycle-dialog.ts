@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { afterNextRender, Component, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
@@ -43,14 +43,20 @@ export class ScheduleLifecycleDialog {
   protected readonly action = ACTION[this.data.action];
 
   protected readonly submitting = signal(false);
+  protected readonly outcomeUncertain = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
+  private readonly cancelButton = viewChild('cancelButton', { read: ElementRef<HTMLButtonElement> });
+
+  constructor() {
+    afterNextRender(() => this.cancelButton()?.nativeElement.focus());
+  }
 
   protected get heading(): string {
     return `${this.action.verb} ‘${this.data.schedule.name}’?`;
   }
 
   protected confirm(): void {
-    if (this.submitting()) {
+    if (this.submitting() || this.outcomeUncertain()) {
       return;
     }
     this.submitting.set(true);
@@ -64,6 +70,7 @@ export class ScheduleLifecycleDialog {
           this.dialogRef.close();
           return;
         }
+        this.outcomeUncertain.set(failure.kind === 'uncertain');
         this.errorMessage.set(failure.message);
       },
     });

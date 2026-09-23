@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, linkedSignal, output, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, linkedSignal, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { form, FormField, max, maxLength, min, required, submit, validate } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,9 +6,9 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { firstValueFrom, forkJoin } from 'rxjs';
+import { firstValueFrom, forkJoin, timeout, TimeoutError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import {
@@ -23,6 +23,7 @@ import {
   SchedulesService,
 } from '../..';
 import { addCalendarDays, compareCalendarDates, formatCalendarDate } from '../../data/schedule-calendar';
+import { SCHEDULE_WRITE_TIMEOUT_MS, ScheduleWriteFreshness } from '../../data/schedule-write';
 
 type NewScheduleModel = {
   name: string;
@@ -58,9 +59,12 @@ export class NewScheduleForm {
   private readonly accountsService = inject(AccountsService);
   private readonly categoriesService = inject(CategoriesService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly writeFreshness = inject(ScheduleWriteFreshness);
 
   readonly created = output<Schedule>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   protected readonly directions = DIRECTION_OPTIONS;
   protected readonly frequencies = FREQUENCY_OPTIONS;
@@ -69,6 +73,7 @@ export class NewScheduleForm {
   protected readonly loadingOptions = signal(true);
   protected readonly optionsFailed = signal(false);
   protected readonly submitting = signal(false);
+  protected readonly outcomeUncertain = signal(false);
   protected readonly eligibilityRejected = signal(false);
 
   protected readonly model = signal<NewScheduleModel>({
@@ -131,6 +136,20 @@ export class NewScheduleForm {
   });
 
   constructor() {
+    effect(() => {
+      const value = this.model();
+      this.dirtyChange.emit(
+        value.name !== '' ||
+          value.amount !== null ||
+          value.accountId !== null ||
+          value.categoryId !== null ||
+          value.description !== '' ||
+          value.direction !== '' ||
+          value.frequency !== '' ||
+          value.firstGeneration !== null ||
+          value.lastGeneration !== null,
+      );
+    });
     void this.loadOptions();
   }
 
@@ -148,28 +167,37 @@ export class NewScheduleForm {
 
   protected save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
     submit(this.scheduleForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
         try {
           const value = this.model();
           const created = await firstValueFrom(
-            this.schedulesService.create({
-              accountId: value.accountId as number,
-              categoryId: value.categoryId as number,
-              name: value.name.trim(),
-              direction: value.direction as ScheduleDirection,
-              amount: value.amount as number,
-              description: value.description.trim() || null,
-              frequency: value.frequency as ScheduleFrequency,
-              firstGeneration: value.firstGeneration as Date,
-              lastGeneration: value.lastGeneration,
-            } satisfies NewSchedule),
+            this.schedulesService
+              .create({
+                accountId: value.accountId as number,
+                categoryId: value.categoryId as number,
+                name: value.name.trim(),
+                direction: value.direction as ScheduleDirection,
+                amount: value.amount as number,
+                description: value.description.trim() || null,
+                frequency: value.frequency as ScheduleFrequency,
+                firstGeneration: value.firstGeneration as Date,
+                lastGeneration: value.lastGeneration,
+              } satisfies NewSchedule)
+              .pipe(timeout({ first: SCHEDULE_WRITE_TIMEOUT_MS })),
           );
           this.created.emit(created);
           return undefined;
         } catch (error) {
+          if (error instanceof TimeoutError) {
+            this.outcomeUncertain.set(true);
+            this.writeFreshness.reportUncertain();
+            return undefined;
+          }
           if (isUnattributedConflict(error)) {
             const refreshed = await this.refreshAfterConflict();
             this.errorMessage.set(
@@ -199,9 +227,15 @@ export class NewScheduleForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.scheduleForm().invalid()) {
+      this.scheduleForm().markAsTouched();
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected cancel(): void {

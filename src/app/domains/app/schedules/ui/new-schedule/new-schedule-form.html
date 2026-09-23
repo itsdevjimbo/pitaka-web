@@ -2,9 +2,17 @@
   class="grid gap-x-4 gap-y-3 sm:grid-cols-2"
   (submit)="save($event)"
 >
-  @if (errorMessage(); as message) {
+  @if (outcomeUncertain()) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-warning-container px-4 py-3 text-sm font-medium text-warning sm:col-span-2"
+      role="alert"
+    >
+      We couldn’t confirm whether this Schedule was created. Close this editor and refresh Schedules before trying
+      again.
+    </div>
+  } @else if (errorMessage(); as message) {
+    <div
+      class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger sm:col-span-2"
       role="alert"
     >
       {{ message }}
@@ -12,7 +20,7 @@
   }
   @if (optionsFailed()) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger sm:col-span-2"
       role="alert"
     >
       Eligible Accounts and Categories couldn’t be loaded. Close the dialog and try again.
@@ -207,9 +215,7 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="
-        scheduleForm().invalid() || submitting() || loadingOptions() || optionsFailed() || eligibilityRejected()
-      "
+      [disabled]="submitting() || outcomeUncertain() || loadingOptions() || optionsFailed() || eligibilityRejected()"
     >
       {{ submitting() ? 'Creating…' : 'Create Schedule' }}
     </button>

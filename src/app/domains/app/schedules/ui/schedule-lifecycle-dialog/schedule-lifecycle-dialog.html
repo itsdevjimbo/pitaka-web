@@ -1,9 +1,9 @@
 <app-dialog-shell [heading]="heading">
-  <p class="text-sm text-neutral-600 dark:text-neutral-300">{{ action.explanation }}</p>
+  <p class="text-sm text-secondary">{{ action.explanation }}</p>
 
   @if (errorMessage(); as error) {
     <p
-      class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-100"
+      class="mt-4 rounded-2xl bg-danger-container px-3 py-2 text-sm text-danger"
       role="alert"
     >
       {{ error }}
@@ -12,6 +12,7 @@
 
   <div class="mt-6 flex justify-end gap-2">
     <button
+      #cancelButton
       matButton
       type="button"
       [disabled]="submitting()"
@@ -22,7 +23,7 @@
     <button
       matButton="filled"
       type="button"
-      [disabled]="submitting()"
+      [disabled]="submitting() || outcomeUncertain()"
       (click)="confirm()"
     >
       {{ submitting() ? action.pendingLabel : action.verb }}

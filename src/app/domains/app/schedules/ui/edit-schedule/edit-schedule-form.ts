@@ -1,14 +1,14 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { form, FormField, max, maxLength, min, required, submit, validate } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { firstValueFrom, forkJoin } from 'rxjs';
+import { firstValueFrom, forkJoin, timeout, TimeoutError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { CategoriesService, Category, keepSavedFilingCategory } from '@/app/domains/app/categories';
 import {
   Schedule,
@@ -25,6 +25,7 @@ import {
   formatCalendarDate,
   nextEligibleGeneration,
 } from '../../data/schedule-calendar';
+import { SCHEDULE_WRITE_TIMEOUT_MS, ScheduleWriteFreshness } from '../../data/schedule-write';
 import { ScheduleRowData } from '../schedule-row/schedule-row';
 
 type EditScheduleModel = {
@@ -51,16 +52,20 @@ type EditScheduleModel = {
 export class EditScheduleForm {
   private readonly schedulesService = inject(SchedulesService);
   private readonly categoriesService = inject(CategoriesService);
+  private readonly writeFreshness = inject(ScheduleWriteFreshness);
 
   readonly row = input.required<ScheduleRowData>();
   readonly saved = output<Schedule>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   private readonly activeCategories = signal<readonly Category[]>([]);
   private readonly allCategories = signal<readonly Category[]>([]);
   protected readonly loadingOptions = signal(true);
   protected readonly optionsFailed = signal(false);
   protected readonly submitting = signal(false);
+  protected readonly outcomeUncertain = signal(false);
   protected readonly eligibilityRejected = signal(false);
   protected readonly conflictRefreshFailed = signal(false);
 
@@ -94,6 +99,17 @@ export class EditScheduleForm {
     const status = this.currentSchedule().status;
     return !this.conflictRefreshFailed() && (status === 'active' || status === 'paused');
   });
+  private readonly dirty = computed(() => {
+    const schedule = this.row().schedule;
+    const value = this.model();
+    return (
+      value.name !== schedule.name ||
+      value.amount !== schedule.amount ||
+      value.categoryId !== schedule.categoryId ||
+      value.description !== (schedule.description ?? '') ||
+      value.lastGeneration?.getTime() !== schedule.lastGeneration?.getTime()
+    );
+  });
 
   protected readonly scheduleForm = form(this.model, (path) => {
     required(path.name, { message: 'You must enter a name' });
@@ -121,29 +137,39 @@ export class EditScheduleForm {
   });
 
   constructor() {
+    effect(() => this.dirtyChange.emit(this.dirty()));
     void this.loadOptions();
   }
 
   protected save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
     submit(this.scheduleForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
         try {
           const value = this.model();
           const updated = await firstValueFrom(
-            this.schedulesService.update(this.currentSchedule().id, {
-              name: value.name.trim(),
-              amount: value.amount as number,
-              categoryId: value.categoryId,
-              description: value.description.trim() || null,
-              lastGeneration: value.lastGeneration,
-            } satisfies ScheduleUpdate),
+            this.schedulesService
+              .update(this.currentSchedule().id, {
+                name: value.name.trim(),
+                amount: value.amount as number,
+                categoryId: value.categoryId,
+                description: value.description.trim() || null,
+                lastGeneration: value.lastGeneration,
+              } satisfies ScheduleUpdate)
+              .pipe(timeout({ first: SCHEDULE_WRITE_TIMEOUT_MS })),
           );
           this.saved.emit(updated);
           return undefined;
         } catch (error) {
+          if (error instanceof TimeoutError) {
+            this.outcomeUncertain.set(true);
+            this.writeFreshness.reportUncertain();
+            return undefined;
+          }
           if (isUnattributedConflict(error)) {
             const refreshed = await this.refreshAfterConflict();
             this.conflictRefreshFailed.set(!refreshed);
@@ -173,9 +199,15 @@ export class EditScheduleForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.scheduleForm().invalid()) {
+      this.scheduleForm().markAsTouched();
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected eligibilityChanged(): void {

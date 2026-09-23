@@ -41,13 +41,17 @@ describe('ScheduleRow', () => {
   }
 
   it('shows the lifecycle, filing, frequency, amount, and history facts', () => {
-    const text = (setup().nativeElement as HTMLElement).textContent ?? '';
+    const element = setup({
+      schedule: { ...SCHEDULE, lastGeneration: new Date(2026, 11, 5) },
+    }).nativeElement as HTMLElement;
+    const text = element.textContent ?? '';
 
     expect(text).toContain('Next generation: 5 Oct 2026');
     expect(text).toContain('Rent');
     expect(text).toContain('Expense');
     expect(text).toContain('₱18,000.00');
     expect(text).toContain('Monthly');
+    expect(text).toContain('Last generation: 5 Dec 2026 (inclusive)');
     expect(text).toContain('Everyday cash · Housing');
     expect(text).toContain('1 surviving generated Transaction');
   });

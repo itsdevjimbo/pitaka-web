@@ -3,10 +3,12 @@ import { Component, DestroyRef, inject, input, output, signal, viewChild } from 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
+import { timeout, TimeoutError } from 'rxjs';
 import { PesoPipe } from '@/app/core/money';
 import { scheduleHistoryQueryParams } from '@/app/domains/app/transactions';
 import { Schedule, SCHEDULE_FREQUENCIES } from '../../data/schedule';
 import { toScheduleLifecycleFailure } from '../../data/schedule-lifecycle-coordinator';
+import { SCHEDULE_WRITE_TIMEOUT_MS } from '../../data/schedule-write';
 import { SchedulesService } from '../../data/schedules.service';
 import { ScheduleLifecycleAction } from '../schedule-lifecycle-dialog/schedule-lifecycle-dialog';
 
@@ -25,8 +27,7 @@ export type ScheduleRowData = {
   templateUrl: './schedule-row.html',
   imports: [DatePipe, MatButtonModule, PesoPipe, RouterLink],
   host: {
-    class:
-      'relative mb-6 block rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs last:mb-0 dark:border-neutral-800 dark:bg-neutral-950',
+    class: 'grid min-w-0 gap-4 border-b border-divider p-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-6',
   },
 })
 export class ScheduleRow {
@@ -37,7 +38,7 @@ export class ScheduleRow {
   readonly writeDisabled = input(false);
   readonly edit = output<ScheduleRowData>();
   readonly extend = output<ScheduleRowData>();
-  readonly deleted = output<void>();
+  readonly deleted = output<ScheduleRowData>();
   readonly deleteConflict = output<{ scheduleId: number; message: string }>();
   readonly lifecycle = output<{ row: ScheduleRowData; action: ScheduleLifecycleAction }>();
 
@@ -85,15 +86,23 @@ export class ScheduleRow {
     this.deleteError.set(null);
     this.schedulesService
       .delete(scheduleId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(timeout({ first: SCHEDULE_WRITE_TIMEOUT_MS }), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.deleting.set(false);
           this.confirmingDelete.set(false);
-          this.deleted.emit();
+          this.deleted.emit(this.row());
         },
         error: (error: unknown) => {
           this.deleting.set(false);
+          if (error instanceof TimeoutError) {
+            this.confirmingDelete.set(false);
+            this.deleteConflict.emit({
+              scheduleId,
+              message: 'We couldn’t confirm whether this Schedule was deleted. Refresh Schedules before trying again.',
+            });
+            return;
+          }
           const failure = toScheduleLifecycleFailure(error);
           if (failure.kind === 'conflict') {
             this.confirmingDelete.set(false);
