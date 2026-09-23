@@ -108,12 +108,12 @@ describe('TagsList', () => {
     expect(rowAction(4)?.tagName).toBe('BUTTON');
   });
 
-  it('shows search and the whole collection count when Tags exist', () => {
-    const { searchInput, text } = setup(() => of(EVERYTHING));
+  it('shows search and renders the whole collection when Tags exist', () => {
+    const { searchInput, rowNames, text } = setup(() => of(EVERYTHING));
     expect(searchInput()).not.toBeNull();
     expect(searchInput()?.getAttribute('aria-label')).toBe('Search tags');
     expect(text()).not.toContain('Find a tag');
-    expect(text()).toContain('3 tags');
+    expect(rowNames()).toEqual(['groceries', 'holiday', 'work']);
   });
 
   it('keeps inline creation in the empty state and gives the field focus', async () => {
