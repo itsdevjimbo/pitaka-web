@@ -7,147 +7,115 @@ import {
   afterNextRender,
   computed,
   inject,
+  linkedSignal,
   signal,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  disabled,
+  form,
+  FormField,
+  maxLength,
+  PathKind,
+  SchemaPath,
+  SchemaPathRules,
+  submit,
+  validate,
+} from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
+import { NavigationStart, Router } from '@angular/router';
+import { filter, firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { RowNotice } from '@/app/core/notices';
+import { partitionServerError } from '@/app/core/forms';
+import { ResourceState, RowNotice } from '@/app/core/notices';
+import { SIGN_IN_REASON_PARAM, SIGN_IN_ROUTE } from '@/app/core/session';
 import { Tag } from '../../data/tag';
+import { TagUnavailableError, TagWriteOutcomeUncertainError } from '../../data/tag-errors';
 import { TagsService } from '../../data/tags.service';
 
-/** The longest a Tag name may be — mirrors the API's `[MaxLength(255)]`, set on the inputs. */
+/** The longest Tag name accepted while renaming — mirrors the API's `[MaxLength(255)]`. */
 const NAME_MAX = 255;
 
 const LOAD_FAILED = 'Something went wrong loading your tags. Please try again.';
-
-/** The re-read after a write failed: the change landed, the list may be stale. */
-const REFRESH_FAILED = 'Your change was saved, but this list may be out of date. Try again to refresh it.';
-
-/** A write failed before the server could attribute it to anything. */
+const REFRESH_FAILED = 'Your change was saved, but this list may be out of date. Refresh before making another change.';
+const READ_FAILED = 'This list may be out of date. Refresh before making another change.';
+const CREATE_FAILED = 'Something went wrong adding the tag. Please try again.';
+const RENAME_FAILED = 'Something went wrong renaming the tag. Please try again.';
 const ACTION_FAILED = 'Something went wrong. Please try again.';
-
-/**
- * The 403 / 404 an honest person cannot reach on a freshly-read list — someone
- * else's Tag, or an id that is already gone. Both mean the list is stale, so
- * both re-read it and neither offers a Retry (retrying a 404 just fails again).
- */
-const STALE = 'That tag is no longer there.';
-
-/**
- * The one wording for a duplicate name, shared by the add field and the rename
- * field. Follows `duplicateCategoryNameMessage` minus its cross-kind clause,
- * which has nothing to attach to here. This deliberately differs from the entry
- * control on the transaction forms (#141), which attaches the existing Tag
- * silently: there the gesture is *attach*; here there is nothing to attach, so
- * it must speak.
- */
-function duplicateNameMessage(name: string): string {
-  return `You already have a tag called “${name}”.`;
-}
-
-/** A message pinned to one row after a delete failed for a reason that is not staleness. */
+const WRITE_UNCERTAIN = 'We couldn’t confirm whether your Tag change went through. Refresh before trying again.';
+type WriteOutcome = 'succeeded' | 'uncertain' | 'not-written';
+type RefreshFailure = { message: string; outcome: WriteOutcome };
+type FocusTarget = number | 'add' | 'heading' | 'preserve';
 type RowNoticeState = { id: number; message: string; retry: () => void };
 
-/**
- * The Tags screen: `/app/tags`, reached from the *Manage* navigation group. One
- * flat list of `{ id, name }` — no kind, no active axis, so no pane to split
- * into and no detail route. The screen owns its count, search, inline add field
- * and rows directly.
- *
- * It reads the whole set cold through `TagsService.readAll()` and re-reads after
- * every successful write; cache ownership is documented in ADR 0017.
- *
- * Three acts, not five — there is no retire on the wire. **Create** is an inline
- * field at the top, not a dialog, because Tags arrive in bursts; on success it
- * clears and keeps focus. **Rename** edits the name in place on the row, the
- * same control shape as the add field, so there is exactly one way to type a Tag
- * name here; it commits on Enter or blur, abandons on Escape, and a rename to
- * the Tag's own current name is a no-op the client swallows. **Delete** is an
- * inline confirm strip (the house pattern) whose wording states the effect as a
- * certainty — `DELETE /api/tags/{id}` has no in-use guard, so this is the first
- * delete in the app with no server-side backstop, and the explicit "can't be
- * undone" is earned.
- *
- * Zero Tags is every person's first view — nothing seeds one. The zero state
- * replaces the search and the count (a search box over an empty room searches
- * nothing) but keeps the add field, which is the only way out of zero, and
- * teaches that Tags are attached while filing — the one place that explanation
- * lives.
- */
+/** Manage the person's Tags: one searchable list, inline creation and renaming, and deletion. */
 @Component({
   selector: 'tags-list',
   templateUrl: './tags-list.html',
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, RowNotice],
+  imports: [FormField, MatButtonModule, MatIconModule, MatMenuModule, ResourceState, RowNotice],
   host: {
     class: 'flex flex-auto flex-col',
   },
 })
 export default class TagsList {
-  // Dependencies
   private service = inject(TagsService);
   private destroyRef = inject(DestroyRef);
   private injector = inject(Injector);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private router = inject(Router);
 
-  // Constants
-  protected readonly nameMax = NAME_MAX;
-
-  /**
-   * The one Tailwind shell every inline name field wears — the search box, the
-   * add field and the in-place rename field — so there is visibly exactly one
-   * way to type a Tag name here.
-   */
   protected readonly fieldClass =
-    'w-full rounded-lg border border-neutral-200 bg-transparent py-1.5 pr-3 pl-8 text-sm disabled:opacity-50 dark:border-neutral-800';
+    'min-h-12 w-full min-w-0 rounded-xl border border-divider bg-surface py-2 pr-3 pl-11 text-base text-text placeholder:text-secondary focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:outline-none dark:focus-visible:ring-primary-200';
+  protected readonly addFieldClass =
+    'min-h-12 w-full min-w-0 rounded-xl border border-divider bg-surface px-3 py-2 text-base text-text placeholder:text-secondary focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:outline-none dark:focus-visible:ring-primary-200';
 
-  // State
   protected readonly tags = signal<readonly Tag[] | null>(null);
   protected readonly loading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
-
-  /** Set when the re-read after a write fails — the rows stay, an inline retry re-runs it. */
-  protected readonly refreshError = signal<string | null>(null);
-
-  /** The staleness line for a 403 / 404 on rename or delete — re-reads, no Retry. */
+  protected readonly refreshing = signal(false);
+  protected readonly refreshError = signal<RefreshFailure | null>(null);
   protected readonly staleMessage = signal<string | null>(null);
-
   protected readonly search = signal('');
-
-  /** A message under the add field: a duplicate name, or a generic add failure. */
-  protected readonly addError = signal<string | null>(null);
-
-  /** `true` while a create is in flight — disables the add field so one gesture sends one request. */
+  protected readonly addModel = signal({ name: '' });
+  protected readonly editModel = signal({ name: '' });
   protected readonly adding = signal(false);
-
-  /** The id of the row being renamed in place, or `null`. */
-  protected readonly editingId = signal<number | null>(null);
-
-  /** A message under the rename field: a duplicate name, or a generic rename failure. */
-  protected readonly editError = signal<string | null>(null);
-
-  /** The id of the row whose delete is awaiting confirmation, or `null`. */
-  protected readonly confirmingDeleteId = signal<number | null>(null);
-
-  /** The id of the row with a rename or delete request in flight. */
   protected readonly busyId = signal<number | null>(null);
-
-  /** A per-row message left by a failed delete that was not staleness. */
+  protected readonly editingId = signal<number | null>(null);
+  protected readonly confirmingDeleteId = signal<number | null>(null);
+  protected readonly confirmingRenameDiscard = signal(false);
+  protected readonly confirmingNavigationDiscard = signal(false);
+  protected readonly navigationMessage = signal<string | null>(null);
+  protected readonly writeProgressMessage = signal<string | null>(null);
   protected readonly notice = signal<RowNoticeState | null>(null);
+  protected readonly successMessage = signal<string | null>(null);
 
-  private readonly addInput = viewChild<ElementRef<HTMLInputElement>>('addInput');
-  private readonly editInput = viewChild<ElementRef<HTMLInputElement>>('editInput');
+  private successTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** Alphabetical, case-insensitive — there is no `createdAt` or usage count to sort by. */
+  protected readonly addForm = form(this.addModel, (path) => {
+    disabled(path.name, { when: () => this.writesBlocked() });
+  });
+
+  protected readonly editForm = form(this.editModel, (path) => {
+    applyTagNameValidation(path.name);
+    disabled(path.name, { when: () => this.writesBlocked() });
+  });
+
+  protected readonly addErrorMessage = linkedSignal<{ name: string }, string | null>({
+    source: this.addModel,
+    computation: () => null,
+  });
+  protected readonly editErrorMessage = linkedSignal<{ name: string }, string | null>({
+    source: this.editModel,
+    computation: () => null,
+  });
+
   private readonly sorted = computed(() =>
     [...(this.tags() ?? [])].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
   );
-
   protected readonly trimmedSearch = computed(() => this.search().trim());
-
-  /** What is on screen: the whole set, narrowed by the search. */
   protected readonly visible = computed(() => {
     const query = this.trimmedSearch().toLocaleLowerCase();
     if (!query) {
@@ -155,26 +123,49 @@ export default class TagsList {
     }
     return this.sorted().filter((tag) => tag.name.toLocaleLowerCase().includes(query));
   });
-
-  /** `true` once the person has at least one Tag — gates the search and the count. */
   protected readonly hasTags = computed(() => this.sorted().length > 0);
-
-  /** The count beside the search — the whole set, not the search-narrowed view. */
-  protected readonly count = computed(() => this.sorted().length);
-
   protected readonly hasSearch = computed(() => this.trimmedSearch().length > 0);
-
-  /** The search matched nothing — offers a clear-search action, never read as an empty collection. */
   protected readonly noMatch = computed(() => this.hasSearch() && this.visible().length === 0);
+  protected readonly addDirty = computed(() => this.addModel().name.length > 0);
+  private readonly editingTag = computed(() => (this.tags() ?? []).find((tag) => tag.id === this.editingId()) ?? null);
+  protected readonly editDirty = computed(() => {
+    const tag = this.editingTag();
+    return tag !== null && this.editModel().name !== tag.name;
+  });
+  protected readonly hasUnsavedChanges = computed(() => this.addDirty() || this.editDirty());
+  protected readonly writesBlocked = computed(
+    () => this.refreshing() || this.refreshError() !== null || this.adding() || this.busyId() !== null,
+  );
+  protected readonly searchDisabled = computed(
+    () => this.editingId() !== null || this.confirmingDeleteId() !== null || this.writesBlocked(),
+  );
+
+  private readonly addInput = viewChild<ElementRef<HTMLInputElement>>('addInput');
+  private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+  private readonly editInput = viewChild<ElementRef<HTMLInputElement>>('editInput');
+
+  private readVersion = 0;
+  private pendingNavigationUrl: string | null = null;
+  private resumedNavigationUrl: string | null = null;
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      if (this.successTimer) {
+        clearTimeout(this.successTimer);
+      }
+    });
     this.load();
-    // The add field is the only way out of the zero state, so it opens focused.
-    this.focusOnceRendered(this.addInput);
+    this.router.events
+      .pipe(
+        filter((event): event is NavigationStart => event instanceof NavigationStart),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((event) => this.protectNavigation(event));
   }
 
-  /** Read the whole set cold. Bound to the failed-load retry. */
+  /** Read the whole set cold. Bound to the failed initial-load retry. */
   protected load(): void {
+    const version = ++this.readVersion;
     this.loading.set(true);
     this.errorMessage.set(null);
     this.refreshError.set(null);
@@ -185,35 +176,29 @@ export default class TagsList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (tags) => {
+          if (version !== this.readVersion) {
+            return;
+          }
+          const firstLoad = this.tags() === null;
           this.tags.set(tags);
           this.loading.set(false);
+          if (firstLoad && tags.length === 0) {
+            this.focusAfterRender(this.addInput);
+          }
         },
         error: (error: unknown) => {
+          if (version !== this.readVersion) {
+            return;
+          }
           this.errorMessage.set(error instanceof ApiError ? error.message : LOAD_FAILED);
           this.loading.set(false);
         },
       });
   }
 
-  /**
-   * Re-read the whole set after a successful write. A failure keeps the rows on
-   * screen — now one write stale — under an inline retry. After a delete this
-   * leaves the deleted row standing, and it stands: removing it locally would
-   * invent a list state the client never read, while the strip already says
-   * what happened. Bound to the refresh strip's *Try again*, which re-runs this
-   * read without disturbing the rows — unlike {@link load}, which is for a first
-   * load that has no rows to keep.
-   */
-  protected reload(): void {
-    this.refreshError.set(null);
-
-    this.service
-      .readAll()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (tags) => this.tags.set(tags),
-        error: () => this.refreshError.set(REFRESH_FAILED),
-      });
+  protected retryRefresh(): void {
+    const outcome = this.refreshError()?.outcome ?? 'not-written';
+    this.readAfterWrite(outcome, 'preserve');
   }
 
   protected onSearch(value: string): void {
@@ -224,175 +209,450 @@ export default class TagsList {
     this.search.set('');
   }
 
-  /**
-   * Create a Tag from the inline field. Trim, then refuse empty locally — Enter
-   * on an empty or whitespace-only field does nothing. On success the field
-   * clears and keeps focus; the alphabetical re-sort moves the new row into
-   * view, so there is no flash.
-   */
-  protected addTag(raw: string): void {
-    const name = raw.trim();
-    this.addError.set(null);
-    this.staleMessage.set(null);
-    if (!name || this.adding()) {
-      return;
-    }
+  protected createTag(event: Event): void {
+    event.preventDefault();
 
-    this.adding.set(true);
-    this.service
-      .create(name)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.adding.set(false);
-          const input = this.addInput()?.nativeElement;
-          if (input) {
-            input.value = '';
+    submit(this.addForm, {
+      action: async () => {
+        if (this.writesBlocked()) {
+          return undefined;
+        }
+
+        const name = this.addModel().name.trim();
+        this.adding.set(true);
+        this.writeProgressMessage.set('Adding Tag…');
+        this.navigationMessage.set(null);
+        this.staleMessage.set(null);
+        this.addErrorMessage.set(null);
+        let writeUncertain = false;
+
+        try {
+          await firstValueFrom(this.service.create(name).pipe(takeUntilDestroyed(this.destroyRef)));
+          this.addForm().reset({ name: '' });
+          this.revealTag(name);
+          this.readAfterWrite('succeeded', 'add', () => this.announceSuccess(`Tag “${name}” added.`));
+          return undefined;
+        } catch (error) {
+          if (this.isUncertainWrite(error)) {
+            this.noteUncertainWrite();
+            writeUncertain = true;
+            return undefined;
           }
-          this.focusOnceRendered(this.addInput);
-          this.reload();
-        },
-        error: (error: unknown) => {
-          this.adding.set(false);
-          this.addError.set(
-            error instanceof ApiError && error.status === 409
-              ? duplicateNameMessage(name)
-              : error instanceof ApiError
-                ? error.message
-                : ACTION_FAILED,
+          const { boundErrors: serverErrors, bannerMessage } = partitionServerError(
+            error,
+            { name: this.addForm.name },
+            CREATE_FAILED,
           );
-        },
-      });
+          if (serverErrors.length > 0) {
+            this.addForm().markAsTouched();
+            this.focusAfterRender(this.addInput);
+          }
+          if (bannerMessage !== null) {
+            this.addErrorMessage.set(bannerMessage);
+          }
+          return serverErrors.length > 0 ? serverErrors : undefined;
+        } finally {
+          this.adding.set(false);
+          this.writeProgressMessage.set(null);
+          if (!writeUncertain) {
+            this.finishBlockedNavigationMessage();
+          }
+        }
+      },
+    });
+
+    if (this.addForm().invalid()) {
+      this.addForm().markAsTouched();
+      this.focusAfterRender(this.addInput);
+    }
   }
 
-  /** Open one row for renaming. Rename and Delete are the row menu's only items. */
   protected startRename(tag: Tag): void {
+    if (this.writesBlocked()) {
+      return;
+    }
     this.notice.set(null);
     this.confirmingDeleteId.set(null);
-    this.editError.set(null);
+    this.confirmingRenameDiscard.set(false);
+    this.editErrorMessage.set(null);
     this.staleMessage.set(null);
+    this.editForm().reset({ name: tag.name });
     this.editingId.set(tag.id);
-    this.focusOnceRendered(this.editInput);
+    this.focusAfterRender(this.editInput);
   }
 
-  /** Escape abandons the edit with no request. */
-  protected cancelRename(): void {
-    this.editingId.set(null);
-    this.editError.set(null);
+  protected requestCancelRename(event?: Event): void {
+    event?.preventDefault();
+    if (this.editDirty()) {
+      this.confirmingRenameDiscard.set(true);
+      const id = this.editingId();
+      if (id !== null) {
+        this.focusById(`keep-editing-rename-tag-${id}`);
+      }
+      return;
+    }
+    this.closeRename(true);
   }
 
-  /**
-   * Commit a rename on Enter or blur. An empty field abandons — blur-commit has
-   * to be safe. A rename to the Tag's own current name is swallowed: no request,
-   * so nobody is told their name conflicts with itself.
-   */
-  protected commitRename(tag: Tag, raw: string): void {
-    if (this.editingId() !== tag.id || this.busyId() === tag.id) {
-      return;
-    }
-    const name = raw.trim();
-    if (!name || name === tag.name) {
-      this.editingId.set(null);
-      this.editError.set(null);
-      return;
-    }
+  protected keepRename(): void {
+    this.confirmingRenameDiscard.set(false);
+    this.focusAfterRender(this.editInput);
+  }
 
-    this.editError.set(null);
-    this.busyId.set(tag.id);
-    this.service
-      .rename(tag.id, name)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.busyId.set(null);
-          this.editingId.set(null);
-          this.reload();
-        },
-        error: (error: unknown) => {
-          this.busyId.set(null);
-          if (error instanceof ApiError && error.status === 409) {
-            this.editError.set(duplicateNameMessage(name));
-          } else if (this.isStale(error)) {
-            this.editingId.set(null);
-            this.goStale();
-          } else {
-            this.editError.set(error instanceof ApiError ? error.message : ACTION_FAILED);
+  protected discardRename(): void {
+    const id = this.editingId();
+    this.closeRename(false);
+    if (id !== null) {
+      this.focusRowAction(id);
+    }
+  }
+
+  protected renameTag(tag: Tag, event: Event): void {
+    event.preventDefault();
+
+    submit(this.editForm, {
+      action: async () => {
+        if (this.editingId() !== tag.id || this.writesBlocked()) {
+          return undefined;
+        }
+
+        const name = this.editModel().name.trim();
+        if (name === tag.name) {
+          this.closeRename(false);
+          this.focusRowAction(tag.id);
+          return undefined;
+        }
+
+        this.busyId.set(tag.id);
+        this.writeProgressMessage.set('Saving Tag name…');
+        this.navigationMessage.set(null);
+        this.staleMessage.set(null);
+        this.editErrorMessage.set(null);
+        let writeUncertain = false;
+
+        try {
+          await firstValueFrom(this.service.rename(tag.id, name).pipe(takeUntilDestroyed(this.destroyRef)));
+          this.closeRename(false);
+          this.revealTag(name);
+          this.readAfterWrite('succeeded', tag.id, () => this.announceSuccess(`Tag “${name}” renamed.`));
+          return undefined;
+        } catch (error) {
+          if (this.isUncertainWrite(error)) {
+            this.noteUncertainWrite();
+            writeUncertain = true;
+            return undefined;
           }
-        },
-      });
+          if (this.isStale(error)) {
+            this.closeRename(false);
+            this.goStale(tag.id);
+            return undefined;
+          }
+          const { boundErrors: serverErrors, bannerMessage } = partitionServerError(
+            error,
+            { name: this.editForm.name },
+            RENAME_FAILED,
+          );
+          if (serverErrors.length > 0) {
+            this.editForm().markAsTouched();
+            this.focusAfterRender(this.editInput);
+          }
+          if (bannerMessage !== null) {
+            this.editErrorMessage.set(bannerMessage);
+          }
+          return serverErrors.length > 0 ? serverErrors : undefined;
+        } finally {
+          this.busyId.set(null);
+          this.writeProgressMessage.set(null);
+          if (!writeUncertain) {
+            this.finishBlockedNavigationMessage();
+          }
+        }
+      },
+    });
+
+    if (this.editForm().invalid()) {
+      this.editForm().markAsTouched();
+      this.focusAfterRender(this.editInput);
+    }
   }
 
   protected askDelete(tag: Tag): void {
+    if (this.writesBlocked()) {
+      return;
+    }
     this.notice.set(null);
     this.staleMessage.set(null);
-    this.editingId.set(null);
     this.confirmingDeleteId.set(tag.id);
+    this.focusById(`cancel-delete-tag-${tag.id}`);
   }
 
-  protected cancelDelete(): void {
+  protected cancelDelete(tag: Tag): void {
     this.confirmingDeleteId.set(null);
+    this.focusRowAction(tag.id);
   }
 
-  /**
-   * Delete a Tag. No inline acknowledgement afterwards — the confirm strip was
-   * the feedback, and the row vanishing is that sentence coming true.
-   */
   protected confirmDelete(tag: Tag): void {
+    if (this.writesBlocked()) {
+      return;
+    }
+    const previousVisible = this.visible();
+    const deletedIndex = previousVisible.findIndex((item) => item.id === tag.id);
+    const nextFocusId: FocusTarget =
+      previousVisible[deletedIndex + 1]?.id ?? previousVisible[deletedIndex - 1]?.id ?? 'heading';
     this.confirmingDeleteId.set(null);
     this.notice.set(null);
     this.busyId.set(tag.id);
+    this.writeProgressMessage.set('Deleting Tag…');
+    this.navigationMessage.set(null);
+
     this.service
       .remove(tag.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.busyId.set(null);
-          this.reload();
+          this.writeProgressMessage.set(null);
+          this.readAfterWrite('succeeded', nextFocusId, () => this.announceSuccess(`Tag “${tag.name}” deleted.`));
         },
         error: (error: unknown) => {
           this.busyId.set(null);
+          this.writeProgressMessage.set(null);
+          if (this.isUncertainWrite(error)) {
+            this.noteUncertainWrite();
+            return;
+          }
+          this.finishBlockedNavigationMessage();
           if (this.isStale(error)) {
-            this.goStale();
+            this.goStale(nextFocusId);
           } else {
             this.notice.set({
               id: tag.id,
               message: error instanceof ApiError ? error.message : ACTION_FAILED,
               retry: () => this.confirmDelete(tag),
             });
+            this.focusRowAction(tag.id);
           }
         },
       });
   }
 
-  private isStale(error: unknown): boolean {
-    return error instanceof ApiError && (error.status === 403 || error.status === 404);
+  protected keepNavigation(): void {
+    this.pendingNavigationUrl = null;
+    this.confirmingNavigationDiscard.set(false);
+    this.focusAfterRender(this.editingId() === null ? this.addInput : this.editInput);
   }
 
-  /**
-   * A 403 / 404 means the list is stale: show the one line, drop any open edit
-   * or confirm, and re-read so the vanished row falls away. No Retry — retrying
-   * a 404 just fails again. A failed re-read here is swallowed; the person still
-   * has the line telling them what happened.
-   */
-  private goStale(): void {
-    this.notice.set(null);
+  protected discardAndNavigate(): void {
+    const destination = this.pendingNavigationUrl;
+    this.pendingNavigationUrl = null;
+    this.confirmingNavigationDiscard.set(false);
+    this.closeRename(false);
+    this.addForm().reset({ name: '' });
+    if (destination !== null) {
+      this.resumedNavigationUrl = destination;
+      queueMicrotask(() => void this.router.navigateByUrl(destination));
+    }
+  }
+
+  private closeRename(focus: boolean): void {
+    const id = this.editingId();
     this.editingId.set(null);
-    this.confirmingDeleteId.set(null);
-    this.staleMessage.set(STALE);
+    this.confirmingRenameDiscard.set(false);
+    this.editErrorMessage.set(null);
+    this.editForm().reset({ name: '' });
+    if (focus && id !== null) {
+      this.focusRowAction(id);
+    }
+  }
+
+  private readAfterWrite(outcome: WriteOutcome, focusTarget: FocusTarget = 'preserve', onSuccess?: () => void): void {
+    const version = ++this.readVersion;
+    this.refreshing.set(true);
+    this.refreshError.set(null);
 
     this.service
       .readAll()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (tags) => this.tags.set(tags),
-        error: () => undefined,
+        next: (tags) => {
+          if (version !== this.readVersion) {
+            return;
+          }
+          this.tags.set(tags);
+          this.refreshing.set(false);
+          this.refreshError.set(null);
+          if (outcome === 'uncertain') {
+            this.staleMessage.set(
+              'The Tags list is current. Check whether the change is reflected before trying again.',
+            );
+          }
+          onSuccess?.();
+          this.focusAfterRead(focusTarget);
+        },
+        error: () => {
+          if (version !== this.readVersion) {
+            return;
+          }
+          this.refreshing.set(false);
+          const message =
+            outcome === 'succeeded' ? REFRESH_FAILED : outcome === 'uncertain' ? WRITE_UNCERTAIN : READ_FAILED;
+          this.refreshError.set({ message, outcome });
+          this.focusAfterRead(focusTarget);
+        },
       });
   }
 
-  /** Focus a view-child input on the render after it appears. */
-  private focusOnceRendered(ref: Signal<ElementRef<HTMLInputElement> | undefined>): void {
-    afterNextRender(() => ref()?.nativeElement.focus(), {
+  private goStale(focusTagId: FocusTarget): void {
+    this.notice.set(null);
+    this.editingId.set(null);
+    this.confirmingDeleteId.set(null);
+    this.staleMessage.set('That tag is no longer there.');
+    this.readAfterWrite('not-written', focusTagId);
+  }
+
+  private noteUncertainWrite(): void {
+    this.staleMessage.set(null);
+    this.refreshError.set({ message: WRITE_UNCERTAIN, outcome: 'uncertain' });
+    this.focusById('retry-tags-refresh');
+  }
+
+  private isStale(error: unknown): boolean {
+    return error instanceof TagUnavailableError;
+  }
+
+  private isUncertainWrite(error: unknown): boolean {
+    return error instanceof TagWriteOutcomeUncertainError;
+  }
+
+  private protectNavigation(event: NavigationStart): void {
+    if (event.url === this.resumedNavigationUrl) {
+      this.resumedNavigationUrl = null;
+      this.navigationMessage.set(null);
+      return;
+    }
+    const navigation = this.router.currentNavigation();
+    if (!navigation) {
+      return;
+    }
+    if (this.isSessionExpiryRedirect(event.url)) {
+      this.discardDrafts();
+      this.navigationMessage.set(null);
+      return;
+    }
+    if (this.adding() || this.busyId() !== null) {
+      navigation.abort();
+      this.navigationMessage.set('A tag change is saving. Wait for it to finish before leaving.');
+      return;
+    }
+    if (this.hasUnsavedChanges()) {
+      this.navigationMessage.set(null);
+      navigation.abort();
+      this.pendingNavigationUrl = event.url;
+      this.confirmingNavigationDiscard.set(true);
+      this.focusById('keep-navigation-editing');
+      return;
+    }
+    this.navigationMessage.set(null);
+  }
+
+  private isSessionExpiryRedirect(url: string): boolean {
+    return (
+      url.split('?')[0] === SIGN_IN_ROUTE &&
+      this.router.parseUrl(url).queryParams[SIGN_IN_REASON_PARAM] === 'session-expired'
+    );
+  }
+
+  private discardDrafts(): void {
+    this.pendingNavigationUrl = null;
+    this.confirmingNavigationDiscard.set(false);
+    this.closeRename(false);
+    this.addForm().reset({ name: '' });
+  }
+
+  private revealTag(name: string): void {
+    const query = this.trimmedSearch().toLocaleLowerCase();
+    if (query && !name.toLocaleLowerCase().includes(query)) {
+      this.search.set('');
+    }
+  }
+
+  private announceSuccess(message: string): void {
+    if (this.successTimer) {
+      clearTimeout(this.successTimer);
+    }
+    this.successMessage.set(message);
+    this.successTimer = setTimeout(() => {
+      this.successMessage.set(null);
+      this.successTimer = null;
+    }, 5_000);
+  }
+
+  private finishBlockedNavigationMessage(): void {
+    if (this.navigationMessage() !== null) {
+      this.navigationMessage.set('The tag action finished. You can leave this page now.');
+    }
+  }
+
+  private focusAfterRead(target: FocusTarget): void {
+    if (target === 'preserve') {
+      return;
+    }
+    if (target === 'heading') {
+      this.focusById('tags-heading');
+    } else if (target === 'add') {
+      this.focusAddInput();
+    } else {
+      this.focusRowAction(target);
+    }
+  }
+
+  private focusAddInput(): void {
+    afterNextRender(
+      () => {
+        if (this.refreshError() !== null) {
+          this.host.nativeElement.querySelector<HTMLButtonElement>('#retry-tags-refresh')?.focus();
+          return;
+        }
+        this.addInput()?.nativeElement.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private focusRowAction(id: number): void {
+    afterNextRender(
+      () => {
+        const target = this.host.nativeElement.querySelector<HTMLButtonElement>(`#tag-actions-${id}`);
+        if (target && !target.disabled) {
+          target.focus();
+        } else if (this.refreshError() !== null) {
+          this.host.nativeElement.querySelector<HTMLButtonElement>('#retry-tags-refresh')?.focus();
+        } else if (this.hasTags()) {
+          this.searchInput()?.nativeElement.focus();
+        } else {
+          this.addInput()?.nativeElement.focus();
+        }
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private focusById(id: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus(), {
       injector: this.injector,
     });
   }
+
+  private focusAfterRender<T extends HTMLElement>(ref: Signal<ElementRef<T> | undefined>): void {
+    afterNextRender(() => ref()?.nativeElement?.focus(), { injector: this.injector });
+  }
+}
+
+function applyTagNameValidation<TPathKind extends PathKind = PathKind.Root>(
+  name: SchemaPath<string, SchemaPathRules.Supported, TPathKind>,
+): void {
+  validate(name, (context) =>
+    context.value().trim() ? undefined : { kind: 'required', message: 'Enter a tag name.' },
+  );
+  maxLength(name, NAME_MAX, { message: `A tag name must be ${NAME_MAX} characters or fewer.` });
 }

@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
+import { TagUnavailableError, TagWriteOutcomeUncertainError } from './tag-errors';
 import { TagsService } from './tags.service';
 
 /** One Tag row shaped the way `GET /api/tags` sends it. */
@@ -28,8 +29,8 @@ const TAGS_URL = `${BASE_URL}/api/tags`;
  * and the real `errorInterceptor`, and asserts what comes out the top: which set
  * each reader returns, that `all()` is shared and `readAll()` is cold, that each
  * of the three writes drops the cache (proven by a later read issuing a second
- * request), and that the duplicate-name 409, the 403 and the 404 arrive
- * distinguishably.
+ * request), and that duplicate-name conflicts and unavailable rows are
+ * normalized for callers.
  */
 describe('TagsService', () => {
   let service: TagsService;
@@ -153,6 +154,14 @@ describe('TagsService', () => {
       await expect(result).resolves.toEqual({ id: 7, name: 'holiday' });
     });
 
+    it('normalizes a transport failure as an uncertain write outcome', async () => {
+      const result = firstValueFrom(service.create('holiday'));
+
+      http.expectOne(TAGS_URL).error(new ProgressEvent('error'));
+
+      expect(await result.catch((error: unknown) => error)).toBeInstanceOf(TagWriteOutcomeUncertainError);
+    });
+
     it('re-files a duplicate-name 409 as a name field error', async () => {
       const result = firstValueFrom(service.create('groceries'));
 
@@ -200,6 +209,14 @@ describe('TagsService', () => {
       await expect(result).resolves.toEqual({ id: 7, name: 'vacation' });
     });
 
+    it('normalizes a server failure as an uncertain write outcome', async () => {
+      const result = firstValueFrom(service.rename(7, 'vacation'));
+
+      http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 503, statusText: 'Service Unavailable' });
+
+      expect(await result.catch((error: unknown) => error)).toBeInstanceOf(TagWriteOutcomeUncertainError);
+    });
+
     it('re-files a duplicate-name 409 as a name field error', async () => {
       const result = firstValueFrom(service.rename(7, 'groceries'));
 
@@ -216,26 +233,22 @@ describe('TagsService', () => {
       });
     });
 
-    it('passes a 403 on a Tag owned by someone else straight through, distinguishable by status', async () => {
+    it('normalizes a 403 on a Tag owned by someone else', async () => {
       const result = firstValueFrom(service.rename(7, 'vacation'));
 
       http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 403, statusText: 'Forbidden' });
 
       const error = await result.catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(ApiError);
-      expect((error as ApiError).status).toBe(403);
-      expect((error as ApiError).fieldErrors).toEqual({});
+      expect(error).toBeInstanceOf(TagUnavailableError);
     });
 
-    it('passes a 404 on an unknown id straight through, distinguishable by status', async () => {
+    it('normalizes a 404 for an unknown Tag', async () => {
       const result = firstValueFrom(service.rename(99, 'vacation'));
 
       http.expectOne(`${TAGS_URL}/99`).flush(null, { status: 404, statusText: 'Not Found' });
 
       const error = await result.catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(ApiError);
-      expect((error as ApiError).status).toBe(404);
-      expect((error as ApiError).fieldErrors).toEqual({});
+      expect(error).toBeInstanceOf(TagUnavailableError);
     });
   });
 
@@ -250,24 +263,22 @@ describe('TagsService', () => {
       await expect(result).resolves.toBeUndefined();
     });
 
-    it('has no in-use 409 to catch — a failure passes through as a plain ApiError', async () => {
+    it('normalizes a server failure as an uncertain write outcome', async () => {
       const result = firstValueFrom(service.remove(7));
 
       http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 500, statusText: 'Internal Server Error' });
 
-      const error = await result.catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(ApiError);
-      expect((error as ApiError).fieldErrors).toEqual({});
+      expect(await result.catch((error: unknown) => error)).toBeInstanceOf(TagWriteOutcomeUncertainError);
     });
 
-    it('passes a 403 and a 404 straight through, distinguishable by status', async () => {
+    it('normalizes 403 and 404 failures as an unavailable Tag', async () => {
       const forbidden = firstValueFrom(service.remove(7));
       http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 403, statusText: 'Forbidden' });
-      expect(((await forbidden.catch((e: unknown) => e)) as ApiError).status).toBe(403);
+      expect(await forbidden.catch((e: unknown) => e)).toBeInstanceOf(TagUnavailableError);
 
       const missing = firstValueFrom(service.remove(99));
       http.expectOne(`${TAGS_URL}/99`).flush(null, { status: 404, statusText: 'Not Found' });
-      expect(((await missing.catch((e: unknown) => e)) as ApiError).status).toBe(404);
+      expect(await missing.catch((e: unknown) => e)).toBeInstanceOf(TagUnavailableError);
     });
   });
 
@@ -330,6 +341,34 @@ describe('TagsService', () => {
 
       await firstValueFrom(service.all());
       http.expectNone(TAGS_URL);
+    });
+
+    it('an uncertain write drops the cache before its outcome is confirmed', async () => {
+      await warmCache();
+
+      const uncertain = firstValueFrom(service.create('holiday'));
+      http.expectOne(TAGS_URL).flush(null, { status: 500, statusText: 'Internal Server Error' });
+      expect(await uncertain.catch((error: unknown) => error)).toBeInstanceOf(TagWriteOutcomeUncertainError);
+
+      await expectReadRefetches();
+    });
+
+    it('times out an unresolved write, normalizes it, and drops the cache', async () => {
+      await warmCache();
+
+      vi.useFakeTimers();
+      try {
+        const result = firstValueFrom(service.create('holiday')).catch((error: unknown) => error);
+        const request = http.expectOne(TAGS_URL);
+
+        await vi.advanceTimersByTimeAsync(15_000);
+
+        expect(request.cancelled).toBe(true);
+        expect(await result).toBeInstanceOf(TagWriteOutcomeUncertainError);
+        await expectReadRefetches();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

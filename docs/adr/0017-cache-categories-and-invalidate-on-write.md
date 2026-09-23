@@ -7,8 +7,10 @@ status: accepted
 The Category and Tag collections are reference data held in application-lifetime
 shared caches. Every successful write drops the owning service's cache, and the next
 cached reader re-fetches the whole collection. A failed fetch is discarded so a
-retry reaches the API; a failed write leaves the last successful collection
-intact.
+retry reaches the API. A definite write failure leaves the last successful
+collection intact. A Tag write with an uncertain outcome (timeout, lost transport
+response, or server failure) also drops the cache because the mutation may have
+committed without a conclusive response.
 
 This is a narrow exception to the default cold resource readers. It does not
 weaken [ADR 0006](0006-never-render-a-balance-from-cache.md): balances, totals,
@@ -29,14 +31,18 @@ staleness is acceptable, and each collection has a concrete repeated-read use:
   used to resolve row labels.
 
 The staleness window is one application instance (one tab) and closes after that
-instance next writes the resource. A rename in another tab or on another device
+instance next writes the resource. For Tags, it also closes after an uncertain
+write outcome invalidates the cache. A rename in another tab or on another device
 can retain an old label until then. No cross-tab invalidation is built.
 
 ## Invalidation belongs to the service
 
 Create, rename, status-change, and delete operations invalidate the relevant
-cache inside `CategoriesService` or `TagsService` after the write succeeds. It
-is never a separate call a consumer can forget.
+cache inside `CategoriesService` or `TagsService` after the write succeeds. For
+Tag writes, `TagsService` also invalidates after a timeout, lost transport
+response, or server failure, since the mutation may have committed. Definite
+write failures preserve the last successful collection. Invalidation is never a
+separate call a consumer can forget.
 
 `CategoriesService.refreshList()` is the deliberate non-write invalidator. The
 new and edit Schedule forms use it after the API rejects a formerly eligible
@@ -93,9 +99,11 @@ invalidates the shared cache; it does not patch that cache.
 ## Consequences
 
 - A successful cached fetch is replayed for the application session until a
-  successful write invalidates it.
+  successful write invalidates it, or a Tag write has an uncertain outcome.
 - Failed cached fetches are not replayed. The next cached read retries the API.
-- Failed writes do not invalidate a previously successful collection.
+- Definite failed writes do not invalidate a previously successful collection.
+- An uncertain Tag write invalidates the cache because the write may have
+  committed; the next cached reader fetches the collection again.
 - Cold management reads neither consume nor populate the shared caches.
 - No other collection becomes cacheable by analogy. A new cache needs its own
   explicit repeated-read benefit and correctness analysis, and financial
