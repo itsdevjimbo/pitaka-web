@@ -981,14 +981,13 @@ describe('ScheduleList', () => {
     });
   });
 
-  it('shows compact lifecycle choices without count badges', () => {
+  it('shows lifecycle choices without count badges', () => {
     const { fixture } = setup(() => of(ALL));
     const nav = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
       'nav[aria-label="Schedule lifecycle"]',
     )!;
     const buttons = Array.from(nav.querySelectorAll<HTMLButtonElement>('button'));
 
-    expect(nav.classList.contains('w-fit')).toBe(true);
     expect(buttons.map((button) => button.textContent?.trim())).toEqual(['Upcoming', 'Paused', 'Past']);
     expect(nav.querySelector('.mat-badge-content')).toBeNull();
   });
