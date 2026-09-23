@@ -19,5 +19,6 @@ Verified on 2026-09-23 against the Categories screen, its rendered panes, and th
 
 ## Visual and assistive-technology limits
 
-- The available Chrome session redirected the Categories route to sign-in, so no screenshots of the updated authenticated screen could be captured.
-- Browser checks for Light / Dark / System appearance, measured contrast, phone and 400% reflow, 44px target dimensions, keyboard traversal, reduced motion, and manual screen-reader use remain unverified. The rendered component tests cover the workflow, accessible labels, focus movement, validation, and stale-write gating; they do not replace those manual checks.
+- After sign-in, the authenticated Categories screen was inspected in Chrome at 100% zoom in Dark and Light appearance, and System appearance (which resolved to Dark). The desktop layout showed both panes side by side. At 400% browser zoom, the panes stacked and the page scrolled vertically without visible horizontal clipping. Appearance was restored to Dark and browser zoom to 100%. A Tab check showed visible focus on the Categories navigation item.
+- The screenshots were inspected in the interactive session but could not be saved as PNG files: macOS `screencapture` failed both inside and outside the sandbox.
+- Measured contrast, exact rendered target dimensions, a phone-sized viewport, full keyboard traversal, reduced-motion behavior, and manual screen-reader use remain unverified. The rendered component tests cover the workflow, accessible labels, focus movement, validation, and stale-write gating; they do not replace those manual checks.
