@@ -54,7 +54,12 @@
         </h1>
         <p class="mt-2 flex flex-wrap items-baseline gap-x-1 text-sm font-medium">
           <span class="text-secondary">New to Pitaka?</span>
-          <a routerLink="/auth/sign-up">Sign up</a>
+          <a
+            class="underline underline-offset-4"
+            routerLink="/auth/sign-up"
+          >
+            Sign up
+          </a>
         </p>
       </header>
 
@@ -155,7 +160,7 @@
           </mat-form-field>
 
           <a
-            class="-mt-2 self-end text-sm font-semibold"
+            class="-mt-2 self-end text-sm font-semibold underline underline-offset-4"
             routerLink="/auth/forgot-password"
           >
             Forgot password?
