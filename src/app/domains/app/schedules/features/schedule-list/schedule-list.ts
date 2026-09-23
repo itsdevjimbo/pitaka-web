@@ -9,6 +9,7 @@ import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { Schedule, ScheduleStatus, SchedulesService } from '../..';
 import { ScheduleLifecycleCoordinator, ScheduleLifecycleEvent } from '../../data/schedule-lifecycle-coordinator';
+import { ScheduleWriteFreshness } from '../../data/schedule-write';
 import { EditScheduleDialog } from '../../ui/edit-schedule/edit-schedule-dialog';
 import { ExtendScheduleDialog } from '../../ui/extend-schedule/extend-schedule-dialog';
 import { NewScheduleDialog } from '../../ui/new-schedule/new-schedule-dialog';
@@ -45,6 +46,7 @@ export default class ScheduleList {
   private readonly accountsService = inject(AccountsService);
   private readonly categoriesService = inject(CategoriesService);
   private readonly lifecycleCoordinator = inject(ScheduleLifecycleCoordinator);
+  private readonly writeFreshness = inject(ScheduleWriteFreshness);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialog = inject(MatDialog);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -122,6 +124,11 @@ export default class ScheduleList {
     this.lifecycleCoordinator.events
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((event) => this.onLifecycleEvent(event));
+    this.writeFreshness.uncertain.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.stale.set(true);
+      this.savedStale.set(false);
+      this.uncertainWrite.set(true);
+    });
     this.load();
   }
 

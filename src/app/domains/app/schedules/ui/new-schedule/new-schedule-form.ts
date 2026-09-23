@@ -23,7 +23,7 @@ import {
   SchedulesService,
 } from '../..';
 import { addCalendarDays, compareCalendarDates, formatCalendarDate } from '../../data/schedule-calendar';
-import { SCHEDULE_WRITE_TIMEOUT_MS } from '../../data/schedule-write';
+import { SCHEDULE_WRITE_TIMEOUT_MS, ScheduleWriteFreshness } from '../../data/schedule-write';
 
 type NewScheduleModel = {
   name: string;
@@ -59,6 +59,7 @@ export class NewScheduleForm {
   private readonly accountsService = inject(AccountsService);
   private readonly categoriesService = inject(CategoriesService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly writeFreshness = inject(ScheduleWriteFreshness);
 
   readonly created = output<Schedule>();
   readonly cancelled = output<void>();
@@ -194,6 +195,7 @@ export class NewScheduleForm {
         } catch (error) {
           if (error instanceof TimeoutError) {
             this.outcomeUncertain.set(true);
+            this.writeFreshness.reportUncertain();
             return undefined;
           }
           if (isUnattributedConflict(error)) {

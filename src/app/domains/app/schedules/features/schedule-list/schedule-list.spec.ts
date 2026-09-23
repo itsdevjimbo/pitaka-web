@@ -254,7 +254,7 @@ describe('ScheduleList', () => {
 
     it('uses the approved confirmation text and cancellation sends no write', async () => {
       const setStatus = vi.fn(() => of(ALL[0]));
-      const { fixture, dialog, dialogText } = setup(() => of(ALL), {
+      const { fixture, dialogText } = setup(() => of(ALL), {
         setStatus: setStatus as SchedulesService['setStatus'],
       });
 
@@ -1499,7 +1499,7 @@ describe('ScheduleList', () => {
     it('releases a timed-out create with refresh-before-retry guidance', async () => {
       const pending = new Subject<Schedule>();
       const create = vi.fn((_value: NewSchedule) => pending.asObservable());
-      const { fixture, dialogText } = setup(() => of(ALL), {
+      const { fixture, dialog, dialogText } = setup(() => of(ALL), {
         create: create as SchedulesService['create'],
       });
 
@@ -1515,6 +1515,21 @@ describe('ScheduleList', () => {
         expect(dialogText()).toContain('couldn’t confirm whether this Schedule was created');
         expect(overlayButton('Create Schedule').disabled).toBe(true);
         expect(create).toHaveBeenCalledOnce();
+
+        overlayButton('Cancel').click();
+        fixture.detectChanges();
+        overlayButton('Discard changes').click();
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        expect(dialog()).toBeNull();
+        const pageCreate = Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+        ).find((button) => (button.textContent ?? '').includes('Create Schedule'))!;
+        expect(pageCreate.disabled).toBe(true);
+
+        click(fixture, 'Retry');
+        expect(pageCreate.disabled).toBe(false);
       } finally {
         vi.useRealTimers();
       }

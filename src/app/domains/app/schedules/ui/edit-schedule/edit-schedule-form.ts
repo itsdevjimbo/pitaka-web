@@ -25,7 +25,7 @@ import {
   formatCalendarDate,
   nextEligibleGeneration,
 } from '../../data/schedule-calendar';
-import { SCHEDULE_WRITE_TIMEOUT_MS } from '../../data/schedule-write';
+import { SCHEDULE_WRITE_TIMEOUT_MS, ScheduleWriteFreshness } from '../../data/schedule-write';
 import { ScheduleRowData } from '../schedule-row/schedule-row';
 
 type EditScheduleModel = {
@@ -52,6 +52,7 @@ type EditScheduleModel = {
 export class EditScheduleForm {
   private readonly schedulesService = inject(SchedulesService);
   private readonly categoriesService = inject(CategoriesService);
+  private readonly writeFreshness = inject(ScheduleWriteFreshness);
 
   readonly row = input.required<ScheduleRowData>();
   readonly saved = output<Schedule>();
@@ -166,6 +167,7 @@ export class EditScheduleForm {
         } catch (error) {
           if (error instanceof TimeoutError) {
             this.outcomeUncertain.set(true);
+            this.writeFreshness.reportUncertain();
             return undefined;
           }
           if (isUnattributedConflict(error)) {
