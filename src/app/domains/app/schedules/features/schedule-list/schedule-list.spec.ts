@@ -254,7 +254,7 @@ describe('ScheduleList', () => {
 
     it('uses the approved confirmation text and cancellation sends no write', async () => {
       const setStatus = vi.fn(() => of(ALL[0]));
-      const { fixture, dialogText } = setup(() => of(ALL), {
+      const { fixture, dialog, dialogText } = setup(() => of(ALL), {
         setStatus: setStatus as SchedulesService['setStatus'],
       });
 

@@ -9,7 +9,6 @@ describe('ScheduleLifecycleNav', () => {
       providers: [{ provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } }],
     });
     const fixture = TestBed.createComponent(ScheduleLifecycleNav);
-    fixture.componentRef.setInput('counts', { upcoming: 2, paused: 1, past: 3 });
     fixture.componentRef.setInput('view', 'upcoming');
     fixture.detectChanges();
     return fixture;
