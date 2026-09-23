@@ -59,7 +59,15 @@
       </mat-form-field>
     }
 
-    @if (errorMessage(); as message) {
+    @if (outcomeUncertain()) {
+      <p
+        class="rounded-2xl bg-warning-container px-3 py-2 text-sm text-warning"
+        role="alert"
+      >
+        We couldn’t confirm whether this Schedule was extended. Close this editor and refresh Schedules before trying
+        again.
+      </p>
+    } @else if (errorMessage(); as message) {
       <p
         class="rounded-2xl bg-danger-container px-3 py-2 text-sm text-danger"
         role="alert"
@@ -80,7 +88,7 @@
       <button
         matButton="filled"
         type="submit"
-        [disabled]="submitting()"
+        [disabled]="submitting() || outcomeUncertain()"
       >
         {{ submitting() ? 'Extending…' : 'Extend and resume' }}
       </button>

@@ -8,13 +8,13 @@ Verified on 2026-09-23 against the production Schedule list, row, lifecycle, and
 - Compact ledger rows keep long names, complete tabular peso amounts, direction, Frequency, Account, Category, inclusive Last generation date, generated Transaction history, restrictions, and actions readable as one responsive unit.
 - The screen and editors use the shared Pocket Pop surface, text, direction, warning, danger, focus, typography, loading, initial-error, and stale-state roles. Legacy emerald, rose, amber, red, and neutral screen colors were removed from the changed Schedule templates.
 - Existing pause, resume, extend, edit, delete, history, retired-Account, retired-Category, conflict, and stale-data eligibility is preserved. A write followed by a failed reread retains the prior ledger, says **Saved, but couldn’t refresh**, and keeps freshness-dependent actions unavailable until Retry succeeds.
-- Create, Edit, and Extend keep invalid Submit available, reveal validation and focus the first invalid field. Changed editors require Keep editing / Discard changes, pending editors cannot be dismissed, and a 15-second uncertain write releases the editor with refresh-before-retry guidance.
+- Create, Edit, and Extend keep invalid Submit available, reveal validation and focus the first invalid field. Changed editors require Keep editing / Discard changes, pending editors cannot be dismissed, and a 15-second uncertain write releases the editor with refresh-before-retry guidance while preventing a replay until fresh data is read. Lifecycle and deletion writes use the same timeout boundary.
 - Lifecycle and deletion confirmations start on the safe action. Successful deletion moves focus to the next Schedule or the page heading. Successful actions are announced in a status message while their server-authoritative reread runs.
 
 ## Automated verification
 
-- Focused Schedule suites: 108 tests passed across five files.
-- Full application suite: 1,047 tests passed across 79 files.
+- Focused Schedule suites: 109 tests passed across five files.
+- Full application suite: 1,048 tests passed across 79 files.
 - `npm run build`, `npm run lint`, and `npm run check:format`: passed.
 - `npm run check:changed -- --base origin/main`: passed.
 

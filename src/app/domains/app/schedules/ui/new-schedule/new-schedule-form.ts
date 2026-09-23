@@ -23,6 +23,7 @@ import {
   SchedulesService,
 } from '../..';
 import { addCalendarDays, compareCalendarDates, formatCalendarDate } from '../../data/schedule-calendar';
+import { SCHEDULE_WRITE_TIMEOUT_MS } from '../../data/schedule-write';
 
 type NewScheduleModel = {
   name: string;
@@ -47,9 +48,6 @@ const FREQUENCY_OPTIONS = (Object.keys(SCHEDULE_FREQUENCIES) as ScheduleFrequenc
 }));
 
 const COULD_NOT_CREATE = 'Something went wrong creating your Schedule. Please try again.';
-const CREATE_TIMEOUT_MS = 15_000;
-const CREATE_UNCERTAIN =
-  'We couldn’t confirm whether this Schedule was created. Refresh Schedules before trying again.';
 
 @Component({
   selector: 'schedules-new-schedule-form',
@@ -74,6 +72,7 @@ export class NewScheduleForm {
   protected readonly loadingOptions = signal(true);
   protected readonly optionsFailed = signal(false);
   protected readonly submitting = signal(false);
+  protected readonly outcomeUncertain = signal(false);
   protected readonly eligibilityRejected = signal(false);
 
   protected readonly model = signal<NewScheduleModel>({
@@ -188,13 +187,13 @@ export class NewScheduleForm {
                 firstGeneration: value.firstGeneration as Date,
                 lastGeneration: value.lastGeneration,
               } satisfies NewSchedule)
-              .pipe(timeout({ first: CREATE_TIMEOUT_MS })),
+              .pipe(timeout({ first: SCHEDULE_WRITE_TIMEOUT_MS })),
           );
           this.created.emit(created);
           return undefined;
         } catch (error) {
           if (error instanceof TimeoutError) {
-            this.errorMessage.set(CREATE_UNCERTAIN);
+            this.outcomeUncertain.set(true);
             return undefined;
           }
           if (isUnattributedConflict(error)) {

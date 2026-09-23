@@ -43,6 +43,7 @@ export class ScheduleLifecycleDialog {
   protected readonly action = ACTION[this.data.action];
 
   protected readonly submitting = signal(false);
+  protected readonly outcomeUncertain = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
   private readonly cancelButton = viewChild('cancelButton', { read: ElementRef<HTMLButtonElement> });
 
@@ -55,7 +56,7 @@ export class ScheduleLifecycleDialog {
   }
 
   protected confirm(): void {
-    if (this.submitting()) {
+    if (this.submitting() || this.outcomeUncertain()) {
       return;
     }
     this.submitting.set(true);
@@ -69,6 +70,7 @@ export class ScheduleLifecycleDialog {
           this.dialogRef.close();
           return;
         }
+        this.outcomeUncertain.set(failure.kind === 'uncertain');
         this.errorMessage.set(failure.message);
       },
     });

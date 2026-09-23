@@ -49,6 +49,7 @@ export default class ScheduleList {
   private readonly dialog = inject(MatDialog);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private focusAfterDelete: number | 'heading' | null = null;
+  private actionMessageTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly schedules = signal<readonly Schedule[] | null>(null);
   private readonly accounts = signal<readonly Account[]>([]);
@@ -57,11 +58,13 @@ export default class ScheduleList {
   protected readonly refreshing = signal(false);
   protected readonly loadFailed = signal(false);
   protected readonly actionMessage = signal<string | null>(null);
+  protected readonly actionMessageIsSuccess = signal(false);
   protected readonly busyScheduleIds = signal<ReadonlySet<number>>(new Set());
 
   /** True after a refresh failure until all three collections refresh successfully. */
   protected readonly stale = signal(false);
   protected readonly savedStale = signal(false);
+  protected readonly uncertainWrite = signal(false);
   protected readonly selectedView = signal<ScheduleView>('upcoming');
 
   protected readonly rows = computed<readonly ScheduleRowData[]>(() => {
@@ -111,6 +114,11 @@ export default class ScheduleList {
   protected readonly empty = computed(() => this.schedules()?.length === 0);
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      if (this.actionMessageTimer !== null) {
+        clearTimeout(this.actionMessageTimer);
+      }
+    });
     this.lifecycleCoordinator.events
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((event) => this.onLifecycleEvent(event));
@@ -121,6 +129,7 @@ export default class ScheduleList {
     const hasCurrentData = this.schedules() !== null;
     if (hasCurrentData) {
       this.refreshing.set(true);
+      this.uncertainWrite.set(false);
     } else {
       this.loading.set(true);
     }
@@ -139,14 +148,16 @@ export default class ScheduleList {
           this.categories.set(categories);
           this.stale.set(false);
           this.savedStale.set(false);
+          this.uncertainWrite.set(false);
           this.loading.set(false);
           this.refreshing.set(false);
           if (conflict) {
+            this.clearActionMessage();
             const current = schedules.find((schedule) => schedule.id === conflict.scheduleId);
             const state = current ? ` It is currently ${current.status}.` : '';
             this.actionMessage.set(`${conflict.message}${state} Review the refreshed Schedule before trying again.`);
           } else if (reason === 'ordinary') {
-            this.actionMessage.set(null);
+            this.clearActionMessage();
           }
           this.restoreDeleteFocus();
         },
@@ -173,7 +184,7 @@ export default class ScheduleList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((created) => {
         if (created) {
-          this.actionMessage.set(`${created.name} created.`);
+          this.showActionMessage(`${created.name} created.`);
           this.load(undefined, 'after-write');
         }
       });
@@ -189,7 +200,7 @@ export default class ScheduleList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
         if (saved) {
-          this.actionMessage.set(`${saved.name} saved.`);
+          this.showActionMessage(`${saved.name} saved.`);
           this.load(undefined, 'after-write');
         }
       });
@@ -199,7 +210,7 @@ export default class ScheduleList {
     if (this.stale() || this.refreshing() || row.accountRetired || row.schedule.status !== 'completed') {
       return;
     }
-    this.actionMessage.set(null);
+    this.clearActionMessage();
     this.dialog.open<ExtendScheduleDialog, ScheduleRowData>(ExtendScheduleDialog, { data: row });
   }
 
@@ -207,7 +218,7 @@ export default class ScheduleList {
     if (this.stale() || this.refreshing() || (action === 'resume' && row.accountRetired)) {
       return;
     }
-    this.actionMessage.set(null);
+    this.clearActionMessage();
     this.dialog.open<ScheduleLifecycleDialog, ScheduleLifecycleDialogData>(ScheduleLifecycleDialog, {
       data: {
         schedule: row.schedule,
@@ -219,7 +230,7 @@ export default class ScheduleList {
   private onLifecycleEvent(event: ScheduleLifecycleEvent): void {
     if (event.kind === 'started') {
       this.busyScheduleIds.update((ids) => new Set(ids).add(event.scheduleId));
-      this.actionMessage.set(null);
+      this.clearActionMessage();
       return;
     }
     this.busyScheduleIds.update((ids) => {
@@ -229,11 +240,17 @@ export default class ScheduleList {
     });
     if (event.kind === 'updated') {
       this.selectedView.set(STATUS_VIEW[event.schedule.status]);
-      this.actionMessage.set(`${event.schedule.name} updated.`);
+      this.showActionMessage(`${event.schedule.name} updated.`);
       this.load(undefined, 'after-write');
     } else if (event.kind === 'conflict') {
       this.load(event);
     } else {
+      this.clearActionMessage();
+      if (event.kind === 'uncertain') {
+        this.stale.set(true);
+        this.savedStale.set(false);
+        this.uncertainWrite.set(true);
+      }
       this.actionMessage.set(event.message);
     }
   }
@@ -242,12 +259,13 @@ export default class ScheduleList {
     const rows = this.visibleRows();
     const index = rows.findIndex((candidate) => candidate.schedule.id === row.schedule.id);
     this.focusAfterDelete = rows[index + 1]?.schedule.id ?? rows[index - 1]?.schedule.id ?? 'heading';
-    this.actionMessage.set(`${row.schedule.name} deleted.`);
+    this.restoreDeleteFocus();
+    this.showActionMessage(`${row.schedule.name} deleted.`);
     this.load(undefined, 'after-write');
   }
 
   protected onDeleteConflict(conflict: { scheduleId: number; message: string }): void {
-    this.actionMessage.set(null);
+    this.clearActionMessage();
     this.load(conflict);
   }
 
@@ -261,5 +279,24 @@ export default class ScheduleList {
       const selector = target === 'heading' ? 'h1' : `[data-schedule-id="${target}"] button`;
       this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus();
     });
+  }
+
+  private showActionMessage(message: string): void {
+    this.clearActionMessage();
+    this.actionMessageIsSuccess.set(true);
+    this.actionMessage.set(message);
+    this.actionMessageTimer = setTimeout(() => {
+      this.actionMessage.set(null);
+      this.actionMessageTimer = null;
+    }, 5_000);
+  }
+
+  private clearActionMessage(): void {
+    if (this.actionMessageTimer !== null) {
+      clearTimeout(this.actionMessageTimer);
+      this.actionMessageTimer = null;
+    }
+    this.actionMessageIsSuccess.set(false);
+    this.actionMessage.set(null);
   }
 }

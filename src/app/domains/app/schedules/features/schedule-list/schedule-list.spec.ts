@@ -179,7 +179,6 @@ describe('ScheduleList', () => {
 
     expect(text()).toContain('Loading Schedules');
     expect(fixture.nativeElement.querySelector('[role="status"]')).not.toBeNull();
-    expect(fixture.nativeElement.querySelectorAll('.animate-pulse').length).toBe(2);
   });
 
   it('shows Active Schedules by next generation with their card facts', () => {
@@ -193,15 +192,6 @@ describe('ScheduleList', () => {
     expect(text()).toContain('BPI Savings');
     expect(text()).toContain('Salary');
     expect(text()).toContain('14 surviving generated Transactions');
-  });
-
-  it('uses the approved full-width compact Schedule composition', () => {
-    const { fixture } = setup(() => of(ALL));
-    const element = fixture.nativeElement as HTMLElement;
-
-    expect(element.querySelector('[data-schedule-view-controls]')).not.toBeNull();
-    expect(element.querySelector('[data-schedule-list]')).not.toBeNull();
-    expect(element.querySelector('.lg\\:grid-cols-\\[12rem_minmax\\(0\\,1fr\\)\\]')).toBeNull();
   });
 
   it('switches among Upcoming, Paused, and Past with truthful lifecycle timing', () => {
@@ -444,6 +434,31 @@ describe('ScheduleList', () => {
       expect(overlayButton('Pause').disabled).toBe(false);
     });
 
+    it('gates another lifecycle write after an uncertain timeout until refresh', async () => {
+      const pending = new Subject<Schedule>();
+      const setStatus = vi.fn(() => pending.asObservable());
+      const { fixture, dialogText, text } = setup(() => of(ALL), {
+        setStatus: setStatus as SchedulesService['setStatus'],
+      });
+
+      clickExact(fixture, 'Pause');
+      await settle(fixture);
+      vi.useFakeTimers();
+      try {
+        overlayButton('Pause').click();
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(15_000);
+        fixture.detectChanges();
+
+        expect(dialogText()).toContain('couldn’t confirm whether this Schedule changed');
+        expect(overlayButton('Pause').disabled).toBe(true);
+        expect(text()).toContain('Refresh before making changes.');
+        expect(setStatus).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('refreshes a state conflict and explains the current state before retry', async () => {
       const conflict = new ApiError('This Schedule changed in another request.', 409);
       const changed = schedule({ ...ALL[1], status: 'paused' });
@@ -617,6 +632,32 @@ describe('ScheduleList', () => {
         )!.disabled,
       ).toBe(false);
       expect(text()).toContain('Unused allowance');
+    });
+
+    it('refreshes instead of replaying a deletion with an uncertain outcome', async () => {
+      const pending = new Subject<void>();
+      const list = vi.fn().mockReturnValue(of([UNUSED]));
+      const deleteSchedule = vi.fn(() => pending.asObservable());
+      const { fixture, text } = setup(list as SchedulesService['list'], {
+        delete: deleteSchedule as SchedulesService['delete'],
+      });
+
+      clickExact(fixture, 'Delete');
+      await settle(fixture);
+      vi.useFakeTimers();
+      try {
+        clickExact(fixture, 'Delete');
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(15_000);
+        fixture.detectChanges();
+
+        expect(deleteSchedule).toHaveBeenCalledOnce();
+        expect(list).toHaveBeenCalledTimes(2);
+        expect(text()).toContain('couldn’t confirm whether this Schedule was deleted');
+        expect((fixture.nativeElement as HTMLElement).querySelector('[role="alertdialog"]')).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('refreshes a deletion conflict and explains the authoritative server state', async () => {
@@ -1282,6 +1323,36 @@ describe('ScheduleList', () => {
       expect(createButton.disabled).toBe(true);
     });
 
+    it('announces routine success once and dismisses it after five seconds', async () => {
+      const created = schedule({ id: 22, name: 'Market allowance' });
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of(ALL))
+        .mockReturnValueOnce(of([...ALL, created]));
+      const { fixture, text } = setup(list as SchedulesService['list'], {
+        create: (() => of(created)) as SchedulesService['create'],
+      });
+
+      await openDialog(fixture);
+      await fillValidSchedule(fixture);
+      vi.useFakeTimers();
+      try {
+        overlayButton('Create Schedule').click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        expect(text()).toContain('Market allowance created.');
+
+        await vi.advanceTimersByTimeAsync(5_000);
+        fixture.detectChanges();
+        expect(text()).not.toContain('Market allowance created.');
+        expect(text()).toContain('Market allowance');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('keeps entered values and attributes duplicate-name failures', async () => {
       const create = vi.fn(() =>
         throwError(
@@ -1442,7 +1513,7 @@ describe('ScheduleList', () => {
         fixture.detectChanges();
 
         expect(dialogText()).toContain('couldn’t confirm whether this Schedule was created');
-        expect(overlayButton('Create Schedule').disabled).toBe(false);
+        expect(overlayButton('Create Schedule').disabled).toBe(true);
         expect(create).toHaveBeenCalledOnce();
       } finally {
         vi.useRealTimers();

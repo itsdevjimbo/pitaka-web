@@ -25,6 +25,7 @@ import {
   formatCalendarDate,
   nextEligibleGeneration,
 } from '../../data/schedule-calendar';
+import { SCHEDULE_WRITE_TIMEOUT_MS } from '../../data/schedule-write';
 import { ScheduleRowData } from '../schedule-row/schedule-row';
 
 type EditScheduleModel = {
@@ -34,9 +35,6 @@ type EditScheduleModel = {
   description: string;
   lastGeneration: Date | null;
 };
-
-const SAVE_TIMEOUT_MS = 15_000;
-const SAVE_UNCERTAIN = 'We couldn’t confirm whether these changes were saved. Refresh Schedules before trying again.';
 
 @Component({
   selector: 'schedules-edit-schedule-form',
@@ -66,6 +64,7 @@ export class EditScheduleForm {
   protected readonly loadingOptions = signal(true);
   protected readonly optionsFailed = signal(false);
   protected readonly submitting = signal(false);
+  protected readonly outcomeUncertain = signal(false);
   protected readonly eligibilityRejected = signal(false);
   protected readonly conflictRefreshFailed = signal(false);
 
@@ -160,13 +159,13 @@ export class EditScheduleForm {
                 description: value.description.trim() || null,
                 lastGeneration: value.lastGeneration,
               } satisfies ScheduleUpdate)
-              .pipe(timeout({ first: SAVE_TIMEOUT_MS })),
+              .pipe(timeout({ first: SCHEDULE_WRITE_TIMEOUT_MS })),
           );
           this.saved.emit(updated);
           return undefined;
         } catch (error) {
           if (error instanceof TimeoutError) {
-            this.errorMessage.set(SAVE_UNCERTAIN);
+            this.outcomeUncertain.set(true);
             return undefined;
           }
           if (isUnattributedConflict(error)) {

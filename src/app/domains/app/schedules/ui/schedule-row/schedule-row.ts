@@ -3,10 +3,12 @@ import { Component, DestroyRef, inject, input, output, signal, viewChild } from 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
+import { timeout, TimeoutError } from 'rxjs';
 import { PesoPipe } from '@/app/core/money';
 import { scheduleHistoryQueryParams } from '@/app/domains/app/transactions';
 import { Schedule, SCHEDULE_FREQUENCIES } from '../../data/schedule';
 import { toScheduleLifecycleFailure } from '../../data/schedule-lifecycle-coordinator';
+import { SCHEDULE_WRITE_TIMEOUT_MS } from '../../data/schedule-write';
 import { SchedulesService } from '../../data/schedules.service';
 import { ScheduleLifecycleAction } from '../schedule-lifecycle-dialog/schedule-lifecycle-dialog';
 
@@ -84,7 +86,7 @@ export class ScheduleRow {
     this.deleteError.set(null);
     this.schedulesService
       .delete(scheduleId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(timeout({ first: SCHEDULE_WRITE_TIMEOUT_MS }), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.deleting.set(false);
@@ -93,6 +95,14 @@ export class ScheduleRow {
         },
         error: (error: unknown) => {
           this.deleting.set(false);
+          if (error instanceof TimeoutError) {
+            this.confirmingDelete.set(false);
+            this.deleteConflict.emit({
+              scheduleId,
+              message: 'We couldn’t confirm whether this Schedule was deleted. Refresh Schedules before trying again.',
+            });
+            return;
+          }
           const failure = toScheduleLifecycleFailure(error);
           if (failure.kind === 'conflict') {
             this.confirmingDelete.set(false);

@@ -23,7 +23,7 @@
     <button
       matButton="filled"
       type="button"
-      [disabled]="submitting()"
+      [disabled]="submitting() || outcomeUncertain()"
       (click)="confirm()"
     >
       {{ submitting() ? action.pendingLabel : action.verb }}

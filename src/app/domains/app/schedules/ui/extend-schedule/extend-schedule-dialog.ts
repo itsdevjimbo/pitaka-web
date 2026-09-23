@@ -6,7 +6,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { firstValueFrom, timeout, TimeoutError } from 'rxjs';
+import { firstValueFrom, TimeoutError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { DialogShell } from '@/app/core/dialog';
 import { focusFirstInvalidField, partitionServerError } from '@/app/core/forms';
@@ -17,10 +17,6 @@ import { ScheduleRowData } from '../schedule-row/schedule-row';
 type ExtendScheduleModel = {
   lastGeneration: Date | null;
 };
-
-const EXTEND_TIMEOUT_MS = 15_000;
-const EXTEND_UNCERTAIN =
-  'We couldn’t confirm whether this Schedule was extended. Refresh Schedules before trying again.';
 
 /** Chooses a finite or indefinite continuation and submits it atomically. */
 @Component({
@@ -38,6 +34,7 @@ export class ExtendScheduleDialog {
   protected readonly indefinite = signal(false);
   protected readonly model = linkedSignal<ExtendScheduleModel>(() => ({ lastGeneration: this.minimumEnd }));
   protected readonly submitting = signal(false);
+  protected readonly outcomeUncertain = signal(false);
   protected readonly dirty = computed(
     () => this.indefinite() || this.model().lastGeneration?.getTime() !== this.minimumEnd.getTime(),
   );
@@ -82,14 +79,12 @@ export class ExtendScheduleDialog {
     this.submitting.set(true);
     this.errorMessage.set(null);
     try {
-      await firstValueFrom(
-        this.coordinator.extend(this.row.schedule.id, lastGeneration).pipe(timeout({ first: EXTEND_TIMEOUT_MS })),
-      );
+      await firstValueFrom(this.coordinator.extend(this.row.schedule.id, lastGeneration));
       this.dialogRef.close();
       return undefined;
     } catch (error) {
       if (error instanceof TimeoutError) {
-        this.errorMessage.set(EXTEND_UNCERTAIN);
+        this.outcomeUncertain.set(true);
         return undefined;
       }
       if (error instanceof ApiError && error.status === 409) {

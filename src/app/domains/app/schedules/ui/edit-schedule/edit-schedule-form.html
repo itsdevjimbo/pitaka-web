@@ -2,7 +2,14 @@
   class="grid gap-x-4 gap-y-3 sm:grid-cols-2"
   (submit)="save($event)"
 >
-  @if (errorMessage(); as message) {
+  @if (outcomeUncertain()) {
+    <div
+      class="rounded-2xl bg-warning-container px-4 py-3 text-sm font-medium text-warning sm:col-span-2"
+      role="alert"
+    >
+      We couldn’t confirm whether these changes were saved. Close this editor and refresh Schedules before trying again.
+    </div>
+  } @else if (errorMessage(); as message) {
     <div
       class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger sm:col-span-2"
       role="alert"
@@ -173,7 +180,14 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="submitting() || loadingOptions() || optionsFailed() || eligibilityRejected() || !canRetry()"
+      [disabled]="
+        submitting() ||
+        outcomeUncertain() ||
+        loadingOptions() ||
+        optionsFailed() ||
+        eligibilityRejected() ||
+        !canRetry()
+      "
     >
       {{ submitting() ? 'Saving…' : completesSchedule() ? 'Save and complete' : 'Save changes' }}
     </button>

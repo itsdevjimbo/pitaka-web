@@ -36,7 +36,11 @@
 
   @if (actionMessage(); as message) {
     <section
-      class="rounded-2xl bg-warning-container px-4 py-3 text-sm text-warning"
+      class="rounded-2xl px-4 py-3 text-sm"
+      [class.bg-soft]="actionMessageIsSuccess()"
+      [class.text-text]="actionMessageIsSuccess()"
+      [class.bg-warning-container]="!actionMessageIsSuccess()"
+      [class.text-warning]="!actionMessageIsSuccess()"
       role="status"
     >
       {{ message }}
@@ -58,7 +62,11 @@
     @if (stale()) {
       <app-resource-state
         [kind]="savedStale() ? 'saved-stale' : 'stale'"
-        message="Couldn’t refresh. These Schedules may be out of date"
+        [message]="
+          uncertainWrite()
+            ? 'Schedule information may be out of date. Refresh before making changes.'
+            : 'Couldn’t refresh. These Schedules may be out of date'
+        "
         (retry)="load()"
       />
     }
@@ -87,10 +95,7 @@
           @if (visibleRows().length === 0) {
             <schedules-empty-state [scope]="selectedView()" />
           } @else {
-            <ol
-              data-schedule-list
-              class="overflow-hidden rounded-2xl border border-divider bg-surface"
-            >
+            <ol class="overflow-hidden rounded-2xl border border-divider bg-surface">
               @for (row of visibleRows(); track row.schedule.id) {
                 <li
                   schedules-schedule-row

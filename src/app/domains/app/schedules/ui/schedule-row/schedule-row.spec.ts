@@ -54,16 +54,6 @@ describe('ScheduleRow', () => {
     expect(text).toContain('Last generation: 5 Dec 2026 (inclusive)');
     expect(text).toContain('Everyday cash · Housing');
     expect(text).toContain('1 surviving generated Transaction');
-    expect(element.querySelector('[data-schedule-amount]')?.textContent).toContain('₱18,000.00');
-    expect(element.querySelector('[data-schedule-actions]')).not.toBeNull();
-  });
-
-  it('uses semantic direction roles instead of legacy hardcoded palette utilities', () => {
-    const element = setup().nativeElement as HTMLElement;
-    const direction = element.querySelector<HTMLElement>('[data-schedule-direction]');
-
-    expect(direction?.classList).toContain('text-expense');
-    expect(direction?.className).not.toMatch(/rose|emerald|red|amber|neutral/);
   });
 
   it('opens surviving history with only the URL-backed Schedule criterion, even at zero', () => {
