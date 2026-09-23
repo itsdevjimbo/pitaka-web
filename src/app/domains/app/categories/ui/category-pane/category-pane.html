@@ -54,7 +54,7 @@
     @for (option of filters; track option.value) {
       <button
         type="button"
-        class="min-h-11 flex-1 rounded-lg px-2.5 py-1 font-medium text-secondary hover:bg-surface"
+        class="min-h-11 flex-1 cursor-pointer rounded-lg px-2.5 py-1 font-medium text-secondary hover:bg-surface"
         [class.bg-surface]="filter() === option.value"
         [class.text-text]="filter() === option.value"
         [class.shadow-sm]="filter() === option.value"
@@ -104,21 +104,21 @@
     <ul class="flex min-w-0 flex-col gap-2">
       @for (category of visible(); track category.id) {
         <li class="flex min-w-0 flex-col gap-2 rounded-xl border border-divider bg-surface p-3">
-          <div class="flex min-w-0 items-start gap-2">
-            <span class="leading-snug min-w-0 flex-auto pt-2 font-medium break-words text-text">
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="leading-snug min-w-0 flex-auto font-medium break-words text-text">
               {{ category.name }}
             </span>
 
             @if (!category.isActive) {
               <span
-                class="mt-1 inline-flex min-h-7 shrink-0 items-center rounded-full bg-soft px-2 text-xs font-semibold text-secondary"
+                class="inline-flex min-h-7 shrink-0 items-center rounded-full bg-soft px-2 text-xs font-semibold text-secondary"
               >
                 Retired
               </span>
             }
             @if (category.isDefault) {
               <span
-                class="mt-1 inline-flex min-h-7 shrink-0 items-center rounded-full bg-soft px-2 text-xs font-semibold text-secondary"
+                class="inline-flex min-h-7 shrink-0 items-center rounded-full bg-soft px-2 text-xs font-semibold text-secondary"
               >
                 Default
               </span>
