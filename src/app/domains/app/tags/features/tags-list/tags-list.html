@@ -265,9 +265,13 @@
           </button>
         </section>
       } @else {
-        <ul class="flex min-w-0 flex-col gap-2">
-          @for (tag of visible(); track tag.id) {
-            <li class="flex min-w-0 flex-col gap-3 rounded-2xl border border-divider bg-surface p-3 sm:p-4">
+        <ul class="flex min-w-0 flex-col">
+          @for (tag of visible(); track tag.id; let first = $first) {
+            <li
+              class="flex min-w-0 flex-col gap-3 py-3 sm:py-4"
+              [class.border-t]="!first"
+              [class.border-divider]="!first"
+            >
               @if (editingId() === tag.id) {
                 <form
                   novalidate
