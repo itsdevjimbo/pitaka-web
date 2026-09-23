@@ -80,23 +80,6 @@
         </div>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-2">
-        <button
-          matButton
-          [disabled]="busy()"
-          (click)="openEdit(currentGoal)"
-        >
-          <mat-icon svgIcon="pencil" />
-          Edit goal
-        </button>
-        @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
-          <button
-            matButton="filled"
-            [disabled]="stale() || busy()"
-            (click)="setStatus('Completed')"
-          >
-            Mark complete
-          </button>
-        }
         @if (currentGoal.status === 'Active') {
           <button
             matButton="filled"
@@ -116,6 +99,23 @@
           <mat-icon svgIcon="ellipsis-vertical" />
         </button>
         <mat-menu #goalMenu>
+          <button
+            mat-menu-item
+            (click)="openEdit(currentGoal)"
+          >
+            <mat-icon svgIcon="pencil" />
+            <span>Edit goal</span>
+          </button>
+          @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
+            <button
+              mat-menu-item
+              [disabled]="stale() || busy()"
+              (click)="setStatus('Completed')"
+            >
+              <mat-icon svgIcon="circle-check" />
+              <span>Mark complete</span>
+            </button>
+          }
           @if (currentGoal.status === 'Active') {
             <button
               mat-menu-item
@@ -146,7 +146,7 @@
 
     <div
       data-goal-workspace
-      class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start"
+      class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:items-start"
     >
       <section
         data-goal-summary

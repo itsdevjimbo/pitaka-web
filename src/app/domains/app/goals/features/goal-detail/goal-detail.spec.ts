@@ -97,6 +97,27 @@ describe('GoalDetail', () => {
     fixture.detectChanges();
   }
 
+  async function openGoalMenu(fixture: ComponentFixture<GoalDetail>) {
+    const action = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Goal actions"]',
+    );
+    if (!action) {
+      throw new Error('No Goal actions button');
+    }
+    action.click();
+    await settle(fixture);
+  }
+
+  function goalMenuButton(label: string): HTMLButtonElement {
+    const button = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+      (candidate) => candidate.textContent?.trim() === label,
+    );
+    if (!button) {
+      throw new Error(`No ${label} Goal menu item`);
+    }
+    return button;
+  }
+
   async function askToDeleteContribution(fixture: ComponentFixture<GoalDetail>) {
     const action = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
       '[aria-label="Contribution actions"]',
@@ -165,6 +186,22 @@ describe('GoalDetail', () => {
     );
     expect(body.indexOf(formatPeso(900))).toBeLessThan(body.indexOf(formatPeso(800)));
     expect(body.indexOf(formatPeso(800))).toBeLessThan(body.indexOf(formatPeso(500)));
+  });
+
+  it('keeps editing and eligible completion in the Goal actions menu', async () => {
+    const { fixture } = setup({ get: () => of({ ...GOAL, currentAmount: GOAL.targetAmount }) });
+    const header = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[data-goal-page-header]');
+    if (!header) {
+      throw new Error('No Goal page header');
+    }
+
+    expect(header.textContent).not.toContain('Edit goal');
+    expect(header.textContent).not.toContain('Mark complete');
+
+    await openGoalMenu(fixture);
+
+    expect(goalMenuButton('Edit goal')).toBeTruthy();
+    expect(goalMenuButton('Mark complete')).toBeTruthy();
   });
 
   it('identifies a Linked Contribution by its source income Transaction and Account', () => {
@@ -365,21 +402,24 @@ describe('GoalDetail', () => {
     await confirmContributionDelete(fixture);
 
     expect(text()).toContain('Saved, but couldn’t refresh');
-    const staleButtons = Array.from(
+    await openGoalMenu(fixture);
+    expect(goalMenuButton('Mark complete').disabled).toBe(true);
+    const staleAdd = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
-    );
-    expect(staleButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(true);
-    expect(staleButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(true);
+    ).find((button) => button.textContent?.includes('Add contribution'));
+    expect(staleAdd?.disabled).toBe(true);
 
-    staleButtons.find((button) => button.textContent?.includes('Retry'))?.click();
+    Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Retry'))
+      ?.click();
     await settle(fixture);
 
     expect(text()).not.toContain('Saved, but couldn’t refresh');
-    const freshButtons = Array.from(
+    expect(goalMenuButton('Mark complete').disabled).toBe(false);
+    const freshAdd = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
-    );
-    expect(freshButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(false);
-    expect(freshButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(false);
+    ).find((button) => button.textContent?.includes('Add contribution'));
+    expect(freshAdd?.disabled).toBe(false);
   });
 
   it('replaces a Goal that becomes unavailable during refresh with a return to Goals', async () => {
@@ -389,11 +429,9 @@ describe('GoalDetail', () => {
       .mockReturnValueOnce(of(reached))
       .mockReturnValueOnce(throwError(() => new ApiError('This Goal is no longer available.', 404)));
     const { fixture, text } = setup({ get, setStatus: () => of({ ...reached, status: 'Completed' }) });
-    const complete = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
-    ).find((button) => button.textContent?.includes('Mark complete'));
+    await openGoalMenu(fixture);
 
-    complete?.click();
+    goalMenuButton('Mark complete').click();
     await settle(fixture);
 
     expect(text()).toContain('This Goal is no longer available.');
@@ -401,20 +439,22 @@ describe('GoalDetail', () => {
     expect(text()).not.toContain('Edit goal');
   });
 
-  it('prevents duplicate lifecycle submissions while a status write is pending', () => {
+  it('prevents duplicate lifecycle submissions while a status write is pending', async () => {
     const pending = new Subject<Goal>();
     const setStatus = vi.fn(() => pending.asObservable());
     const { fixture } = setup({ get: () => of({ ...GOAL, currentAmount: GOAL.targetAmount }), setStatus });
-    const complete = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
-    ).find((button) => button.textContent?.includes('Mark complete'));
+    await openGoalMenu(fixture);
 
-    complete?.click();
+    goalMenuButton('Mark complete').click();
     fixture.detectChanges();
-    complete?.click();
+    const action = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Goal actions"]',
+    );
+    action?.click();
+    await settle(fixture);
 
     expect(setStatus).toHaveBeenCalledOnce();
-    expect(complete?.disabled).toBe(true);
+    expect(action?.disabled).toBe(true);
   });
 
   it('short-circuits an invalid id to not-found without making requests', () => {
