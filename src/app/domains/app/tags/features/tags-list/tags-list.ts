@@ -29,11 +29,11 @@ import { MatMenuModule } from '@angular/material/menu';
 import { NavigationStart, Router } from '@angular/router';
 import { filter, firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { focusFirstInvalidField, partitionServerError } from '@/app/core/forms';
+import { partitionServerError } from '@/app/core/forms';
 import { ResourceState, RowNotice } from '@/app/core/notices';
 import { SIGN_IN_REASON_PARAM, SIGN_IN_ROUTE } from '@/app/core/session';
 import { Tag } from '../../data/tag';
-import { TagUnavailableError } from '../../data/tag-errors';
+import { TagUnavailableError, TagWriteOutcomeUncertainError } from '../../data/tag-errors';
 import { TagsService } from '../../data/tags.service';
 
 /** The longest a Tag name may be — mirrors the API's `[MaxLength(255)]`. */
@@ -45,7 +45,10 @@ const READ_FAILED = 'This list may be out of date. Refresh before making another
 const CREATE_FAILED = 'Something went wrong adding the tag. Please try again.';
 const RENAME_FAILED = 'Something went wrong renaming the tag. Please try again.';
 const ACTION_FAILED = 'Something went wrong. Please try again.';
-type RefreshFailure = { message: string; writeSucceeded: boolean };
+const WRITE_UNCERTAIN = 'We couldn’t confirm whether your Tag change went through. Refresh before trying again.';
+type WriteOutcome = 'succeeded' | 'uncertain' | 'not-written';
+type RefreshFailure = { message: string; outcome: WriteOutcome };
+type FocusTarget = number | 'add' | 'heading' | 'preserve';
 type RowNoticeState = { id: number; message: string; retry: () => void };
 
 /** Manage the person's Tags: one searchable list, inline creation and renaming, and deletion. */
@@ -83,6 +86,7 @@ export default class TagsList {
   protected readonly confirmingRenameDiscard = signal(false);
   protected readonly confirmingNavigationDiscard = signal(false);
   protected readonly navigationMessage = signal<string | null>(null);
+  protected readonly writeProgressMessage = signal<string | null>(null);
   protected readonly notice = signal<RowNoticeState | null>(null);
   protected readonly successMessage = signal<string | null>(null);
 
@@ -193,8 +197,8 @@ export default class TagsList {
   }
 
   protected retryRefresh(): void {
-    const writeSucceeded = this.refreshError()?.writeSucceeded ?? true;
-    this.readAfterWrite(writeSucceeded);
+    const outcome = this.refreshError()?.outcome ?? 'not-written';
+    this.readAfterWrite(outcome, 'preserve');
   }
 
   protected onSearch(value: string): void {
@@ -207,7 +211,6 @@ export default class TagsList {
 
   protected createTag(event: Event): void {
     event.preventDefault();
-    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.addForm, {
       action: async () => {
@@ -217,16 +220,24 @@ export default class TagsList {
 
         const name = this.addModel().name.trim();
         this.adding.set(true);
+        this.writeProgressMessage.set('Adding Tag…');
         this.navigationMessage.set(null);
+        this.staleMessage.set(null);
         this.addErrorMessage.set(null);
+        let writeUncertain = false;
 
         try {
           await firstValueFrom(this.service.create(name).pipe(takeUntilDestroyed(this.destroyRef)));
           this.addForm().reset({ name: '' });
           this.revealTag(name);
-          this.readAfterWrite(true, 'add', () => this.announceSuccess(`Tag “${name}” added.`));
+          this.readAfterWrite('succeeded', 'add', () => this.announceSuccess(`Tag “${name}” added.`));
           return undefined;
         } catch (error) {
+          if (this.isUncertainWrite(error)) {
+            this.noteUncertainWrite();
+            writeUncertain = true;
+            return undefined;
+          }
           const { boundErrors: serverErrors, bannerMessage } = partitionServerError(
             error,
             { name: this.addForm.name },
@@ -242,14 +253,17 @@ export default class TagsList {
           return serverErrors.length > 0 ? serverErrors : undefined;
         } finally {
           this.adding.set(false);
-          this.finishBlockedNavigationMessage();
+          this.writeProgressMessage.set(null);
+          if (!writeUncertain) {
+            this.finishBlockedNavigationMessage();
+          }
         }
       },
     });
 
     if (this.addForm().invalid()) {
       this.addForm().markAsTouched();
-      focusFirstInvalidField(formElement);
+      this.focusAfterRender(this.addInput);
     }
   }
 
@@ -295,7 +309,6 @@ export default class TagsList {
 
   protected renameTag(tag: Tag, event: Event): void {
     event.preventDefault();
-    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.editForm, {
       action: async () => {
@@ -311,16 +324,24 @@ export default class TagsList {
         }
 
         this.busyId.set(tag.id);
+        this.writeProgressMessage.set('Saving Tag name…');
         this.navigationMessage.set(null);
+        this.staleMessage.set(null);
         this.editErrorMessage.set(null);
+        let writeUncertain = false;
 
         try {
           await firstValueFrom(this.service.rename(tag.id, name).pipe(takeUntilDestroyed(this.destroyRef)));
           this.closeRename(false);
           this.revealTag(name);
-          this.readAfterWrite(true, tag.id, () => this.announceSuccess(`Tag “${name}” renamed.`));
+          this.readAfterWrite('succeeded', tag.id, () => this.announceSuccess(`Tag “${name}” renamed.`));
           return undefined;
         } catch (error) {
+          if (this.isUncertainWrite(error)) {
+            this.noteUncertainWrite();
+            writeUncertain = true;
+            return undefined;
+          }
           if (this.isStale(error)) {
             this.closeRename(false);
             this.goStale(tag.id);
@@ -341,14 +362,17 @@ export default class TagsList {
           return serverErrors.length > 0 ? serverErrors : undefined;
         } finally {
           this.busyId.set(null);
-          this.finishBlockedNavigationMessage();
+          this.writeProgressMessage.set(null);
+          if (!writeUncertain) {
+            this.finishBlockedNavigationMessage();
+          }
         }
       },
     });
 
     if (this.editForm().invalid()) {
       this.editForm().markAsTouched();
-      focusFirstInvalidField(formElement);
+      this.focusAfterRender(this.editInput);
     }
   }
 
@@ -373,10 +397,12 @@ export default class TagsList {
     }
     const previousVisible = this.visible();
     const deletedIndex = previousVisible.findIndex((item) => item.id === tag.id);
-    const nextFocusId = previousVisible[deletedIndex + 1]?.id ?? previousVisible[deletedIndex - 1]?.id ?? null;
+    const nextFocusId: FocusTarget =
+      previousVisible[deletedIndex + 1]?.id ?? previousVisible[deletedIndex - 1]?.id ?? 'heading';
     this.confirmingDeleteId.set(null);
     this.notice.set(null);
     this.busyId.set(tag.id);
+    this.writeProgressMessage.set('Deleting Tag…');
     this.navigationMessage.set(null);
 
     this.service
@@ -385,10 +411,16 @@ export default class TagsList {
       .subscribe({
         next: () => {
           this.busyId.set(null);
-          this.readAfterWrite(true, nextFocusId, () => this.announceSuccess(`Tag “${tag.name}” deleted.`));
+          this.writeProgressMessage.set(null);
+          this.readAfterWrite('succeeded', nextFocusId, () => this.announceSuccess(`Tag “${tag.name}” deleted.`));
         },
         error: (error: unknown) => {
           this.busyId.set(null);
+          this.writeProgressMessage.set(null);
+          if (this.isUncertainWrite(error)) {
+            this.noteUncertainWrite();
+            return;
+          }
           this.finishBlockedNavigationMessage();
           if (this.isStale(error)) {
             this.goStale(nextFocusId);
@@ -433,11 +465,7 @@ export default class TagsList {
     }
   }
 
-  private readAfterWrite(
-    writeSucceeded: boolean,
-    focusTarget: number | 'add' | null = null,
-    onSuccess?: () => void,
-  ): void {
+  private readAfterWrite(outcome: WriteOutcome, focusTarget: FocusTarget = 'preserve', onSuccess?: () => void): void {
     const version = ++this.readVersion;
     this.refreshing.set(true);
     this.refreshError.set(null);
@@ -453,6 +481,11 @@ export default class TagsList {
           this.tags.set(tags);
           this.refreshing.set(false);
           this.refreshError.set(null);
+          if (outcome === 'uncertain') {
+            this.staleMessage.set(
+              'The Tags list is current. Check whether the change is reflected before trying again.',
+            );
+          }
           onSuccess?.();
           this.focusAfterRead(focusTarget);
         },
@@ -461,22 +494,34 @@ export default class TagsList {
             return;
           }
           this.refreshing.set(false);
-          this.refreshError.set({ message: writeSucceeded ? REFRESH_FAILED : READ_FAILED, writeSucceeded });
+          const message =
+            outcome === 'succeeded' ? REFRESH_FAILED : outcome === 'uncertain' ? WRITE_UNCERTAIN : READ_FAILED;
+          this.refreshError.set({ message, outcome });
           this.focusAfterRead(focusTarget);
         },
       });
   }
 
-  private goStale(focusTagId: number | null): void {
+  private goStale(focusTagId: FocusTarget): void {
     this.notice.set(null);
     this.editingId.set(null);
     this.confirmingDeleteId.set(null);
     this.staleMessage.set('That tag is no longer there.');
-    this.readAfterWrite(false, focusTagId);
+    this.readAfterWrite('not-written', focusTagId);
+  }
+
+  private noteUncertainWrite(): void {
+    this.staleMessage.set(null);
+    this.refreshError.set({ message: WRITE_UNCERTAIN, outcome: 'uncertain' });
+    this.focusById('retry-tags-refresh');
   }
 
   private isStale(error: unknown): boolean {
     return error instanceof TagUnavailableError;
+  }
+
+  private isUncertainWrite(error: unknown): boolean {
+    return error instanceof TagWriteOutcomeUncertainError;
   }
 
   private protectNavigation(event: NavigationStart): void {
@@ -548,15 +593,16 @@ export default class TagsList {
     }
   }
 
-  private focusAfterRead(target: number | 'add' | null): void {
-    if (target === 'add') {
+  private focusAfterRead(target: FocusTarget): void {
+    if (target === 'preserve') {
+      return;
+    }
+    if (target === 'heading') {
+      this.focusById('tags-heading');
+    } else if (target === 'add') {
       this.focusAddInput();
-    } else if (target !== null) {
-      this.focusRowAction(target);
-    } else if (this.hasTags()) {
-      this.focusAfterRender(this.searchInput);
     } else {
-      this.focusAddInput();
+      this.focusRowAction(target);
     }
   }
 

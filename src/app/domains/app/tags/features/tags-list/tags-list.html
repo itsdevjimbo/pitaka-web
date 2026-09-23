@@ -1,6 +1,7 @@
 <main class="flex w-full min-w-0 flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
   <header class="flex min-w-0 flex-col gap-1">
     <h1
+      id="tags-heading"
       class="font-display text-3xl tracking-tight break-words"
       tabindex="-1"
     >
@@ -8,6 +9,17 @@
     </h1>
     <p class="text-secondary">Tags cut across Categories so related Transactions stay easy to find.</p>
   </header>
+
+  @if (writeProgressMessage(); as message) {
+    <p
+      class="sr-only"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      {{ message }}
+    </p>
+  }
 
   @if (confirmingNavigationDiscard()) {
     <section
@@ -115,7 +127,7 @@
           (click)="retryRefresh()"
         >
           <mat-icon svgIcon="refresh-cw" />
-          {{ failure.writeSucceeded ? 'Retry refresh' : 'Refresh tags' }}
+          {{ failure.outcome === 'succeeded' ? 'Retry refresh' : 'Refresh tags' }}
         </button>
       </section>
     }
@@ -390,8 +402,7 @@
                     <mat-icon
                       class="mt-3 size-5 shrink-0 animate-spin text-secondary motion-reduce:animate-none"
                       svgIcon="loader-circle"
-                      role="status"
-                      aria-label="Saving tag change…"
+                      aria-hidden="true"
                     />
                   } @else {
                     <button

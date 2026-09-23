@@ -8,7 +8,7 @@ import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { withOverlayContainer } from '@/testing/overlay';
 import { Tag } from '../../data/tag';
-import { TagUnavailableError } from '../../data/tag-errors';
+import { TagUnavailableError, TagWriteOutcomeUncertainError } from '../../data/tag-errors';
 import { TagsService } from '../../data/tags.service';
 import TagsList from './tags-list';
 
@@ -99,7 +99,7 @@ describe('TagsList', () => {
   }
 
   it('lists Tags alphabetically and wraps the full name beside a reachable row action', () => {
-    const longName = `${'a'.repeat(80)} ${'b'.repeat(80)}`;
+    const longName = `${'a'.repeat(127)} ${'b'.repeat(127)}`;
     const { root, rowNames, rowAction } = setup(() => of([tag(4, longName), tag(2, 'Zebra'), tag(3, 'apple')]));
 
     expect(rowNames()).toEqual([longName, 'apple', 'Zebra']);
@@ -232,9 +232,9 @@ describe('TagsList', () => {
       const create: TagsService['create'] = vi.fn(() => of(tag(9, 'new')));
       const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
 
-      type(addInput(), '   ');
       const submitButton = button(root(), 'Add tag');
       expect(submitButton.disabled).toBe(false);
+      submitButton.focus();
       submitButton.click();
       await settle(fixture);
 
@@ -242,6 +242,21 @@ describe('TagsList', () => {
       expect(addInput().getAttribute('aria-invalid')).toBe('true');
       expect(root().querySelector('#add-tag-name-errors')?.textContent).toContain('Enter a tag name.');
       expect(document.activeElement).toBe(addInput());
+    });
+
+    it('announces when a create write is in progress', () => {
+      const response = new Subject<Tag>();
+      const create: TagsService['create'] = vi.fn(() => response);
+      const { fixture, root, addInput } = setup(() => of(EVERYTHING), { create });
+
+      type(addInput(), 'errands');
+      button(root(), 'Add tag').click();
+      fixture.detectChanges();
+
+      expect(root().querySelector('[aria-atomic="true"]')?.textContent).toContain('Adding Tag…');
+
+      response.next(tag(9, 'errands'));
+      response.complete();
     });
 
     it('shows a duplicate-name error under the field and preserves the entered value', async () => {
@@ -264,15 +279,15 @@ describe('TagsList', () => {
       expect(addInput().getAttribute('aria-describedby')).toContain('add-tag-name-errors');
     });
 
-    it('keeps entered text after a generic write failure', async () => {
-      const create: TagsService['create'] = vi.fn(() => throwError(() => new ApiError('Try again later.', 500)));
+    it('keeps entered text after a known write rejection', async () => {
+      const create: TagsService['create'] = vi.fn(() => throwError(() => new ApiError('Tag name was rejected.', 422)));
       const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
 
       type(addInput(), 'travel');
       button(root(), 'Add tag').click();
       await settle(fixture);
 
-      expect(root().textContent).toContain('Try again later.');
+      expect(root().textContent).toContain('Tag name was rejected.');
       expect(addInput().value).toBe('travel');
     });
 
@@ -305,9 +320,67 @@ describe('TagsList', () => {
       expect(addInput().disabled).toBe(false);
       expect(root().textContent).toContain('errands');
     });
+
+    it('treats a create transport failure as uncertain until a read-only check', async () => {
+      const create: TagsService['create'] = vi.fn(() => throwError(() => new TagWriteOutcomeUncertainError()));
+      const readAll: ReadTags = vi.fn(() => of(EVERYTHING));
+      const { fixture, root, addInput } = setup(readAll, { create });
+
+      type(addInput(), 'errands');
+      button(root(), 'Add tag').click();
+      await settle(fixture);
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(root().textContent).toContain('couldn’t confirm whether your Tag change went through');
+      expect(addInput().value).toBe('errands');
+      expect(button(root(), 'Add tag').disabled).toBe(true);
+
+      button(root(), 'Refresh tags').click();
+      await settle(fixture);
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(addInput().value).toBe('errands');
+      expect(button(root(), 'Add tag').disabled).toBe(false);
+    });
+
+    it('does not move focus into the list when a failed refresh succeeds', async () => {
+      const create: TagsService['create'] = vi.fn(() => of(tag(9, 'errands')));
+      let readCount = 0;
+      const readAll: ReadTags = vi.fn(() => {
+        readCount += 1;
+        return readCount === 2 ? throwError(() => new ApiError('Offline.', 500)) : of(EVERYTHING);
+      });
+      const { fixture, root, addInput, searchInput } = setup(readAll, { create });
+
+      type(addInput(), 'errands');
+      button(root(), 'Add tag').click();
+      await settle(fixture);
+      button(root(), 'Retry refresh').focus();
+      button(root(), 'Retry refresh').click();
+      await settle(fixture);
+
+      expect(document.activeElement).not.toBe(searchInput());
+      expect(document.activeElement).not.toBe(addInput());
+    });
   });
 
   describe('inline renaming', () => {
+    it('announces when a rename write is in progress', async () => {
+      const response = new Subject<Tag>();
+      const rename: TagsService['rename'] = vi.fn(() => response);
+      const { fixture, root, rowAction, editInput } = setup(() => of(EVERYTHING), { rename });
+      await startEditing(fixture, rowAction(1)!);
+
+      type(editInput()!, 'food');
+      button(root(), 'Save').click();
+      fixture.detectChanges();
+
+      expect(root().querySelector('[aria-atomic="true"]')?.textContent).toContain('Saving Tag name…');
+
+      response.next(tag(1, 'food'));
+      response.complete();
+    });
+
     it('starts from the row menu, saves explicitly, re-reads and restores row focus', async () => {
       const rename: TagsService['rename'] = vi.fn((id, name) => of(tag(id, name)));
       let attempt = 0;
@@ -359,6 +432,29 @@ describe('TagsList', () => {
 
       expect(root().querySelector('[id^="rename-tag-"]')).toBeNull();
       expect(root().textContent).toContain('That tag is no longer there.');
+    });
+
+    it('treats a rename transport failure as uncertain until a read-only check', async () => {
+      const rename: TagsService['rename'] = vi.fn(() => throwError(() => new TagWriteOutcomeUncertainError()));
+      const readAll: ReadTags = vi.fn(() => of(EVERYTHING));
+      const { fixture, root, rowAction, editInput } = setup(readAll, { rename });
+      await startEditing(fixture, rowAction(1)!);
+
+      type(editInput()!, 'food');
+      button(root(), 'Save').click();
+      await settle(fixture);
+
+      expect(rename).toHaveBeenCalledTimes(1);
+      expect(root().textContent).toContain('couldn’t confirm whether your Tag change went through');
+      expect(editInput()!.value).toBe('food');
+      expect(button(root(), 'Save').disabled).toBe(true);
+
+      button(root(), 'Refresh tags').click();
+      await settle(fixture);
+
+      expect(rename).toHaveBeenCalledTimes(1);
+      expect(editInput()!.value).toBe('food');
+      expect(button(root(), 'Save').disabled).toBe(false);
     });
 
     it('keeps invalid Submit enabled, focuses the field and does not send a request', async () => {
@@ -472,6 +568,23 @@ describe('TagsList', () => {
   });
 
   describe('deletion', () => {
+    it('announces when a delete write is in progress', async () => {
+      const response = new Subject<void>();
+      const remove: TagsService['remove'] = vi.fn(() => response);
+      const { fixture, root, rowAction } = setup(() => of(EVERYTHING), { remove });
+
+      await openRowMenu(fixture, rowAction(1)!);
+      overlayButton('Delete').click();
+      await settle(fixture);
+      button(root(), 'Delete').click();
+      fixture.detectChanges();
+
+      expect(root().querySelector('[aria-atomic="true"]')?.textContent).toContain('Deleting Tag…');
+
+      response.next();
+      response.complete();
+    });
+
     it('states the consequence, focuses safe Cancel first, and restores the row action on cancellation', async () => {
       const { fixture, root, rowAction } = setup(() => of(EVERYTHING));
 
@@ -509,12 +622,53 @@ describe('TagsList', () => {
       expect(document.activeElement).toBe(rowAction(2));
     });
 
-    it('keeps the row and offers retry after a non-stale delete failure', async () => {
-      const remove: TagsService['remove'] = vi
-        .fn()
-        .mockReturnValueOnce(throwError(() => new ApiError('Delete failed.', 500)))
-        .mockReturnValue(of(undefined));
-      const { fixture, root, rowAction } = setup(() => of(EVERYTHING), { remove });
+    it('focuses the Tags heading after deleting the last visible Tag', async () => {
+      const onlyTag = tag(7, 'only tag');
+      let readCount = 0;
+      const readAll: ReadTags = vi.fn(() => {
+        readCount += 1;
+        return of(readCount === 1 ? [onlyTag] : []);
+      });
+      const remove: TagsService['remove'] = vi.fn(() => of(undefined));
+      const { fixture, root, rowAction } = setup(readAll, { remove });
+
+      await openRowMenu(fixture, rowAction(7)!);
+      overlayButton('Delete').click();
+      await settle(fixture);
+      button(root(), 'Delete').click();
+      await settle(fixture);
+
+      expect(root().querySelector('ul > li')).toBeNull();
+      expect(document.activeElement).toBe(root().querySelector('h1'));
+    });
+
+    it('treats a delete transport failure as uncertain until a read-only check', async () => {
+      const remove: TagsService['remove'] = vi.fn(() => throwError(() => new TagWriteOutcomeUncertainError()));
+      const readAll: ReadTags = vi.fn(() => of(EVERYTHING));
+      const { fixture, root, rowAction, rowNames } = setup(readAll, { remove });
+      await openRowMenu(fixture, rowAction(1)!);
+      overlayButton('Delete').click();
+      await settle(fixture);
+
+      button(root(), 'Delete').click();
+      await settle(fixture);
+
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(root().textContent).toContain('couldn’t confirm whether your Tag change went through');
+      expect(rowNames()).toContain('groceries');
+      expect(root().textContent).not.toContain('Try again');
+
+      button(root(), 'Refresh tags').click();
+      await settle(fixture);
+
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(rowNames()).toContain('groceries');
+      expect(rowAction(1)?.disabled).toBe(false);
+    });
+
+    it('requires a read-only check after a server error without replaying the delete', async () => {
+      const remove: TagsService['remove'] = vi.fn(() => throwError(() => new TagWriteOutcomeUncertainError()));
+      const { fixture, root, rowAction, rowNames } = setup(() => of(EVERYTHING), { remove });
 
       await openRowMenu(fixture, rowAction(1)!);
       overlayButton('Delete').click();
@@ -522,11 +676,15 @@ describe('TagsList', () => {
       button(root(), 'Delete').click();
       await settle(fixture);
 
-      expect(root().textContent).toContain('Delete failed.');
-      expect(root().textContent).toContain('groceries');
-      button(root(), 'Try again').click();
+      expect(root().textContent).toContain('couldn’t confirm whether your Tag change went through');
+      expect(rowNames()).toContain('groceries');
+      expect(root().textContent).not.toContain('Try again');
+
+      button(root(), 'Refresh tags').click();
       await settle(fixture);
-      expect(remove).toHaveBeenCalledTimes(2);
+
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(rowNames()).toContain('groceries');
     });
   });
 });
