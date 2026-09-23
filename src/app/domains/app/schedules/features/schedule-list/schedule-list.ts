@@ -1,9 +1,10 @@
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin } from 'rxjs';
+import { ResourceState } from '@/app/core/notices';
 import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { CategoriesService, Category } from '@/app/domains/app/categories';
 import { Schedule, ScheduleStatus, SchedulesService } from '../..';
@@ -31,10 +32,12 @@ const STATUS_VIEW: Record<ScheduleStatus, ScheduleView> = {
   cancelled: 'past',
 };
 
+type RefreshReason = 'ordinary' | 'after-write';
+
 @Component({
   selector: 'schedule-list',
   templateUrl: './schedule-list.html',
-  imports: [MatButtonModule, MatIconModule, ScheduleEmptyState, ScheduleLifecycleNav, ScheduleRow],
+  imports: [MatButtonModule, MatIconModule, ResourceState, ScheduleEmptyState, ScheduleLifecycleNav, ScheduleRow],
   host: { class: 'flex flex-auto flex-col' },
 })
 export default class ScheduleList {
@@ -44,6 +47,8 @@ export default class ScheduleList {
   private readonly lifecycleCoordinator = inject(ScheduleLifecycleCoordinator);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialog = inject(MatDialog);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private focusAfterDelete: number | 'heading' | null = null;
 
   protected readonly schedules = signal<readonly Schedule[] | null>(null);
   private readonly accounts = signal<readonly Account[]>([]);
@@ -56,6 +61,7 @@ export default class ScheduleList {
 
   /** True after a refresh failure until all three collections refresh successfully. */
   protected readonly stale = signal(false);
+  protected readonly savedStale = signal(false);
   protected readonly selectedView = signal<ScheduleView>('upcoming');
 
   protected readonly rows = computed<readonly ScheduleRowData[]>(() => {
@@ -111,7 +117,7 @@ export default class ScheduleList {
     this.load();
   }
 
-  protected load(conflict?: { scheduleId: number; message: string }): void {
+  protected load(conflict?: { scheduleId: number; message: string }, reason: RefreshReason = 'ordinary'): void {
     const hasCurrentData = this.schedules() !== null;
     if (hasCurrentData) {
       this.refreshing.set(true);
@@ -132,19 +138,22 @@ export default class ScheduleList {
           this.accounts.set(accounts);
           this.categories.set(categories);
           this.stale.set(false);
+          this.savedStale.set(false);
           this.loading.set(false);
           this.refreshing.set(false);
           if (conflict) {
             const current = schedules.find((schedule) => schedule.id === conflict.scheduleId);
             const state = current ? ` It is currently ${current.status}.` : '';
             this.actionMessage.set(`${conflict.message}${state} Review the refreshed Schedule before trying again.`);
-          } else {
+          } else if (reason === 'ordinary') {
             this.actionMessage.set(null);
           }
+          this.restoreDeleteFocus();
         },
         error: () => {
           if (hasCurrentData) {
             this.stale.set(true);
+            this.savedStale.set(reason === 'after-write');
           } else {
             this.loadFailed.set(true);
           }
@@ -164,7 +173,8 @@ export default class ScheduleList {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((created) => {
         if (created) {
-          this.load();
+          this.actionMessage.set(`${created.name} created.`);
+          this.load(undefined, 'after-write');
         }
       });
   }
@@ -177,7 +187,12 @@ export default class ScheduleList {
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.load());
+      .subscribe((saved) => {
+        if (saved) {
+          this.actionMessage.set(`${saved.name} saved.`);
+          this.load(undefined, 'after-write');
+        }
+      });
   }
 
   protected openExtendDialog(row: ScheduleRowData): void {
@@ -214,7 +229,8 @@ export default class ScheduleList {
     });
     if (event.kind === 'updated') {
       this.selectedView.set(STATUS_VIEW[event.schedule.status]);
-      this.load();
+      this.actionMessage.set(`${event.schedule.name} updated.`);
+      this.load(undefined, 'after-write');
     } else if (event.kind === 'conflict') {
       this.load(event);
     } else {
@@ -222,13 +238,28 @@ export default class ScheduleList {
     }
   }
 
-  protected onScheduleDeleted(): void {
-    this.actionMessage.set(null);
-    this.load();
+  protected onScheduleDeleted(row: ScheduleRowData): void {
+    const rows = this.visibleRows();
+    const index = rows.findIndex((candidate) => candidate.schedule.id === row.schedule.id);
+    this.focusAfterDelete = rows[index + 1]?.schedule.id ?? rows[index - 1]?.schedule.id ?? 'heading';
+    this.actionMessage.set(`${row.schedule.name} deleted.`);
+    this.load(undefined, 'after-write');
   }
 
   protected onDeleteConflict(conflict: { scheduleId: number; message: string }): void {
     this.actionMessage.set(null);
     this.load(conflict);
+  }
+
+  private restoreDeleteFocus(): void {
+    const target = this.focusAfterDelete;
+    if (target === null) {
+      return;
+    }
+    this.focusAfterDelete = null;
+    queueMicrotask(() => {
+      const selector = target === 'heading' ? 'h1' : `[data-schedule-id="${target}"] button`;
+      this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus();
+    });
   }
 }

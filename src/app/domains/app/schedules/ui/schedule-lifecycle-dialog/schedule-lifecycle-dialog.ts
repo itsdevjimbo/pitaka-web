@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { afterNextRender, Component, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
@@ -44,6 +44,11 @@ export class ScheduleLifecycleDialog {
 
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
+  private readonly cancelButton = viewChild('cancelButton', { read: ElementRef<HTMLButtonElement> });
+
+  constructor() {
+    afterNextRender(() => this.cancelButton()?.nativeElement.focus());
+  }
 
   protected get heading(): string {
     return `${this.action.verb} ‘${this.data.schedule.name}’?`;

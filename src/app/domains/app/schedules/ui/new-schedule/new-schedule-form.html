@@ -4,7 +4,7 @@
 >
   @if (errorMessage(); as message) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger sm:col-span-2"
       role="alert"
     >
       {{ message }}
@@ -12,7 +12,7 @@
   }
   @if (optionsFailed()) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger sm:col-span-2"
       role="alert"
     >
       Eligible Accounts and Categories couldn’t be loaded. Close the dialog and try again.
@@ -207,9 +207,7 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="
-        scheduleForm().invalid() || submitting() || loadingOptions() || optionsFailed() || eligibilityRejected()
-      "
+      [disabled]="submitting() || loadingOptions() || optionsFailed() || eligibilityRejected()"
     >
       {{ submitting() ? 'Creating…' : 'Create Schedule' }}
     </button>

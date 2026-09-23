@@ -25,8 +25,7 @@ export type ScheduleRowData = {
   templateUrl: './schedule-row.html',
   imports: [DatePipe, MatButtonModule, PesoPipe, RouterLink],
   host: {
-    class:
-      'relative mb-6 block rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs last:mb-0 dark:border-neutral-800 dark:bg-neutral-950',
+    class: 'grid min-w-0 gap-4 border-b border-divider p-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-6',
   },
 })
 export class ScheduleRow {
@@ -37,7 +36,7 @@ export class ScheduleRow {
   readonly writeDisabled = input(false);
   readonly edit = output<ScheduleRowData>();
   readonly extend = output<ScheduleRowData>();
-  readonly deleted = output<void>();
+  readonly deleted = output<ScheduleRowData>();
   readonly deleteConflict = output<{ scheduleId: number; message: string }>();
   readonly lifecycle = output<{ row: ScheduleRowData; action: ScheduleLifecycleAction }>();
 
@@ -90,7 +89,7 @@ export class ScheduleRow {
         next: () => {
           this.deleting.set(false);
           this.confirmingDelete.set(false);
-          this.deleted.emit();
+          this.deleted.emit(this.row());
         },
         error: (error: unknown) => {
           this.deleting.set(false);

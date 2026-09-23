@@ -1,8 +1,13 @@
-<main class="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 pb-24 sm:p-8">
-  <header class="flex items-start justify-between gap-4">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight">Schedules</h1>
-      <p class="mt-1 text-neutral-500 dark:text-neutral-400">Standing instructions that generate Transactions.</p>
+<main class="flex w-full flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+      <h1
+        class="font-display text-3xl tracking-tight break-words"
+        tabindex="-1"
+      >
+        Schedules
+      </h1>
+      <p class="mt-1 text-secondary">See what will be generated next.</p>
     </div>
     @if (!loading() && !loadFailed()) {
       <div class="flex flex-wrap justify-end gap-2">
@@ -31,63 +36,31 @@
 
   @if (actionMessage(); as message) {
     <section
-      class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
-      role="alert"
+      class="rounded-2xl bg-warning-container px-4 py-3 text-sm text-warning"
+      role="status"
     >
       {{ message }}
     </section>
   }
 
   @if (loading()) {
-    <section
-      class="flex flex-col gap-3"
-      role="status"
-      aria-label="Loading Schedules"
-    >
-      <span class="sr-only">Loading Schedules</span>
-      @for (item of [1, 2, 3]; track item) {
-        <div
-          data-schedule-skeleton
-          class="animate-pulse rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800"
-        >
-          <div class="h-3 w-36 rounded bg-neutral-200 dark:bg-neutral-800"></div>
-          <div class="mt-4 h-5 w-52 rounded bg-neutral-200 dark:bg-neutral-800"></div>
-          <div class="mt-5 h-12 rounded bg-neutral-100 dark:bg-neutral-900"></div>
-        </div>
-      }
-    </section>
+    <app-resource-state
+      kind="loading"
+      message="Loading Schedules"
+    />
   } @else if (loadFailed()) {
-    <section
-      class="flex flex-col items-center gap-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
-      role="alert"
-    >
-      <mat-icon
-        class="size-8 text-neutral-400"
-        svgIcon="circle-alert"
-      />
-      <p class="text-lg font-semibold">Schedules couldn’t be loaded</p>
-      <button
-        matButton="filled"
-        (click)="load()"
-      >
-        <mat-icon svgIcon="refresh-cw" />
-        Retry
-      </button>
-    </section>
+    <app-resource-state
+      kind="initial-error"
+      message="Schedules couldn’t be loaded"
+      (retry)="load()"
+    />
   } @else {
     @if (stale()) {
-      <section
-        class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
-        role="alert"
-      >
-        <span>Schedules couldn’t be refreshed. Shown information may be out of date.</span>
-        <button
-          matButton
-          (click)="load()"
-        >
-          Retry
-        </button>
-      </section>
+      <app-resource-state
+        [kind]="savedStale() ? 'saved-stale' : 'stale'"
+        message="Couldn’t refresh. These Schedules may be out of date"
+        (retry)="load()"
+      />
     }
 
     @if (empty()) {
@@ -97,25 +70,36 @@
         (create)="openCreateDialog()"
       />
     } @else {
-      <section class="grid gap-7 lg:grid-cols-[12rem_minmax(0,1fr)]">
+      <section class="grid min-w-0 gap-5">
         <schedules-lifecycle-nav
           [counts]="counts()"
           [(view)]="selectedView"
         />
 
+        <p class="text-sm text-secondary">
+          {{ visibleRows().length }} shown
+          @if (selectedView() === 'upcoming') {
+            · Earliest generation first
+          }
+        </p>
+
         <div class="min-w-0">
           @if (visibleRows().length === 0) {
             <schedules-empty-state [scope]="selectedView()" />
           } @else {
-            <ol class="relative ml-3 border-l-2 border-neutral-200 pl-7 dark:border-neutral-800">
+            <ol
+              data-schedule-list
+              class="overflow-hidden rounded-2xl border border-divider bg-surface"
+            >
               @for (row of visibleRows(); track row.schedule.id) {
                 <li
                   schedules-schedule-row
+                  [attr.data-schedule-id]="row.schedule.id"
                   [row]="row"
                   [writeDisabled]="refreshing() || stale() || busyScheduleIds().has(row.schedule.id)"
                   (edit)="openEditDialog($event)"
                   (extend)="openExtendDialog($event)"
-                  (deleted)="onScheduleDeleted()"
+                  (deleted)="onScheduleDeleted($event)"
                   (deleteConflict)="onDeleteConflict($event)"
                   (lifecycle)="openLifecycleDialog($event.row, $event.action)"
                 ></li>

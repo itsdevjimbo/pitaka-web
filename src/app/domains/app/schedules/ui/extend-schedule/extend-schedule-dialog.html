@@ -1,9 +1,13 @@
-<app-dialog-shell [heading]="'Extend ‘' + row.schedule.name + '’'">
+<app-dialog-shell
+  [heading]="'Extend ‘' + row.schedule.name + '’'"
+  [dirty]="dirty()"
+  [pending]="submitting()"
+>
   <form
     class="grid gap-4"
     (submit)="save($event)"
   >
-    <p class="text-sm text-neutral-600 dark:text-neutral-300">
+    <p class="text-sm text-secondary">
       Your Schedule will continue from {{ nextGeneration | date: 'd MMM y' }}. Missed occurrences won’t be generated.
     </p>
 
@@ -57,7 +61,7 @@
 
     @if (errorMessage(); as message) {
       <p
-        class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-100"
+        class="rounded-2xl bg-danger-container px-3 py-2 text-sm text-danger"
         role="alert"
       >
         {{ message }}
@@ -69,14 +73,14 @@
         matButton
         type="button"
         [disabled]="submitting()"
-        (click)="dialogRef.close()"
+        (click)="shell().requestClose()"
       >
         Cancel
       </button>
       <button
         matButton="filled"
         type="submit"
-        [disabled]="submitting() || (!indefinite() && extendForm().invalid())"
+        [disabled]="submitting()"
       >
         {{ submitting() ? 'Extending…' : 'Extend and resume' }}
       </button>

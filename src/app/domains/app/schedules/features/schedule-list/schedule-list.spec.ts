@@ -178,7 +178,8 @@ describe('ScheduleList', () => {
     const { fixture, text } = setup(() => pending);
 
     expect(text()).toContain('Loading Schedules');
-    expect(fixture.nativeElement.querySelectorAll('[data-schedule-skeleton]').length).toBe(3);
+    expect(fixture.nativeElement.querySelector('[role="status"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('.animate-pulse').length).toBe(2);
   });
 
   it('shows Active Schedules by next generation with their card facts', () => {
@@ -192,6 +193,15 @@ describe('ScheduleList', () => {
     expect(text()).toContain('BPI Savings');
     expect(text()).toContain('Salary');
     expect(text()).toContain('14 surviving generated Transactions');
+  });
+
+  it('uses the approved full-width compact Schedule composition', () => {
+    const { fixture } = setup(() => of(ALL));
+    const element = fixture.nativeElement as HTMLElement;
+
+    expect(element.querySelector('[data-schedule-view-controls]')).not.toBeNull();
+    expect(element.querySelector('[data-schedule-list]')).not.toBeNull();
+    expect(element.querySelector('.lg\\:grid-cols-\\[12rem_minmax\\(0\\,1fr\\)\\]')).toBeNull();
   });
 
   it('switches among Upcoming, Paused, and Past with truthful lifecycle timing', () => {
@@ -228,7 +238,7 @@ describe('ScheduleList', () => {
   it('places card actions after the Schedule details', () => {
     const { fixture } = setup(() => of(ALL));
     const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('li[schedules-schedule-row]')!;
-    const details = card.querySelector('dl')!;
+    const details = card.querySelector('[aria-label^="View generated Transactions"]')!;
     const pause = Array.from(card.querySelectorAll('button')).find(
       (button) => (button.textContent ?? '').trim() === 'Pause',
     )!;
@@ -263,6 +273,7 @@ describe('ScheduleList', () => {
       expect(dialog()).not.toBeNull();
       expect(dialogText()).toContain('Pause ‘Sooner salary’?');
       expect(dialogText()).toContain('No Transactions will be generated while paused. You can resume later.');
+      expect(document.activeElement?.textContent?.trim()).toBe('Cancel');
       overlayButton('Cancel').click();
       await settle(fixture);
       expect(dialog()).toBeNull();
@@ -580,8 +591,10 @@ describe('ScheduleList', () => {
 
       expect((fixture.nativeElement as HTMLElement).querySelector('[role="alertdialog"]')).toBeNull();
       expect(list).toHaveBeenCalledTimes(2);
-      expect(text()).not.toContain('Unused allowance');
+      expect((fixture.nativeElement as HTMLElement).querySelector('li[schedules-schedule-row]')).toBeNull();
+      expect(text()).toContain('Unused allowance deleted.');
       expect(text()).toContain('No Schedules yet');
+      expect(document.activeElement?.textContent?.trim()).toBe('Schedules');
     });
 
     it('keeps a failed deletion actionable in the confirmation dialog', async () => {
@@ -789,6 +802,9 @@ describe('ScheduleList', () => {
       expect(dialogText()).toContain('Extending…');
       expect(overlayButton('Extending…').disabled).toBe(true);
       expect(overlayButton('Cancel').disabled).toBe(true);
+      pressEscape();
+      await settle(fixture);
+      expect(dialogText()).toContain('Saving in progress. Wait for it to finish before closing.');
 
       pending.next({ ...completed, status: 'active', lastGeneration: null });
       pending.complete();
@@ -804,7 +820,7 @@ describe('ScheduleList', () => {
         await settle(fixture);
 
         expect(dialogText()).toContain('Choose 30 Sep 2026 or later');
-        expect(overlayButton('Extend and resume').disabled).toBe(true);
+        expect(overlayButton('Extend and resume').disabled).toBe(false);
       });
     });
 
@@ -981,7 +997,7 @@ describe('ScheduleList', () => {
 
     click(fixture, 'Refresh');
     expect(text()).toContain('Sooner salary');
-    expect(text()).toContain('Schedules couldn’t be refreshed. Shown information may be out of date.');
+    expect(text()).toContain('Couldn’t refresh. These Schedules may be out of date');
 
     click(fixture, 'Retry');
     expect(text()).toContain('Sooner salary');
@@ -1080,6 +1096,37 @@ describe('ScheduleList', () => {
       expect(listed.dialogText()).not.toContain('Cadence');
       expect(listed.dialogText()).toContain('First generation');
       expect(listed.dialogText()).toContain('Last generation');
+    });
+
+    it('keeps invalid Submit enabled, reveals errors, and focuses the first invalid field', async () => {
+      const create = vi.fn(() => of(ALL[0]));
+      const { fixture } = setup(() => of(ALL), { create: create as SchedulesService['create'] });
+
+      click(fixture, 'Create Schedule');
+      await settle(fixture);
+      const submit = overlayButton('Create Schedule');
+      expect(submit.disabled).toBe(false);
+
+      overlay().querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'));
+      await settle(fixture);
+
+      expect(create).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(overlay().querySelector('#schedule-name'));
+      expect(overlay().textContent).toContain('You must enter a name');
+    });
+
+    it('asks before discarding a changed Schedule editor', async () => {
+      const { fixture, dialogText } = setup(() => of(ALL));
+
+      click(fixture, 'Create Schedule');
+      await settle(fixture);
+      typeInto('#schedule-name', 'Monthly allowance');
+      await settle(fixture);
+      overlayButton('Cancel').click();
+      await settle(fixture);
+
+      expect(dialogText()).toContain('Discard changes?');
+      expect(document.activeElement?.textContent).toContain('Keep editing');
     });
 
     it('opens the same shared form from the first-use empty state', async () => {
@@ -1209,6 +1256,30 @@ describe('ScheduleList', () => {
       expect(dialog()).toBeNull();
       expect(list).toHaveBeenCalledTimes(2);
       expect(text()).toContain('Market allowance');
+    });
+
+    it('keeps the previous ledger and gates actions when the post-create refresh fails', async () => {
+      const created = schedule({ id: 22, name: 'Market allowance' });
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of(ALL))
+        .mockReturnValueOnce(throwError(() => new ApiError('Offline', 0)));
+      const { fixture, dialog, text } = setup(list as SchedulesService['list'], {
+        create: (() => of(created)) as SchedulesService['create'],
+      });
+
+      await openDialog(fixture);
+      await fillValidSchedule(fixture);
+      overlayButton('Create Schedule').click();
+      await settle(fixture);
+
+      expect(dialog()).toBeNull();
+      expect(text()).toContain('Saved, but couldn’t refresh');
+      expect(text()).toContain('Sooner salary');
+      const createButton = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+      ).find((button) => (button.textContent ?? '').includes('Create Schedule'))!;
+      expect(createButton.disabled).toBe(true);
     });
 
     it('keeps entered values and attributes duplicate-name failures', async () => {
@@ -1345,10 +1416,37 @@ describe('ScheduleList', () => {
       expect(submit.disabled).toBe(true);
       submit.click();
       expect(create).toHaveBeenCalledTimes(1);
+      overlayButton('Cancel').click();
+      await settle(fixture);
+      expect(dialogText()).toContain('Saving in progress. Wait for it to finish before closing.');
 
       pending.next(ALL[0]);
       pending.complete();
       await settle(fixture);
+    });
+
+    it('releases a timed-out create with refresh-before-retry guidance', async () => {
+      const pending = new Subject<Schedule>();
+      const create = vi.fn((_value: NewSchedule) => pending.asObservable());
+      const { fixture, dialogText } = setup(() => of(ALL), {
+        create: create as SchedulesService['create'],
+      });
+
+      await openDialog(fixture);
+      await fillValidSchedule(fixture);
+      vi.useFakeTimers();
+      try {
+        overlayButton('Create Schedule').click();
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(15_000);
+        fixture.detectChanges();
+
+        expect(dialogText()).toContain('couldn’t confirm whether this Schedule was created');
+        expect(overlayButton('Create Schedule').disabled).toBe(false);
+        expect(create).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('disables create actions while the list is stale', async () => {
@@ -1375,7 +1473,7 @@ describe('ScheduleList', () => {
 
       click(fixture, 'Refresh');
 
-      expect(text()).toContain('Schedules couldn’t be refreshed. Shown information may be out of date.');
+      expect(text()).toContain('Couldn’t refresh. These Schedules may be out of date');
       const createButtons = Array.from(
         (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
       ).filter((button) => (button.textContent ?? '').includes('Create Schedule'));
@@ -1566,7 +1664,10 @@ describe('ScheduleList', () => {
 
       pressEscape();
       await settle(fixture);
-      expect(list).toHaveBeenCalledTimes(3);
+      expect(dialogText()).toContain('Discard changes?');
+      overlayButton('Discard changes').click();
+      await settle(fixture);
+      expect(list).toHaveBeenCalledTimes(2);
     });
 
     it('blocks retry when the Schedule is absent from refreshed state after a conflict', async () => {
@@ -1695,6 +1796,9 @@ describe('ScheduleList', () => {
       expect(submit.disabled).toBe(true);
       submit.click();
       expect(update).toHaveBeenCalledOnce();
+      overlayButton('Cancel').click();
+      await settle(fixture);
+      expect(dialogText()).toContain('Saving in progress. Wait for it to finish before closing.');
 
       pending.next(editable);
       pending.complete();

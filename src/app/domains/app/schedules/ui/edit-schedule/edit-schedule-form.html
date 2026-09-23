@@ -4,7 +4,7 @@
 >
   @if (errorMessage(); as message) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger sm:col-span-2"
       role="alert"
     >
       {{ message }}
@@ -12,27 +12,27 @@
   }
   @if (optionsFailed()) {
     <div
-      class="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800 sm:col-span-2 dark:bg-red-950 dark:text-red-200"
+      class="rounded-2xl bg-danger-container px-4 py-3 text-sm font-medium text-danger sm:col-span-2"
       role="alert"
     >
       Categories couldn’t be loaded. Close the dialog and try again.
     </div>
   }
-  <dl class="grid gap-3 rounded-xl bg-neutral-50 p-4 text-sm sm:col-span-2 sm:grid-cols-2 dark:bg-neutral-900">
+  <dl class="grid gap-3 rounded-2xl bg-soft p-4 text-sm sm:col-span-2 sm:grid-cols-2">
     <div>
-      <dt class="text-xs text-neutral-500">Account</dt>
+      <dt class="text-xs text-secondary">Account</dt>
       <dd>{{ row().accountName }}</dd>
     </div>
     <div>
-      <dt class="text-xs text-neutral-500">Direction</dt>
+      <dt class="text-xs text-secondary">Direction</dt>
       <dd>{{ currentSchedule().direction === 'income' ? 'Income' : 'Expense' }}</dd>
     </div>
     <div>
-      <dt class="text-xs text-neutral-500">Frequency</dt>
+      <dt class="text-xs text-secondary">Frequency</dt>
       <dd>{{ frequencies[currentSchedule().frequency] }}</dd>
     </div>
     <div>
-      <dt class="text-xs text-neutral-500">First generation</dt>
+      <dt class="text-xs text-secondary">First generation</dt>
       <dd>{{ currentSchedule().firstGeneration | date: 'd MMM y' }}</dd>
     </div>
   </dl>
@@ -90,7 +90,7 @@
         <mat-option [value]="category.id">
           {{ category.name }}
           @if (!category.isActive) {
-            <span class="text-neutral-500 dark:text-neutral-400">· Retired</span>
+            <span class="text-secondary">· Retired</span>
           }
         </mat-option>
       }
@@ -129,7 +129,7 @@
 
   @if (completesSchedule()) {
     <div
-      class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:col-span-2 dark:bg-amber-950 dark:text-amber-100"
+      class="rounded-2xl bg-warning-container px-4 py-3 text-sm text-warning sm:col-span-2"
       role="status"
     >
       This change will complete the Schedule. Existing Transactions won’t change.
@@ -137,14 +137,14 @@
   }
   @if (conflictRefreshFailed()) {
     <div
-      class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:col-span-2 dark:bg-amber-950 dark:text-amber-100"
+      class="rounded-2xl bg-warning-container px-4 py-3 text-sm text-warning sm:col-span-2"
       role="alert"
     >
       Current Schedule information is unavailable. Close the dialog and refresh before trying again.
     </div>
   } @else if (!canRetry()) {
     <div
-      class="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:col-span-2 dark:bg-amber-950 dark:text-amber-100"
+      class="rounded-2xl bg-warning-container px-4 py-3 text-sm text-warning sm:col-span-2"
       role="alert"
     >
       This Schedule is now {{ currentSchedule().status === 'completed' ? 'Completed' : 'Cancelled' }}. Close the dialog
@@ -173,14 +173,7 @@
     <button
       matButton="filled"
       type="submit"
-      [disabled]="
-        scheduleForm().invalid() ||
-        submitting() ||
-        loadingOptions() ||
-        optionsFailed() ||
-        eligibilityRejected() ||
-        !canRetry()
-      "
+      [disabled]="submitting() || loadingOptions() || optionsFailed() || eligibilityRejected() || !canRetry()"
     >
       {{ submitting() ? 'Saving…' : completesSchedule() ? 'Save and complete' : 'Save changes' }}
     </button>

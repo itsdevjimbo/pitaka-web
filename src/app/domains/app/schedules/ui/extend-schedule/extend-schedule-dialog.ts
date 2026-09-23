@@ -1,15 +1,15 @@
 import { DatePipe } from '@angular/common';
-import { Component, inject, linkedSignal, signal } from '@angular/core';
+import { Component, computed, inject, linkedSignal, signal, viewChild } from '@angular/core';
 import { form, FormField, required, submit, validate } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout, TimeoutError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { DialogShell } from '@/app/core/dialog';
-import { partitionServerError } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError } from '@/app/core/forms';
 import { compareCalendarDates, formatCalendarDate, nextExtensionGeneration } from '../../data/schedule-calendar';
 import { ScheduleLifecycleCoordinator } from '../../data/schedule-lifecycle-coordinator';
 import { ScheduleRowData } from '../schedule-row/schedule-row';
@@ -17,6 +17,10 @@ import { ScheduleRowData } from '../schedule-row/schedule-row';
 type ExtendScheduleModel = {
   lastGeneration: Date | null;
 };
+
+const EXTEND_TIMEOUT_MS = 15_000;
+const EXTEND_UNCERTAIN =
+  'We couldn’t confirm whether this Schedule was extended. Refresh Schedules before trying again.';
 
 /** Chooses a finite or indefinite continuation and submits it atomically. */
 @Component({
@@ -34,6 +38,10 @@ export class ExtendScheduleDialog {
   protected readonly indefinite = signal(false);
   protected readonly model = linkedSignal<ExtendScheduleModel>(() => ({ lastGeneration: this.minimumEnd }));
   protected readonly submitting = signal(false);
+  protected readonly dirty = computed(
+    () => this.indefinite() || this.model().lastGeneration?.getTime() !== this.minimumEnd.getTime(),
+  );
+  protected readonly shell = viewChild.required(DialogShell);
   protected readonly errorMessage = linkedSignal<ExtendScheduleModel, string | null>({
     source: this.model,
     computation: () => null,
@@ -55,11 +63,16 @@ export class ExtendScheduleDialog {
 
   protected save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
     if (this.indefinite()) {
       void this.performExtension(null);
       return;
     }
     submit(this.extendForm, { action: async () => this.performExtension(this.model().lastGeneration) });
+    if (this.extendForm().invalid()) {
+      this.extendForm().markAsTouched();
+      focusFirstInvalidField(formElement);
+    }
   }
 
   private async performExtension(lastGeneration: Date | null) {
@@ -69,10 +82,16 @@ export class ExtendScheduleDialog {
     this.submitting.set(true);
     this.errorMessage.set(null);
     try {
-      await firstValueFrom(this.coordinator.extend(this.row.schedule.id, lastGeneration));
+      await firstValueFrom(
+        this.coordinator.extend(this.row.schedule.id, lastGeneration).pipe(timeout({ first: EXTEND_TIMEOUT_MS })),
+      );
       this.dialogRef.close();
       return undefined;
     } catch (error) {
+      if (error instanceof TimeoutError) {
+        this.errorMessage.set(EXTEND_UNCERTAIN);
+        return undefined;
+      }
       if (error instanceof ApiError && error.status === 409) {
         this.dialogRef.close();
         return undefined;
