@@ -10,7 +10,7 @@ import { API_BASE_URL } from '@/app/core/api';
 import { AuthService } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
-import { Theming } from '@/app/core/theming';
+import { Scheme, Theming } from '@/app/core/theming';
 import { AccountsService } from '@/app/domains/app/accounts';
 import { AppLayout } from '@/app/domains/app/layout/layout';
 import { TEST_API_BASE_URL } from '@/testing/api-base-url';
@@ -28,6 +28,8 @@ describe('the auth area routes', () => {
     confirmEmail: AuthService['confirmEmail'] = () => of(undefined),
     resetPassword: AuthService['resetPassword'] = () => of(undefined),
   ) {
+    const scheme = signal<Scheme>('system');
+    const setScheme = vi.fn((choice: Scheme) => scheme.set(choice));
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
@@ -37,7 +39,7 @@ describe('the auth area routes', () => {
         { provide: API_BASE_URL, useValue: TEST_API_BASE_URL },
         {
           provide: Theming,
-          useValue: { scheme: signal('system'), persistenceNotice: signal(null), setScheme: vi.fn() },
+          useValue: { scheme, persistenceNotice: signal(null), setScheme },
         },
         {
           provide: Session,
@@ -59,6 +61,8 @@ describe('the auth area routes', () => {
     TestBed.overrideComponent(AppLayout, {
       set: { template: '<router-outlet />', imports: [RouterOutlet] },
     });
+
+    return { scheme, setScheme };
   }
 
   it('offers the way out on sign-in, pointing at the forgot-password screen', async () => {
@@ -71,6 +75,32 @@ describe('the auth area routes', () => {
       'a[href="/auth/forgot-password"]',
     );
     expect(link?.textContent?.trim()).toBe('Forgot password?');
+  });
+
+  it('lets a signed-out visitor review and change the selected appearance on sign-in', async () => {
+    const { scheme, setScheme } = setup();
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/auth/sign-in');
+
+    const appearance = document.querySelector('button[aria-label="Appearance"]') as HTMLButtonElement | null;
+    expect(appearance).not.toBeNull();
+    appearance?.click();
+    await harness.fixture.whenStable();
+
+    const choices = Array.from(document.querySelectorAll('[role="menuitemradio"]')) as HTMLElement[];
+    const systemChoice = choices.find((choice) => choice.textContent?.trim() === 'System');
+    expect(systemChoice?.getAttribute('aria-checked')).toBe('true');
+
+    const darkChoice = choices.find((choice) => choice.textContent?.trim() === 'Dark');
+    if (!darkChoice) {
+      throw new Error('No Dark appearance choice');
+    }
+    darkChoice.click();
+    await harness.fixture.whenStable();
+
+    expect(setScheme).toHaveBeenCalledWith('dark');
+    expect(scheme()).toBe('dark');
   });
 
   it('resolves /auth/forgot-password for a guest', async () => {

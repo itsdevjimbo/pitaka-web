@@ -22,13 +22,16 @@ import { Theming } from './theming';
       @for (item of choices; track item.value) {
         <button
           mat-menu-item
+          role="menuitemradio"
           type="button"
+          [attr.aria-checked]="scheme() === item.value"
           (click)="choose(item.value)"
         >
           <span class="flex min-w-36 items-center gap-2">
             <span class="flex-auto">{{ item.label }}</span>
             <mat-pseudo-checkbox
               appearance="minimal"
+              aria-hidden="true"
               [state]="scheme() === item.value ? 'checked' : 'unchecked'"
             />
           </span>

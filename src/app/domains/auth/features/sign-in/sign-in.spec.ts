@@ -3,6 +3,7 @@ import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, EmailNotConfirmedError } from '@/app/core/auth';
+import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import AuthSignIn from './sign-in';
 
@@ -13,6 +14,7 @@ describe('AuthSignIn', () => {
       imports: [AuthSignIn],
       providers: [
         provideRouter([]),
+        provideIcons(),
         { provide: Session, useValue: { signIn } },
         // Only reached by the resend control on the unconfirmed-email state;
         // stubbed so its host doesn't need a real HTTP setup.
@@ -78,6 +80,56 @@ describe('AuthSignIn', () => {
     expect(text(fixture)).toContain('You must enter an email address');
     expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#email'));
     expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('reveals and hides the password through a clearly named control', () => {
+    const { fixture } = setup(() => Promise.resolve());
+    const password = fixture.nativeElement.querySelector('#password') as HTMLInputElement;
+
+    const showPassword = fixture.nativeElement.querySelector(
+      'button[aria-label="Show password"]',
+    ) as HTMLButtonElement | null;
+    expect(showPassword).not.toBeNull();
+    showPassword?.click();
+    fixture.detectChanges();
+
+    expect(password.type).toBe('text');
+    const hidePassword = fixture.nativeElement.querySelector(
+      'button[aria-label="Hide password"]',
+    ) as HTMLButtonElement | null;
+    expect(hidePassword).not.toBeNull();
+    hidePassword?.click();
+    fixture.detectChanges();
+
+    expect(password.type).toBe('password');
+  });
+
+  it('announces pending sign-in and ignores duplicate submissions until the request settles', async () => {
+    let finishSignIn!: () => void;
+    const signIn = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSignIn = resolve;
+        }),
+    );
+    const { fixture } = setup(signIn);
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    const button = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    form.dispatchEvent(new Event('submit'));
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toContain('Signing in…');
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('Signing in…');
+
+    form.dispatchEvent(new Event('submit'));
+    finishSignIn();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(signIn).toHaveBeenCalledTimes(1);
   });
 
   it('binds server-blamed fields onto the matching form controls', async () => {

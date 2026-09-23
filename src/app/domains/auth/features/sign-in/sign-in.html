@@ -1,5 +1,8 @@
-<div class="flex flex-auto">
-  <aside class="hidden w-1/2 flex-col justify-between bg-soft p-12 lg:flex">
+<main class="flex min-h-dvh flex-auto bg-canvas">
+  <aside
+    class="hidden w-1/2 flex-col justify-between bg-soft p-12 lg:flex xl:p-16"
+    aria-labelledby="brand-heading"
+  >
     <img
       class="w-40 dark:hidden"
       src="/images/logo/logo-text.svg"
@@ -10,79 +13,90 @@
       src="/images/logo/logo-text-on-dark.svg"
       alt="Pitaka"
     />
-    <div class="max-w-lg">
-      <p class="leading-tight font-display text-5xl text-text">Small steps. Big possibilities.</p>
-      <p class="mt-4 text-lg text-secondary">Your everyday money, a little clearer.</p>
+
+    <div class="max-w-xl">
+      <h2
+        id="brand-heading"
+        class="font-display text-5xl leading-[1.05] font-[750] tracking-[-0.025em] text-text xl:text-[3.5rem]"
+      >
+        Small steps. Big possibilities.
+      </h2>
+      <p class="mt-6 max-w-md text-lg leading-7 text-secondary">Your everyday money, a little clearer.</p>
     </div>
-    <p class="text-sm text-secondary">Personal expense tracking, at your pace.</p>
+
+    <p class="max-w-sm text-sm leading-6 text-secondary">A clearer view of what you have and where it is going.</p>
   </aside>
-  <div class="flex flex-auto items-center justify-center bg-surface p-4 sm:p-12">
-    <div class="flex w-full max-w-80 flex-col sm:min-w-80">
-      <!-- Logo -->
+
+  <section
+    class="flex min-h-dvh flex-auto items-center-safe justify-center bg-canvas px-4 py-20 sm:px-8 lg:bg-surface lg:px-12 lg:py-16"
+    aria-labelledby="sign-in-title"
+  >
+    <div
+      class="w-full max-w-sm rounded-[20px] border border-divider bg-surface p-6 shadow-sm sm:p-8 lg:max-w-[24rem] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+    >
       <img
-        class="w-12 dark:hidden"
+        class="mb-8 size-12 lg:mb-10 dark:hidden"
         src="/images/logo/logo.svg"
         alt="Pitaka"
       />
       <img
-        class="hidden w-12 dark:block"
+        class="mb-8 hidden size-12 lg:mb-10 dark:block"
         src="/images/logo/logo-on-dark.svg"
         alt="Pitaka"
       />
 
-      <!-- Title -->
-      <h1 class="leading-tight mt-8 text-4xl">Sign in</h1>
-      <div class="mt-0.5 flex items-baseline font-medium">
-        <div class="text-secondary">New to Pitaka?</div>
-        <a
-          class="ml-1 underline"
-          routerLink="/auth/sign-up"
+      <header>
+        <h1
+          id="sign-in-title"
+          class="leading-tight font-display text-4xl font-[750] tracking-[-0.025em] text-text"
         >
-          Sign up
-        </a>
-      </div>
+          Sign in
+        </h1>
+        <p class="mt-2 flex flex-wrap items-baseline gap-x-1 text-sm font-medium">
+          <span class="text-secondary">New to Pitaka?</span>
+          <a routerLink="/auth/sign-up">Sign up</a>
+        </p>
+      </header>
 
-      <!-- Sign in form -->
       <form
         class="mt-8"
+        novalidate
         (submit)="signIn($event)"
       >
-        <!-- Session notice: information, not a failure -->
         @if (sessionNotice(); as notice) {
           <div
-            class="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 dark:bg-blue-950 dark:text-blue-200"
+            class="mb-5 rounded-2xl bg-soft px-4 py-3 text-sm leading-6 text-text"
             role="status"
           >
             {{ notice }}
           </div>
         }
 
-        <!-- Error message -->
         @if (errorMessage(); as message) {
           <div
-            class="bg-error-container text-error mb-4 rounded-lg px-4 py-3 text-sm font-medium"
+            class="mb-5 rounded-2xl bg-danger-container px-4 py-3 text-sm leading-6 text-danger"
             role="alert"
           >
             {{ message }}
           </div>
         }
 
-        <!-- Unconfirmed email: the one failure that offers a way out other
-             than trying again (issue #68) -->
         @if (unconfirmedEmail(); as email) {
           <auth-resend-confirmation
-            class="mb-4 block"
+            class="mb-5 block"
             [email]="email"
           />
         }
 
         <div class="flex flex-col gap-y-4">
-          <!-- Email field -->
           <mat-form-field class="w-full">
             <mat-label>Email address</mat-label>
             <input
               id="email"
               matInput
+              type="email"
+              inputmode="email"
+              autocomplete="username"
               [formField]="signInForm.email"
             />
             <mat-error>
@@ -94,7 +108,6 @@
             </mat-error>
           </mat-form-field>
 
-          <!-- Password field -->
           <mat-form-field
             appearance="fill"
             class="w-full"
@@ -104,12 +117,16 @@
               id="password"
               matInput
               type="password"
+              autocomplete="current-password"
               [formField]="signInForm.password"
               #passwordField
             />
             <button
               matIconButton
               type="button"
+              class="min-h-11 min-w-11"
+              aria-controls="password"
+              [attr.aria-label]="passwordField.type === 'password' ? 'Show password' : 'Hide password'"
               (click)="
                 passwordField.type === 'password' ? (passwordField.type = 'text') : (passwordField.type = 'password')
               "
@@ -119,13 +136,13 @@
                 <mat-icon
                   class="size-5"
                   svgIcon="eye"
-                ></mat-icon>
+                />
               }
               @if (passwordField.type === 'text') {
                 <mat-icon
                   class="size-5"
                   svgIcon="eye-off"
-                ></mat-icon>
+                />
               }
             </button>
             <mat-error>
@@ -137,26 +154,34 @@
             </mat-error>
           </mat-form-field>
 
-          <!-- The way out of a password that is not coming back. It sits with
-               the password field, where someone looks the moment theirs fails. -->
           <a
-            class="-mt-2 self-end text-sm font-medium underline"
+            class="-mt-2 self-end text-sm font-semibold"
             routerLink="/auth/forgot-password"
           >
             Forgot password?
           </a>
         </div>
 
-        <!-- Submit button -->
         <button
           type="submit"
           matButton="filled"
           class="mt-6 w-full"
           [disabled]="submitting()"
+          [attr.aria-busy]="submitting()"
         >
           {{ submitting() ? 'Signing in…' : 'Sign in' }}
         </button>
+
+        @if (submitting()) {
+          <p
+            class="sr-only"
+            role="status"
+            aria-live="polite"
+          >
+            Signing in…
+          </p>
+        }
       </form>
     </div>
-  </div>
-</div>
+  </section>
+</main>
