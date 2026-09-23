@@ -1,10 +1,14 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, Profile } from '@/app/core/auth';
+import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
+import { withOverlayContainer } from '@/testing/overlay';
 import { ProfileIdentity } from './profile-identity';
 
 const ADA: Profile = {
@@ -15,6 +19,8 @@ const ADA: Profile = {
 };
 
 describe('ProfileIdentity', () => {
+  const overlay = withOverlayContainer();
+
   function setup(updateProfile: AuthService['updateProfile'] = () => of(ADA)) {
     const profile = signal<Profile | null>(ADA);
     const applyProfileUpdate = vi.fn((updated: Profile) => profile.set(updated));
@@ -22,7 +28,10 @@ describe('ProfileIdentity', () => {
     TestBed.configureTestingModule({
       imports: [ProfileIdentity],
       providers: [
+        provideDialogDefaults(),
         provideIcons(),
+        provideRouter([]),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: AuthService, useValue: { updateProfile } },
         { provide: Session, useValue: { profile, applyProfileUpdate } },
       ],
@@ -82,9 +91,13 @@ describe('ProfileIdentity', () => {
 
     click(fixture, 'Edit name');
     enterName(fixture, '   ');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled,
+    ).toBe(false);
     await submitAndSettle(fixture);
 
     expect(fixture.nativeElement.textContent).toContain('Enter a name');
+    expect(document.activeElement).toBe(input(fixture));
     expect(updateProfile).not.toHaveBeenCalled();
 
     enterName(fixture, 'x'.repeat(256));
@@ -152,8 +165,34 @@ describe('ProfileIdentity', () => {
     await submitAndSettle(fixture);
 
     expect(fixture.nativeElement.textContent).toContain('Choose a name with fewer characters.');
+    expect(input(fixture).value).toBe('Ada Byron');
     expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
     expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#profile-name'));
+  });
+
+  it('asks before discarding a changed name and keeps the draft when requested', async () => {
+    const { fixture } = setup();
+
+    click(fixture, 'Edit name');
+    enterName(fixture, 'Augusta Ada King');
+    click(fixture, 'Cancel');
+    await fixture.whenStable();
+
+    const prompt = overlay().querySelector('[role="alertdialog"]');
+    expect(prompt?.textContent).toContain('Discard changes?');
+    expect(document.activeElement?.textContent).toContain('Keep editing');
+
+    const keepEditing = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Keep editing',
+    );
+    if (!keepEditing) {
+      throw new Error('No Keep editing button');
+    }
+    keepEditing.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(input(fixture).value).toBe('Augusta Ada King');
   });
 
   it('cancels on Escape, returns focus to Edit name, and clears stale success feedback', async () => {

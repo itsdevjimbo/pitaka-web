@@ -111,6 +111,10 @@ export class DialogShell {
 
   constructor() {
     this.dialogRef
+      .afterOpened()
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.host.nativeElement.querySelector<HTMLElement>('[data-dialog-initial-focus]')?.focus());
+    this.dialogRef
       .keydownEvents()
       .pipe(takeUntilDestroyed())
       .subscribe((event) => {

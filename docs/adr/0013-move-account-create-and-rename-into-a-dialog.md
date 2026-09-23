@@ -135,3 +135,12 @@ animation may still keep the shell alive. This central policy prevents each
 editor from implementing its own router/history interception and keeps direct
 links, browser Back, and in-dialog prerequisite links consistent. Session
 expiry remains the exception described above and may discard immediately.
+
+## Amendment (2026-09-24): inline Profile editors follow the same policy
+
+Profile keeps its identity, email, and password editors inline to preserve the
+approved section layout. `EditorDismissal` reuses the shell's safe Keep editing /
+Discard changes dialog when one of those drafts is dismissed. The Profile route
+guard asks once before discarding changed sections, blocks navigation while a
+write is pending, and allows session expiry through after `Session` clears the
+private Profile. The `@if`-owned sections then leave the view with their drafts.

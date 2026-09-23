@@ -1,18 +1,43 @@
 @if (pendingEmail(); as pendingEmail) {
-  <section class="mb-4 rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-300 dark:bg-amber-950/30 dark:ring-amber-800">
-    <p class="text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-300">Action waiting</p>
-    <h2 class="mt-1 text-lg font-bold">Confirm {{ pendingEmail }}</h2>
-    <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
-      Open the link we sent there. Until then, sign in with {{ profile()?.email }}.
+  <section
+    class="mb-4 min-w-0 rounded-2xl bg-warning-container p-5 text-warning"
+    aria-labelledby="pending-email-heading"
+  >
+    <h3
+      id="pending-email-heading"
+      class="font-display text-lg font-semibold break-words"
+    >
+      Pending email change
+    </h3>
+    <p class="mt-1 text-sm">
+      The confirmation link was sent to
+      <span class="font-semibold break-words">{{ pendingEmail }}</span>
+      . {{ profile()?.email }} remains your current email address until you confirm {{ pendingEmail }}.
     </p>
     @if (mode() === 'cancel') {
-      <div class="mt-4 rounded-xl bg-white/60 p-4 dark:bg-black/10">
-        <p class="font-semibold">Cancel this email change?</p>
-        <p class="mt-1 text-sm">The link sent to {{ pendingEmail }} will stop working.</p>
-        <div class="mt-3 flex gap-2">
+      <div
+        class="mt-4 rounded-xl bg-danger-container p-4 text-danger"
+        role="alertdialog"
+        aria-labelledby="cancel-email-change-heading"
+        aria-describedby="cancel-email-change-description"
+      >
+        <p
+          id="cancel-email-change-heading"
+          class="font-semibold"
+        >
+          Cancel email change to {{ pendingEmail }}?
+        </p>
+        <p
+          id="cancel-email-change-description"
+          class="mt-1 text-sm"
+        >
+          The confirmation link will stop working. You’ll keep using {{ profile()?.email }}.
+        </p>
+        <div class="mt-3 flex flex-wrap gap-2">
           <button
             #keepAction
             matButton
+            class="min-h-11"
             type="button"
             [disabled]="submitting()"
             (click)="close()"
@@ -22,6 +47,7 @@
           </button>
           <button
             matButton="filled"
+            class="min-h-11"
             type="button"
             [disabled]="submitting()"
             (click)="cancelChange()"
@@ -34,22 +60,24 @@
       <form
         class="mt-4"
         (submit)="send($event)"
-        (keydown.escape)="close()"
+        (keydown.escape)="requestClose()"
       >
         <ng-container [ngTemplateOutlet]="passwordField" />
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <button
             matButton
+            class="min-h-11"
             type="button"
             [disabled]="submitting()"
-            (click)="close()"
+            (click)="requestClose()"
           >
             Cancel
           </button>
           <button
             matButton="filled"
+            class="min-h-11"
             type="submit"
-            [disabled]="emailForm().invalid() || submitting()"
+            [disabled]="submitting()"
           >
             {{ submitting() ? 'Sending…' : 'Send another link' }}
           </button>
@@ -60,7 +88,9 @@
     } @else {
       <div class="mt-4 flex flex-wrap gap-2">
         <button
+          #resendAction
           matButton="outlined"
+          class="min-h-11"
           type="button"
           (click)="beginResend()"
         >
@@ -68,6 +98,7 @@
         </button>
         <button
           matButton="outlined"
+          class="min-h-11"
           type="button"
           (click)="beginRequest()"
         >
@@ -76,26 +107,28 @@
         <button
           #cancelAction
           matButton
+          class="min-h-11"
           type="button"
           (click)="beginCancel()"
         >
-          Cancel change
+          Cancel email change
         </button>
       </div>
     }
   </section>
 }
 
-<section class="rounded-2xl border border-neutral-200 p-5 dark:border-neutral-800">
+<section class="min-w-0 rounded-2xl border border-divider bg-surface p-5 sm:p-6">
   <div class="flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <h2 class="font-semibold">Email address</h2>
-      <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Used to sign in and recover access.</p>
+    <div class="min-w-0">
+      <h2 class="font-display text-xl font-semibold tracking-tight text-text">Email</h2>
+      <p class="mt-1 text-sm text-secondary">Used to sign in and recover access.</p>
     </div>
     @if (!pendingEmail() && mode() !== 'request') {
       <button
         #changeAction
         matButton
+        class="min-h-11 shrink-0"
         type="button"
         (click)="beginRequest()"
       >
@@ -103,40 +136,65 @@
       </button>
     }
   </div>
+  <div class="mt-4 min-w-0">
+    <p class="text-xs font-semibold tracking-wide text-secondary uppercase">Current email address</p>
+    <p class="mt-1 font-medium break-words text-text">{{ profile()?.email }}</p>
+  </div>
   @if (!pendingEmail() && mode() === 'request') {
     <ng-container [ngTemplateOutlet]="editor" />
   }
-</section>
-
-@if (successMessage(); as message) {
-  <p
-    class="mt-3 text-sm text-green-700 dark:text-green-300"
-    role="status"
-  >
-    {{ message }}
-  </p>
-}
-@if (refreshNeeded()) {
-  <p
-    class="mt-3 text-sm text-amber-700 dark:text-amber-300"
-    role="status"
-  >
-    Profile couldn't be refreshed.
-    <button
-      matButton
-      type="button"
-      (click)="retryRefresh()"
+  @if (successMessage(); as message) {
+    <p
+      class="mt-4 rounded-xl bg-success-container p-3 text-sm text-success"
+      role="status"
     >
-      Retry refresh
-    </button>
-  </p>
-}
+      {{ message }}
+    </p>
+  }
+  @if (refreshNeeded()) {
+    <p
+      class="mt-4 rounded-xl bg-warning-container p-3 text-sm text-warning"
+      role="status"
+    >
+      @if (refreshing()) {
+        Refreshing Profile…
+      } @else {
+        The email change was saved, but the Profile couldn't be refreshed.
+      }
+      <button
+        matButton
+        class="mt-2 min-h-11"
+        type="button"
+        [disabled]="refreshing()"
+        (click)="retryRefresh()"
+      >
+        {{ refreshing() ? 'Refreshing…' : 'Retry refresh' }}
+      </button>
+    </p>
+  }
+  @if (pendingFeedback()) {
+    <p
+      class="mt-4 rounded-xl bg-soft p-3 text-sm text-text"
+      role="status"
+    >
+      Saving in progress. Wait for it to finish before closing.
+    </p>
+  }
+  @if (errorMessage(); as message) {
+    <p
+      class="mt-4 rounded-xl bg-danger-container p-3 text-sm text-danger"
+      role="alert"
+    >
+      {{ message }}
+    </p>
+  }
+</section>
 
 <ng-template #editor>
   <form
     class="mt-5 flex flex-col gap-y-4"
     (submit)="send($event)"
-    (keydown.escape)="close()"
+    (keydown.escape)="requestClose()"
   >
     <mat-form-field class="w-full">
       <mat-label>New email address</mat-label>
@@ -153,19 +211,21 @@
       </mat-error>
     </mat-form-field>
     <ng-container [ngTemplateOutlet]="passwordField" />
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <button
         matButton
+        class="min-h-11"
         type="button"
         [disabled]="submitting()"
-        (click)="close()"
+        (click)="requestClose()"
       >
         Cancel
       </button>
       <button
         matButton="filled"
+        class="min-h-11"
         type="submit"
-        [disabled]="emailForm().invalid() || submitting()"
+        [disabled]="submitting()"
       >
         {{ submitting() ? 'Sending…' : 'Send confirmation email' }}
       </button>
@@ -188,12 +248,3 @@
     </mat-error>
   </mat-form-field>
 </ng-template>
-
-@if (errorMessage(); as message) {
-  <p
-    class="mt-3 text-sm text-red-700 dark:text-red-300"
-    role="alert"
-  >
-    {{ message }}
-  </p>
-}

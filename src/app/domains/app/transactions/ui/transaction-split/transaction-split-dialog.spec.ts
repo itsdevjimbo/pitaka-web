@@ -53,7 +53,11 @@ const GOALS = [
 describe('TransactionSplitDialog', () => {
   let fixture: ComponentFixture<TransactionSplitDialog>;
   let split: ReturnType<typeof vi.fn>;
-  let dialogRef: { close: ReturnType<typeof vi.fn>; keydownEvents: () => typeof NEVER };
+  let dialogRef: {
+    afterOpened: () => typeof NEVER;
+    close: ReturnType<typeof vi.fn>;
+    keydownEvents: () => typeof NEVER;
+  };
 
   function setup(
     overrides: {
@@ -71,7 +75,7 @@ describe('TransactionSplitDialog', () => {
             contributions: [],
           } satisfies TransactionSplitResult)),
     );
-    dialogRef = { close: vi.fn(), keydownEvents: () => NEVER };
+    dialogRef = { afterOpened: () => NEVER, close: vi.fn(), keydownEvents: () => NEVER };
     const snapshot = overrides.snapshot ?? SNAPSHOT;
     const keys = ['74287c99-1f5c-49b7-9d24-81e884c634a0', '2c159351-a5b0-4930-9f19-f1446a8d9231'];
 

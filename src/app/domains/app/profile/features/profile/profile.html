@@ -1,11 +1,12 @@
-<main class="mx-auto w-full max-w-5xl p-4 pb-28 sm:p-8 sm:pb-28">
-  <header class="mb-6">
-    <h1 class="text-2xl font-bold tracking-tight">Profile</h1>
-    <p class="mt-1 text-neutral-500 dark:text-neutral-400">Your identity and sign-in details.</p>
+<main class="mx-auto flex w-full max-w-5xl flex-auto flex-col gap-6 p-4 pb-28 sm:p-8">
+  <header>
+    <p class="text-sm font-semibold text-primary-700 dark:text-primary-200">Your details</p>
+    <h1 class="mt-1 font-display text-3xl font-bold tracking-tight text-text">Profile</h1>
+    <p class="mt-2 text-secondary">Manage the identity and sign-in details for your Profile.</p>
   </header>
   @if (emailChangeConfirmed) {
     <p
-      class="mb-4 text-sm text-green-700 dark:text-green-300"
+      class="rounded-2xl bg-success-container p-4 text-sm font-medium text-success"
       role="status"
     >
       Email address changed
@@ -13,13 +14,13 @@
   }
 
   @if (profile(); as person) {
-    <div class="grid items-start gap-6 lg:grid-cols-[18rem_1fr]">
-      <profile-identity />
+    <div class="grid min-w-0 items-start gap-5 min-[900px]:grid-cols-[minmax(15rem,0.9fr)_minmax(0,1.6fr)]">
+      <profile-identity class="min-w-0" />
 
-      <div class="flex flex-col gap-4">
-        <profile-email />
+      <div class="grid min-w-0 gap-5">
+        <profile-email class="min-w-0" />
 
-        <profile-password />
+        <profile-password class="min-w-0" />
       </div>
     </div>
   }

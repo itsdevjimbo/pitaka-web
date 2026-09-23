@@ -1,15 +1,27 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, IncorrectCurrentPasswordError } from '@/app/core/auth';
+import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
+import { withOverlayContainer } from '@/testing/overlay';
 import { ProfilePassword } from './profile-password';
 
 describe('ProfilePassword', () => {
+  const overlay = withOverlayContainer();
+
   function setup(changePassword: AuthService['changePassword']) {
     TestBed.configureTestingModule({
       imports: [ProfilePassword],
-      providers: [provideIcons(), { provide: AuthService, useValue: { changePassword } }],
+      providers: [
+        provideIcons(),
+        provideRouter([]),
+        provideDialogDefaults(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: AuthService, useValue: { changePassword } },
+      ],
     });
     const fixture = TestBed.createComponent(ProfilePassword);
     fixture.detectChanges();
@@ -58,6 +70,18 @@ describe('ProfilePassword', () => {
     expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#current-password'));
   });
 
+  it('keeps invalid Submit enabled and focuses the first password error', async () => {
+    const { fixture } = setup(() => of(undefined));
+    open(fixture);
+    const submit = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(submit?.disabled).toBe(false);
+
+    await submitAndSettle(fixture);
+
+    expect(fixture.nativeElement.textContent).toContain('Enter your current password');
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#current-password'));
+  });
+
   it('does not submit a mismatched or too-short new password', async () => {
     const changePassword = vi.fn(() => of(undefined));
     const { fixture } = setup(changePassword);
@@ -82,7 +106,7 @@ describe('ProfilePassword', () => {
     expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('Password changed');
   });
 
-  it('clears every secret when the editor is cancelled', () => {
+  it('clears every secret when the person confirms discarding the editor', async () => {
     const { fixture } = setup(() => of(undefined));
     fill(fixture, 'current-password', 'new-password', 'new-password');
 
@@ -93,6 +117,15 @@ describe('ProfilePassword', () => {
       throw new Error('No Cancel button');
     }
     cancel.click();
+    await fixture.whenStable();
+    const discard = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Discard changes',
+    );
+    if (!discard) {
+      throw new Error('No Discard changes button');
+    }
+    discard.click();
+    await fixture.whenStable();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('form')).toBeNull();
@@ -109,6 +142,38 @@ describe('ProfilePassword', () => {
     await submitAndSettle(fixture);
 
     expect(fixture.nativeElement.textContent).toContain('Your current password is incorrect.');
+    expect((fixture.nativeElement.querySelector('#current-password') as HTMLInputElement).value).toBe('wrong-password');
+    expect((fixture.nativeElement.querySelector('#new-password') as HTMLInputElement).value).toBe('new-password');
+    expect((fixture.nativeElement.querySelector('#confirm-new-password') as HTMLInputElement).value).toBe(
+      'new-password',
+    );
+  });
+
+  it('asks before discarding a changed password and keeps the draft when requested', async () => {
+    const { fixture } = setup(() => of(undefined));
+    fill(fixture, 'current-password', 'new-password', 'new-password');
+
+    const cancel = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Cancel',
+    );
+    if (!cancel) {
+      throw new Error('No Cancel button');
+    }
+    cancel.click();
+    await fixture.whenStable();
+
+    expect(overlay().querySelector('[role="alertdialog"]')?.textContent).toContain('Discard changes?');
+    const keepEditing = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Keep editing',
+    );
+    if (!keepEditing) {
+      throw new Error('No Keep editing button');
+    }
+    keepEditing.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('#new-password') as HTMLInputElement).value).toBe('new-password');
   });
 
   it('keeps a bodyless 401 truthful as a session-ended banner', async () => {

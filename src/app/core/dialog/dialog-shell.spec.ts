@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatDialogRef } from '@angular/material/dialog';
 import { NavigationStart, Router } from '@angular/router';
-import { Subject } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { provideIcons } from '@/app/core/icons';
 import { DialogShell } from './dialog-shell';
 
@@ -82,7 +82,7 @@ describe('DialogShell', () => {
         routerProvider(),
         {
           provide: MatDialogRef,
-          useValue: { close, keydownEvents: () => keydown.asObservable() },
+          useValue: { afterOpened: () => of(undefined), close, keydownEvents: () => keydown.asObservable() },
         },
       ],
     });
@@ -104,7 +104,7 @@ describe('DialogShell', () => {
         routerProvider(),
         {
           provide: MatDialogRef,
-          useValue: { close, keydownEvents: () => keydown.asObservable() },
+          useValue: { afterOpened: () => of(undefined), close, keydownEvents: () => keydown.asObservable() },
         },
       ],
     });

@@ -16,7 +16,8 @@ import { MatIcon } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
-import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { EditorDismissal } from '@/app/core/dialog';
+import { focusFirstInvalidField, partitionServerError, type ServerErrorControls } from '@/app/core/forms';
 import { Session } from '@/app/core/session';
 
 const PROFILE_NAME_MAX = 255;
@@ -31,6 +32,7 @@ const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please t
 export class ProfileIdentity {
   private readonly injector = inject(Injector);
   private readonly session = inject(Session);
+  private readonly editorDismissal = inject(EditorDismissal);
 
   protected readonly profile = this.session.profile;
   protected readonly editingName = signal(false);
@@ -58,6 +60,7 @@ export class ProfileIdentity {
   });
   protected readonly successMessage = signal<string | null>(null);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly pendingFeedback = signal(false);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   private readonly editNameAction = viewChild<ElementRef<HTMLButtonElement>>('editNameAction');
 
@@ -70,12 +73,33 @@ export class ProfileIdentity {
     this.nameModel.set({ name: profile.name });
     this.errorMessage.set(null);
     this.successMessage.set(null);
+    this.pendingFeedback.set(false);
     this.editingName.set(true);
     this.focusAfterRender(this.nameInput, true);
   }
 
+  hasUnsavedChanges(): boolean {
+    return this.editingName() && this.hasChangedName();
+  }
+
+  isWritePending(): boolean {
+    return this.submitting();
+  }
+
+  notifyWritePending(): void {
+    this.pendingFeedback.set(true);
+  }
+
+  discardUnsavedChanges(): void {
+    this.editingName.set(false);
+    this.nameModel.set({ name: '' });
+    this.errorMessage.set(null);
+    this.pendingFeedback.set(false);
+  }
+
   protected saveName(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
     submit(this.nameForm, {
       action: async () => {
         const profile = this.profile();
@@ -85,6 +109,7 @@ export class ProfileIdentity {
         }
 
         this.submitting.set(true);
+        this.pendingFeedback.set(false);
         this.errorMessage.set(null);
         try {
           const updated = await firstValueFrom(this.injector.get(AuthService).updateProfile(name));
@@ -109,17 +134,27 @@ export class ProfileIdentity {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingFeedback.set(false);
         }
       },
     });
+    if (this.nameForm().invalid()) {
+      focusFirstInvalidField(formElement);
+    }
   }
 
-  protected cancelNameEdit(): void {
+  protected async cancelNameEdit(): Promise<void> {
     if (this.submitting()) {
+      this.pendingFeedback.set(true);
       return;
     }
-    this.editingName.set(false);
-    this.errorMessage.set(null);
+    if (this.hasUnsavedChanges()) {
+      const discard = await firstValueFrom(this.editorDismissal.confirmDiscard());
+      if (!discard) {
+        return;
+      }
+    }
+    this.discardUnsavedChanges();
     this.focusAfterRender(this.editNameAction);
   }
 
