@@ -2,6 +2,7 @@ import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { finalize } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { CategoriesService } from '../../data/categories.service';
 import { Category } from '../../data/category';
@@ -52,6 +53,8 @@ export default class CategoriesList {
 
   /** Set when the re-read after a write fails — the rows stay, an inline retry re-runs it. */
   protected readonly refreshError = signal<string | null>(null);
+  protected readonly refreshing = signal(false);
+  private refreshRevision = 0;
 
   protected readonly expenseCategories = computed(() =>
     (this.categories() ?? []).filter((category) => category.kind === 'expense'),
@@ -67,6 +70,8 @@ export default class CategoriesList {
 
   /** Read the whole set cold. Bound to the failed-load retry. */
   protected load(): void {
+    this.refreshRevision += 1;
+    this.refreshing.set(false);
     this.loading.set(true);
     this.errorMessage.set(null);
     this.refreshError.set(null);
@@ -92,16 +97,33 @@ export default class CategoriesList {
    * rather than replacing a good screen with the load error.
    */
   protected reload(): void {
+    const revision = ++this.refreshRevision;
+    this.refreshing.set(true);
     this.refreshError.set(null);
 
     this.service
       .readAll()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => {
+          if (revision === this.refreshRevision) {
+            this.refreshing.set(false);
+          }
+        }),
+      )
       .subscribe({
-        next: (categories) => this.categories.set(categories),
+        next: (categories) => {
+          if (revision === this.refreshRevision) {
+            this.categories.set(categories);
+          }
+        },
         // The framing — the write landed, the list is stale — matters more here
         // than a server detail, so it is fixed rather than taken from the error.
-        error: () => this.refreshError.set(REFRESH_FAILED),
+        error: () => {
+          if (revision === this.refreshRevision) {
+            this.refreshError.set(REFRESH_FAILED);
+          }
+        },
       });
   }
 }

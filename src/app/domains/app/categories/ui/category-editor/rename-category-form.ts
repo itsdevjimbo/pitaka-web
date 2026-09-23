@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
-import { partitionServerError } from '@/app/core/forms';
+import { focusFirstInvalidField, partitionServerError } from '@/app/core/forms';
 import { CategoriesService } from '../../data/categories.service';
 import { Category, CATEGORY_NAME_MAX } from '../../data/category';
 import { duplicateNameBinding } from './duplicate-name';
@@ -45,6 +45,8 @@ export class RenameCategoryForm {
   // Outputs
   readonly renamed = output<Category>();
   readonly cancelled = output<void>();
+  readonly dirtyChange = output<boolean>();
+  readonly pendingChange = output<boolean>();
 
   // State
   protected readonly model = linkedSignal<{ name: string }>(() => ({
@@ -68,10 +70,12 @@ export class RenameCategoryForm {
 
   save(event: Event): void {
     event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.renameForm, {
       action: async () => {
         this.submitting.set(true);
+        this.pendingChange.emit(true);
         this.errorMessage.set(null);
 
         try {
@@ -98,9 +102,15 @@ export class RenameCategoryForm {
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
           this.submitting.set(false);
+          this.pendingChange.emit(false);
         }
       },
     });
+
+    if (this.renameForm().invalid()) {
+      this.renameForm().markAsTouched();
+      focusFirstInvalidField(formElement);
+    }
   }
 
   protected cancel(): void {

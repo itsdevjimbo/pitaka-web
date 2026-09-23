@@ -60,6 +60,7 @@ import { filter } from 'rxjs';
           <div class="mt-4 flex justify-end gap-3">
             <button
               matButton
+              class="min-h-11"
               type="button"
               (click)="keepEditing()"
               #keepEditingButton
@@ -68,6 +69,7 @@ import { filter } from 'rxjs';
             </button>
             <button
               matButton="filled"
+              class="min-h-11"
               type="button"
               (click)="discard()"
             >
