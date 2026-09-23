@@ -1,280 +1,488 @@
-<div class="mx-auto flex w-full max-w-2xl flex-col gap-y-6 p-4 sm:p-8">
-  <!-- Heading -->
-  <header class="flex flex-col gap-y-1">
-    <h1 class="text-2xl font-bold tracking-tight">Tags</h1>
-    <p class="text-neutral-500 dark:text-neutral-400">
-      The labels you attach to transactions to cut across categories.
-    </p>
+<main class="flex w-full min-w-0 flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
+  <header class="flex min-w-0 flex-col gap-1">
+    <h1
+      class="font-display text-3xl tracking-tight break-words"
+      tabindex="-1"
+    >
+      Tags
+    </h1>
+    <p class="text-secondary">Tags cut across Categories so related Transactions stay easy to find.</p>
   </header>
 
-  @if (loading()) {
-    <!-- Slow load: show that it is working -->
-    <div
-      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+  @if (confirmingNavigationDiscard()) {
+    <section
+      class="grid min-w-0 gap-3 rounded-2xl bg-warning-container p-4 text-warning sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+      role="alertdialog"
+      aria-labelledby="discard-tags-heading"
+      aria-describedby="discard-tags-description"
+    >
+      <div>
+        <h2
+          id="discard-tags-heading"
+          class="font-semibold"
+        >
+          Discard unsaved changes?
+        </h2>
+        <p
+          id="discard-tags-description"
+          class="mt-1 text-sm"
+        >
+          Your Tag changes will not be saved.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2 sm:justify-end">
+        <button
+          matButton
+          type="button"
+          class="min-h-11"
+          id="keep-navigation-editing"
+          (click)="keepNavigation()"
+        >
+          Keep editing
+        </button>
+        <button
+          matButton="filled"
+          type="button"
+          class="min-h-11"
+          (click)="discardAndNavigate()"
+        >
+          Discard changes and leave
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (navigationMessage(); as message) {
+    <p
+      class="rounded-2xl bg-soft px-4 py-3 text-sm text-text"
       role="status"
     >
-      <mat-icon
-        class="size-6 animate-spin"
-        svgIcon="loader-circle"
-      />
-      <span>Loading your tags…</span>
-    </div>
+      {{ message }}
+    </p>
+  }
+
+  @if (loading()) {
+    <app-resource-state
+      kind="loading"
+      message="Loading your tags…"
+    />
   } @else if (errorMessage(); as message) {
-    <!-- Failed load: one explanation, one retry, everything else withheld -->
-    <div
-      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
-      role="alert"
-    >
-      <mat-icon
-        class="size-8 text-neutral-400"
-        svgIcon="circle-alert"
-      />
-      <p class="max-w-sm text-neutral-600 dark:text-neutral-300">{{ message }}</p>
-      <button
-        matButton="filled"
-        (click)="load()"
-      >
-        <mat-icon svgIcon="refresh-cw" />
-        Try again
-      </button>
-    </div>
+    <app-resource-state
+      kind="initial-error"
+      [message]="message"
+      (retry)="load()"
+    />
   } @else {
     @if (staleMessage(); as message) {
-      <!-- A 403/404 on a stale list: say so, re-read, no retry -->
       <p
-        class="rounded-lg bg-neutral-100 px-3 py-2 text-sm text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300"
+        class="rounded-2xl bg-warning-container px-4 py-3 text-sm text-warning"
         role="status"
       >
         {{ message }}
       </p>
     }
 
-    @if (refreshError(); as message) {
-      <!-- The re-read after a write failed: rows stay, this refreshes them -->
-      <div
-        class="flex flex-col items-center gap-y-3 rounded-xl border border-neutral-200 px-6 py-4 text-center dark:border-neutral-800"
-        role="alert"
+    @if (refreshing()) {
+      <p
+        class="flex items-center gap-2 text-sm text-secondary"
+        role="status"
+        aria-live="polite"
       >
-        <p class="max-w-sm text-sm text-neutral-600 dark:text-neutral-300">
-          {{ message }}
-        </p>
-        <button
-          matButton="outlined"
-          (click)="reload()"
-        >
-          <mat-icon svgIcon="refresh-cw" />
-          Try again
-        </button>
-      </div>
+        <mat-icon
+          class="size-4 animate-spin motion-reduce:animate-none"
+          svgIcon="loader-circle"
+          aria-hidden="true"
+        />
+        Refreshing tags…
+      </p>
     }
 
-    @if (hasTags()) {
-      <!-- Search, with the count beside it — both withheld until the first Tag exists -->
-      <div class="flex flex-col gap-y-1">
-        <div class="relative">
-          <mat-icon
-            class="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-neutral-400"
-            svgIcon="search"
-          />
-          <input
-            type="search"
-            [class]="fieldClass"
-            aria-label="Search tags"
-            [value]="search()"
-            (input)="onSearch($any($event.target).value)"
-          />
-        </div>
-        <span class="text-xs text-neutral-500 dark:text-neutral-400">
-          {{ count() }} {{ count() === 1 ? 'tag' : 'tags' }}
-        </span>
-      </div>
-    }
-
-    <!-- Add a tag — the inline field, present in every non-error state -->
-    <div class="flex flex-col gap-y-1">
-      <div class="relative">
-        <mat-icon
-          class="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-neutral-400"
-          svgIcon="plus"
-        />
-        <input
-          #addInput
-          type="text"
-          [class]="fieldClass"
-          placeholder="Add a tag"
-          aria-label="Add a tag"
-          [attr.maxlength]="nameMax"
-          [disabled]="adding()"
-          (keydown.enter)="addTag(addInput.value)"
-        />
-      </div>
-      @if (addError(); as message) {
-        <p
-          class="text-sm text-red-700 dark:text-red-300"
-          role="alert"
-        >
-          {{ message }}
-        </p>
-      }
-    </div>
-
-    @if (!hasTags()) {
-      <!-- Zero Tags: the add field above is the way out; this explains the point -->
-      <div
-        class="flex flex-col items-center gap-y-2 rounded-xl border border-dashed border-neutral-300 px-6 py-16 text-center dark:border-neutral-700"
+    @if (refreshError(); as failure) {
+      <section
+        class="flex flex-wrap items-center gap-3 rounded-2xl bg-warning-container p-4 text-warning"
+        role="status"
       >
         <mat-icon
-          class="size-10 text-neutral-400"
-          svgIcon="tag"
+          svgIcon="triangle-alert"
+          aria-hidden="true"
         />
-        <p class="text-lg font-semibold">No tags yet</p>
-        <p class="max-w-xs text-neutral-500 dark:text-neutral-400">
-          You attach a tag to a transaction while filing it; on its own it does nothing yet.
-        </p>
-      </div>
-    } @else if (noMatch()) {
-      <!-- The search matched nothing — never read as an empty collection -->
-      <div
-        class="flex flex-col items-center gap-y-2 rounded-lg border border-dashed border-neutral-300 px-4 py-8 text-center dark:border-neutral-700"
-      >
-        <mat-icon
-          class="size-7 text-neutral-400"
-          svgIcon="search-x"
-        />
-        <p class="text-sm text-neutral-500 dark:text-neutral-400">No tags match “{{ trimmedSearch() }}”.</p>
+        <p class="min-w-0 flex-auto">{{ failure.message }}</p>
         <button
           matButton
           type="button"
-          (click)="clearSearch()"
+          class="min-h-11"
+          id="retry-tags-refresh"
+          (click)="retryRefresh()"
         >
-          Clear search
+          <mat-icon svgIcon="refresh-cw" />
+          {{ failure.saved ? 'Retry refresh' : 'Refresh tags' }}
         </button>
-      </div>
-    } @else {
-      <ul class="flex flex-col gap-y-2">
-        @for (tag of visible(); track tag.id) {
-          <li class="flex flex-col gap-y-3 rounded-xl border border-neutral-200 px-4 py-2.5 dark:border-neutral-800">
-            <div class="flex items-center gap-x-3">
-              @if (editingId() === tag.id) {
-                <div class="relative min-w-0 flex-auto">
-                  <mat-icon
-                    class="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-neutral-400"
-                    svgIcon="pencil"
-                  />
-                  <input
-                    #editInput
-                    type="text"
-                    [class]="fieldClass"
-                    [attr.aria-label]="'Rename ' + tag.name"
-                    [attr.maxlength]="nameMax"
-                    [value]="tag.name"
-                    (keydown.enter)="commitRename(tag, editInput.value)"
-                    (keydown.escape)="cancelRename()"
-                    (blur)="commitRename(tag, editInput.value)"
-                  />
-                </div>
-              } @else {
-                <span class="min-w-0 flex-auto truncate">{{ tag.name }}</span>
+      </section>
+    }
 
-                @if (busyId() === tag.id) {
-                  <mat-icon
-                    class="size-5 shrink-0 animate-spin text-neutral-400"
-                    svgIcon="loader-circle"
-                    role="status"
-                    aria-label="Working…"
-                  />
-                } @else {
-                  <button
-                    matIconButton
-                    class="shrink-0"
-                    [attr.aria-label]="'Actions for ' + tag.name"
-                    [matMenuTriggerFor]="rowMenu"
-                  >
-                    <mat-icon svgIcon="ellipsis-vertical" />
-                  </button>
-                  <mat-menu #rowMenu>
-                    <button
-                      mat-menu-item
-                      (click)="startRename(tag)"
-                    >
-                      <mat-icon svgIcon="pencil" />
-                      <span>Rename</span>
-                    </button>
-                    <button
-                      mat-menu-item
-                      (click)="askDelete(tag)"
-                    >
-                      <mat-icon svgIcon="trash-2" />
-                      <span>Delete</span>
-                    </button>
-                  </mat-menu>
-                }
+    <section
+      class="flex w-full max-w-4xl min-w-0 flex-col gap-5 rounded-2xl border border-divider bg-surface p-4 sm:p-6"
+    >
+      @if (hasTags()) {
+        <div class="flex min-w-0 flex-col gap-2">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <label
+              for="tag-search"
+              class="font-display text-xl tracking-tight"
+            >
+              Find a tag
+            </label>
+            <span class="text-sm text-secondary">{{ count() }} {{ count() === 1 ? 'tag' : 'tags' }}</span>
+          </div>
+          <div class="relative min-w-0">
+            <mat-icon
+              class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-secondary"
+              svgIcon="search"
+              aria-hidden="true"
+            />
+            <input
+              #searchInput
+              id="tag-search"
+              type="search"
+              class="min-h-12 w-full min-w-0 rounded-xl border border-divider bg-surface py-2 pr-3 pl-11 text-base text-text placeholder:text-secondary focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:outline-none dark:focus-visible:ring-primary-200"
+              aria-describedby="tag-search-help"
+              [disabled]="searchDisabled()"
+              [value]="search()"
+              placeholder="Search tags"
+              (input)="onSearch(searchInput.value)"
+            />
+          </div>
+          @if (searchDisabled()) {
+            <p
+              id="tag-search-help"
+              class="text-sm text-secondary"
+            >
+              Finish the current Tag action before searching.
+            </p>
+          }
+        </div>
+      }
+
+      <form
+        novalidate
+        class="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+        (submit)="createTag($event)"
+      >
+        <div class="min-w-0">
+          <label
+            for="add-tag-name"
+            class="mb-1.5 block text-sm font-medium text-text"
+          >
+            Add a tag
+          </label>
+          <div class="relative min-w-0">
+            <mat-icon
+              class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-secondary"
+              svgIcon="plus"
+              aria-hidden="true"
+            />
+            <input
+              #addInput
+              id="add-tag-name"
+              type="text"
+              [class]="fieldClass"
+              [formField]="addForm.name"
+              [attr.aria-invalid]="addForm.name().touched() && addForm.name().invalid()"
+              [attr.aria-describedby]="
+                addForm.name().touched() && addForm.name().invalid() ? 'add-tag-name-errors' : null
+              "
+              placeholder="Name your tag"
+            />
+          </div>
+          @if (addForm.name().touched() && addForm.name().invalid()) {
+            <ul
+              id="add-tag-name-errors"
+              class="mt-1 list-none text-sm text-danger"
+              role="alert"
+              aria-live="polite"
+            >
+              @for (error of addForm.name().errors(); track error) {
+                <li>{{ error.message }}</li>
               }
-            </div>
+            </ul>
+          }
+          @if (addErrorMessage(); as message) {
+            <p
+              class="mt-1 text-sm text-danger"
+              role="alert"
+            >
+              {{ message }}
+            </p>
+          }
+        </div>
+        <button
+          matButton="filled"
+          type="submit"
+          class="min-h-11"
+          [disabled]="writesBlocked()"
+        >
+          <mat-icon svgIcon="plus" />
+          {{ adding() ? 'Adding…' : 'Add tag' }}
+        </button>
+      </form>
 
-            @if (editError(); as message) {
+      @if (!hasTags()) {
+        <section class="flex min-w-0 flex-col items-center gap-3 rounded-2xl bg-soft px-6 py-10 text-center">
+          <span
+            class="grid size-14 place-items-center rounded-2xl bg-surface text-primary-600 dark:text-primary-200"
+            aria-hidden="true"
+          >
+            <mat-icon
+              class="size-7"
+              svgIcon="tag"
+            />
+          </span>
+          <h2 class="font-display text-xl">No tags yet</h2>
+          <p class="max-w-md text-secondary">
+            Tags connect Transactions across Categories. Add one above, then attach it while filing a Transaction.
+          </p>
+        </section>
+      } @else if (noMatch()) {
+        <section
+          class="flex min-w-0 flex-col items-center gap-2 rounded-2xl border border-dashed border-divider bg-soft px-4 py-8 text-center"
+        >
+          <mat-icon
+            class="size-7 text-secondary"
+            svgIcon="search-x"
+            aria-hidden="true"
+          />
+          <h2 class="font-display text-lg">No tags match “{{ trimmedSearch() }}”</h2>
+          <button
+            matButton
+            type="button"
+            class="min-h-11"
+            (click)="clearSearch()"
+          >
+            Clear search
+          </button>
+        </section>
+      } @else {
+        <ul class="flex min-w-0 flex-col gap-2">
+          @for (tag of visible(); track tag.id) {
+            <li class="flex min-w-0 flex-col gap-3 rounded-2xl border border-divider bg-surface p-3 sm:p-4">
               @if (editingId() === tag.id) {
-                <p
-                  class="text-sm text-red-700 dark:text-red-300"
-                  role="alert"
+                <form
+                  novalidate
+                  class="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+                  (submit)="renameTag(tag, $event)"
+                  (keydown.escape)="requestCancelRename($event)"
                 >
-                  {{ message }}
-                </p>
-              }
-            }
-
-            @if (confirmingDeleteId() === tag.id) {
-              <div
-                class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-100 px-3 py-2 dark:bg-neutral-900"
-                role="alertdialog"
-                aria-label="Confirm delete"
-              >
-                <p class="text-sm text-neutral-700 dark:text-neutral-200">
-                  Delete
-                  <span class="font-semibold">{{ tag.name }}</span>
-                  ? It will be removed from every transaction carrying it. This can’t be undone.
-                </p>
-                <div class="flex gap-x-2">
-                  <button
-                    matButton
-                    type="button"
-                    (click)="cancelDelete()"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    matButton="filled"
-                    type="button"
-                    class="bg-red-600 text-white hover:bg-red-700"
-                    (click)="confirmDelete(tag)"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            }
-
-            @if (notice(); as n) {
-              @if (n.id === tag.id) {
-                <app-row-notice [message]="n.message">
-                  <div
-                    row-notice-actions
-                    class="flex gap-x-2"
-                  >
+                  <div class="min-w-0">
+                    <label
+                      [for]="'rename-tag-' + tag.id"
+                      class="mb-1.5 block text-sm font-medium text-text"
+                    >
+                      Rename {{ tag.name }}
+                    </label>
+                    <div class="relative min-w-0">
+                      <mat-icon
+                        class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-secondary"
+                        svgIcon="pencil"
+                        aria-hidden="true"
+                      />
+                      <input
+                        #editInput
+                        [id]="'rename-tag-' + tag.id"
+                        type="text"
+                        [class]="fieldClass"
+                        [formField]="editForm.name"
+                        [attr.aria-invalid]="editForm.name().touched() && editForm.name().invalid()"
+                        [attr.aria-describedby]="
+                          editForm.name().touched() && editForm.name().invalid() ? 'rename-tag-errors-' + tag.id : null
+                        "
+                      />
+                    </div>
+                    @if (editForm.name().touched() && editForm.name().invalid()) {
+                      <ul
+                        [id]="'rename-tag-errors-' + tag.id"
+                        class="mt-1 list-none text-sm text-danger"
+                        role="alert"
+                        aria-live="polite"
+                      >
+                        @for (error of editForm.name().errors(); track error) {
+                          <li>{{ error.message }}</li>
+                        }
+                      </ul>
+                    }
+                    @if (editErrorMessage(); as message) {
+                      <p
+                        class="mt-1 text-sm text-danger"
+                        role="alert"
+                      >
+                        {{ message }}
+                      </p>
+                    }
+                  </div>
+                  <div class="flex flex-wrap justify-end gap-2 sm:pt-7">
                     <button
                       matButton
                       type="button"
-                      (click)="n.retry()"
+                      class="min-h-11"
+                      [disabled]="writesBlocked()"
+                      (click)="requestCancelRename()"
                     >
-                      Try again
+                      Cancel
+                    </button>
+                    <button
+                      matButton="filled"
+                      type="submit"
+                      class="min-h-11"
+                      [disabled]="writesBlocked()"
+                    >
+                      {{ busyId() === tag.id ? 'Saving…' : 'Save' }}
                     </button>
                   </div>
-                </app-row-notice>
+                </form>
+
+                @if (confirmingRenameDiscard()) {
+                  <section
+                    class="grid min-w-0 gap-3 rounded-2xl bg-warning-container p-3 text-warning sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    role="alertdialog"
+                    [attr.aria-labelledby]="'discard-rename-heading-' + tag.id"
+                  >
+                    <p
+                      [id]="'discard-rename-heading-' + tag.id"
+                      class="text-sm font-medium"
+                    >
+                      Discard the unsaved name for {{ tag.name }}?
+                    </p>
+                    <div class="flex flex-wrap gap-2 sm:justify-end">
+                      <button
+                        matButton
+                        type="button"
+                        class="min-h-11"
+                        [id]="'keep-editing-rename-tag-' + tag.id"
+                        (click)="keepRename()"
+                      >
+                        Keep editing
+                      </button>
+                      <button
+                        matButton="filled"
+                        type="button"
+                        class="min-h-11"
+                        (click)="discardRename()"
+                      >
+                        Discard changes
+                      </button>
+                    </div>
+                  </section>
+                }
+              } @else {
+                <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                  <span class="leading-snug min-w-0 py-2 font-medium break-words text-text">{{ tag.name }}</span>
+
+                  @if (busyId() === tag.id) {
+                    <mat-icon
+                      class="mt-3 size-5 shrink-0 animate-spin text-secondary motion-reduce:animate-none"
+                      svgIcon="loader-circle"
+                      role="status"
+                      aria-label="Saving tag change…"
+                    />
+                  } @else {
+                    <button
+                      matIconButton
+                      type="button"
+                      [id]="'tag-actions-' + tag.id"
+                      class="shrink-0"
+                      [attr.aria-label]="'Actions for ' + tag.name"
+                      [disabled]="writesBlocked()"
+                      [matMenuTriggerFor]="rowMenu"
+                    >
+                      <mat-icon svgIcon="ellipsis-vertical" />
+                    </button>
+                    <mat-menu #rowMenu>
+                      <button
+                        mat-menu-item
+                        (click)="startRename(tag)"
+                      >
+                        <mat-icon svgIcon="pencil" />
+                        <span>Rename</span>
+                      </button>
+                      <button
+                        mat-menu-item
+                        (click)="askDelete(tag)"
+                      >
+                        <mat-icon svgIcon="trash-2" />
+                        <span>Delete</span>
+                      </button>
+                    </mat-menu>
+                  }
+                </div>
+
+                @if (confirmingDeleteId() === tag.id) {
+                  <section
+                    class="grid min-w-0 gap-3 rounded-2xl bg-warning-container p-3 text-warning sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    role="alertdialog"
+                    [attr.aria-labelledby]="'delete-tag-heading-' + tag.id"
+                    [attr.aria-describedby]="'delete-tag-description-' + tag.id"
+                  >
+                    <div class="min-w-0">
+                      <h2
+                        [id]="'delete-tag-heading-' + tag.id"
+                        class="font-semibold break-words"
+                      >
+                        Delete {{ tag.name }}?
+                      </h2>
+                      <p
+                        [id]="'delete-tag-description-' + tag.id"
+                        class="mt-1 text-sm"
+                      >
+                        It will be removed from every Transaction carrying it. This can’t be undone.
+                      </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 sm:justify-end">
+                      <button
+                        matButton
+                        type="button"
+                        class="min-h-11"
+                        [id]="'cancel-delete-tag-' + tag.id"
+                        (click)="cancelDelete(tag)"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        matButton
+                        type="button"
+                        class="min-h-11 bg-danger text-canvas hover:opacity-90"
+                        [disabled]="writesBlocked()"
+                        (click)="confirmDelete(tag)"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </section>
+                }
+
+                @if (notice(); as rowNotice) {
+                  @if (rowNotice.id === tag.id) {
+                    <app-row-notice [message]="rowNotice.message">
+                      <div
+                        row-notice-actions
+                        class="flex flex-wrap gap-x-2"
+                      >
+                        <button
+                          matButton
+                          type="button"
+                          class="min-h-11"
+                          [disabled]="writesBlocked()"
+                          (click)="rowNotice.retry()"
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    </app-row-notice>
+                  }
+                }
               }
-            }
-          </li>
-        }
-      </ul>
-    }
+            </li>
+          }
+        </ul>
+      }
+    </section>
   }
-</div>
+</main>

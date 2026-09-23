@@ -1,7 +1,8 @@
+import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
-import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { provideRouter, Router } from '@angular/router';
+import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
@@ -10,24 +11,28 @@ import { Tag } from '../../data/tag';
 import { TagsService } from '../../data/tags.service';
 import TagsList from './tags-list';
 
+@Component({ template: 'Destination' })
+class Destination {}
+
 const tag = (id: number, name: string): Tag => ({ id, name });
 
 const GROCERIES = tag(1, 'groceries');
 const HOLIDAY = tag(2, 'holiday');
 const WORK = tag(3, 'work');
-const EVERYTHING = [WORK, GROCERIES, HOLIDAY]; // deliberately unsorted
+const EVERYTHING = [WORK, GROCERIES, HOLIDAY];
 
-type Service = Partial<TagsService>;
+type ReadTags = TagsService['readAll'];
+type TagListService = Partial<TagsService>;
 
 describe('TagsList', () => {
   const overlay = withOverlayContainer();
 
-  function setup(readAll: TagsService['readAll'], overrides: Service = {}) {
+  function setup(readAll: ReadTags, overrides: TagListService = {}) {
     TestBed.configureTestingModule({
       imports: [TagsList],
       providers: [
         provideIcons(),
-        provideRouter([]),
+        provideRouter([{ path: 'other', component: Destination }]),
         provideDialogDefaults(),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: TagsService, useValue: { readAll, ...overrides } },
@@ -42,17 +47,12 @@ describe('TagsList', () => {
       fixture,
       root,
       text: () => root().textContent ?? '',
-      addInput: () => root().querySelector<HTMLInputElement>('input[aria-label="Add a tag"]')!,
-      searchInput: () => root().querySelector<HTMLInputElement>('input[type="search"]'),
-      countText: () => root().querySelector('span.text-xs')?.textContent?.trim() ?? '',
-      rows: () => Array.from(root().querySelectorAll('ul > li')),
-      rowNames: () =>
-        Array.from(root().querySelectorAll('ul > li')).map((li) =>
-          li.querySelector('span.truncate')?.textContent?.trim(),
-        ),
-      menuTrigger: (name: string) =>
-        root().querySelector<HTMLButtonElement>(`button[aria-label="Actions for ${name}"]`),
-      editInput: () => root().querySelector<HTMLInputElement>('input[aria-label^="Rename "]'),
+      addInput: () => root().querySelector<HTMLInputElement>('#add-tag-name')!,
+      searchInput: () => root().querySelector<HTMLInputElement>('#tag-search'),
+      editInput: () => root().querySelector<HTMLInputElement>('[id^="rename-tag-"]'),
+      rowNames: () => Array.from(root().querySelectorAll('ul > li > div > span')).map((el) => el.textContent?.trim()),
+      rowAction: (id: number) => root().querySelector<HTMLButtonElement>(`#tag-actions-${id}`),
+      button: (label: string) => button(root(), label),
     };
   }
 
@@ -64,14 +64,18 @@ describe('TagsList', () => {
     fixture.detectChanges();
   }
 
-  function overlayButton(label: string): HTMLButtonElement {
-    const button = Array.from(overlay().querySelectorAll('button')).find((el) =>
-      (el.textContent ?? '').includes(label),
+  function button(container: ParentNode, label: string): HTMLButtonElement {
+    const result = Array.from(container.querySelectorAll('button')).find(
+      (candidate) => (candidate.textContent ?? '').trim() === label,
     );
-    if (!button) {
-      throw new Error(`No overlay button labelled "${label}"`);
+    if (!result) {
+      throw new Error(`No button labelled "${label}"`);
     }
-    return button;
+    return result;
+  }
+
+  function overlayButton(label: string): HTMLButtonElement {
+    return button(overlay(), label);
   }
 
   async function openRowMenu(fixture: ComponentFixture<TagsList>, trigger: HTMLButtonElement) {
@@ -79,98 +83,91 @@ describe('TagsList', () => {
     await settle(fixture);
   }
 
+  async function startEditing(fixture: ComponentFixture<TagsList>, trigger: HTMLButtonElement) {
+    await openRowMenu(fixture, trigger);
+    overlayButton('Rename').click();
+    await settle(fixture);
+  }
+
   function type(input: HTMLInputElement, value: string): void {
     input.value = value;
-    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  function press(input: HTMLInputElement, key: string): void {
-    input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
-  }
+  it('lists Tags alphabetically and wraps the full name beside a reachable row action', () => {
+    const longName = `${'a'.repeat(80)} ${'b'.repeat(80)}`;
+    const { root, rowNames, rowAction } = setup(() => of([tag(4, longName), tag(2, 'Zebra'), tag(3, 'apple')]));
 
-  it('lists the tags alphabetically, case-insensitively', () => {
-    const { rowNames } = setup(() => of([tag(1, 'Zebra'), tag(2, 'apple'), tag(3, 'mango')]));
-    expect(rowNames()).toEqual(['apple', 'mango', 'Zebra']);
+    expect(rowNames()).toEqual([longName, 'apple', 'Zebra']);
+    expect(root().querySelector('ul > li span')?.className).toContain('break-words');
+    expect(rowAction(4)?.getAttribute('aria-label')).toBe(`Actions for ${longName}`);
+    expect(rowAction(4)?.tagName).toBe('BUTTON');
   });
 
-  it('shows the search and the count once there is at least one tag', () => {
-    const { searchInput, countText } = setup(() => of(EVERYTHING));
+  it('shows search and the whole collection count when Tags exist', () => {
+    const { searchInput, text } = setup(() => of(EVERYTHING));
     expect(searchInput()).not.toBeNull();
-    expect(countText()).toBe('3 tags');
+    expect(text()).toContain('3 tags');
   });
 
-  it('withholds the search and count at zero but keeps the add field, focused', async () => {
-    const { fixture, searchInput, countText, addInput, text } = setup(() => of([]));
+  it('keeps inline creation in the empty state and gives the field focus', async () => {
+    const { fixture, root, addInput, searchInput, text } = setup(() => of([]));
     await settle(fixture);
 
     expect(searchInput()).toBeNull();
-    expect(countText()).toBe('');
-    expect(addInput()).not.toBeNull();
+    expect(root().querySelector('button[type="submit"]')?.textContent).toContain('Add tag');
+    expect(root().querySelector('label[for="add-tag-name"]')?.textContent).toContain('Add a tag');
     expect(document.activeElement).toBe(addInput());
-    // …and it teaches what tags are for, in one sentence with no second call to action.
     expect(text()).toContain('No tags yet');
-    expect(text()).toContain('attach a tag to a transaction while filing it');
-    expect(text()).not.toContain('record and refile');
+    expect(text()).toContain('attach it while filing a Transaction');
   });
 
-  it('narrows the list by the search', async () => {
-    const { fixture, searchInput, rowNames } = setup(() => of(EVERYTHING));
-    type(searchInput()!, 'ol');
+  it('narrows search and distinguishes no matches from a genuinely empty collection', async () => {
+    const { fixture, searchInput, root, text } = setup(() => of(EVERYTHING));
+
+    type(searchInput()!, 'hol');
     await settle(fixture);
-    expect(rowNames()).toEqual(['holiday']);
-  });
-
-  it('tells a filter-empty search from an empty collection, and clears it', async () => {
-    const { fixture, searchInput, text, root } = setup(() => of(EVERYTHING));
+    expect(root().querySelectorAll('ul > li')).toHaveLength(1);
+    expect(text()).toContain('holiday');
 
     type(searchInput()!, 'zzz');
     await settle(fixture);
     expect(text()).toContain('No tags match “zzz”');
     expect(text()).not.toContain('No tags yet');
-
-    Array.from(root().querySelectorAll('button'))
-      .find((b) => (b.textContent ?? '').includes('Clear search'))!
-      .click();
+    button(root(), 'Clear search').click();
     await settle(fixture);
     expect(text()).toContain('groceries');
-    expect(text()).not.toContain('No tags match');
   });
 
-  it('explains a failed load and retries the whole read', async () => {
+  it('shows an initial read failure and retries without presenting an empty state', async () => {
     let attempt = 0;
-    const readAll = vi.fn(() => {
+    const readAll: ReadTags = vi.fn(() => {
       attempt += 1;
       return attempt === 1 ? throwError(() => new ApiError('Could not reach the server.', 0)) : of(EVERYTHING);
     });
-    const { fixture, text, root } = setup(readAll as unknown as TagsService['readAll']);
+    const { fixture, root, text } = setup(readAll);
 
     expect(text()).toContain('Could not reach the server.');
-    expect(root().querySelector('input[aria-label="Add a tag"]')).toBeNull();
-
-    Array.from(root().querySelectorAll('button'))
-      .find((b) => (b.textContent ?? '').includes('Try again'))!
-      .click();
+    expect(root().querySelector('#add-tag-name')).toBeNull();
+    expect(text()).not.toContain('No tags yet');
+    button(root(), 'Retry').click();
     await settle(fixture);
-
     expect(readAll).toHaveBeenCalledTimes(2);
     expect(text()).toContain('groceries');
   });
 
-  describe('create', () => {
-    it('creates the trimmed name, then clears the field, keeps focus and re-reads', async () => {
-      const create = vi.fn(() => of(tag(9, 'errands')));
+  describe('creation', () => {
+    it('creates a trimmed name, clears the field, keeps focus and reads the collection again', async () => {
+      const create: TagsService['create'] = vi.fn((name) => of(tag(9, name)));
       let attempt = 0;
-      const readAll = vi.fn(() => {
+      const readAll: ReadTags = vi.fn(() => {
         attempt += 1;
-        return attempt === 1 ? of(EVERYTHING) : of([...EVERYTHING, tag(9, 'errands')]);
+        return of(attempt === 1 ? EVERYTHING : [...EVERYTHING, tag(9, 'errands')]);
       });
-      const { fixture, addInput, rowNames } = setup(readAll as unknown as TagsService['readAll'], {
-        create: create as unknown as TagsService['create'],
-      });
+      const { fixture, addInput, rowNames } = setup(readAll, { create });
 
-      const input = addInput();
-      type(input, '  errands  ');
-      press(input, 'Enter');
+      type(addInput(), '  errands  ');
+      button(fixture.nativeElement, 'Add tag').click();
       await settle(fixture);
 
       expect(create).toHaveBeenCalledWith('errands');
@@ -180,274 +177,249 @@ describe('TagsList', () => {
       expect(rowNames()).toContain('errands');
     });
 
-    it('does nothing on an empty or whitespace-only field — no request', () => {
-      const create = vi.fn(() => of(tag(9, 'x')));
-      const { addInput } = setup(() => of(EVERYTHING), {
-        create: create as unknown as TagsService['create'],
-      });
+    it('keeps invalid Submit enabled, links the required error to the field, and sends no request', async () => {
+      const create: TagsService['create'] = vi.fn(() => of(tag(9, 'new')));
+      const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
 
-      const input = addInput();
-      type(input, '   ');
-      press(input, 'Enter');
-
-      expect(create).not.toHaveBeenCalled();
-    });
-
-    it('shows a duplicate-name 409 under the field, keeping the typed text', async () => {
-      const create = vi.fn(() => throwError(() => new ApiError('taken', 409, { name: ['taken'] })));
-      const { fixture, addInput, text } = setup(() => of(EVERYTHING), {
-        create: create as unknown as TagsService['create'],
-      });
-
-      const input = addInput();
-      type(input, 'groceries');
-      press(input, 'Enter');
+      type(addInput(), '   ');
+      const submitButton = button(root(), 'Add tag');
+      expect(submitButton.disabled).toBe(false);
+      submitButton.click();
       await settle(fixture);
 
-      expect(text()).toContain('You already have a tag called “groceries”.');
+      expect(create).not.toHaveBeenCalled();
+      expect(addInput().getAttribute('aria-invalid')).toBe('true');
+      expect(root().querySelector('#add-tag-name-errors')?.textContent).toContain('Enter a tag name.');
+      expect(document.activeElement).toBe(addInput());
+    });
+
+    it('shows a duplicate-name error under the field and preserves the entered value', async () => {
+      const create: TagsService['create'] = vi.fn(() =>
+        throwError(() => new ApiError('taken', 409, { name: ['taken'] })),
+      );
+      const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
+
+      type(addInput(), 'groceries');
+      button(root(), 'Add tag').click();
+      await settle(fixture);
+
+      expect(root().textContent).toContain('You already have a tag called “groceries”.');
       expect(addInput().value).toBe('groceries');
+      expect(addInput().getAttribute('aria-describedby')).toContain('add-tag-name-errors');
+    });
+
+    it('keeps entered text after a generic write failure', async () => {
+      const create: TagsService['create'] = vi.fn(() => throwError(() => new ApiError('Try again later.', 500)));
+      const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
+
+      type(addInput(), 'travel');
+      button(root(), 'Add tag').click();
+      await settle(fixture);
+
+      expect(root().textContent).toContain('Try again later.');
+      expect(addInput().value).toBe('travel');
+    });
+
+    it('blocks another write after a successful create whose refresh failed, then retries only the read', async () => {
+      const create: TagsService['create'] = vi.fn(() => of(tag(9, 'errands')));
+      let attempt = 0;
+      const readAll: ReadTags = vi.fn(() => {
+        attempt += 1;
+        if (attempt === 1) {
+          return of(EVERYTHING);
+        }
+        if (attempt === 2) {
+          return throwError(() => new ApiError('Server unavailable.', 500));
+        }
+        return of([...EVERYTHING, tag(9, 'errands')]);
+      });
+      const { fixture, addInput, root } = setup(readAll, { create });
+
+      type(addInput(), 'errands');
+      button(root(), 'Add tag').click();
+      await settle(fixture);
+      expect(root().textContent).toContain('Your change was saved');
+      expect(addInput().disabled).toBe(true);
+      expect(button(root(), 'Add tag').disabled).toBe(true);
+
+      button(root(), 'Retry refresh').click();
+      await settle(fixture);
+      expect(readAll).toHaveBeenCalledTimes(3);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(addInput().disabled).toBe(false);
+      expect(root().textContent).toContain('errands');
     });
   });
 
-  describe('rename, in place on the row', () => {
-    function startEditing(fixture: ComponentFixture<TagsList>, trigger: HTMLButtonElement) {
-      return openRowMenu(fixture, trigger).then(() => {
-        overlayButton('Rename').click();
-        return settle(fixture);
-      });
-    }
-
-    it('is reached from a real focusable trigger sitting in the row', () => {
-      const { menuTrigger } = setup(() => of(EVERYTHING));
-      const trigger = menuTrigger('groceries');
-      expect(trigger).not.toBeNull();
-      expect(trigger!.tagName).toBe('BUTTON');
-      trigger!.focus();
-      expect(document.activeElement).toBe(trigger);
-    });
-
-    it('commits on Enter and re-reads', async () => {
-      const rename = vi.fn(() => of(tag(1, 'food')));
+  describe('inline renaming', () => {
+    it('starts from the row menu, saves explicitly, re-reads and restores row focus', async () => {
+      const rename: TagsService['rename'] = vi.fn((id, name) => of(tag(id, name)));
       let attempt = 0;
-      const readAll = vi.fn(() => {
+      const readAll: ReadTags = vi.fn(() => {
         attempt += 1;
-        return attempt === 1 ? of(EVERYTHING) : of([tag(1, 'food'), HOLIDAY, WORK]);
+        return of(attempt === 1 ? EVERYTHING : [tag(1, 'food'), HOLIDAY, WORK]);
       });
-      const { fixture, menuTrigger, editInput, rowNames } = setup(readAll as unknown as TagsService['readAll'], {
-        rename: rename as unknown as TagsService['rename'],
-      });
+      const { fixture, root, rowAction, editInput, rowNames } = setup(readAll, { rename });
 
-      await startEditing(fixture, menuTrigger('groceries')!);
-      const input = editInput()!;
-      type(input, 'food');
-      press(input, 'Enter');
+      await startEditing(fixture, rowAction(1)!);
+      type(editInput()!, 'food');
+      button(root(), 'Save').click();
       await settle(fixture);
 
       expect(rename).toHaveBeenCalledWith(1, 'food');
       expect(readAll).toHaveBeenCalledTimes(2);
       expect(rowNames()).toContain('food');
+      expect(document.activeElement).toBe(rowAction(1));
     });
 
-    it('commits on blur', async () => {
-      const rename = vi.fn(() => of(tag(1, 'food')));
-      const { fixture, menuTrigger, editInput } = setup(() => of(EVERYTHING), {
-        rename: rename as unknown as TagsService['rename'],
-      });
+    it('keeps invalid Submit enabled, focuses the field and does not send a request', async () => {
+      const rename: TagsService['rename'] = vi.fn((id, name) => of(tag(id, name)));
+      const { fixture, root, rowAction, editInput } = setup(() => of(EVERYTHING), { rename });
 
-      await startEditing(fixture, menuTrigger('groceries')!);
-      const input = editInput()!;
-      type(input, 'food');
-      input.dispatchEvent(new Event('blur'));
-      await settle(fixture);
-
-      expect(rename).toHaveBeenCalledWith(1, 'food');
-    });
-
-    it('abandons an emptied field with no request', async () => {
-      const rename = vi.fn(() => of(tag(1, 'food')));
-      const { fixture, menuTrigger, editInput } = setup(() => of(EVERYTHING), {
-        rename: rename as unknown as TagsService['rename'],
-      });
-
-      await startEditing(fixture, menuTrigger('groceries')!);
-      const input = editInput()!;
-      type(input, '   ');
-      press(input, 'Enter');
+      await startEditing(fixture, rowAction(1)!);
+      type(editInput()!, '  ');
+      const save = button(root(), 'Save');
+      expect(save.disabled).toBe(false);
+      save.click();
       await settle(fixture);
 
       expect(rename).not.toHaveBeenCalled();
-      expect(editInput()).toBeNull();
+      expect(editInput()!.getAttribute('aria-invalid')).toBe('true');
+      expect(document.activeElement).toBe(editInput());
     });
 
-    it('abandons on Escape — no request, edit closes', async () => {
-      const rename = vi.fn(() => of(tag(1, 'food')));
-      const { fixture, menuTrigger, editInput } = setup(() => of(EVERYTHING), {
-        rename: rename as unknown as TagsService['rename'],
-      });
+    it('asks before discarding a dirty name and restores focus to the row action', async () => {
+      const { fixture, root, rowAction, editInput } = setup(() => of(EVERYTHING));
 
-      await startEditing(fixture, menuTrigger('groceries')!);
-      const input = editInput()!;
-      type(input, 'food');
-      press(input, 'Escape');
-      await settle(fixture);
-
-      expect(rename).not.toHaveBeenCalled();
-      expect(editInput()).toBeNull();
-    });
-
-    it('swallows a rename to the tag’s own current name — no request', async () => {
-      const rename = vi.fn(() => of(GROCERIES));
-      const { fixture, menuTrigger, editInput } = setup(() => of(EVERYTHING), {
-        rename: rename as unknown as TagsService['rename'],
-      });
-
-      await startEditing(fixture, menuTrigger('groceries')!);
-      const input = editInput()!;
-      type(input, 'groceries');
-      press(input, 'Enter');
-      await settle(fixture);
-
-      expect(rename).not.toHaveBeenCalled();
-      expect(editInput()).toBeNull();
-    });
-
-    it('shows a duplicate-name 409 under the rename field, keeping the typed text', async () => {
-      const rename = vi.fn(() => throwError(() => new ApiError('taken', 409, { name: ['taken'] })));
-      const { fixture, menuTrigger, editInput, text } = setup(() => of(EVERYTHING), {
-        rename: rename as unknown as TagsService['rename'],
-      });
-
-      await startEditing(fixture, menuTrigger('groceries')!);
-      const input = editInput()!;
-      type(input, 'holiday');
-      press(input, 'Enter');
-      await settle(fixture);
-
-      expect(text()).toContain('You already have a tag called “holiday”.');
-      expect(editInput()!.value).toBe('holiday');
-    });
-
-    it('folds a 403 into one staleness line, re-reads, and offers no retry', async () => {
-      const rename = vi.fn(() => throwError(() => new ApiError('Forbidden', 403)));
-      let attempt = 0;
-      const readAll = vi.fn(() => {
-        attempt += 1;
-        return of(attempt === 1 ? EVERYTHING : [HOLIDAY, WORK]);
-      });
-      const { fixture, menuTrigger, editInput, text } = setup(readAll as unknown as TagsService['readAll'], {
-        rename: rename as unknown as TagsService['rename'],
-      });
-
-      await startEditing(fixture, menuTrigger('groceries')!);
+      await startEditing(fixture, rowAction(1)!);
       type(editInput()!, 'food');
-      press(editInput()!, 'Enter');
+      button(root(), 'Cancel').click();
       await settle(fixture);
 
-      expect(text()).toContain('That tag is no longer there.');
-      expect(text()).not.toContain('Try again');
-      expect(readAll).toHaveBeenCalledTimes(2);
+      expect(root().querySelector('[role="alertdialog"]')?.textContent).toContain('Discard the unsaved name');
+      expect(document.activeElement).toBe(button(root(), 'Keep editing'));
+      button(root(), 'Discard changes').click();
+      await settle(fixture);
+      expect(root().querySelector('[id^="rename-tag-"]')).toBeNull();
+      expect(document.activeElement).toBe(rowAction(1));
+    });
+
+    it('shows a duplicate-name error under the editor and retains the typed value', async () => {
+      const rename: TagsService['rename'] = vi.fn(() =>
+        throwError(() => new ApiError('taken', 409, { name: ['taken'] })),
+      );
+      const { fixture, root, rowAction, editInput } = setup(() => of(EVERYTHING), { rename });
+
+      await startEditing(fixture, rowAction(1)!);
+      type(editInput()!, 'holiday');
+      button(root(), 'Save').click();
+      await settle(fixture);
+
+      expect(root().textContent).toContain('You already have a tag called “holiday”.');
+      expect(editInput()!.value).toBe('holiday');
+      expect(editInput()!.getAttribute('aria-describedby')).toContain('rename-tag-errors-1');
+    });
+
+    it('keeps drafts when navigation is requested and proceeds only after explicit discard', async () => {
+      const { fixture, root, addInput } = setup(() => of(EVERYTHING));
+      const router = TestBed.inject(Router);
+
+      type(addInput(), 'travel');
+      const firstNavigation = router.navigateByUrl('/other');
+      await firstNavigation;
+      await settle(fixture);
+
+      expect(router.url).not.toBe('/other');
+      expect(root().textContent).toContain('Discard unsaved changes?');
+      expect(document.activeElement).toBe(button(root(), 'Keep editing'));
+      button(root(), 'Discard changes and leave').click();
+      await settle(fixture);
+      expect(router.url).toBe('/other');
+    });
+
+    it('blocks navigation during a pending write and allows it after the request finishes', async () => {
+      const response = new Subject<Tag>();
+      const create: TagsService['create'] = vi.fn(() => response);
+      const { fixture, root, addInput } = setup(() => of(EVERYTHING), { create });
+      const router = TestBed.inject(Router);
+
+      type(addInput(), 'travel');
+      button(root(), 'Add tag').click();
+      fixture.detectChanges();
+      expect(root().querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+
+      await router.navigateByUrl('/other');
+      await settle(fixture);
+      expect(router.url).not.toBe('/other');
+      expect(root().textContent).toContain('A tag change is saving.');
+
+      response.next(tag(9, 'travel'));
+      response.complete();
+      await settle(fixture);
+      expect(root().textContent).toContain('The tag action finished.');
+
+      await router.navigateByUrl('/other');
+      await settle(fixture);
+      expect(router.url).toBe('/other');
     });
   });
 
-  describe('delete', () => {
-    it('asks on the row with the certain-effect wording and a destructive button, and waits for confirm', async () => {
-      const remove = vi.fn(() => of(undefined));
-      const { fixture, menuTrigger, root, text } = setup(() => of(EVERYTHING), {
-        remove: remove as unknown as TagsService['remove'],
-      });
+  describe('deletion', () => {
+    it('states the consequence, focuses safe Cancel first, and restores the row action on cancellation', async () => {
+      const { fixture, root, rowAction } = setup(() => of(EVERYTHING));
 
-      await openRowMenu(fixture, menuTrigger('groceries')!);
+      await openRowMenu(fixture, rowAction(1)!);
       overlayButton('Delete').click();
       await settle(fixture);
 
-      expect(text()).toContain('It will be removed from every transaction carrying it. This can’t be undone.');
-      expect(remove).not.toHaveBeenCalled();
-
-      const strip = root().querySelector('[role="alertdialog"]')!;
-      const confirm = Array.from(strip.querySelectorAll('button')).find(
-        (b) => (b.textContent ?? '').trim() === 'Delete',
-      )!;
-      expect(confirm.className).toContain('red');
-      confirm.click();
+      expect(root().textContent).toContain(
+        'It will be removed from every Transaction carrying it. This can’t be undone.',
+      );
+      expect(document.activeElement).toBe(button(root(), 'Cancel'));
+      button(root(), 'Cancel').click();
       await settle(fixture);
+      expect(document.activeElement).toBe(rowAction(1));
+    });
+
+    it('deletes after confirmation, re-reads, then focuses the next row action', async () => {
+      const remove: TagsService['remove'] = vi.fn(() => of(undefined));
+      let attempt = 0;
+      const readAll: ReadTags = vi.fn(() => {
+        attempt += 1;
+        return of(attempt === 1 ? EVERYTHING : [HOLIDAY, WORK]);
+      });
+      const { fixture, root, rowAction } = setup(readAll, { remove });
+
+      await openRowMenu(fixture, rowAction(1)!);
+      overlayButton('Delete').click();
+      await settle(fixture);
+      button(root(), 'Delete').click();
+      await settle(fixture);
+
       expect(remove).toHaveBeenCalledWith(1);
-    });
-
-    it('says nothing after a successful delete — the row just goes', async () => {
-      const remove = vi.fn(() => of(undefined));
-      let attempt = 0;
-      const readAll = vi.fn(() => {
-        attempt += 1;
-        return of(attempt === 1 ? EVERYTHING : [HOLIDAY, WORK]);
-      });
-      const { fixture, menuTrigger, root, text } = setup(readAll as unknown as TagsService['readAll'], {
-        remove: remove as unknown as TagsService['remove'],
-      });
-
-      await openRowMenu(fixture, menuTrigger('groceries')!);
-      overlayButton('Delete').click();
-      await settle(fixture);
-      Array.from(root().querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'))
-        .find((b) => (b.textContent ?? '').trim() === 'Delete')!
-        .click();
-      await settle(fixture);
-
-      expect(text()).not.toContain('groceries');
-      expect(text()).not.toContain('deleted');
-      expect(text()).not.toContain('removed');
-    });
-
-    it('folds a 404 into the one staleness line, re-reads, and offers no retry', async () => {
-      const remove = vi.fn(() => throwError(() => new ApiError('Not found', 404)));
-      let attempt = 0;
-      const readAll = vi.fn(() => {
-        attempt += 1;
-        return of(attempt === 1 ? EVERYTHING : [HOLIDAY, WORK]);
-      });
-      const { fixture, menuTrigger, root, text } = setup(readAll as unknown as TagsService['readAll'], {
-        remove: remove as unknown as TagsService['remove'],
-      });
-
-      await openRowMenu(fixture, menuTrigger('groceries')!);
-      overlayButton('Delete').click();
-      await settle(fixture);
-      Array.from(root().querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'))
-        .find((b) => (b.textContent ?? '').trim() === 'Delete')!
-        .click();
-      await settle(fixture);
-
-      expect(text()).toContain('That tag is no longer there.');
-      expect(text()).not.toContain('Try again');
       expect(readAll).toHaveBeenCalledTimes(2);
+      expect(root().textContent).not.toContain('groceries');
+      expect(document.activeElement).toBe(rowAction(2));
     });
 
-    it('keeps every row when the re-read after a delete fails, stale row included', async () => {
-      const remove = vi.fn(() => of(undefined));
-      let attempt = 0;
-      const readAll = vi.fn(() => {
-        attempt += 1;
-        return attempt === 1 ? of(EVERYTHING) : throwError(() => new ApiError('Server error', 500));
-      });
-      const { fixture, menuTrigger, root, text } = setup(readAll as unknown as TagsService['readAll'], {
-        remove: remove as unknown as TagsService['remove'],
-      });
+    it('keeps the row and offers retry after a non-stale delete failure', async () => {
+      const remove: TagsService['remove'] = vi
+        .fn()
+        .mockReturnValueOnce(throwError(() => new ApiError('Delete failed.', 500)))
+        .mockReturnValue(of(undefined));
+      const { fixture, root, rowAction } = setup(() => of(EVERYTHING), { remove });
 
-      await openRowMenu(fixture, menuTrigger('groceries')!);
+      await openRowMenu(fixture, rowAction(1)!);
       overlayButton('Delete').click();
       await settle(fixture);
-      Array.from(root().querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'))
-        .find((b) => (b.textContent ?? '').trim() === 'Delete')!
-        .click();
+      button(root(), 'Delete').click();
       await settle(fixture);
 
-      expect(text()).toContain('Your change was saved');
-      // The deleted row stands rather than the client inventing a list it never read.
-      expect(text()).toContain('groceries');
+      expect(root().textContent).toContain('Delete failed.');
+      expect(root().textContent).toContain('groceries');
+      button(root(), 'Try again').click();
+      await settle(fixture);
+      expect(remove).toHaveBeenCalledTimes(2);
     });
-  });
-
-  it('opens with an empty search — nothing is carried across entries', () => {
-    const { searchInput } = setup(() => of(EVERYTHING));
-    expect(searchInput()!.value).toBe('');
   });
 });
