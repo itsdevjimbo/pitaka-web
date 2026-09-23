@@ -50,9 +50,11 @@ The browser also resolved primary actions and focus to the approved scheme-aware
 
 ## Automated verification
 
-- Focused Goal detail suite: 17 tests passed.
+- Focused Goal detail suite: 16 behavioral tests passed.
 - `npm run check:changed`: passed after the implementation edits.
-- Final repository checks and full-suite totals are recorded below after the final run.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- Full `npm test -- --watch=false`: 79 test files and 1,040 tests passed.
 
 ## Explicit limitations
 

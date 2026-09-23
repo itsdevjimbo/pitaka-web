@@ -71,15 +71,32 @@
           {{ currentGoal.name }}
         </h1>
         <div class="flex flex-wrap gap-2">
+          <goals-state [goal]="currentGoal" />
           <span
             class="gap-1.5 rounded-lg border border-current bg-surface px-2.5 py-1.5 text-sm font-semibold text-secondary"
           >
             {{ currentGoal.status }}
           </span>
-          <goals-state [goal]="currentGoal" />
         </div>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-2">
+        <button
+          matButton
+          [disabled]="busy()"
+          (click)="openEdit(currentGoal)"
+        >
+          <mat-icon svgIcon="pencil" />
+          Edit goal
+        </button>
+        @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
+          <button
+            matButton="filled"
+            [disabled]="stale() || busy()"
+            (click)="setStatus('Completed')"
+          >
+            Mark complete
+          </button>
+        }
         @if (currentGoal.status === 'Active') {
           <button
             matButton="filled"
@@ -99,23 +116,6 @@
           <mat-icon svgIcon="ellipsis-vertical" />
         </button>
         <mat-menu #goalMenu>
-          <button
-            mat-menu-item
-            [disabled]="busy()"
-            (click)="openEdit(currentGoal)"
-          >
-            <mat-icon svgIcon="pencil" />
-            Edit goal
-          </button>
-          @if (currentGoal.status === 'Active' && currentGoal.currentAmount >= currentGoal.targetAmount) {
-            <button
-              mat-menu-item
-              [disabled]="stale() || busy()"
-              (click)="setStatus('Completed')"
-            >
-              Mark complete
-            </button>
-          }
           @if (currentGoal.status === 'Active') {
             <button
               mat-menu-item
@@ -146,7 +146,7 @@
 
     <div
       data-goal-workspace
-      class="grid gap-6 xl:grid-cols-3 xl:items-start"
+      class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start"
     >
       <section
         data-goal-summary
@@ -251,7 +251,7 @@
       </section>
 
       <section
-        class="col-span-2 grid rounded-2xl border border-divider bg-surface"
+        class="grid rounded-2xl border border-divider bg-surface"
         aria-labelledby="contributions-heading"
       >
         <div class="flex items-center justify-between gap-x-4 p-5 sm:p-6">

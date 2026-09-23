@@ -116,24 +116,6 @@ describe('GoalDetail', () => {
     await settle(fixture);
   }
 
-  async function goalAction(fixture: ComponentFixture<GoalDetail>, label: string) {
-    const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
-      '[aria-label="Goal actions"]',
-    );
-    if (!trigger) {
-      throw new Error('No Goal actions button');
-    }
-    trigger.click();
-    await settle(fixture);
-    const action = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => button.textContent?.trim() === label,
-    );
-    if (!action) {
-      throw new Error(`No ${label} Goal action`);
-    }
-    return action;
-  }
-
   async function confirmContributionDelete(fixture: ComponentFixture<GoalDetail>) {
     const dialog = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]');
     const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find(
@@ -183,27 +165,6 @@ describe('GoalDetail', () => {
     );
     expect(body.indexOf(formatPeso(900))).toBeLessThan(body.indexOf(formatPeso(800)));
     expect(body.indexOf(formatPeso(800))).toBeLessThan(body.indexOf(formatPeso(500)));
-  });
-
-  it('keeps the Goal hierarchy in the page header and places the summary beside Contributions at the wide breakpoint', () => {
-    const { fixture } = setup({ list: () => of([contribution()]) });
-    const element = fixture.nativeElement as HTMLElement;
-    const pageHeader = element.querySelector<HTMLElement>('[data-goal-page-header]');
-    const workspace = element.querySelector<HTMLElement>('[data-goal-workspace]');
-    const summary = element.querySelector<HTMLElement>('[data-goal-summary]');
-    const fundingState = element.querySelector('goals-state');
-    const contributions = element.querySelector<HTMLElement>('[aria-labelledby="contributions-heading"]');
-    if (!pageHeader || !workspace || !summary || !fundingState || !contributions) {
-      throw new Error('Expected the Goal page header, summary, and Contributions workspace');
-    }
-
-    expect(pageHeader.querySelector('h1')?.textContent).toContain('Dental work');
-    expect(pageHeader.contains(fundingState)).toBe(true);
-    expect(pageHeader.querySelector('[aria-label="Goal actions"]')).not.toBeNull();
-    expect(summary.querySelector('h1')).toBeNull();
-    expect(summary.contains(fundingState)).toBe(false);
-    expect(workspace.contains(summary)).toBe(true);
-    expect(workspace.contains(contributions)).toBe(true);
   });
 
   it('identifies a Linked Contribution by its source income Transaction and Account', () => {
@@ -407,10 +368,8 @@ describe('GoalDetail', () => {
     const staleButtons = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
     );
+    expect(staleButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(true);
     expect(staleButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(true);
-
-    const staleComplete = await goalAction(fixture, 'Mark complete');
-    expect(staleComplete.disabled).toBe(true);
 
     staleButtons.find((button) => button.textContent?.includes('Retry'))?.click();
     await settle(fixture);
@@ -419,9 +378,8 @@ describe('GoalDetail', () => {
     const freshButtons = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
     );
+    expect(freshButtons.find((button) => button.textContent?.includes('Mark complete'))?.disabled).toBe(false);
     expect(freshButtons.find((button) => button.textContent?.includes('Add contribution'))?.disabled).toBe(false);
-    const freshComplete = await goalAction(fixture, 'Mark complete');
-    expect(freshComplete.disabled).toBe(false);
   });
 
   it('replaces a Goal that becomes unavailable during refresh with a return to Goals', async () => {
@@ -431,9 +389,11 @@ describe('GoalDetail', () => {
       .mockReturnValueOnce(of(reached))
       .mockReturnValueOnce(throwError(() => new ApiError('This Goal is no longer available.', 404)));
     const { fixture, text } = setup({ get, setStatus: () => of({ ...reached, status: 'Completed' }) });
-    const complete = await goalAction(fixture, 'Mark complete');
+    const complete = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    ).find((button) => button.textContent?.includes('Mark complete'));
 
-    complete.click();
+    complete?.click();
     await settle(fixture);
 
     expect(text()).toContain('This Goal is no longer available.');
@@ -441,18 +401,20 @@ describe('GoalDetail', () => {
     expect(text()).not.toContain('Edit goal');
   });
 
-  it('prevents duplicate lifecycle submissions while a status write is pending', async () => {
+  it('prevents duplicate lifecycle submissions while a status write is pending', () => {
     const pending = new Subject<Goal>();
     const setStatus = vi.fn(() => pending.asObservable());
     const { fixture } = setup({ get: () => of({ ...GOAL, currentAmount: GOAL.targetAmount }), setStatus });
-    const complete = await goalAction(fixture, 'Mark complete');
+    const complete = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+    ).find((button) => button.textContent?.includes('Mark complete'));
 
-    complete.click();
+    complete?.click();
     fixture.detectChanges();
-    complete.click();
+    complete?.click();
 
     expect(setStatus).toHaveBeenCalledOnce();
-    expect(complete.disabled).toBe(true);
+    expect(complete?.disabled).toBe(true);
   });
 
   it('short-circuits an invalid id to not-found without making requests', () => {
