@@ -111,6 +111,8 @@ describe('TagsList', () => {
   it('shows search and the whole collection count when Tags exist', () => {
     const { searchInput, text } = setup(() => of(EVERYTHING));
     expect(searchInput()).not.toBeNull();
+    expect(searchInput()?.getAttribute('aria-label')).toBe('Search tags');
+    expect(text()).not.toContain('Find a tag');
     expect(text()).toContain('3 tags');
   });
 
@@ -120,7 +122,9 @@ describe('TagsList', () => {
 
     expect(searchInput()).toBeNull();
     expect(root().querySelector('button[type="submit"]')?.textContent).toContain('Add tag');
-    expect(root().querySelector('label[for="add-tag-name"]')?.textContent).toContain('Add a tag');
+    expect(root().querySelector('label[for="add-tag-name"]')).toBeNull();
+    expect(addInput().getAttribute('aria-label')).toBe('Tag name');
+    expect(addInput().parentElement?.querySelector('mat-icon')).toBeNull();
     expect(document.activeElement).toBe(addInput());
     expect(text()).toContain('No tags yet');
     expect(text()).toContain('attach it while filing a Transaction');
@@ -228,8 +232,8 @@ describe('TagsList', () => {
       }
     });
 
-    it('keeps invalid Submit enabled, links the required error to the field, and sends no request', async () => {
-      const create: TagsService['create'] = vi.fn(() => of(tag(9, 'new')));
+    it('submits an empty name without client-side validation', async () => {
+      const create: TagsService['create'] = vi.fn(() => of(tag(9, '')));
       const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
 
       const submitButton = button(root(), 'Add tag');
@@ -238,10 +242,22 @@ describe('TagsList', () => {
       submitButton.click();
       await settle(fixture);
 
-      expect(create).not.toHaveBeenCalled();
-      expect(addInput().getAttribute('aria-invalid')).toBe('true');
-      expect(root().querySelector('#add-tag-name-errors')?.textContent).toContain('Enter a tag name.');
-      expect(document.activeElement).toBe(addInput());
+      expect(create).toHaveBeenCalledWith('');
+      expect(addInput().getAttribute('aria-invalid')).not.toBe('true');
+      expect(root().querySelector('#add-tag-name-errors')).toBeNull();
+    });
+
+    it('submits a name longer than 255 characters without client-side validation', async () => {
+      const name = 'x'.repeat(256);
+      const create: TagsService['create'] = vi.fn(() => of(tag(9, name)));
+      const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
+
+      type(addInput(), name);
+      button(root(), 'Add tag').click();
+      await settle(fixture);
+
+      expect(create).toHaveBeenCalledWith(name);
+      expect(root().querySelector('#add-tag-name-errors')).toBeNull();
     });
 
     it('announces when a create write is in progress', () => {

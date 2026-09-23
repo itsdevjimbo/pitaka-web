@@ -36,7 +36,7 @@ import { Tag } from '../../data/tag';
 import { TagUnavailableError, TagWriteOutcomeUncertainError } from '../../data/tag-errors';
 import { TagsService } from '../../data/tags.service';
 
-/** The longest a Tag name may be — mirrors the API's `[MaxLength(255)]`. */
+/** The longest Tag name accepted while renaming — mirrors the API's `[MaxLength(255)]`. */
 const NAME_MAX = 255;
 
 const LOAD_FAILED = 'Something went wrong loading your tags. Please try again.';
@@ -69,6 +69,8 @@ export default class TagsList {
 
   protected readonly fieldClass =
     'min-h-12 w-full min-w-0 rounded-xl border border-divider bg-surface py-2 pr-3 pl-11 text-base text-text placeholder:text-secondary focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:outline-none dark:focus-visible:ring-primary-200';
+  protected readonly addFieldClass =
+    'min-h-12 w-full min-w-0 rounded-xl border border-divider bg-surface px-3 py-2 text-base text-text placeholder:text-secondary focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:outline-none dark:focus-visible:ring-primary-200';
 
   protected readonly tags = signal<readonly Tag[] | null>(null);
   protected readonly loading = signal(true);
@@ -93,7 +95,6 @@ export default class TagsList {
   private successTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly addForm = form(this.addModel, (path) => {
-    applyTagNameValidation(path.name);
     disabled(path.name, { when: () => this.writesBlocked() });
   });
 

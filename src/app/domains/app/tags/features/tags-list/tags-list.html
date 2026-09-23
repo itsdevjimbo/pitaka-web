@@ -132,9 +132,7 @@
       </section>
     }
 
-    <section
-      class="flex w-full max-w-4xl min-w-0 flex-col gap-5 rounded-2xl border border-divider bg-surface p-4 sm:p-6"
-    >
+    <section class="flex w-full min-w-0 flex-col gap-5 rounded-2xl border border-divider bg-surface p-4 sm:p-6">
       @if (successMessage(); as message) {
         <p
           class="rounded-2xl bg-soft px-4 py-3 text-sm text-text"
@@ -148,12 +146,6 @@
       @if (hasTags()) {
         <div class="flex min-w-0 flex-col gap-2">
           <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <label
-              for="tag-search"
-              class="font-display text-xl tracking-tight"
-            >
-              Find a tag
-            </label>
             <span class="text-sm text-secondary">{{ count() }} {{ count() === 1 ? 'tag' : 'tags' }}</span>
           </div>
           <div class="relative min-w-0">
@@ -167,6 +159,7 @@
               id="tag-search"
               type="search"
               class="min-h-12 w-full min-w-0 rounded-xl border border-divider bg-surface py-2 pr-3 pl-11 text-base text-text placeholder:text-secondary focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:outline-none dark:focus-visible:ring-primary-200"
+              aria-label="Search tags"
               aria-describedby="tag-search-help"
               [disabled]="searchDisabled()"
               [value]="search()"
@@ -191,31 +184,19 @@
         (submit)="createTag($event)"
       >
         <div class="min-w-0">
-          <label
-            for="add-tag-name"
-            class="mb-1.5 block text-sm font-medium text-text"
-          >
-            Add a tag
-          </label>
-          <div class="relative min-w-0">
-            <mat-icon
-              class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-secondary"
-              svgIcon="plus"
-              aria-hidden="true"
-            />
-            <input
-              #addInput
-              id="add-tag-name"
-              type="text"
-              [class]="fieldClass"
-              [formField]="addForm.name"
-              [attr.aria-invalid]="addForm.name().touched() && addForm.name().invalid()"
-              [attr.aria-describedby]="
-                addForm.name().touched() && addForm.name().invalid() ? 'add-tag-name-errors' : null
-              "
-              placeholder="Name your tag"
-            />
-          </div>
+          <input
+            #addInput
+            id="add-tag-name"
+            type="text"
+            [class]="addFieldClass"
+            [formField]="addForm.name"
+            aria-label="Tag name"
+            [attr.aria-invalid]="addForm.name().touched() && addForm.name().invalid()"
+            [attr.aria-describedby]="
+              addForm.name().touched() && addForm.name().invalid() ? 'add-tag-name-errors' : null
+            "
+            placeholder="Name your tag"
+          />
           @if (addForm.name().touched() && addForm.name().invalid()) {
             <ul
               id="add-tag-name-errors"
