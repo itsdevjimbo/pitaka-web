@@ -19,11 +19,7 @@ import {
   ScheduleLifecycleDialog,
   ScheduleLifecycleDialogData,
 } from '../../ui/schedule-lifecycle-dialog/schedule-lifecycle-dialog';
-import {
-  ScheduleLifecycleNav,
-  ScheduleView,
-  ScheduleViewCounts,
-} from '../../ui/schedule-lifecycle-nav/schedule-lifecycle-nav';
+import { ScheduleLifecycleNav, ScheduleView } from '../../ui/schedule-lifecycle-nav/schedule-lifecycle-nav';
 import { ScheduleRow, ScheduleRowData } from '../../ui/schedule-row/schedule-row';
 
 const STATUS_VIEW: Record<ScheduleStatus, ScheduleView> = {
@@ -99,18 +95,6 @@ export default class ScheduleList {
         }
         return a.schedule.name.localeCompare(b.schedule.name);
       });
-  });
-
-  protected readonly counts = computed<ScheduleViewCounts>(() => {
-    const result: Record<ScheduleView, number> = {
-      upcoming: 0,
-      paused: 0,
-      past: 0,
-    };
-    for (const row of this.rows()) {
-      result[STATUS_VIEW[row.schedule.status]] += 1;
-    }
-    return result;
   });
 
   protected readonly empty = computed(() => this.schedules()?.length === 0);

@@ -563,15 +563,13 @@ describe('ScheduleList', () => {
       const deleteButton = (row: HTMLElement) =>
         Array.from(row.querySelectorAll<HTMLButtonElement>('button')).find(
           (button) => button.textContent?.trim() === 'Delete',
-        )!;
+        );
 
       expect(neverUsedRow.textContent).toContain('0 surviving generated Transactions');
-      expect(deleteButton(neverUsedRow).disabled).toBe(false);
+      expect(deleteButton(neverUsedRow)?.disabled).toBe(false);
       expect(historyRemovedRow.textContent).toContain('0 surviving generated Transactions');
-      expect(deleteButton(historyRemovedRow).disabled).toBe(true);
-      expect(historyRemovedRow.textContent).toContain(
-        'This Schedule can’t be deleted because it has generated a Transaction.',
-      );
+      expect(deleteButton(historyRemovedRow)).toBeUndefined();
+      expect(historyRemovedRow.textContent).toContain('Can’t delete: a Transaction was generated.');
     });
 
     it('keeps submitted controls pending, then closes and refreshes after deletion', async () => {
@@ -682,7 +680,7 @@ describe('ScheduleList', () => {
       expect(text()).toContain('Unused allowance');
       expect(text()).toContain('This Schedule has generated a Transaction and cannot be deleted.');
       expect(text()).toContain('Review the refreshed Schedule before trying again.');
-      expect(text()).toContain('This Schedule can’t be deleted because it has generated a Transaction.');
+      expect(text()).toContain('Can’t delete: a Transaction was generated.');
     });
 
     it('disables an open deletion confirmation when list information becomes stale', async () => {
@@ -729,12 +727,9 @@ describe('ScheduleList', () => {
       const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]')!;
       const deleteButton = Array.from(confirmation.querySelectorAll<HTMLButtonElement>('button')).find(
         (button) => button.textContent?.trim() === 'Delete',
-      )!;
-      expect(deleteButton.disabled).toBe(true);
-      expect(confirmation.textContent).toContain(
-        'This Schedule can’t be deleted because it has generated a Transaction.',
       );
-      deleteButton.click();
+      expect(deleteButton).toBeUndefined();
+      expect(confirmation.textContent).toContain('Can’t delete: a Transaction was generated.');
       expect(deleteSchedule).not.toHaveBeenCalled();
     });
   });
@@ -986,19 +981,16 @@ describe('ScheduleList', () => {
     });
   });
 
-  it('shows each lifecycle count as a Material badge beside its menu label', () => {
+  it('shows compact lifecycle choices without count badges', () => {
     const { fixture } = setup(() => of(ALL));
-    const buttons = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
-        'nav[aria-label="Schedule lifecycle"] button',
-      ),
-    );
+    const nav = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      'nav[aria-label="Schedule lifecycle"]',
+    )!;
+    const buttons = Array.from(nav.querySelectorAll<HTMLButtonElement>('button'));
 
-    expect(buttons.map((button) => button.querySelector('.mat-badge-content')?.textContent?.trim())).toEqual([
-      '2',
-      '1',
-      '2',
-    ]);
+    expect(nav.classList.contains('w-fit')).toBe(true);
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual(['Upcoming', 'Paused', 'Past']);
+    expect(nav.querySelector('.mat-badge-content')).toBeNull();
   });
 
   it('warns about a retired Account and labels a retired Category', () => {

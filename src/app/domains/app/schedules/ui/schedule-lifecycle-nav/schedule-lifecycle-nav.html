@@ -1,5 +1,5 @@
 <nav
-  class="flex flex-wrap gap-1 rounded-xl bg-surface p-1"
+  class="flex w-fit max-w-full flex-wrap gap-1 rounded-xl bg-surface p-1"
   aria-label="Schedule lifecycle"
 >
   @for (option of views; track option.id) {
@@ -11,14 +11,7 @@
       [class.text-text]="view() === option.id"
       (click)="view.set(option.id)"
     >
-      <span
-        class="mr-4"
-        [matBadge]="counts()[option.id]"
-        matBadgeOverlap="false"
-      >
-        {{ option.label }}
-        <span class="sr-only">{{ counts()[option.id] }}</span>
-      </span>
+      {{ option.label }}
     </button>
   }
 </nav>

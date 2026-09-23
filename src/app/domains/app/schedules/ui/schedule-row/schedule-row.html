@@ -121,7 +121,7 @@
         </p>
       }
       @if (!row().schedule.canDelete) {
-        <p class="text-sm">This Schedule can’t be deleted because it has generated a Transaction.</p>
+        <p class="text-xs whitespace-nowrap">Can’t delete: a Transaction was generated.</p>
       }
       <div class="flex gap-2 self-end">
         <button
@@ -133,37 +133,30 @@
         >
           Cancel
         </button>
-        <button
-          matButton="filled"
-          type="button"
-          [disabled]="deleting() || writeDisabled() || !row().schedule.canDelete"
-          (click)="confirmDelete()"
-        >
-          {{ deleting() ? 'Deleting…' : 'Delete' }}
-        </button>
+        @if (row().schedule.canDelete) {
+          <button
+            matButton="filled"
+            type="button"
+            [disabled]="deleting() || writeDisabled()"
+            (click)="confirmDelete()"
+          >
+            {{ deleting() ? 'Deleting…' : 'Delete' }}
+          </button>
+        }
       </div>
     </div>
+  } @else if (row().schedule.canDelete) {
+    <button
+      #deleteTrigger
+      matButton="outlined"
+      type="button"
+      [disabled]="writeDisabled()"
+      (click)="askDelete()"
+    >
+      Delete
+    </button>
   } @else {
-    <div class="flex max-w-xs flex-col items-start gap-1 sm:items-end">
-      <button
-        #deleteTrigger
-        matButton="outlined"
-        type="button"
-        [disabled]="writeDisabled() || !row().schedule.canDelete"
-        [attr.aria-describedby]="!row().schedule.canDelete ? 'delete-blocked-' + row().schedule.id : null"
-        (click)="askDelete()"
-      >
-        Delete
-      </button>
-      @if (!row().schedule.canDelete) {
-        <p
-          [id]="'delete-blocked-' + row().schedule.id"
-          class="text-xs text-secondary sm:text-right"
-        >
-          This Schedule can’t be deleted because it has generated a Transaction.
-        </p>
-      }
-    </div>
+    <p class="text-xs whitespace-nowrap text-secondary">Can’t delete: a Transaction was generated.</p>
   }
 </div>
 

@@ -1,9 +1,7 @@
-import { Component, input, model } from '@angular/core';
-import { MatBadgeModule } from '@angular/material/badge';
+import { Component, model } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 
 export type ScheduleView = 'upcoming' | 'paused' | 'past';
-export type ScheduleViewCounts = Readonly<Record<ScheduleView, number>>;
 
 const VIEWS: readonly { id: ScheduleView; label: string }[] = [
   { id: 'upcoming', label: 'Upcoming' },
@@ -15,10 +13,9 @@ const VIEWS: readonly { id: ScheduleView; label: string }[] = [
 @Component({
   selector: 'schedules-lifecycle-nav',
   templateUrl: './schedule-lifecycle-nav.html',
-  imports: [MatBadgeModule, MatButtonModule],
+  imports: [MatButtonModule],
 })
 export class ScheduleLifecycleNav {
-  readonly counts = input.required<ScheduleViewCounts>();
   readonly view = model.required<ScheduleView>();
 
   protected readonly views = VIEWS;

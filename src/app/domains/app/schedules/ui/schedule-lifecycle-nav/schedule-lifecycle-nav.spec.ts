@@ -15,20 +15,14 @@ describe('ScheduleLifecycleNav', () => {
     return fixture;
   }
 
-  it('shows lifecycle counts and the selected view', () => {
+  it('shows compact lifecycle choices without count badges and marks the selected view', () => {
     const element = setup().nativeElement as HTMLElement;
+    const nav = element.querySelector('nav[aria-label="Schedule lifecycle"]')!;
     const buttons = Array.from(element.querySelectorAll<HTMLButtonElement>('button'));
 
-    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
-      expect.stringContaining('Upcoming'),
-      expect.stringContaining('Paused'),
-      expect.stringContaining('Past'),
-    ]);
-    expect(buttons.map((button) => button.querySelector('.mat-badge-content')?.textContent?.trim())).toEqual([
-      '2',
-      '1',
-      '3',
-    ]);
+    expect(nav.classList.contains('w-fit')).toBe(true);
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual(['Upcoming', 'Paused', 'Past']);
+    expect(element.querySelector('.mat-badge-content')).toBeNull();
     expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
   });
 

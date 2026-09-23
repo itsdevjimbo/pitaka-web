@@ -79,10 +79,7 @@
       />
     } @else {
       <section class="grid min-w-0 gap-5">
-        <schedules-lifecycle-nav
-          [counts]="counts()"
-          [(view)]="selectedView"
-        />
+        <schedules-lifecycle-nav [(view)]="selectedView" />
 
         <p class="text-sm text-secondary">
           {{ visibleRows().length }} shown
