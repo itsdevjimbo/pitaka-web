@@ -115,7 +115,7 @@
           (click)="retryRefresh()"
         >
           <mat-icon svgIcon="refresh-cw" />
-          {{ failure.saved ? 'Retry refresh' : 'Refresh tags' }}
+          {{ failure.writeSucceeded ? 'Retry refresh' : 'Refresh tags' }}
         </button>
       </section>
     }
@@ -123,6 +123,16 @@
     <section
       class="flex w-full max-w-4xl min-w-0 flex-col gap-5 rounded-2xl border border-divider bg-surface p-4 sm:p-6"
     >
+      @if (successMessage(); as message) {
+        <p
+          class="rounded-2xl bg-soft px-4 py-3 text-sm text-text"
+          role="status"
+          aria-live="polite"
+        >
+          {{ message }}
+        </p>
+      }
+
       @if (hasTags()) {
         <div class="flex min-w-0 flex-col gap-2">
           <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">

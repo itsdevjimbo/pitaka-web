@@ -8,6 +8,7 @@ import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
 import { withOverlayContainer } from '@/testing/overlay';
 import { Tag } from '../../data/tag';
+import { TagUnavailableError } from '../../data/tag-errors';
 import { TagsService } from '../../data/tags.service';
 import TagsList from './tags-list';
 
@@ -32,7 +33,10 @@ describe('TagsList', () => {
       imports: [TagsList],
       providers: [
         provideIcons(),
-        provideRouter([{ path: 'other', component: Destination }]),
+        provideRouter([
+          { path: 'other', component: Destination },
+          { path: 'auth/sign-in', component: Destination },
+        ]),
         provideDialogDefaults(),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: TagsService, useValue: { readAll, ...overrides } },
@@ -177,6 +181,53 @@ describe('TagsList', () => {
       expect(rowNames()).toContain('errands');
     });
 
+    it('reveals a created Tag outside the active search and announces success once', async () => {
+      const create: TagsService['create'] = vi.fn((name) => of(tag(9, name)));
+      let attempt = 0;
+      const readAll: ReadTags = vi.fn(() => {
+        attempt += 1;
+        return of(attempt === 1 ? EVERYTHING : [...EVERYTHING, tag(9, 'errands')]);
+      });
+      const { fixture, root, addInput, searchInput, rowNames } = setup(readAll, { create });
+
+      type(searchInput()!, 'hol');
+      type(addInput(), 'errands');
+      button(root(), 'Add tag').click();
+      await settle(fixture);
+
+      expect(searchInput()!.value).toBe('');
+      expect(rowNames()).toContain('errands');
+      expect(root().querySelector('[role="status"]')?.textContent).toContain('Tag “errands” added.');
+    });
+
+    it('dismisses the routine success announcement after five seconds', async () => {
+      const create: TagsService['create'] = vi.fn((name) => of(tag(9, name)));
+      let attempt = 0;
+      const readAll: ReadTags = vi.fn(() => {
+        attempt += 1;
+        return of(attempt === 1 ? EVERYTHING : [...EVERYTHING, tag(9, 'errands')]);
+      });
+      const { fixture, root, addInput } = setup(readAll, { create });
+
+      vi.useFakeTimers();
+      try {
+        type(addInput(), 'errands');
+        button(root(), 'Add tag').click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        expect(root().textContent).toContain('Tag “errands” added.');
+
+        await vi.advanceTimersByTimeAsync(5_000);
+        fixture.detectChanges();
+        expect(root().textContent).not.toContain('Tag “errands” added.');
+        expect(root().textContent).toContain('errands');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('keeps invalid Submit enabled, links the required error to the field, and sends no request', async () => {
       const create: TagsService['create'] = vi.fn(() => of(tag(9, 'new')));
       const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
@@ -195,7 +246,12 @@ describe('TagsList', () => {
 
     it('shows a duplicate-name error under the field and preserves the entered value', async () => {
       const create: TagsService['create'] = vi.fn(() =>
-        throwError(() => new ApiError('taken', 409, { name: ['taken'] })),
+        throwError(
+          () =>
+            new ApiError('You already have a tag with this name.', 409, {
+              name: ['You already have a tag with this name.'],
+            }),
+        ),
       );
       const { fixture, addInput, root } = setup(() => of(EVERYTHING), { create });
 
@@ -203,7 +259,7 @@ describe('TagsList', () => {
       button(root(), 'Add tag').click();
       await settle(fixture);
 
-      expect(root().textContent).toContain('You already have a tag called “groceries”.');
+      expect(root().textContent).toContain('You already have a tag with this name.');
       expect(addInput().value).toBe('groceries');
       expect(addInput().getAttribute('aria-describedby')).toContain('add-tag-name-errors');
     });
@@ -272,6 +328,39 @@ describe('TagsList', () => {
       expect(document.activeElement).toBe(rowAction(1));
     });
 
+    it('reveals and announces a renamed Tag that no longer matches the active search', async () => {
+      const rename: TagsService['rename'] = vi.fn((id, name) => of(tag(id, name)));
+      let attempt = 0;
+      const readAll: ReadTags = vi.fn(() => {
+        attempt += 1;
+        return of(attempt === 1 ? EVERYTHING : [tag(1, 'food'), HOLIDAY, WORK]);
+      });
+      const { fixture, root, searchInput, rowAction, editInput, rowNames } = setup(readAll, { rename });
+
+      type(searchInput()!, 'gro');
+      await startEditing(fixture, rowAction(1)!);
+      type(editInput()!, 'food');
+      button(root(), 'Save').click();
+      await settle(fixture);
+
+      expect(searchInput()!.value).toBe('');
+      expect(rowNames()).toContain('food');
+      expect(root().querySelector('[role="status"]')?.textContent).toContain('Tag “food” renamed.');
+    });
+
+    it('closes a stale editor and refreshes when the adapter reports an unavailable Tag', async () => {
+      const rename: TagsService['rename'] = vi.fn(() => throwError(() => new TagUnavailableError()));
+      const { fixture, root, rowAction, editInput } = setup(() => of(EVERYTHING), { rename });
+
+      await startEditing(fixture, rowAction(1)!);
+      type(editInput()!, 'food');
+      button(root(), 'Save').click();
+      await settle(fixture);
+
+      expect(root().querySelector('[id^="rename-tag-"]')).toBeNull();
+      expect(root().textContent).toContain('That tag is no longer there.');
+    });
+
     it('keeps invalid Submit enabled, focuses the field and does not send a request', async () => {
       const rename: TagsService['rename'] = vi.fn((id, name) => of(tag(id, name)));
       const { fixture, root, rowAction, editInput } = setup(() => of(EVERYTHING), { rename });
@@ -306,7 +395,12 @@ describe('TagsList', () => {
 
     it('shows a duplicate-name error under the editor and retains the typed value', async () => {
       const rename: TagsService['rename'] = vi.fn(() =>
-        throwError(() => new ApiError('taken', 409, { name: ['taken'] })),
+        throwError(
+          () =>
+            new ApiError('You already have a tag with this name.', 409, {
+              name: ['You already have a tag with this name.'],
+            }),
+        ),
       );
       const { fixture, root, rowAction, editInput } = setup(() => of(EVERYTHING), { rename });
 
@@ -315,7 +409,7 @@ describe('TagsList', () => {
       button(root(), 'Save').click();
       await settle(fixture);
 
-      expect(root().textContent).toContain('You already have a tag called “holiday”.');
+      expect(root().textContent).toContain('You already have a tag with this name.');
       expect(editInput()!.value).toBe('holiday');
       expect(editInput()!.getAttribute('aria-describedby')).toContain('rename-tag-errors-1');
     });
@@ -335,6 +429,19 @@ describe('TagsList', () => {
       button(root(), 'Discard changes and leave').click();
       await settle(fixture);
       expect(router.url).toBe('/other');
+    });
+
+    it('discards drafts and permits the session-expiry redirect with its return destination', async () => {
+      const { fixture, root, addInput } = setup(() => of(EVERYTHING));
+      const router = TestBed.inject(Router);
+
+      type(addInput(), 'unsaved name');
+      await router.navigateByUrl('/auth/sign-in?returnUrl=%2Fapp%2Ftags&reason=session-expired');
+      await settle(fixture);
+
+      expect(router.url).toBe('/auth/sign-in?returnUrl=%2Fapp%2Ftags&reason=session-expired');
+      expect(root().querySelector('[role="alertdialog"]')).toBeNull();
+      expect(addInput().value).toBe('');
     });
 
     it('blocks navigation during a pending write and allows it after the request finishes', async () => {
@@ -388,7 +495,7 @@ describe('TagsList', () => {
         attempt += 1;
         return of(attempt === 1 ? EVERYTHING : [HOLIDAY, WORK]);
       });
-      const { fixture, root, rowAction } = setup(readAll, { remove });
+      const { fixture, root, rowAction, rowNames } = setup(readAll, { remove });
 
       await openRowMenu(fixture, rowAction(1)!);
       overlayButton('Delete').click();
@@ -398,7 +505,7 @@ describe('TagsList', () => {
 
       expect(remove).toHaveBeenCalledWith(1);
       expect(readAll).toHaveBeenCalledTimes(2);
-      expect(root().textContent).not.toContain('groceries');
+      expect(rowNames()).not.toContain('groceries');
       expect(document.activeElement).toBe(rowAction(2));
     });
 

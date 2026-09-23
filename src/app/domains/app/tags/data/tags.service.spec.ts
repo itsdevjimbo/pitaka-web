@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
+import { TagUnavailableError } from './tag-errors';
 import { TagsService } from './tags.service';
 
 /** One Tag row shaped the way `GET /api/tags` sends it. */
@@ -28,8 +29,8 @@ const TAGS_URL = `${BASE_URL}/api/tags`;
  * and the real `errorInterceptor`, and asserts what comes out the top: which set
  * each reader returns, that `all()` is shared and `readAll()` is cold, that each
  * of the three writes drops the cache (proven by a later read issuing a second
- * request), and that the duplicate-name 409, the 403 and the 404 arrive
- * distinguishably.
+ * request), and that duplicate-name conflicts and unavailable rows are
+ * normalized for callers.
  */
 describe('TagsService', () => {
   let service: TagsService;
@@ -216,26 +217,22 @@ describe('TagsService', () => {
       });
     });
 
-    it('passes a 403 on a Tag owned by someone else straight through, distinguishable by status', async () => {
+    it('normalizes a 403 on a Tag owned by someone else', async () => {
       const result = firstValueFrom(service.rename(7, 'vacation'));
 
       http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 403, statusText: 'Forbidden' });
 
       const error = await result.catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(ApiError);
-      expect((error as ApiError).status).toBe(403);
-      expect((error as ApiError).fieldErrors).toEqual({});
+      expect(error).toBeInstanceOf(TagUnavailableError);
     });
 
-    it('passes a 404 on an unknown id straight through, distinguishable by status', async () => {
+    it('normalizes a 404 for an unknown Tag', async () => {
       const result = firstValueFrom(service.rename(99, 'vacation'));
 
       http.expectOne(`${TAGS_URL}/99`).flush(null, { status: 404, statusText: 'Not Found' });
 
       const error = await result.catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(ApiError);
-      expect((error as ApiError).status).toBe(404);
-      expect((error as ApiError).fieldErrors).toEqual({});
+      expect(error).toBeInstanceOf(TagUnavailableError);
     });
   });
 
@@ -260,14 +257,14 @@ describe('TagsService', () => {
       expect((error as ApiError).fieldErrors).toEqual({});
     });
 
-    it('passes a 403 and a 404 straight through, distinguishable by status', async () => {
+    it('normalizes 403 and 404 failures as an unavailable Tag', async () => {
       const forbidden = firstValueFrom(service.remove(7));
       http.expectOne(`${TAGS_URL}/7`).flush(null, { status: 403, statusText: 'Forbidden' });
-      expect(((await forbidden.catch((e: unknown) => e)) as ApiError).status).toBe(403);
+      expect(await forbidden.catch((e: unknown) => e)).toBeInstanceOf(TagUnavailableError);
 
       const missing = firstValueFrom(service.remove(99));
       http.expectOne(`${TAGS_URL}/99`).flush(null, { status: 404, statusText: 'Not Found' });
-      expect(((await missing.catch((e: unknown) => e)) as ApiError).status).toBe(404);
+      expect(await missing.catch((e: unknown) => e)).toBeInstanceOf(TagUnavailableError);
     });
   });
 

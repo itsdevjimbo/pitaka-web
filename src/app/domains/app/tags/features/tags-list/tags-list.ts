@@ -12,7 +12,17 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { disabled, form, FormField, maxLength, submit, validate, type FieldTree } from '@angular/forms/signals';
+import {
+  disabled,
+  form,
+  FormField,
+  maxLength,
+  PathKind,
+  SchemaPath,
+  SchemaPathRules,
+  submit,
+  validate,
+} from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -21,7 +31,9 @@ import { filter, firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { focusFirstInvalidField, partitionServerError } from '@/app/core/forms';
 import { ResourceState, RowNotice } from '@/app/core/notices';
+import { SIGN_IN_REASON_PARAM, SIGN_IN_ROUTE } from '@/app/core/session';
 import { Tag } from '../../data/tag';
+import { TagUnavailableError } from '../../data/tag-errors';
 import { TagsService } from '../../data/tags.service';
 
 /** The longest a Tag name may be — mirrors the API's `[MaxLength(255)]`. */
@@ -33,14 +45,7 @@ const READ_FAILED = 'This list may be out of date. Refresh before making another
 const CREATE_FAILED = 'Something went wrong adding the tag. Please try again.';
 const RENAME_FAILED = 'Something went wrong renaming the tag. Please try again.';
 const ACTION_FAILED = 'Something went wrong. Please try again.';
-const STALE = 'That tag is no longer there.';
-
-/** The one wording for a duplicate name, shared by the add and rename fields. */
-function duplicateNameMessage(name: string): string {
-  return `You already have a tag called “${name}”.`;
-}
-
-type RefreshFailure = { message: string; saved: boolean };
+type RefreshFailure = { message: string; writeSucceeded: boolean };
 type RowNoticeState = { id: number; message: string; retry: () => void };
 
 /** Manage the person's Tags: one searchable list, inline creation and renaming, and deletion. */
@@ -79,20 +84,17 @@ export default class TagsList {
   protected readonly confirmingNavigationDiscard = signal(false);
   protected readonly navigationMessage = signal<string | null>(null);
   protected readonly notice = signal<RowNoticeState | null>(null);
+  protected readonly successMessage = signal<string | null>(null);
+
+  private successTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly addForm = form(this.addModel, (path) => {
-    validate(path.name, (context) =>
-      context.value().trim() ? undefined : { kind: 'required', message: 'Enter a tag name.' },
-    );
-    maxLength(path.name, NAME_MAX, { message: `A tag name must be ${NAME_MAX} characters or fewer.` });
+    applyTagNameValidation(path.name);
     disabled(path.name, { when: () => this.writesBlocked() });
   });
 
   protected readonly editForm = form(this.editModel, (path) => {
-    validate(path.name, (context) =>
-      context.value().trim() ? undefined : { kind: 'required', message: 'Enter a tag name.' },
-    );
-    maxLength(path.name, NAME_MAX, { message: `A tag name must be ${NAME_MAX} characters or fewer.` });
+    applyTagNameValidation(path.name);
     disabled(path.name, { when: () => this.writesBlocked() });
   });
 
@@ -143,6 +145,11 @@ export default class TagsList {
   private resumedNavigationUrl: string | null = null;
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      if (this.successTimer) {
+        clearTimeout(this.successTimer);
+      }
+    });
     this.load();
     this.router.events
       .pipe(
@@ -186,8 +193,8 @@ export default class TagsList {
   }
 
   protected retryRefresh(): void {
-    const saved = this.refreshError()?.saved ?? true;
-    this.readAfterWrite(saved);
+    const writeSucceeded = this.refreshError()?.writeSucceeded ?? true;
+    this.readAfterWrite(writeSucceeded);
   }
 
   protected onSearch(value: string): void {
@@ -216,15 +223,10 @@ export default class TagsList {
         try {
           await firstValueFrom(this.service.create(name).pipe(takeUntilDestroyed(this.destroyRef)));
           this.addForm().reset({ name: '' });
-          this.readAfterWrite(true, 'add');
+          this.revealTag(name);
+          this.readAfterWrite(true, 'add', () => this.announceSuccess(`Tag “${name}” added.`));
           return undefined;
         } catch (error) {
-          const boundErrors = this.boundNameError(error, this.addForm.name, name);
-          if (boundErrors) {
-            this.addForm().markAsTouched();
-            this.focusAfterRender(this.addInput);
-            return boundErrors;
-          }
           const { boundErrors: serverErrors, bannerMessage } = partitionServerError(
             error,
             { name: this.addForm.name },
@@ -315,19 +317,14 @@ export default class TagsList {
         try {
           await firstValueFrom(this.service.rename(tag.id, name).pipe(takeUntilDestroyed(this.destroyRef)));
           this.closeRename(false);
-          this.readAfterWrite(true, tag.id);
+          this.revealTag(name);
+          this.readAfterWrite(true, tag.id, () => this.announceSuccess(`Tag “${name}” renamed.`));
           return undefined;
         } catch (error) {
           if (this.isStale(error)) {
             this.closeRename(false);
             this.goStale(tag.id);
             return undefined;
-          }
-          const boundErrors = this.boundNameError(error, this.editForm.name, name);
-          if (boundErrors) {
-            this.editForm().markAsTouched();
-            this.focusAfterRender(this.editInput);
-            return boundErrors;
           }
           const { boundErrors: serverErrors, bannerMessage } = partitionServerError(
             error,
@@ -388,7 +385,7 @@ export default class TagsList {
       .subscribe({
         next: () => {
           this.busyId.set(null);
-          this.readAfterWrite(true, nextFocusId);
+          this.readAfterWrite(true, nextFocusId, () => this.announceSuccess(`Tag “${tag.name}” deleted.`));
         },
         error: (error: unknown) => {
           this.busyId.set(null);
@@ -425,17 +422,6 @@ export default class TagsList {
     }
   }
 
-  private boundNameError(
-    error: unknown,
-    field: FieldTree<string>,
-    name: string,
-  ): { fieldTree: FieldTree<string>; kind: 'server'; message: string }[] | null {
-    if (!(error instanceof ApiError) || error.status !== 409) {
-      return null;
-    }
-    return [{ fieldTree: field, kind: 'server' as const, message: duplicateNameMessage(name) }];
-  }
-
   private closeRename(focus: boolean): void {
     const id = this.editingId();
     this.editingId.set(null);
@@ -447,7 +433,11 @@ export default class TagsList {
     }
   }
 
-  private readAfterWrite(saved: boolean, focusTarget: number | 'add' | null = null): void {
+  private readAfterWrite(
+    writeSucceeded: boolean,
+    focusTarget: number | 'add' | null = null,
+    onSuccess?: () => void,
+  ): void {
     const version = ++this.readVersion;
     this.refreshing.set(true);
     this.refreshError.set(null);
@@ -463,6 +453,7 @@ export default class TagsList {
           this.tags.set(tags);
           this.refreshing.set(false);
           this.refreshError.set(null);
+          onSuccess?.();
           this.focusAfterRead(focusTarget);
         },
         error: () => {
@@ -470,7 +461,7 @@ export default class TagsList {
             return;
           }
           this.refreshing.set(false);
-          this.refreshError.set({ message: saved ? REFRESH_FAILED : READ_FAILED, saved });
+          this.refreshError.set({ message: writeSucceeded ? REFRESH_FAILED : READ_FAILED, writeSucceeded });
           this.focusAfterRead(focusTarget);
         },
       });
@@ -480,12 +471,12 @@ export default class TagsList {
     this.notice.set(null);
     this.editingId.set(null);
     this.confirmingDeleteId.set(null);
-    this.staleMessage.set(STALE);
+    this.staleMessage.set('That tag is no longer there.');
     this.readAfterWrite(false, focusTagId);
   }
 
   private isStale(error: unknown): boolean {
-    return error instanceof ApiError && (error.status === 403 || error.status === 404);
+    return error instanceof TagUnavailableError;
   }
 
   private protectNavigation(event: NavigationStart): void {
@@ -496,6 +487,11 @@ export default class TagsList {
     }
     const navigation = this.router.currentNavigation();
     if (!navigation) {
+      return;
+    }
+    if (this.isSessionExpiryRedirect(event.url)) {
+      this.discardDrafts();
+      this.navigationMessage.set(null);
       return;
     }
     if (this.adding() || this.busyId() !== null) {
@@ -512,6 +508,38 @@ export default class TagsList {
       return;
     }
     this.navigationMessage.set(null);
+  }
+
+  private isSessionExpiryRedirect(url: string): boolean {
+    return (
+      url.split('?')[0] === SIGN_IN_ROUTE &&
+      this.router.parseUrl(url).queryParams[SIGN_IN_REASON_PARAM] === 'session-expired'
+    );
+  }
+
+  private discardDrafts(): void {
+    this.pendingNavigationUrl = null;
+    this.confirmingNavigationDiscard.set(false);
+    this.closeRename(false);
+    this.addForm().reset({ name: '' });
+  }
+
+  private revealTag(name: string): void {
+    const query = this.trimmedSearch().toLocaleLowerCase();
+    if (query && !name.toLocaleLowerCase().includes(query)) {
+      this.search.set('');
+    }
+  }
+
+  private announceSuccess(message: string): void {
+    if (this.successTimer) {
+      clearTimeout(this.successTimer);
+    }
+    this.successMessage.set(message);
+    this.successTimer = setTimeout(() => {
+      this.successMessage.set(null);
+      this.successTimer = null;
+    }, 5_000);
   }
 
   private finishBlockedNavigationMessage(): void {
@@ -572,4 +600,13 @@ export default class TagsList {
   private focusAfterRender<T extends HTMLElement>(ref: Signal<ElementRef<T> | undefined>): void {
     afterNextRender(() => ref()?.nativeElement?.focus(), { injector: this.injector });
   }
+}
+
+function applyTagNameValidation<TPathKind extends PathKind = PathKind.Root>(
+  name: SchemaPath<string, SchemaPathRules.Supported, TPathKind>,
+): void {
+  validate(name, (context) =>
+    context.value().trim() ? undefined : { kind: 'required', message: 'Enter a tag name.' },
+  );
+  maxLength(name, NAME_MAX, { message: `A tag name must be ${NAME_MAX} characters or fewer.` });
 }

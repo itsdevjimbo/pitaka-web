@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, shareReplay, tap, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
 import { Tag } from './tag';
+import { TagUnavailableError } from './tag-errors';
 
 /**
  * Wire shape of one Tag from the API (read 2026-09-08 from `TagsController.cs`,
@@ -77,22 +78,21 @@ export class TagsService {
   rename(id: number, name: string): Observable<Tag> {
     return this.http.put<TagResource>(`${this.baseUrl}/api/tags/${id}`, { name }).pipe(
       tap(() => this.invalidate()),
-      catchError((error: unknown) => throwError(() => asNameConflict(error))),
+      catchError((error: unknown) => throwError(() => asRenameError(error))),
     );
   }
 
   /**
    * Delete a Tag (`204`, no body). This endpoint has **no in-use guard**: it
    * succeeds and strips the Tag off every Transaction carrying it, so there is
-   * no in-use `409` to catch — a failure passes straight through as the
-   * interceptor's `ApiError`. A `403` (someone
-   * else's Tag) and a `404` (unknown id) arrive on that `ApiError`'s `status`,
-   * distinguishable from a generic failure without any re-filing.
+   * no in-use `409` to catch. `403` and `404` become a resource-level
+   * unavailable error so the screen does not interpret HTTP status codes.
    */
   remove(id: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/api/tags/${id}`).pipe(
       map(() => undefined),
       tap(() => this.invalidate()),
+      catchError((error: unknown) => throwError(() => asUnavailable(error))),
     );
   }
 
@@ -125,6 +125,18 @@ function asNameConflict(error: unknown): unknown {
     return new ApiError(error.message, error.status, {
       name: [error.message],
     });
+  }
+  return error;
+}
+
+/** Normalize endpoint-specific ownership or missing-row failures for callers. */
+function asRenameError(error: unknown): unknown {
+  return asUnavailable(asNameConflict(error));
+}
+
+function asUnavailable(error: unknown): unknown {
+  if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+    return new TagUnavailableError();
   }
   return error;
 }
