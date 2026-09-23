@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, input, output, signal } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -40,7 +40,6 @@ const DELETE_BLOCKED_RETIRED = 'Something still uses this category, so it can’
 
 /** A message pinned to one row after a retire / reactivate / delete failed. */
 type RowNoticeState = {
-  id: number;
   message: string;
   retry?: () => void;
   retire?: () => void;
@@ -83,6 +82,7 @@ type MovedAck = {
 })
 export class CategoryPane {
   // Dependencies
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
   private service = inject(CategoriesService);
   private dialog = inject(MatDialog);
   private destroyRef = inject(DestroyRef);
@@ -93,13 +93,8 @@ export class CategoryPane {
   /** This kind's whole set — active and retired, supplied and the person's own — in wire order. */
   readonly categories = input.required<readonly Category[]>();
 
-  /**
-   * Set by the screen when the re-read after a write failed: the rows on screen
-   * are now one write stale. It suppresses this pane's "moved" acknowledgement,
-   * whose row is still sitting in view because the re-read that would have
-   * removed it never landed.
-   */
-  readonly refreshFailed = input(false);
+  /** The screen blocks writes until a post-write refresh finishes successfully. */
+  readonly writeBlocked = input(false);
 
   // Outputs
 
@@ -114,11 +109,11 @@ export class CategoryPane {
   /** The id of the row whose delete is awaiting confirmation, or `null`. */
   protected readonly confirmingDeleteId = signal<number | null>(null);
 
-  /** The id of the row with a retire / reactivate / delete request in flight. */
-  protected readonly busyId = signal<number | null>(null);
+  /** The row ids with retire / reactivate / delete requests in flight. */
+  protected readonly busyIds = signal<ReadonlySet<number>>(new Set());
 
   /** A per-row message left by a failed retire / reactivate / delete. */
-  protected readonly notice = signal<RowNoticeState | null>(null);
+  protected readonly notices = signal<ReadonlyMap<number, RowNoticeState>>(new Map());
 
   /**
    * The "Groceries retired" line. A plain signal, held until the person's next
@@ -132,7 +127,7 @@ export class CategoryPane {
    * it failed, because the moved row is then still in this view and the screen's
    * stale-list notice should stand alone rather than be contradicted.
    */
-  protected readonly movedAck = computed(() => (this.refreshFailed() ? null : this.moved()));
+  protected readonly movedAck = computed(() => (this.writeBlocked() ? null : this.moved()));
 
   /** "Expense" / "Income" — the pane's heading. */
   protected readonly heading = computed(() => (this.kind() === 'expense' ? 'Expense' : 'Income'));
@@ -209,7 +204,7 @@ export class CategoryPane {
   protected setFilter(value: PaneFilter): void {
     this.filter.set(value);
     this.moved.set(null);
-    this.notice.set(null);
+    this.notices.set(new Map());
     this.confirmingDeleteId.set(null);
   }
 
@@ -219,7 +214,6 @@ export class CategoryPane {
    * control and Escape do nothing.
    */
   protected openAdd(): void {
-    this.notice.set(null);
     this.confirmingDeleteId.set(null);
     this.moved.set(null);
 
@@ -241,7 +235,6 @@ export class CategoryPane {
    * rename re-reads the list; Cancel, the close control and Escape do nothing.
    */
   protected openRename(category: Category): void {
-    this.notice.set(null);
     this.confirmingDeleteId.set(null);
     this.moved.set(null);
 
@@ -264,12 +257,8 @@ export class CategoryPane {
 
     this.runRowWrite(
       category.id,
-      this.service.setActive(category.id, isActive),
-      (error) => ({
-        id: category.id,
-        message: messageFor(error),
-        retry: () => this.setActive(category, isActive),
-      }),
+      () => this.service.setActive(category.id, isActive),
+      (error) => ({ message: messageFor(error), retry: () => this.setActive(category, isActive) }),
       () => {
         this.moved.set(
           hiddenAfter
@@ -281,32 +270,67 @@ export class CategoryPane {
             : null,
         );
         this.changed.emit();
+        if (hiddenAfter) {
+          this.focusAfterRowLeavesView(category.id);
+        }
       },
     );
   }
 
   /** Ask on the row before deleting — kept even though the API refuses deletion for anything ever used. */
   protected askDelete(category: Category): void {
-    this.notice.set(null);
+    this.setNotice(category.id, null);
     this.moved.set(null);
     this.confirmingDeleteId.set(category.id);
+    queueMicrotask(() => this.focusCancelDelete(category.id));
   }
 
-  protected cancelDelete(): void {
+  protected cancelDelete(categoryId: number): void {
     this.confirmingDeleteId.set(null);
+    queueMicrotask(() => this.focusCategory(categoryId));
   }
 
   protected confirmDelete(category: Category): void {
+    const focusTargetId = this.adjacentVisibleCategoryId(category.id);
     this.confirmingDeleteId.set(null);
     this.runRowWrite(
       category.id,
-      this.service.remove(category.id),
+      () => this.service.remove(category.id),
       (error) => this.noticeForFailedDelete(category, error),
       () => {
         this.moved.set(null);
         this.changed.emit();
+        this.focusCategory(focusTargetId);
       },
     );
+  }
+
+  private adjacentVisibleCategoryId(categoryId: number): number | null {
+    const rows = this.visible();
+    const index = rows.findIndex((category) => category.id === categoryId);
+    return rows[index + 1]?.id ?? rows[index - 1]?.id ?? null;
+  }
+
+  private focusCancelDelete(categoryId: number): void {
+    this.host.nativeElement.querySelector<HTMLButtonElement>(`#cancel-delete-category-${categoryId}`)?.focus();
+  }
+
+  private focusAfterRowLeavesView(categoryId: number): void {
+    this.focusCategory(this.adjacentVisibleCategoryId(categoryId));
+  }
+
+  private focusCategory(categoryId: number | null): void {
+    queueMicrotask(() => {
+      const actions =
+        categoryId === null
+          ? null
+          : this.host.nativeElement.querySelector<HTMLButtonElement>(`#category-actions-${categoryId}`);
+      if (actions && !actions.disabled) {
+        actions.focus();
+        return;
+      }
+      this.host.nativeElement.querySelector<HTMLElement>('[data-category-pane-heading]')?.focus();
+    });
   }
 
   /**
@@ -316,22 +340,51 @@ export class CategoryPane {
    */
   private runRowWrite(
     id: number,
-    write$: Observable<unknown>,
+    write: () => Observable<unknown>,
     noticeFor: (error: unknown) => RowNoticeState,
     onSuccess: () => void,
   ): void {
-    this.notice.set(null);
-    this.busyId.set(id);
+    if (this.busyIds().has(id)) {
+      return;
+    }
+    this.setBusy(id, true);
+    this.setNotice(id, null);
 
-    write$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
-        this.busyId.set(null);
-        onSuccess();
-      },
-      error: (error: unknown) => {
-        this.busyId.set(null);
-        this.notice.set(noticeFor(error));
-      },
+    write()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.setBusy(id, false);
+          onSuccess();
+        },
+        error: (error: unknown) => {
+          this.setBusy(id, false);
+          this.setNotice(id, noticeFor(error));
+        },
+      });
+  }
+
+  private setBusy(id: number, busy: boolean): void {
+    this.busyIds.update((busyIds) => {
+      const updated = new Set(busyIds);
+      if (busy) {
+        updated.add(id);
+      } else {
+        updated.delete(id);
+      }
+      return updated;
+    });
+  }
+
+  private setNotice(id: number, notice: RowNoticeState | null): void {
+    this.notices.update((notices) => {
+      const updated = new Map(notices);
+      if (notice) {
+        updated.set(id, notice);
+      } else {
+        updated.delete(id);
+      }
+      return updated;
     });
   }
 
@@ -340,15 +393,13 @@ export class CategoryPane {
     if (error instanceof CategoryInUseError) {
       if (category.isActive) {
         return {
-          id: category.id,
           message: DELETE_BLOCKED_ACTIVE,
           retire: () => this.setActive(category, false),
         };
       }
-      return { id: category.id, message: DELETE_BLOCKED_RETIRED };
+      return { message: DELETE_BLOCKED_RETIRED };
     }
     return {
-      id: category.id,
       message: messageFor(error),
       retry: () => this.confirmDelete(category),
     };

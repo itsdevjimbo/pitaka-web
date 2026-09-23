@@ -1,18 +1,24 @@
-<div class="mx-auto flex w-full max-w-4xl flex-col gap-y-6 p-4 sm:p-8">
+<main class="flex w-full min-w-0 flex-col gap-7 p-4 pb-28 sm:p-8 lg:p-10 lg:pb-10">
   <!-- Heading -->
   <header class="flex flex-col gap-y-1">
-    <h1 class="text-2xl font-bold tracking-tight">Categories</h1>
-    <p class="text-neutral-500 dark:text-neutral-400">The labels you file income and expenses under.</p>
+    <h1
+      class="font-display text-3xl tracking-tight break-words"
+      tabindex="-1"
+    >
+      Categories
+    </h1>
+    <p class="text-secondary">The labels you file income and expenses under.</p>
   </header>
 
   @if (loading()) {
     <!-- Slow load: show that it is working -->
     <div
-      class="flex flex-auto items-center justify-center gap-x-3 py-20 text-neutral-500 dark:text-neutral-400"
+      class="flex flex-auto items-center justify-center gap-x-3 rounded-2xl bg-soft py-20 text-secondary"
       role="status"
+      aria-live="polite"
     >
       <mat-icon
-        class="size-6 animate-spin"
+        class="size-6 animate-spin motion-reduce:animate-none"
         svgIcon="loader-circle"
       />
       <span>Loading your categories…</span>
@@ -20,18 +26,19 @@
   } @else if (errorMessage(); as message) {
     <!-- Failed load: one explanation, one retry, panes withheld -->
     <div
-      class="flex flex-col items-center gap-y-4 rounded-xl border border-neutral-200 px-6 py-14 text-center dark:border-neutral-800"
+      class="flex flex-col items-center gap-y-4 rounded-2xl border border-divider bg-surface px-6 py-14 text-center"
       role="alert"
     >
       <mat-icon
-        class="size-8 text-neutral-400"
+        class="size-8 text-danger"
         svgIcon="circle-alert"
       />
-      <p class="max-w-sm text-neutral-600 dark:text-neutral-300">
+      <p class="max-w-sm text-secondary">
         {{ message }}
       </p>
       <button
         matButton="filled"
+        class="min-h-11"
         (click)="load()"
       >
         <mat-icon svgIcon="refresh-cw" />
@@ -42,14 +49,15 @@
     @if (refreshError(); as message) {
       <!-- The re-read after a write failed: rows stay, this refreshes them -->
       <div
-        class="flex flex-col items-center gap-y-3 rounded-xl border border-neutral-200 px-6 py-4 text-center dark:border-neutral-800"
-        role="alert"
+        class="flex flex-wrap items-center justify-center gap-3 rounded-2xl bg-warning-container px-4 py-3 text-center text-sm text-warning"
+        role="status"
       >
-        <p class="max-w-sm text-sm text-neutral-600 dark:text-neutral-300">
+        <p class="max-w-sm flex-auto">
           {{ message }}
         </p>
         <button
           matButton="outlined"
+          class="min-h-11"
           (click)="reload()"
         >
           <mat-icon svgIcon="refresh-cw" />
@@ -58,20 +66,35 @@
       </div>
     }
 
+    @if (refreshing()) {
+      <p
+        class="flex items-center gap-2 text-sm text-secondary"
+        role="status"
+        aria-live="polite"
+      >
+        <mat-icon
+          class="size-4 animate-spin motion-reduce:animate-none"
+          svgIcon="loader-circle"
+          aria-hidden="true"
+        />
+        Refreshing categories…
+      </p>
+    }
+
     <!-- Two panes: side by side on desktop, stacked on phone -->
-    <div class="grid gap-4 sm:grid-cols-2 sm:items-start">
+    <div class="grid min-w-0 gap-5 sm:grid-cols-2 sm:items-start">
       <categories-category-pane
         kind="expense"
         [categories]="expenseCategories()"
-        [refreshFailed]="refreshError() !== null"
+        [writeBlocked]="refreshError() !== null || refreshing()"
         (changed)="reload()"
       />
       <categories-category-pane
         kind="income"
         [categories]="incomeCategories()"
-        [refreshFailed]="refreshError() !== null"
+        [writeBlocked]="refreshError() !== null || refreshing()"
         (changed)="reload()"
       />
     </div>
   }
-</div>
+</main>

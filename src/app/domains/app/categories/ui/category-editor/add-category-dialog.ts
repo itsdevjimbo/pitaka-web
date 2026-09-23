@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal, viewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
 import { Category, CategoryKind } from '../../data/category';
@@ -16,17 +16,26 @@ import { AddCategoryForm } from './add-category-form';
   selector: 'categories-add-category-dialog',
   imports: [DialogShell, AddCategoryForm],
   template: `
-    <app-dialog-shell [heading]="heading">
+    <app-dialog-shell
+      [heading]="heading"
+      [dirty]="dirty()"
+      [pending]="pending()"
+    >
       <categories-add-category-form
         [kind]="kind"
         (created)="dialogRef.close($event)"
-        (cancelled)="dialogRef.close()"
+        (cancelled)="shell().requestClose()"
+        (dirtyChange)="dirty.set($event)"
+        (pendingChange)="pending.set($event)"
       />
     </app-dialog-shell>
   `,
 })
 export class AddCategoryDialog {
   protected readonly dialogRef = inject<MatDialogRef<AddCategoryDialog, Category>>(MatDialogRef);
+  protected readonly dirty = signal(false);
+  protected readonly pending = signal(false);
+  protected readonly shell = viewChild.required(DialogShell);
 
   /** The kind of the pane whose *Add* button opened the dialog. */
   protected readonly kind = inject<CategoryKind>(MAT_DIALOG_DATA);

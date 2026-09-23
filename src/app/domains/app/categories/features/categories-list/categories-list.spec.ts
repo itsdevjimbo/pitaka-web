@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideDialogDefaults } from '@/app/core/dialog';
 import { provideIcons } from '@/app/core/icons';
@@ -87,7 +87,7 @@ describe('CategoriesList', () => {
       search: (value: string) => {
         const input = section.querySelector<HTMLInputElement>('input[type="search"]')!;
         input.value = value;
-        input.dispatchEvent(new Event('input'));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         fixture.detectChanges();
       },
     };
@@ -251,13 +251,94 @@ describe('CategoriesList', () => {
       await settle(fixture);
       const input = overlay().querySelector<HTMLInputElement>('#add-category-name')!;
       input.value = 'Holidays';
-      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       await settle(fixture);
       overlayButton('Add category').click();
       await settle(fixture);
 
       expect(create).toHaveBeenCalledWith({ name: 'Holidays', kind: 'expense' });
       expect(readAll).toHaveBeenCalledTimes(2);
+      expect(pane('Expense').text()).toContain('Holidays');
+    });
+
+    it('keeps invalid Submit enabled, shows the field error, focuses Name and sends no write', async () => {
+      const create = vi.fn(() => of(cat({ id: 20, name: 'Holidays' })));
+      const { fixture, pane, overlayText } = setup(() => of(EVERYTHING), {
+        create: create as unknown as CategoriesService['create'],
+      });
+
+      pane('Expense').addButton()!.click();
+      await settle(fixture);
+      const add = overlayButton('Add category');
+      expect(add.disabled).toBe(false);
+
+      add.click();
+      await settle(fixture);
+
+      expect(overlayText()).toContain('You must enter a name');
+      expect(document.activeElement).toBe(overlay().querySelector('#add-category-name'));
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('asks before discarding a changed Add form from Cancel', async () => {
+      const { fixture, pane, overlayText } = setup(() => of(EVERYTHING));
+
+      pane('Expense').addButton()!.click();
+      await settle(fixture);
+      const input = overlay().querySelector<HTMLInputElement>('#add-category-name')!;
+      input.value = 'Holidays';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle(fixture);
+      overlayButton('Cancel').click();
+      await settle(fixture);
+
+      expect(overlayText()).toContain('Discard changes?');
+      expect(overlay().querySelector('[role="dialog"]')).not.toBeNull();
+
+      overlayButton('Keep editing').click();
+      await settle(fixture);
+      expect(overlay().querySelector<HTMLInputElement>('#add-category-name')!.value).toBe('Holidays');
+
+      overlayButton('Cancel').click();
+      await settle(fixture);
+      overlayButton('Discard changes').click();
+      await settle(fixture);
+      expect(overlay().querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    it('keeps the Add dialog open while a save is pending', async () => {
+      const created = cat({ id: 20, name: 'Holidays' });
+      const save = new Subject<Category>();
+      let attempt = 0;
+      const readAll = vi.fn(() => {
+        attempt += 1;
+        return attempt === 1 ? of(EVERYTHING) : of([...EVERYTHING, created]);
+      });
+      const create = vi.fn(() => save.asObservable());
+      const { fixture, pane, overlayText } = setup(readAll as unknown as CategoriesService['readAll'], {
+        create: create as unknown as CategoriesService['create'],
+      });
+
+      pane('Expense').addButton()!.click();
+      await settle(fixture);
+      const input = overlay().querySelector<HTMLInputElement>('#add-category-name')!;
+      input.value = 'Holidays';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle(fixture);
+      overlayButton('Add category').click();
+      await settle(fixture);
+      overlay().querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click();
+      await settle(fixture);
+
+      expect(overlayText()).toContain('Saving in progress');
+      expect(overlay().querySelector('[role="dialog"]')).not.toBeNull();
+      expect(create).toHaveBeenCalledTimes(1);
+
+      save.next(created);
+      save.complete();
+      await settle(fixture);
+
+      expect(overlay().querySelector('[role="dialog"]')).toBeNull();
       expect(pane('Expense').text()).toContain('Holidays');
     });
 
@@ -278,7 +359,7 @@ describe('CategoriesList', () => {
       await settle(fixture);
       const input = overlay().querySelector<HTMLInputElement>('#add-category-name')!;
       input.value = 'Groceries';
-      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       await settle(fixture);
       overlayButton('Add category').click();
       await settle(fixture);
@@ -312,6 +393,66 @@ describe('CategoriesList', () => {
     expect(pane('Expense').text()).not.toContain('Motoring');
   });
 
+  it('keeps each in-flight row write isolated while another Category is updated', async () => {
+    const groceriesWrite = new Subject<Category>();
+    const rentWrite = new Subject<Category>();
+    const setActive = vi
+      .fn()
+      .mockReturnValueOnce(groceriesWrite.asObservable())
+      .mockReturnValueOnce(rentWrite.asObservable());
+    const { fixture, pane } = setup(() => of(EVERYTHING), {
+      setActive: setActive as unknown as CategoriesService['setActive'],
+    });
+
+    await openRowMenu(fixture, pane('Expense'), 'Groceries');
+    overlayButton('Retire').click();
+    await settle(fixture);
+    await openRowMenu(fixture, pane('Expense'), 'Rent');
+    overlayButton('Retire').click();
+    await settle(fixture);
+
+    expect(setActive).toHaveBeenCalledTimes(2);
+    groceriesWrite.next({ ...GROCERIES, isActive: false });
+    groceriesWrite.complete();
+    await settle(fixture);
+
+    expect(pane('Expense').actionsFor('Rent')).toBeNull();
+    expect(pane('Expense').el.querySelector('[role="status"][aria-label="Working…"]')).not.toBeNull();
+
+    rentWrite.next({ ...RENT, isActive: false });
+    rentWrite.complete();
+    await settle(fixture);
+    expect(pane('Expense').el.querySelector('[role="status"][aria-label="Working…"]')).toBeNull();
+  });
+
+  it('keeps row errors and retries attached when concurrent writes fail', async () => {
+    const groceriesWrite = new Subject<Category>();
+    const rentWrite = new Subject<Category>();
+    const setActive = vi
+      .fn()
+      .mockReturnValueOnce(groceriesWrite.asObservable())
+      .mockReturnValueOnce(rentWrite.asObservable());
+    const { fixture, pane } = setup(() => of(EVERYTHING), {
+      setActive: setActive as unknown as CategoriesService['setActive'],
+    });
+
+    await openRowMenu(fixture, pane('Expense'), 'Groceries');
+    overlayButton('Retire').click();
+    await settle(fixture);
+    await openRowMenu(fixture, pane('Expense'), 'Rent');
+    overlayButton('Retire').click();
+    await settle(fixture);
+
+    groceriesWrite.error(new ApiError('Groceries could not be updated.', 500));
+    await settle(fixture);
+    rentWrite.error(new ApiError('Rent could not be updated.', 500));
+    await settle(fixture);
+
+    expect(pane('Expense').text()).toContain('Groceries could not be updated.');
+    expect(pane('Expense').text()).toContain('Rent could not be updated.');
+    expect(pane('Expense').el.querySelectorAll('app-row-notice')).toHaveLength(2);
+  });
+
   it('keeps the rows and offers an inline retry when the re-read after a write fails', async () => {
     const setActive = vi.fn(() => of({ ...GROCERIES, isActive: false }));
     let attempt = 0;
@@ -334,6 +475,91 @@ describe('CategoriesList', () => {
     expect(pane('Expense').text()).not.toContain('find it under Retired');
   });
 
+  it('blocks Category changes while the list is stale and restores them after a successful retry', async () => {
+    const retired = { ...GROCERIES, isActive: false };
+    let attempt = 0;
+    const readAll = vi.fn(() => {
+      attempt += 1;
+      if (attempt === 1) {
+        return of(EVERYTHING);
+      }
+      if (attempt === 2) {
+        return throwError(() => new ApiError('Server error', 500));
+      }
+      return of([retired, RENT, DINING, MOTORING, SALARY, GIFTS]);
+    });
+    const setActive = vi.fn(() => of(retired));
+    const { fixture, pane, text } = setup(readAll as unknown as CategoriesService['readAll'], {
+      setActive: setActive as unknown as CategoriesService['setActive'],
+    });
+
+    await openRowMenu(fixture, pane('Expense'), 'Groceries');
+    overlayButton('Retire').click();
+    await settle(fixture);
+
+    expect(text()).toContain('Your change was saved');
+    expect(pane('Expense').addButton()!.disabled).toBe(true);
+    expect(pane('Expense').actionsFor('Rent')!.disabled).toBe(true);
+
+    const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((button) =>
+      (button.textContent ?? '').includes('Try again'),
+    );
+    if (!retry) {
+      throw new Error('Expected the stale Category list retry button');
+    }
+    retry.click();
+    await settle(fixture);
+
+    expect(readAll).toHaveBeenCalledTimes(3);
+    expect(text()).not.toContain('Your change was saved');
+    expect(pane('Expense').addButton()!.disabled).toBe(false);
+    expect(pane('Expense').actionsFor('Rent')!.disabled).toBe(false);
+  });
+
+  it('keeps Category changes blocked until a stale-list retry finishes', async () => {
+    const retired = { ...GROCERIES, isActive: false };
+    const retryRead = new Subject<readonly Category[]>();
+    let attempt = 0;
+    const readAll = vi.fn(() => {
+      attempt += 1;
+      if (attempt === 1) {
+        return of(EVERYTHING);
+      }
+      if (attempt === 2) {
+        return throwError(() => new ApiError('Server error', 500));
+      }
+      return retryRead.asObservable();
+    });
+    const setActive = vi.fn(() => of(retired));
+    const { fixture, pane, text } = setup(readAll as unknown as CategoriesService['readAll'], {
+      setActive: setActive as unknown as CategoriesService['setActive'],
+    });
+
+    await openRowMenu(fixture, pane('Expense'), 'Groceries');
+    overlayButton('Retire').click();
+    await settle(fixture);
+    expect(text()).toContain('Your change was saved');
+
+    const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((button) =>
+      (button.textContent ?? '').includes('Try again'),
+    )!;
+    retry.click();
+    fixture.detectChanges();
+
+    expect(readAll).toHaveBeenCalledTimes(3);
+    expect(pane('Expense').addButton()!.disabled).toBe(true);
+    expect(pane('Expense').actionsFor('Rent')!.disabled).toBe(true);
+    expect(text()).toContain('Refreshing categories');
+
+    retryRead.next([retired, RENT, DINING, MOTORING, SALARY, GIFTS]);
+    retryRead.complete();
+    await settle(fixture);
+
+    expect(text()).not.toContain('Refreshing categories');
+    expect(pane('Expense').addButton()!.disabled).toBe(false);
+    expect(pane('Expense').actionsFor('Rent')!.disabled).toBe(false);
+  });
+
   it('asks on the row before deleting and does not call the service until confirmed', async () => {
     const remove = vi.fn(() => of(undefined));
     const { fixture, pane } = setup(() => of(EVERYTHING), {
@@ -350,6 +576,49 @@ describe('CategoriesList', () => {
     pane('Expense').button('Delete')!.click();
     fixture.detectChanges();
     expect(remove).toHaveBeenCalledWith(2);
+  });
+
+  it('starts delete confirmation on Cancel and returns focus to the row actions when cancelled', async () => {
+    const { fixture, pane } = setup(() => of(EVERYTHING));
+
+    await openRowMenu(fixture, pane('Expense'), 'Rent');
+    overlayButton('Delete').click();
+    await settle(fixture);
+
+    const cancel = Array.from(pane('Expense').el.querySelectorAll('button')).find(
+      (button) => (button.textContent ?? '').trim() === 'Cancel',
+    );
+    expect(cancel).not.toBeUndefined();
+    expect(document.activeElement).toBe(cancel);
+
+    cancel!.click();
+    await settle(fixture);
+
+    expect(document.activeElement).toBe(pane('Expense').actionsFor('Rent'));
+  });
+
+  it('moves focus to the next visible Category after deletion', async () => {
+    const utilities = cat({ id: 5, name: 'Utilities' });
+    const initial = [...EVERYTHING, utilities];
+    let attempt = 0;
+    const readAll = vi.fn(() => {
+      attempt += 1;
+      return attempt === 1 ? of(initial) : of(initial.filter((category) => category.id !== RENT.id));
+    });
+    const remove = vi.fn(() => of(undefined));
+    const { fixture, pane } = setup(readAll as unknown as CategoriesService['readAll'], {
+      remove: remove as unknown as CategoriesService['remove'],
+    });
+
+    await openRowMenu(fixture, pane('Expense'), 'Rent');
+    overlayButton('Delete').click();
+    await settle(fixture);
+    pane('Expense').button('Delete')!.click();
+    await settle(fixture);
+
+    expect(remove).toHaveBeenCalledWith(RENT.id);
+    expect(pane('Expense').text()).not.toContain('Rent');
+    expect(document.activeElement).toBe(pane('Expense').actionsFor('Utilities'));
   });
 
   it('offers Retire as the way out when a delete is refused for an in-use active Category', async () => {
@@ -402,6 +671,30 @@ describe('CategoriesList', () => {
       expect(overlay().querySelector<HTMLInputElement>('#rename-category-name')!.value).toBe('Groceries');
     });
 
+    it('keeps invalid Save enabled, shows the field error, focuses Name and sends no write', async () => {
+      const rename = vi.fn(() => of({ ...GROCERIES, name: 'Food' }));
+      const { fixture, pane, overlayText } = setup(() => of(EVERYTHING), {
+        rename: rename as unknown as CategoriesService['rename'],
+      });
+
+      await openRowMenu(fixture, pane('Expense'), 'Groceries');
+      overlayButton('Rename').click();
+      await settle(fixture);
+      const input = overlay().querySelector<HTMLInputElement>('#rename-category-name')!;
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle(fixture);
+
+      const save = overlayButton('Save');
+      expect(save.disabled).toBe(false);
+      save.click();
+      await settle(fixture);
+
+      expect(overlayText()).toContain('You must enter a name');
+      expect(document.activeElement).toBe(input);
+      expect(rename).not.toHaveBeenCalled();
+    });
+
     it('shows a duplicate name its cross-kind message and keeps the dialog open', async () => {
       const rename = vi.fn(() =>
         throwError(
@@ -420,7 +713,7 @@ describe('CategoriesList', () => {
       await settle(fixture);
       const input = overlay().querySelector<HTMLInputElement>('#rename-category-name')!;
       input.value = 'Gifts';
-      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       overlayButton('Save').click();
       await settle(fixture);
 
@@ -446,7 +739,7 @@ describe('CategoriesList', () => {
       await settle(fixture);
       const input = overlay().querySelector<HTMLInputElement>('#rename-category-name')!;
       input.value = 'Food';
-      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       overlayButton('Save').click();
       await settle(fixture);
 
