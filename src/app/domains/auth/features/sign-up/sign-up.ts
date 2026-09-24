@@ -1,8 +1,7 @@
-import { Component, inject, linkedSignal, signal } from '@angular/core';
+import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
 import { email, form, FormField, required, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -17,15 +16,7 @@ const COULD_NOT_REGISTER = 'Something went wrong creating your profile. Please t
 @Component({
   selector: 'auth-sign-up',
   templateUrl: './sign-up.html',
-  imports: [
-    RouterLink,
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    MatIconModule,
-    FormField,
-    ResendConfirmation,
-  ],
+  imports: [RouterLink, MatFormFieldModule, MatInputModule, MatButtonModule, FormField, ResendConfirmation],
 })
 export default class AuthSignUp {
   // Dependencies
@@ -68,9 +59,16 @@ export default class AuthSignUp {
    * session is established, so there is nowhere else for it to live).
    */
   protected registeredEmail = signal<string | null>(null);
+  protected readonly pageHeading = computed(() =>
+    this.registeredEmail() ? 'Check your inbox' : 'Create your Profile',
+  );
 
   signUp(event: Event) {
     event.preventDefault();
+    if (this.submitting()) {
+      return;
+    }
+
     const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.signUpForm, {
