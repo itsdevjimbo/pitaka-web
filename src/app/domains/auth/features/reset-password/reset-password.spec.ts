@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService, ResetLinkRejectedError } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
@@ -45,7 +45,7 @@ describe('AuthResetPassword', () => {
 
     const fixture = TestBed.createComponent(AuthResetPassword);
     fixture.detectChanges();
-    return { fixture, completePasswordReset };
+    return { fixture, completePasswordReset, resetPassword };
   }
 
   async function submitAndSettle(fixture: ComponentFixture<AuthResetPassword>) {
@@ -71,6 +71,72 @@ describe('AuthResetPassword', () => {
 
     expect((fixture.nativeElement as HTMLElement).querySelector('#new-password')).not.toBeNull();
     expect(text(fixture)).not.toContain('This link is no longer valid');
+  });
+
+  it('focuses the page heading when opened from a valid reset link', async () => {
+    const { fixture } = setup({ userId: '7', token: 'a-token' });
+    await fixture.whenStable();
+
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#reset-password-heading'));
+  });
+
+  it('keeps invalid Submit enabled, shows the password error, and focuses it without sending', async () => {
+    const resetPassword = vi.fn(() => of(undefined));
+    const { fixture } = setup({ userId: '7', token: 'a-token' }, { resetPassword });
+    enterPassword(fixture, 'short');
+    const button = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    expect(button.disabled).toBe(false);
+    await submitAndSettle(fixture);
+
+    expect(text(fixture)).toContain('Your password must be at least 8 characters');
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#new-password'));
+    expect(resetPassword).not.toHaveBeenCalled();
+  });
+
+  it('reveals and hides the password through an accessible control', () => {
+    const { fixture } = setup({ userId: '7', token: 'a-token' });
+    const password = fixture.nativeElement.querySelector('#new-password') as HTMLInputElement;
+    const showPassword = fixture.nativeElement.querySelector(
+      'button[aria-label="Show password"]',
+    ) as HTMLButtonElement | null;
+
+    expect(showPassword).not.toBeNull();
+    expect(showPassword?.getAttribute('aria-controls')).toBe('new-password');
+    showPassword?.click();
+    fixture.detectChanges();
+
+    expect(password.type).toBe('text');
+    const hidePassword = fixture.nativeElement.querySelector(
+      'button[aria-label="Hide password"]',
+    ) as HTMLButtonElement | null;
+    expect(hidePassword).not.toBeNull();
+    hidePassword?.click();
+    fixture.detectChanges();
+
+    expect(password.type).toBe('password');
+  });
+
+  it('announces a pending reset and ignores duplicate submissions until it settles', async () => {
+    const pendingReset = new Subject<void>();
+    const resetPassword = vi.fn(() => pendingReset.asObservable());
+    const { fixture } = setup({ userId: '7', token: 'a-token' }, { resetPassword });
+    enterPassword(fixture, 'a-new-password');
+    const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+
+    form.dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+
+    expect(resetPassword).toHaveBeenCalledTimes(1);
+    expect(fixture.nativeElement.querySelector('button[type="submit"]').disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('Setting your password');
+
+    form.dispatchEvent(new Event('submit'));
+    expect(resetPassword).toHaveBeenCalledTimes(1);
+
+    pendingReset.next();
+    pendingReset.complete();
+    await fixture.whenStable();
   });
 
   it('lands on the dead-link state for a missing token, without calling the API', () => {
@@ -138,6 +204,10 @@ describe('AuthResetPassword', () => {
     expect(text(fixture)).toContain('The field Password must be a string with a minimum length of 8.');
     expect(text(fixture)).not.toContain('This link is no longer valid');
     expect(completePasswordReset).not.toHaveBeenCalled();
+    const input = fixture.nativeElement.querySelector('#new-password') as HTMLInputElement;
+    const error = fixture.nativeElement.querySelector('mat-error') as HTMLElement;
+    expect(input.value).toBe('a-new-password');
+    expect(input.getAttribute('aria-describedby')?.split(' ')).toContain(error.id);
   });
 
   /**
@@ -159,6 +229,9 @@ describe('AuthResetPassword', () => {
     await submitAndSettle(fixture);
 
     expect(text(fixture)).toContain('This link is no longer valid');
+    const recoveryHeading = fixture.nativeElement.querySelector('auth-dead-link h1') as HTMLHeadingElement;
+    expect(recoveryHeading).not.toBeNull();
+    expect(document.activeElement).toBe(recoveryHeading);
     expect(completePasswordReset).not.toHaveBeenCalled();
   });
 
@@ -176,5 +249,6 @@ describe('AuthResetPassword', () => {
     expect(text(fixture)).toContain('Something went wrong on the server.');
     expect(text(fixture)).not.toContain('This link is no longer valid');
     expect(completePasswordReset).not.toHaveBeenCalled();
+    expect((fixture.nativeElement.querySelector('#new-password') as HTMLInputElement).value).toBe('a-new-password');
   });
 });

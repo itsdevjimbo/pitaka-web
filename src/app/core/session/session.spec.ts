@@ -191,6 +191,19 @@ describe('Session', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/auth/sign-in']);
   });
 
+  it('clears the local session after a password reset and returns to sign-in with the reset notice', async () => {
+    const session = await verifiedSession();
+
+    session.completePasswordReset();
+
+    expect(session.isAuthenticated()).toBe(false);
+    expect(session.profile()).toBeNull();
+    expect(storage.getItem(TOKEN_KEY)).toBeNull();
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/sign-in'], {
+      queryParams: { reason: 'password-reset' },
+    });
+  });
+
   it('ignores a second sign-out once the session is already clear', async () => {
     const session = await verifiedSession();
 

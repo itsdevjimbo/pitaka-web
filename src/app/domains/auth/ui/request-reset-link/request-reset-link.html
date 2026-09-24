@@ -3,6 +3,7 @@
   <button
     type="button"
     matButton
+    class="min-h-11"
     [disabled]="quiet()"
     (click)="request()"
   >
@@ -18,7 +19,7 @@
   <!-- The same line whatever came back (ADR 0015) -->
   @if (hasAsked()) {
     <p
-      class="mt-2 text-sm text-neutral-500 dark:text-neutral-400"
+      class="mt-2 text-sm leading-6 text-secondary"
       role="status"
     >
       {{ reassurance }}
