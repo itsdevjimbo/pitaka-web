@@ -18,6 +18,7 @@ import { GoalContributionWithAccountName } from '../../data/contributions/contri
 import { NewGoalContribution, UpdateGoalContribution } from '../../data/contributions/goal-contribution';
 import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal, GOAL_AMOUNT_MAX, GOAL_AMOUNT_MIN } from '../../data/goal';
+import { GoalContributionUnavailableError } from '../../data/goal-errors';
 
 type ContributionModel = { accountId: number | null; amount: number | null; contributionDate: Date; note: string };
 
@@ -135,9 +136,9 @@ export class ContributionForm {
         this.submitting.set(true);
         this.pendingChange.emit(true);
         this.errorMessage.set(null);
+        const existing = this.contribution();
         try {
           const value = this.model();
-          const existing = this.contribution();
           if (existing) {
             await firstValueFrom(
               this.contributions
@@ -173,7 +174,7 @@ export class ContributionForm {
             this.errorMessage.set('This Account is no longer available. Choose another Account.');
           } else if (error instanceof ApiError && /abandoned goal/i.test(error.message)) {
             this.unavailable.emit('abandoned');
-          } else if (error instanceof ApiError && error.status === 404) {
+          } else if (existing !== null && error instanceof GoalContributionUnavailableError) {
             this.unavailable.emit('missing');
           } else {
             const { boundErrors, bannerMessage } = partitionServerError(

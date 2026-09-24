@@ -7,7 +7,12 @@ import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
 import { formatPeso } from '@/app/core/money';
 import { AccountsService } from '@/app/domains/app/accounts';
-import { ContributionDeletionCoordinator, GoalContributionsService, GoalsService } from '@/app/domains/app/goals';
+import {
+  ContributionDeletionCoordinator,
+  GoalContributionUnavailableError,
+  GoalContributionsService,
+  GoalsService,
+} from '@/app/domains/app/goals';
 import { withOverlayContainer } from '@/testing/overlay';
 import { TransactionLinkedContributions } from '../../data/linked-contributions/linked-contribution';
 import { TransactionSplitResult } from '../../data/linked-contributions/transaction-split';
@@ -530,7 +535,9 @@ describe('TransactionRow', () => {
     const removeContribution = vi.fn(() => {
       attempts += 1;
       return throwError(() =>
-        attempts === 1 ? new ApiError('The request timed out.', 504) : new ApiError('Missing', 404),
+        attempts === 1
+          ? new ApiError('The request timed out.', 504)
+          : new GoalContributionUnavailableError(new ApiError('Missing', 404)),
       );
     });
     const linkedRead = vi
@@ -1325,6 +1332,30 @@ describe('TransactionRow', () => {
       const host = fixture.nativeElement as HTMLElement;
       const alert = host.querySelector('[role="alert"]');
       expect(alert?.textContent).toContain('That could not be removed just now.');
+      expect(rowButton(host, 'Try again')).toBeDefined();
+      expect(host.textContent).toContain('Coffee');
+      expect(removed).toEqual([]);
+    });
+
+    it('keeps a Transaction visible and reports no success after its 404 removal response', async () => {
+      const remove = vi.fn(() =>
+        throwError(() => new ApiError("We couldn't find that. It may have been deleted, or it may not be yours.", 404)),
+      );
+      const fixture = renderFixture(
+        toAccountRow(tx({ id: 7, description: 'Coffee' }), NAMES, 3),
+        remove as unknown as TransactionsService['remove'],
+      );
+      const removed: unknown[] = [];
+      fixture.componentInstance.removed.subscribe(() => removed.push('removed'));
+
+      menuItem(openMenu(fixture), 'Remove')?.click();
+      fixture.detectChanges();
+      rowButton(fixture.nativeElement as HTMLElement, 'Remove')?.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain("We couldn't find that.");
       expect(rowButton(host, 'Try again')).toBeDefined();
       expect(host.textContent).toContain('Coffee');
       expect(removed).toEqual([]);

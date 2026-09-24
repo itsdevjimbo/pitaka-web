@@ -9,6 +9,7 @@ export type {
 } from './data/contributions/goal-contribution';
 export { GoalsService } from './data/goals.service';
 export { GoalContributionsService } from './data/contributions/goal-contributions.service';
+export { GoalContributionUnavailableError } from './data/goal-errors';
 export { toGoalDateOnly } from './data/goal-calendar';
 export { ContributionDeletionCoordinator } from './data/contributions/contribution-deletion';
 export type { ContributionDeletionResult } from './data/contributions/contribution-deletion';

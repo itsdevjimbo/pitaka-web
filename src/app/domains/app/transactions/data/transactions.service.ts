@@ -319,10 +319,10 @@ export class TransactionsService {
    * so the row can keep the Transaction visible and offer another explicit
    * attempt. Neither refusal reports successful removal.
    *
-   * Failures arrive already normalised: a 404 or 403 means the Transaction is
-   * gone or was never the person's, collapsed to one not-found line; anything
-   * other unrecognised failure remains a form-level `ApiError` the caller shows
-   * while leaving the row in place.
+   * Failures arrive already normalised: the current ownership contract returns
+   * 404 for a missing or foreign-owned Transaction, and older responses may use
+   * 403; both collapse to one not-found line. Any other failure remains a
+   * form-level `ApiError` the caller shows while leaving the row in place.
    */
   remove(id: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/api/transactions/${id}`).pipe(

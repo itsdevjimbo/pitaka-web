@@ -16,6 +16,7 @@ import { GoalContributionWithAccountName, withAccountNames } from '../../data/co
 import { ContributionDeletionCoordinator } from '../../data/contributions/contribution-deletion';
 import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal } from '../../data/goal';
+import { GoalUnavailableError } from '../../data/goal-errors';
 import { GoalsService } from '../../data/goals.service';
 import { AddContributionDialog } from '../../ui/contribution-editor/add-contribution-dialog';
 import { EditContributionDialog } from '../../ui/contribution-editor/edit-contribution-dialog';
@@ -95,9 +96,9 @@ export default class GoalDetail implements OnInit {
   }
 
   /** Read the Goal, its entire history, and the names that make it legible together. */
-  protected load(): void {
+  protected load(afterRead?: () => void): void {
     if (this.goal() !== null) {
-      this.refresh();
+      this.refresh('ordinary', afterRead);
       return;
     }
     this.loading.set(true);
@@ -119,20 +120,32 @@ export default class GoalDetail implements OnInit {
           this.goal.set(goal);
           this.history.set(withAccountNames(contributions, accounts, sourceTransactions).sort(byNewestContribution));
           this.loading.set(false);
+          afterRead?.();
         },
         error: (error: unknown) => {
           const apiError = error instanceof ApiError ? error : null;
           this.errorMessage.set(apiError ? apiError.message : LOAD_FAILED);
-          this.notFound.set(apiError?.status === 404);
+          const unavailable = error instanceof GoalUnavailableError;
+          this.notFound.set(unavailable);
           this.loading.set(false);
+          if (unavailable) {
+            afterRead?.();
+          }
         },
       });
   }
 
   protected openEdit(goal: Goal): void {
     this.clearPrompts();
-    this.dialog
-      .open<EditGoalDialog, Goal, Goal>(EditGoalDialog, { data: goal })
+    const dialogRef = this.dialog.open<EditGoalDialog, Goal, Goal>(EditGoalDialog, { data: goal });
+    dialogRef.componentInstance.unavailable.subscribe(() =>
+      this.load(() => {
+        if (this.notFound()) {
+          dialogRef.close();
+        }
+      }),
+    );
+    dialogRef
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
@@ -281,12 +294,7 @@ export default class GoalDetail implements OnInit {
     });
   }
   private failed(error: unknown, retry: () => void): void {
-    if (error instanceof ApiError && error.status === 404) {
-      this.load();
-      return;
-    }
-    if (error instanceof ApiError && error.status === 403) {
-      this.notice.set({ message: 'You can no longer change this Goal.' });
+    if (error instanceof GoalUnavailableError) {
       this.load();
       return;
     }
@@ -336,6 +344,7 @@ export default class GoalDetail implements OnInit {
         },
         error: (error: unknown) => {
           if (this.showUnavailableGoal(error)) {
+            afterRead?.();
             return;
           }
           this.refreshError.set(true);
@@ -403,7 +412,7 @@ export default class GoalDetail implements OnInit {
   }
 
   private showUnavailableGoal(error: unknown): boolean {
-    if (!(error instanceof ApiError) || (error.status !== 403 && error.status !== 404)) {
+    if (!(error instanceof GoalUnavailableError)) {
       return false;
     }
     this.clearPrompts();
