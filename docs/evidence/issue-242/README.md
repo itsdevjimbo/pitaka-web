@@ -27,22 +27,21 @@ Verified 2026-09-24 against the sign-in route in the development application.
 
 ## Browser review
 
-![Dark desktop sign-in with touched validation errors](sign-in-dark-invalid-submit.png)
-
-- Reviewed the actual sign-in route in Light and System/Dark, including the
-  desktop split and focused phone card. The stored screenshot shows Dark
-  validation feedback; the Light view was inspected in the browser but was not
-  saved as a separate image.
-- At 400% browser zoom, the brand panel collapsed, the card fit the viewport
-  width, and the form remained reachable by vertical scrolling without
-  horizontal clipping. Browser zoom was restored to 100% afterward.
+- Inspected the current sign-in route in Chrome at 100% and 400% zoom. At 400%,
+  the brand panel collapsed, the focused card fit the viewport, and the form
+  remained reachable by scrolling without horizontal clipping. Browser zoom
+  was restored to 100% afterward.
+- Empty Submit displayed both field errors, kept Submit enabled, and focused
+  Email.
 - Keyboard traversal reached Email, Password, Show password, Forgot password,
   and Sign in. The appearance menu reported System as selected; Escape returned
   focus to its trigger. Password reveal changed the control name to Hide
   password and back.
-- An empty submission showed both field errors and focused Email. The
-  automation suite covers wrong credentials, locked-out and unconfirmed
-  Profiles, server failures, session-expiry notice, and return destinations.
+- The earlier screenshot depicted the superseded layout and was removed.
+  Desktop capture could not save a replacement in this environment; the current
+  render was inspected live during implementation. The automation suite covers
+  wrong credentials, locked-out and unconfirmed Profiles, server failures,
+  session-expiry notice, and return destinations.
 
 ## Limits
 
