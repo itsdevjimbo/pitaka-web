@@ -2,9 +2,9 @@
 
 ## Visual review
 
-The `/auth/sign-up` route was opened in Chrome and captured at a wide desktop size in the task review. The screenshot is visible in the implementation conversation. It shows the approved A composition: Pocket Pop brand panel on the left, unboxed form on the right, and the shared Appearance menu in the auth shell.
+The `/auth/sign-up` route was opened in Chrome at a wide desktop size during the correction and compared directly with the throwaway prototype. The screenshot is visible in the correction conversation. It shows the shared Pitaka / Appearance header, the rounded Pocket Pop brand panel with “Room for your everyday.” and the pocket mark, and the unboxed form on the right.
 
-The form uses the existing self-hosted Pocket Pop logos and Outfit heading role. Its phone layout switches to a focused surface card and hides the desktop brand panel. Dark and phone screenshots were not saved in this review.
+The form uses the existing self-hosted Pocket Pop logos and Outfit heading role. Its phone layout switches to a focused surface card and hides the desktop brand panel. This correction visually rechecked wide Light only; Dark and phone screenshots were not saved.
 
 ## Behavior and checks
 

@@ -55,6 +55,7 @@ describe('AuthSignUp', () => {
     });
     expect(text(fixture)).toContain('ada@example.com');
     expect(text(fixture)).toContain('Confirm your email before signing in.');
+    expect(fixture.nativeElement.querySelector('h1')?.textContent).toContain('Check your inbox');
     expect(fixture.nativeElement.querySelector('auth-resend-confirmation')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('form')).toBeNull();
   });
@@ -105,15 +106,27 @@ describe('AuthSignUp', () => {
 
   it('lets a person reveal and hide the password with an announced control state', () => {
     const { fixture } = setup(() => of({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null }));
-    const password = fixture.nativeElement.querySelector('#password') as HTMLInputElement;
-    const showPassword = fixture.nativeElement.querySelector('button[aria-label="Show password"]') as HTMLButtonElement;
+    const element = fixture.nativeElement as HTMLElement;
+    const password = element.querySelector('#password') as HTMLInputElement;
+    const showPassword = Array.from(element.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Show password',
+    );
+    if (!showPassword) {
+      throw new Error('Expected a Show password button');
+    }
 
     expect(password.autocomplete).toBe('new-password');
+    expect(showPassword.getAttribute('aria-pressed')).toBe('false');
     showPassword.click();
     fixture.detectChanges();
 
     expect(password.type).toBe('text');
-    const hidePassword = fixture.nativeElement.querySelector('button[aria-label="Hide password"]') as HTMLButtonElement;
+    const hidePassword = Array.from(element.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Hide password',
+    );
+    if (!hidePassword) {
+      throw new Error('Expected a Hide password button');
+    }
     expect(hidePassword.getAttribute('aria-pressed')).toBe('true');
 
     hidePassword.click();
