@@ -2,7 +2,7 @@
 
 ## Visual review
 
-The local confirmation route was opened in Chrome at desktop size. The compact centered card, Pitaka wordmark, and shared Appearance menu were inspected in System, Light, and Dark. The invalid-link recovery state was also inspected in Light and Dark. A 400% zoom view showed the card filling the available width; the full page was not checked for scroll reachability. Screenshots were shown in the task conversation but could not be exported to files with the available system screenshot command, so this branch has no PNG artifacts.
+The local confirmation route was opened in Chrome at desktop size. The compact centered card, Pitaka wordmark, and shared Appearance menu were inspected in System, Light, and Dark. The invalid-link recovery state was also inspected in Light and Dark. A 400% zoom view showed the card filling the available width; the full page was not checked for scroll reachability. Screenshots were shown in the task conversation. No PNG artifacts are stored in this branch: the system screenshot export failed, and an isolated headless capture did not represent the expected phone viewport, so it was discarded.
 
 The phone viewport, complete keyboard traversal, screen-reader output, reduced-motion behavior, and measured computed/composited contrast were not verified. The CSS gives primary actions a 44px minimum height; this was not measured as a rendered hit area. No live email-change link was used.
 
