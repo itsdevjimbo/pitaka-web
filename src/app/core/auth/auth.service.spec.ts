@@ -6,6 +6,7 @@ import { ApiError, API_BASE_URL, errorInterceptor, HANDLES_OWN_401 } from '@/app
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import {
   AuthService,
+  EmailConfirmationLinkRejectedError,
   EmailNotConfirmedError,
   IncorrectCurrentPasswordError,
   ResetLinkRejectedError,
@@ -410,19 +411,31 @@ describe('AuthService', () => {
   });
 
   /**
-   * Unlike resend and forgot-password, confirming has a genuine outcome the
-   * caller must see, so a failure is left to propagate rather than swallowed
-   * (ADR 0015: the API collapses every failure cause into one undifferentiated
-   * 400, and the caller is left to treat them all alike).
+   * The adapter interprets the endpoint's undifferentiated token rejection;
+   * higher layers do not need to branch on the API status (ADR 0015).
    */
-  it('lets a confirm-email failure propagate as an ApiError', async () => {
+  it('normalizes a rejected confirmation link', async () => {
     const result = firstValueFrom(service.confirmEmail(7, 'stale-token'));
 
     http.expectOne(`${BASE_URL}/api/auth/confirm-email`).flush(null, { status: 400, statusText: 'Bad Request' });
 
     const error = await result.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EmailConfirmationLinkRejectedError);
+  });
+
+  it('leaves a confirm-email request validation error as an ApiError', async () => {
+    const result = firstValueFrom(service.confirmEmail(7, 'a-token'));
+
+    http
+      .expectOne(`${BASE_URL}/api/auth/confirm-email`)
+      .flush(
+        { errors: { token: ['The token field is required.'] }, title: 'One or more validation errors occurred.' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+
+    const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).status).toBe(400);
+    expect((error as ApiError).fieldErrors).toHaveProperty('token');
   });
 
   it('marks confirm-email as handling its own 401', () => {

@@ -93,6 +93,14 @@ export class ResetLinkRejectedError extends Error {
   }
 }
 
+/** The confirmation endpoint rejected its undifferentiated one-time link. */
+export class EmailConfirmationLinkRejectedError extends Error {
+  constructor() {
+    super('This confirmation link is no longer valid.');
+    this.name = 'EmailConfirmationLinkRejectedError';
+  }
+}
+
 /** A password-gated Profile write rejected only the current password. */
 export class IncorrectCurrentPasswordError extends Error {
   constructor() {
@@ -246,9 +254,9 @@ export class AuthService {
    * Spend a confirmation link. Unlike `resendConfirmation`, this has a genuine
    * outcome the caller must see: success confirms the Profile, and the API
    * collapses every other case — expired, already used, tampered, or wrong —
-   * into one undifferentiated `400` (ADR 0015), which arrives here as an
-   * `ApiError` the caller is left to treat uniformly, exactly as that
-   * indistinguishability demands.
+   * into one undifferentiated `400` (ADR 0015). This adapter normalizes that
+   * endpoint-specific outcome to `EmailConfirmationLinkRejectedError`; a 400
+   * with field errors remains an `ApiError` because it describes the request.
    *
    * Flagged `handlesOwn401` because this screen must not assume the absence of
    * a session (ADR 0015): a signed-in visitor who opens the link keeps their
@@ -258,7 +266,15 @@ export class AuthService {
   confirmEmail(userId: number, token: string): Observable<void> {
     return this.http
       .post<void>(`${this.baseUrl}/api/auth/confirm-email`, { userId, token }, { context: handlesOwn401() })
-      .pipe(map(() => undefined));
+      .pipe(
+        map(() => undefined),
+        catchError((error: unknown) => {
+          if (error instanceof ApiError && error.status === 400 && Object.keys(error.fieldErrors).length === 0) {
+            return throwError(() => new EmailConfirmationLinkRejectedError());
+          }
+          return throwError(() => error);
+        }),
+      );
   }
 
   /**

@@ -2,6 +2,7 @@ import {
   afterNextRender,
   Component,
   computed,
+  DestroyRef,
   ElementRef,
   inject,
   Injector,
@@ -9,12 +10,12 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { ApiError } from '@/app/core/api';
-import { AuthService } from '@/app/core/auth';
+import { AuthService, EmailConfirmationLinkRejectedError } from '@/app/core/auth';
 import { APP_HOME_ROUTE, reasonQueryParams, Session, SIGN_IN_ROUTE } from '@/app/core/session';
 import { DeadLink } from '../../ui/dead-link/dead-link';
 
@@ -40,6 +41,7 @@ type ConfirmationState = 'pending' | 'success' | 'invalid' | 'retry';
 })
 export default class AuthConfirmEmail implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly session = inject(Session);
@@ -57,7 +59,7 @@ export default class AuthConfirmEmail implements OnInit {
   private token: string | null = null;
 
   constructor() {
-    afterNextRender(() => this.heading()?.nativeElement.focus(), { injector: this.injector });
+    this.focusHeadingAfterRender();
   }
 
   async ngOnInit(): Promise<void> {
@@ -83,6 +85,7 @@ export default class AuthConfirmEmail implements OnInit {
       return;
     }
     this.retrying.set(true);
+    this.focusHeadingAfterRender();
     try {
       await this.confirm();
     } finally {
@@ -122,14 +125,21 @@ export default class AuthConfirmEmail implements OnInit {
     this.state.set('pending');
 
     try {
-      await firstValueFrom(this.auth.confirmEmail(this.userId, this.token));
+      await firstValueFrom(this.auth.confirmEmail(this.userId, this.token).pipe(takeUntilDestroyed(this.destroyRef)));
       this.state.set('success');
     } catch (error) {
+      if (this.destroyRef.destroyed) {
+        return;
+      }
       console.error('[confirm-email] confirmation failed', error);
-      this.state.set(error instanceof ApiError && error.status === 400 ? 'invalid' : 'retry');
+      this.state.set(error instanceof EmailConfirmationLinkRejectedError ? 'invalid' : 'retry');
     } finally {
       this.requestInFlight = false;
     }
+  }
+
+  private focusHeadingAfterRender(): void {
+    afterNextRender(() => this.heading()?.nativeElement.focus(), { injector: this.injector });
   }
 }
 

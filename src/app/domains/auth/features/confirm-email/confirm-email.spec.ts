@@ -1,8 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
-import { of, Subject, throwError } from 'rxjs';
-import { ApiError } from '@/app/core/api';
-import { AuthService } from '@/app/core/auth';
+import { Observable, of, Subject, throwError } from 'rxjs';
+import { AuthService, EmailConfirmationLinkRejectedError } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import AuthConfirmEmail from './confirm-email';
@@ -92,6 +91,24 @@ describe('AuthConfirmEmail', () => {
     expect(navigateByUrl).not.toHaveBeenCalled();
   });
 
+  it('unsubscribes from confirmation when the screen is destroyed', () => {
+    let unsubscribed = false;
+    const { fixture } = setup(
+      { userId: '7', token: 'a-token' },
+      {
+        confirmEmail: () =>
+          new Observable<void>(() => () => {
+            unsubscribed = true;
+          }),
+      },
+    );
+
+    fixture.detectChanges();
+    fixture.destroy();
+
+    expect(unsubscribed).toBe(true);
+  });
+
   it('continues a signed-out visitor to sign-in with the confirmation reason', async () => {
     const { fixture, navigate } = setup({ userId: '7', token: 'a-token' });
 
@@ -123,7 +140,7 @@ describe('AuthConfirmEmail', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture } = setup(
       { userId: '7', token: 'stale-token' },
-      { confirmEmail: () => throwError(() => new ApiError('This link is no longer valid.', 400)) },
+      { confirmEmail: () => throwError(() => new EmailConfirmationLinkRejectedError()) },
     );
 
     fixture.detectChanges();
@@ -132,6 +149,9 @@ describe('AuthConfirmEmail', () => {
 
     expect(text(fixture)).toContain('This link is no longer valid');
     expect(text(fixture)).toContain('request a new confirmation link');
+    expect(fixture.nativeElement.querySelector('[role="status"][aria-live="polite"]')?.textContent).toContain(
+      'This confirmation link is no longer valid.',
+    );
     expect(document.activeElement).toBe((fixture.nativeElement as HTMLElement).querySelector('h1'));
 
     error.mockRestore();
@@ -173,7 +193,7 @@ describe('AuthConfirmEmail', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(text(fixture)).toContain('We couldn’t check this link');
+    expect(text(fixture)).toContain('We couldn’t verify the result');
     expect(text(fixture)).not.toContain('This link is no longer valid');
     expect(button(fixture, 'Try again')).not.toBeNull();
 
@@ -202,10 +222,14 @@ describe('AuthConfirmEmail', () => {
       throw new Error('Expected the Try again button');
     }
 
+    retry.focus();
     retry.click();
+    fixture.detectChanges();
+    await Promise.resolve();
     fixture.detectChanges();
 
     expect(confirmEmail).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe((fixture.nativeElement as HTMLElement).querySelector('h1'));
     const checkingAgain = button(fixture, 'Checking again…');
     expect(checkingAgain?.disabled).toBe(true);
     expect(button(fixture, 'Try again')).toBeNull();
