@@ -21,13 +21,9 @@ export const RESET_LINK_REASSURANCE =
 
 /**
  * Where someone who cannot get past sign-in asks for a way back into their
- * Profile. Sign-in links here beside its password field.
- *
- * The screen swaps in place rather than navigating: the line appears above the
- * form the person just used, which keeps the address they typed in view and
- * leaves re-submitting available. That re-submit *is* the resend — there is no
- * separate resend control here, because unlike the confirmation link there is
- * nothing a second button could do that the form does not already do.
+ * Profile. The compact result stays above the same form so the address remains
+ * visible and sending again is an explicit retry. The API and this screen use
+ * one response for every address and request outcome (ADR 0015).
  */
 @Component({
   selector: 'auth-forgot-password',
@@ -63,14 +59,19 @@ export default class AuthForgotPassword {
 
   askForLink(event: Event) {
     event.preventDefault();
+    if (this.submitting()) {
+      return;
+    }
+
     const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.forgotPasswordForm, {
       action: async () => {
         this.submitting.set(true);
+        this.hasAsked.set(false);
 
         // The address as it stood when the ask went out. Editing the field
-        // mid-flight clears `hasAsked`, and the line must not come back over an
+        // mid-flight clears `hasAsked`, and the result must not appear over an
         // address this request was never about.
         const askedFor = this.forgotPasswordFormModel().email;
 

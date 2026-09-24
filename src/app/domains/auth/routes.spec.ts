@@ -111,6 +111,7 @@ describe('the auth area routes', () => {
 
     expect(TestBed.inject(Router).url).toBe('/auth/forgot-password');
     expect((harness.routeNativeElement as HTMLElement).textContent).toContain('Forgot password?');
+    expect(document.querySelector('button[aria-label="Appearance"]')).not.toBeNull();
   });
 
   /**
