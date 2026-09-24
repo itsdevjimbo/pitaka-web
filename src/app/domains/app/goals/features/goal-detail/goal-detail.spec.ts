@@ -439,6 +439,26 @@ describe('GoalDetail', () => {
     expect(text()).not.toContain('Edit goal');
   });
 
+  it.each([403, 404])('treats a %s Goal write failure as unavailable without exposing ownership', async (status) => {
+    const reached = { ...GOAL, currentAmount: GOAL.targetAmount };
+    const get = vi
+      .fn<GoalsService['get']>()
+      .mockReturnValueOnce(of(reached))
+      .mockReturnValueOnce(throwError(() => new ApiError('This Goal is no longer available.', 404)));
+    const setStatus = vi.fn(() => throwError(() => new ApiError('Unavailable', status)));
+    const { fixture, text } = setup({ get, setStatus });
+    await openGoalMenu(fixture);
+
+    goalMenuButton('Mark complete').click();
+    await settle(fixture);
+
+    expect(setStatus).toHaveBeenCalledWith(GOAL.id, 'Completed');
+    expect(text()).toContain('This Goal is no longer available.');
+    expect(text()).toContain('Back to goals');
+    expect(text()).not.toContain('You can no longer change this Goal.');
+    expect(text()).not.toContain('Edit goal');
+  });
+
   it('prevents duplicate lifecycle submissions while a status write is pending', async () => {
     const pending = new Subject<Goal>();
     const setStatus = vi.fn(() => pending.asObservable());

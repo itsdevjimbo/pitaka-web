@@ -302,4 +302,37 @@ describe('GoalList', () => {
     expect(text()).toContain('Goal deleted.');
     expect((fixture.nativeElement as HTMLElement).ownerDocument.activeElement?.textContent).toContain('Holiday');
   });
+
+  it.each([403, 404])(
+    'refreshes the Goal list after a %s ownership failure without exposing its cause',
+    async (status) => {
+      const list = vi
+        .fn<GoalsService['list']>()
+        .mockReturnValueOnce(of([DENTAL]))
+        .mockReturnValueOnce(of([]));
+      const deleteGoal = vi.fn(() => throwError(() => new ApiError('Unavailable', status)));
+      const { fixture, text } = setup(list, { deleteGoal });
+      const actions = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        '[aria-label="Actions for Dental work"]',
+      );
+      actions?.click();
+      await settle(fixture);
+      const menuDelete = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+        (button) => button.textContent?.trim() === 'Delete',
+      );
+      menuDelete?.click();
+      await settle(fixture);
+      const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]');
+      const confirmDelete = Array.from(confirmation?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (button) => button.textContent?.trim() === 'Delete',
+      );
+      confirmDelete?.click();
+      await settle(fixture);
+
+      expect(deleteGoal).toHaveBeenCalledWith(DENTAL.id);
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).not.toContain('Dental work');
+      expect(text()).not.toContain('You can no longer change this Goal.');
+    },
+  );
 });

@@ -229,13 +229,7 @@ export default class GoalList {
   }
 
   private failed(id: number, error: unknown, retry: () => void): void {
-    if (error instanceof ApiError && error.status === 404) {
-      this.load();
-      return;
-    }
-
-    if (error instanceof ApiError && error.status === 403) {
-      this.notice.set({ id, message: 'You can no longer change this Goal.' });
+    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
       this.load();
       return;
     }
