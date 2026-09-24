@@ -1,21 +1,11 @@
-import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
-import { of, Subject, throwError } from 'rxjs';
-import { AuthService } from '@/app/core/auth';
+import { Observable, of, Subject, throwError } from 'rxjs';
+import { AuthService, EmailConfirmationLinkRejectedError } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import AuthConfirmEmail from './confirm-email';
 
-/**
- * The confirm-email screen's own seam (ADR 0015). It fires the confirm on
- * init off the query string, and what happens next is the whole spec: a live
- * session is left alone and sent into the app, a signed-out one is sent to
- * sign-in already told, and everything that is not a clean success — a
- * failure, or a param that was never going to produce one — lands on the
- * shared dead-link state rather than being told apart.
- */
 describe('AuthConfirmEmail', () => {
   function setup(
     queryParams: Record<string, string>,
@@ -33,8 +23,6 @@ describe('AuthConfirmEmail', () => {
     TestBed.configureTestingModule({
       imports: [AuthConfirmEmail],
       providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
         provideIcons(),
         { provide: AuthService, useValue: { confirmEmail } },
         { provide: Session, useValue: { isAuthenticated: () => isAuthenticated } },
@@ -56,50 +44,103 @@ describe('AuthConfirmEmail', () => {
     return (fixture.nativeElement as HTMLElement).textContent ?? '';
   }
 
-  it('confirms with the userId coerced to a number and the token as given', async () => {
-    const confirmEmail = vi.fn(() => of(undefined));
+  function button(fixture: ReturnType<typeof setup>['fixture'], label: string): HTMLButtonElement | null {
+    const element = fixture.nativeElement as HTMLElement;
+    return (
+      Array.from(element.querySelectorAll('button')).find(
+        (candidate) => candidate.textContent?.replace(/\s+/g, ' ').trim() === label,
+      ) ?? null
+    );
+  }
+
+  async function click(fixture: ReturnType<typeof setup>['fixture'], label: string): Promise<void> {
+    const action = button(fixture, label);
+    if (!action) {
+      throw new Error(`Expected the ${label} button`);
+    }
+    action.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('confirms automatically on landing and announces progress', () => {
+    const confirmEmail = vi.fn(() => new Subject<void>());
     const { fixture } = setup({ userId: '7', token: 'a-token' }, { confirmEmail });
 
     fixture.detectChanges();
-    await fixture.whenStable();
 
     expect(confirmEmail).toHaveBeenCalledWith(7, 'a-token');
-  });
-
-  it('shows a spinner while the confirm is in flight', () => {
-    const { fixture } = setup({ userId: '7', token: 'a-token' }, { confirmEmail: () => new Subject() });
-
-    fixture.detectChanges();
-
     expect(text(fixture)).toContain('Confirming your email');
+    expect(fixture.nativeElement.querySelector('[role="status"][aria-live="polite"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('h1')?.textContent?.trim()).toBe('Confirming your email');
   });
 
-  it('sends a signed-out visitor to sign-in, told why they are back', async () => {
-    const { fixture, navigate } = setup({ userId: '7', token: 'a-token' }, { isAuthenticated: false });
+  it('shows the successful result and waits for the person to continue', async () => {
+    const { fixture, navigate, navigateByUrl } = setup({ userId: '7', token: 'a-token' });
 
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(text(fixture)).toContain('Email confirmed');
+    expect(text(fixture)).toContain('You can now sign in to Pitaka.');
+    expect(fixture.nativeElement.querySelector('[role="status"][aria-live="polite"]')).not.toBeNull();
+    expect(button(fixture, 'Continue to sign in')).not.toBeNull();
+    expect(document.activeElement).toBe((fixture.nativeElement as HTMLElement).querySelector('h1'));
+    expect(navigate).not.toHaveBeenCalled();
+    expect(navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('unsubscribes from confirmation when the screen is destroyed', () => {
+    let unsubscribed = false;
+    const { fixture } = setup(
+      { userId: '7', token: 'a-token' },
+      {
+        confirmEmail: () =>
+          new Observable<void>(() => () => {
+            unsubscribed = true;
+          }),
+      },
+    );
+
+    fixture.detectChanges();
+    fixture.destroy();
+
+    expect(unsubscribed).toBe(true);
+  });
+
+  it('continues a signed-out visitor to sign-in with the confirmation reason', async () => {
+    const { fixture, navigate } = setup({ userId: '7', token: 'a-token' });
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await click(fixture, 'Continue to sign in');
 
     expect(navigate).toHaveBeenCalledWith(['/auth/sign-in'], {
       queryParams: { reason: 'email-confirmed' },
     });
   });
 
-  it('sends someone who already has a session into the app, not to sign-in', async () => {
-    const { fixture, navigateByUrl, navigate } = setup({ userId: '7', token: 'a-token' }, { isAuthenticated: true });
+  it('keeps an existing session and continues to the Accounts landing screen', async () => {
+    const { fixture, navigate, navigateByUrl } = setup({ userId: '7', token: 'a-token' }, { isAuthenticated: true });
 
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(text(fixture)).toContain('Continue to your Accounts');
+    await click(fixture, 'Continue to your Accounts');
 
     expect(navigateByUrl).toHaveBeenCalledWith('/app');
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('lands on the dead-link state when the API rejects the confirm', async () => {
+  it('shows the shared recovery state when the API rejects an invalid or expired link', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { fixture } = setup(
       { userId: '7', token: 'stale-token' },
-      { confirmEmail: () => throwError(() => new Error('gone')) },
+      { confirmEmail: () => throwError(() => new EmailConfirmationLinkRejectedError()) },
     );
 
     fixture.detectChanges();
@@ -107,46 +148,98 @@ describe('AuthConfirmEmail', () => {
     fixture.detectChanges();
 
     expect(text(fixture)).toContain('This link is no longer valid');
+    expect(text(fixture)).toContain('request a new confirmation link');
+    expect(fixture.nativeElement.querySelector('[role="status"][aria-live="polite"]')?.textContent).toContain(
+      'This confirmation link is no longer valid.',
+    );
+    expect(document.activeElement).toBe((fixture.nativeElement as HTMLElement).querySelector('h1'));
 
     error.mockRestore();
   });
 
-  it('lands on the dead-link state for a missing token, without calling the API', async () => {
+  it('does not send an incomplete link to the API', async () => {
     const confirmEmail = vi.fn(() => of(undefined));
     const { fixture } = setup({ userId: '7' }, { confirmEmail });
 
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
 
     expect(confirmEmail).not.toHaveBeenCalled();
     expect(text(fixture)).toContain('This link is no longer valid');
   });
 
-  /**
-   * `ConfirmEmailRequest.UserId` is an `int` with no `AllowReadingFromString`
-   * on the API, so sending the string a query param hands back would come back
-   * a 400 this screen would render as a dead link anyway — but coercing here
-   * catches it before the round trip, and without misreporting a link that
-   * merely lacks a numeric-looking id as one the server rejected.
-   */
-  it('lands on the dead-link state for a non-integer userId, without calling the API', async () => {
+  it('does not send a malformed userId to the API', async () => {
     const confirmEmail = vi.fn(() => of(undefined));
     const { fixture } = setup({ userId: 'not-a-number', token: 'a-token' }, { confirmEmail });
 
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
 
     expect(confirmEmail).not.toHaveBeenCalled();
     expect(text(fixture)).toContain('This link is no longer valid');
   });
 
-  it('never fires the confirm twice, even if init ran more than once', async () => {
-    const confirmEmail = vi.fn(() => of(undefined));
+  it('offers a deliberate retry for a temporary failure without calling the link invalid', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const confirmEmail = vi
+      .fn<AuthService['confirmEmail']>()
+      .mockImplementationOnce(() => throwError(() => new Error('offline')))
+      .mockImplementationOnce(() => of(undefined));
     const { fixture } = setup({ userId: '7', token: 'a-token' }, { confirmEmail });
 
-    fixture.componentInstance.ngOnInit();
-    await fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
 
-    expect(confirmEmail).toHaveBeenCalledTimes(1);
+    expect(text(fixture)).toContain('We couldn’t verify the result');
+    expect(text(fixture)).not.toContain('This link is no longer valid');
+    expect(button(fixture, 'Try again')).not.toBeNull();
+
+    await click(fixture, 'Try again');
+
+    expect(confirmEmail).toHaveBeenCalledTimes(2);
+    expect(text(fixture)).toContain('Email confirmed');
+
+    error.mockRestore();
+  });
+
+  it('disables retry while a confirmation request is still in flight', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const pending = new Subject<void>();
+    const confirmEmail = vi
+      .fn<AuthService['confirmEmail']>()
+      .mockImplementationOnce(() => throwError(() => new Error('offline')))
+      .mockImplementationOnce(() => pending);
+    const { fixture } = setup({ userId: '7', token: 'a-token' }, { confirmEmail });
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const retry = button(fixture, 'Try again');
+    if (!retry) {
+      throw new Error('Expected the Try again button');
+    }
+
+    retry.focus();
+    retry.click();
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(confirmEmail).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe((fixture.nativeElement as HTMLElement).querySelector('h1'));
+    const checkingAgain = button(fixture, 'Checking again…');
+    expect(checkingAgain?.disabled).toBe(true);
+    expect(button(fixture, 'Try again')).toBeNull();
+
+    checkingAgain?.click();
+    expect(confirmEmail).toHaveBeenCalledTimes(2);
+
+    pending.complete();
+    await fixture.whenStable();
+
+    error.mockRestore();
   });
 });

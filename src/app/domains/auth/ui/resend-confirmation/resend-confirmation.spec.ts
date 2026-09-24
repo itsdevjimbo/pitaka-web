@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
 import { RESEND_COOLDOWN_SECONDS, RESEND_REASSURANCE, ResendConfirmation } from './resend-confirmation';
 
@@ -58,6 +58,27 @@ describe('ResendConfirmation', () => {
     await click(fixture);
 
     expect(text(fixture)).toContain(RESEND_REASSURANCE);
+  });
+
+  it('announces an in-flight resend and prevents duplicate requests', async () => {
+    const pending = new Subject<void>();
+    const resend = vi.fn(() => pending);
+    const fixture = setup(resend);
+
+    button(fixture).click();
+    fixture.detectChanges();
+
+    expect(resend).toHaveBeenCalledTimes(1);
+    expect(button(fixture).disabled).toBe(true);
+    expect(button(fixture).getAttribute('aria-busy')).toBe('true');
+    expect(text(fixture)).toContain('Sending a new confirmation link');
+    expect(fixture.nativeElement.querySelector('[role="status"][aria-live="polite"]')).not.toBeNull();
+
+    button(fixture).click();
+    expect(resend).toHaveBeenCalledTimes(1);
+
+    pending.complete();
+    await fixture.whenStable();
   });
 
   /**

@@ -1,36 +1,125 @@
-<div class="flex flex-auto">
-  <div class="flex flex-auto items-center justify-center bg-surface p-4 sm:p-12">
-    <div class="flex w-full max-w-80 flex-col items-center sm:min-w-80">
-      <!-- Logo -->
-      <img
-        class="w-12 dark:hidden"
-        src="/images/logo/logo.svg"
-        alt="Pitaka"
-      />
-      <img
-        class="hidden w-12 dark:block"
-        src="/images/logo/logo-on-dark.svg"
-        alt="Pitaka"
-      />
+<main class="flex min-h-dvh items-center justify-center bg-canvas px-4 py-20 sm:px-6">
+  <section class="w-full max-w-md rounded-[20px] border border-divider bg-surface p-6 sm:p-8">
+    <img
+      class="mx-auto h-8 w-auto dark:hidden"
+      src="/images/logo/logo-text.svg"
+      alt="Pitaka"
+    />
+    <img
+      class="mx-auto hidden h-8 w-auto dark:block"
+      src="/images/logo/logo-text-on-dark.svg"
+      alt="Pitaka"
+    />
 
-      @if (dead()) {
-        <div class="mt-8 w-full">
-          <auth-dead-link />
-        </div>
-      } @else {
-        <!-- Spinner: no click-through means nothing for the person to press, so
-             this is the only proof the confirm is under way. -->
-        <div
-          class="mt-8 flex flex-col items-center gap-y-3 text-secondary"
+    @if (state() === 'invalid') {
+      <div class="mt-8">
+        <p
+          class="sr-only"
           role="status"
+          aria-live="polite"
+          aria-atomic="true"
         >
-          <mat-icon
-            class="size-6 animate-spin"
-            svgIcon="loader-circle"
-          />
-          <span>Confirming your email…</span>
-        </div>
-      }
-    </div>
-  </div>
-</div>
+          This confirmation link is no longer valid.
+        </p>
+        <auth-dead-link />
+      </div>
+    } @else {
+      <header class="mt-8">
+        <h1
+          #heading
+          id="confirm-email-heading"
+          tabindex="-1"
+          class="font-display text-[1.75rem] leading-[1.15] font-[750] tracking-[-0.025em] text-text"
+        >
+          {{ state() === 'success' ? 'Email confirmed' : 'Confirming your email' }}
+        </h1>
+
+        @if (state() === 'pending') {
+          <p class="mt-3 text-base leading-6 text-secondary">We’ll check this link automatically.</p>
+          <div
+            class="mt-6 flex items-center gap-3 text-secondary"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <mat-icon
+              class="size-6 motion-safe:animate-spin motion-reduce:animate-none"
+              svgIcon="loader-circle"
+              aria-hidden="true"
+            />
+            <span>Confirming your email…</span>
+          </div>
+          @if (retrying()) {
+            <button
+              type="button"
+              matButton="filled"
+              class="mt-6 min-h-11 w-full"
+              disabled
+              aria-busy="true"
+            >
+              Checking again…
+            </button>
+            <p
+              class="sr-only"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              Checking this link again…
+            </p>
+          }
+        }
+
+        @if (state() === 'success') {
+          <p
+            class="mt-3 text-base leading-6 text-secondary"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            @if (isAuthenticated()) {
+              Your email is confirmed. Continue to your Accounts.
+            } @else {
+              You can now sign in to Pitaka.
+            }
+          </p>
+          <button
+            type="button"
+            matButton="filled"
+            class="mt-8 min-h-11 w-full"
+            [disabled]="continuing()"
+            [attr.aria-busy]="continuing()"
+            (click)="continue()"
+          >
+            @if (continuing()) {
+              Opening…
+            } @else if (isAuthenticated()) {
+              Continue to your Accounts
+            } @else {
+              Continue to sign in
+            }
+          </button>
+        }
+
+        @if (state() === 'retry') {
+          <p
+            class="mt-4 rounded-2xl bg-danger-container px-4 py-3 text-sm leading-6 text-danger"
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+          >
+            We couldn’t verify the result. Try again.
+          </p>
+          <button
+            type="button"
+            matButton="filled"
+            class="mt-6 min-h-11 w-full"
+            (click)="retry()"
+          >
+            Try again
+          </button>
+        }
+      </header>
+    }
+  </section>
+</main>
