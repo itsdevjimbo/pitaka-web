@@ -15,21 +15,21 @@
       alt="Pitaka"
     />
 
+    <header class="mt-8">
+      <h1
+        #stateHeading
+        id="confirm-email-change-heading"
+        tabindex="-1"
+        class="font-display text-[1.75rem] leading-[1.15] font-[750] tracking-[-0.025em] text-text"
+      >
+        {{ pageTitle() }}
+      </h1>
+    </header>
+
     @if (state() === 'ready' || state() === 'retry' || state() === 'confirming') {
-      <header class="mt-8">
-        <h1
-          #stateHeading
-          id="confirm-email-change-heading"
-          tabindex="-1"
-          class="font-display text-[1.75rem] leading-[1.15] font-[750] tracking-[-0.025em] text-text"
-        >
-          Confirm email change
-        </h1>
-        <p class="mt-3 text-base leading-6 text-secondary">
-          Your current email stays in place until you confirm. Choosing Not now leaves the pending email change in
-          place.
-        </p>
-      </header>
+      <p class="mt-3 text-base leading-6 text-secondary">
+        Your current email stays in place until you confirm. Choosing Not now leaves the pending email change in place.
+      </p>
 
       @if (state() === 'retry') {
         <p
@@ -73,38 +73,18 @@
         </p>
       }
     } @else if (state() === 'refreshing-profile') {
-      <header class="mt-8">
-        <h1
-          #stateHeading
-          id="confirm-email-change-heading"
-          tabindex="-1"
-          class="font-display text-[1.75rem] leading-[1.15] font-[750] tracking-[-0.025em] text-text"
-        >
-          Email change confirmed
-        </h1>
-        <p
-          class="mt-3 rounded-xl bg-soft px-4 py-3 text-sm leading-6 text-text"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          Refreshing Profile…
-        </p>
-      </header>
+      <p
+        class="mt-3 rounded-xl bg-soft px-4 py-3 text-sm leading-6 text-text"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        Refreshing Profile…
+      </p>
     } @else if (state() === 'success') {
-      <header class="mt-8">
-        <h1
-          #stateHeading
-          id="confirm-email-change-heading"
-          tabindex="-1"
-          class="font-display text-[1.75rem] leading-[1.15] font-[750] tracking-[-0.025em] text-text"
-        >
-          Email change confirmed for the linked Profile.
-        </h1>
-        <p class="mt-3 text-base leading-6 text-secondary">
-          This session remains signed in to a different Profile; its email address was not changed.
-        </p>
-      </header>
+      <p class="mt-3 text-base leading-6 text-secondary">
+        This session remains signed in to a different Profile; its email address was not changed.
+      </p>
       <button
         matButton="filled"
         class="mt-8 min-h-11 w-full"
@@ -114,34 +94,24 @@
         Go to Profile
       </button>
     } @else if (state() === 'refresh-failed') {
-      <header class="mt-8">
-        <h1
-          #stateHeading
-          id="confirm-email-change-heading"
-          tabindex="-1"
-          class="font-display text-[1.75rem] leading-[1.15] font-[750] tracking-[-0.025em] text-text"
+      @if (refreshing()) {
+        <p
+          class="mt-3 rounded-xl bg-soft px-4 py-3 text-sm leading-6 text-text"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
         >
-          Email change confirmed
-        </h1>
-        @if (refreshing()) {
-          <p
-            class="mt-3 rounded-xl bg-soft px-4 py-3 text-sm leading-6 text-text"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            Refreshing Profile…
-          </p>
-        } @else {
-          <p
-            class="mt-3 rounded-2xl bg-warning-container px-4 py-3 text-sm leading-6 text-warning"
-            role="alert"
-            aria-atomic="true"
-          >
-            Your email address changed, but your Profile couldn't be refreshed. Retry the refresh before continuing.
-          </p>
-        }
-      </header>
+          Refreshing Profile…
+        </p>
+      } @else {
+        <p
+          class="mt-3 rounded-2xl bg-warning-container px-4 py-3 text-sm leading-6 text-warning"
+          role="alert"
+          aria-atomic="true"
+        >
+          Your email address changed, but your Profile couldn't be refreshed. Retry the refresh before continuing.
+        </p>
+      }
       <button
         matButton="filled"
         class="mt-8 min-h-11 w-full"
@@ -152,29 +122,19 @@
         {{ refreshing() ? 'Refreshing Profile…' : 'Retry Profile refresh' }}
       </button>
     } @else if (state() === 'taken') {
-      <header class="mt-8">
-        <h1
-          #stateHeading
-          id="confirm-email-change-heading"
-          tabindex="-1"
-          class="font-display text-[1.75rem] leading-[1.15] font-[750] tracking-[-0.025em] text-text"
-        >
-          This email address is no longer available
-        </h1>
-        @if (session.isAuthenticated() && session.profile()?.id === userId) {
-          <p class="mt-3 text-base leading-6 text-secondary">Choose another address from Profile.</p>
-        } @else if (session.isAuthenticated()) {
-          <p class="mt-3 text-base leading-6 text-secondary">
-            This pending change belongs to a different Profile. Sign out to sign in to that Profile and choose another
-            address.
-          </p>
-        } @else {
-          <p class="mt-3 text-base leading-6 text-secondary">
-            Sign in to the Profile that requested this change to choose another address.
-          </p>
-        }
-      </header>
-      @if (session.isAuthenticated() && session.profile()?.id === userId) {
+      @if (linkedProfileIsActive()) {
+        <p class="mt-3 text-base leading-6 text-secondary">Choose another address from Profile.</p>
+      } @else if (session.isAuthenticated()) {
+        <p class="mt-3 text-base leading-6 text-secondary">
+          This pending change belongs to a different Profile. Sign out to sign in to that Profile and choose another
+          address.
+        </p>
+      } @else {
+        <p class="mt-3 text-base leading-6 text-secondary">
+          Sign in to the Profile that requested this change to choose another address.
+        </p>
+      }
+      @if (linkedProfileIsActive()) {
         <button
           matButton="filled"
           class="mt-8 min-h-11 w-full"
@@ -203,30 +163,20 @@
         </button>
       }
     } @else {
-      <header class="mt-8">
-        <h1
-          #stateHeading
-          id="confirm-email-change-heading"
-          tabindex="-1"
-          class="font-display text-[1.75rem] leading-[1.15] font-[750] tracking-[-0.025em] text-text"
-        >
-          This email change link is no longer valid
-        </h1>
-        @if (session.isAuthenticated() && session.profile()?.id === userId) {
-          <p class="mt-3 text-base leading-6 text-secondary">
-            Go to Profile to check the current email or request a new change.
-          </p>
-        } @else if (session.isAuthenticated()) {
-          <p class="mt-3 text-base leading-6 text-secondary">
-            This link belongs to a different Profile. Your current session remains signed in and unchanged.
-          </p>
-        } @else {
-          <p class="mt-3 text-base leading-6 text-secondary">
-            Sign in to the Profile that requested this change to review its email settings.
-          </p>
-        }
-      </header>
-      @if (session.isAuthenticated() && session.profile()?.id === userId) {
+      @if (linkedProfileIsActive()) {
+        <p class="mt-3 text-base leading-6 text-secondary">
+          Go to Profile to check the current email or request a new change.
+        </p>
+      } @else if (session.isAuthenticated()) {
+        <p class="mt-3 text-base leading-6 text-secondary">
+          This link belongs to a different Profile. Your current session remains signed in and unchanged.
+        </p>
+      } @else {
+        <p class="mt-3 text-base leading-6 text-secondary">
+          Sign in to the Profile that requested this change to review its email settings.
+        </p>
+      }
+      @if (linkedProfileIsActive()) {
         <button
           matButton="filled"
           class="mt-8 min-h-11 w-full"

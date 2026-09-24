@@ -1,4 +1,14 @@
-import { afterNextRender, Component, ElementRef, inject, Injector, OnInit, signal, viewChild } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  Injector,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -23,7 +33,11 @@ export default class AuthConfirmEmailChange implements OnInit {
   protected readonly session = inject(Session);
 
   protected readonly state = signal<ConfirmationState>('ready');
+  protected readonly pageTitle = computed(() => confirmationTitles[this.state()]);
   protected readonly refreshing = signal(false);
+  protected readonly linkedProfileIsActive = computed(
+    () => this.session.isAuthenticated() && this.session.profile()?.id === this.userId,
+  );
   protected userId: number | null = null;
   private token: string | null = null;
   private submitted = false;
@@ -137,3 +151,14 @@ function parseUserId(raw: string | null): number | null {
   const userId = Number(raw);
   return Number.isSafeInteger(userId) && userId > 0 ? userId : null;
 }
+
+const confirmationTitles: Record<ConfirmationState, string> = {
+  ready: 'Confirm email change',
+  confirming: 'Confirm email change',
+  retry: 'Confirm email change',
+  'refreshing-profile': 'Email change confirmed',
+  'refresh-failed': 'Email change confirmed',
+  success: 'Email change confirmed for the linked Profile.',
+  taken: 'This email address is no longer available',
+  invalid: 'This email change link is no longer valid',
+};
