@@ -81,6 +81,10 @@ export default class AuthSignIn {
 
   signIn(event: Event) {
     event.preventDefault();
+    if (this.submitting()) {
+      return;
+    }
+
     const formElement = event.currentTarget as HTMLFormElement;
 
     submit(this.signInForm, {
