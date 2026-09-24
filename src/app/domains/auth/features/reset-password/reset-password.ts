@@ -1,4 +1,13 @@
-import { Component, inject, linkedSignal, signal } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  ElementRef,
+  inject,
+  Injector,
+  linkedSignal,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { form, FormField, submit } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -7,7 +16,7 @@ import { MatInputModule } from '@angular/material/input';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService, ResetLinkRejectedError } from '@/app/core/auth';
-import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
+import { partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { Session } from '@/app/core/session';
 import { passwordRules } from '../../password-rules';
 import { DeadLink } from '../../ui/dead-link/dead-link';
@@ -36,6 +45,9 @@ export default class AuthResetPassword {
   private auth = inject(AuthService);
   private route = inject(ActivatedRoute);
   private session = inject(Session);
+  private injector = inject(Injector);
+  private passwordInput = viewChild<ElementRef<HTMLInputElement>>('passwordInput');
+  private resetHeading = viewChild<ElementRef<HTMLHeadingElement>>('resetHeading');
 
   /**
    * Whether the link itself is dead: missing or malformed params up front, or
@@ -56,6 +68,8 @@ export default class AuthResetPassword {
     if (this.token === null || this.token === '' || this.userId === null) {
       this.dead.set(true);
     }
+
+    afterNextRender(() => this.resetHeading()?.nativeElement.focus(), { injector: this.injector });
   }
 
   // State
@@ -79,7 +93,9 @@ export default class AuthResetPassword {
 
   resetPassword(event: Event) {
     event.preventDefault();
-    const formElement = event.currentTarget as HTMLFormElement;
+    if (this.submitting()) {
+      return;
+    }
 
     submit(this.resetForm, {
       action: async () => {
@@ -130,8 +146,12 @@ export default class AuthResetPassword {
     });
 
     if (this.resetForm().invalid()) {
-      focusFirstInvalidField(formElement);
+      this.focusPasswordAfterRender();
     }
+  }
+
+  private focusPasswordAfterRender(): void {
+    afterNextRender(() => this.passwordInput()?.nativeElement.focus(), { injector: this.injector });
   }
 
   /** The controls a server-blamed field can bind onto — just the new password. */

@@ -1,4 +1,4 @@
-import { Component, input, signal } from '@angular/core';
+import { afterNextRender, Component, ElementRef, inject, Injector, input, signal, viewChild } from '@angular/core';
 import { email, form, FormField, required } from '@angular/forms/signals';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -31,9 +31,16 @@ export class DeadLink {
   /** Which link this is standing in for, and so which endpoint the fix spends. */
   readonly kind = input<'confirm-email' | 'reset-password'>('confirm-email');
 
+  private readonly injector = inject(Injector);
+  private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('heading');
+
   protected emailFormModel = signal({ email: '' });
   protected emailForm = form(this.emailFormModel, (form) => {
     required(form.email, { message: 'You must enter an email address' });
     email(form.email, { message: 'You must enter a valid email address' });
   });
+
+  constructor() {
+    afterNextRender(() => this.heading()?.nativeElement.focus(), { injector: this.injector });
+  }
 }
