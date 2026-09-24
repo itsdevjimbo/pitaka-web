@@ -106,18 +106,28 @@ describe('AuthSignIn', () => {
 
   it('announces pending sign-in and ignores duplicate submissions until the request settles', async () => {
     let finishSignIn!: () => void;
+    let markSignInStarted!: () => void;
+    const signInStarted = new Promise<void>((resolve) => {
+      markSignInStarted = resolve;
+    });
     const signIn = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishSignIn = resolve;
+          markSignInStarted();
         }),
     );
     const { fixture } = setup(signIn);
     const form = fixture.nativeElement.querySelector('form') as HTMLFormElement;
-    const button = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const button = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+      (candidate) => candidate.textContent?.trim() === 'Sign in',
+    );
+    if (!button) {
+      throw new Error('No Sign in button');
+    }
 
     form.dispatchEvent(new Event('submit'));
-    await Promise.resolve();
+    await signInStarted;
     fixture.detectChanges();
 
     expect(button.disabled).toBe(true);
