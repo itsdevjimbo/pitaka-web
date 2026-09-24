@@ -1,81 +1,112 @@
-<div class="flex flex-auto">
-  <aside class="hidden w-1/2 flex-col justify-between bg-soft p-12 lg:flex">
+<main
+  id="main"
+  class="flex min-h-dvh flex-auto flex-col bg-canvas text-text lg:grid lg:grid-cols-2"
+>
+  <aside class="hidden min-h-dvh flex-col justify-between bg-soft p-10 lg:flex xl:p-16">
     <img
-      class="w-40 dark:hidden"
+      class="h-12 w-auto self-start dark:hidden"
       src="/images/logo/logo-text.svg"
       alt="Pitaka"
     />
     <img
-      class="hidden w-40 dark:block"
+      class="hidden h-12 w-auto self-start dark:block"
       src="/images/logo/logo-text-on-dark.svg"
       alt="Pitaka"
     />
-    <div class="max-w-lg">
-      <p class="leading-tight font-display text-5xl text-text">Make room for what matters.</p>
-      <p class="mt-4 text-lg text-secondary">Start with one Account and build from there.</p>
+
+    <div class="max-w-xl py-16">
+      <h2 class="leading-tight font-display text-4xl font-semibold text-text xl:text-5xl">
+        A little clarity, every day.
+      </h2>
+      <p class="leading-relaxed mt-5 max-w-lg text-lg text-secondary">
+        Keep your Accounts, spending, and plans together.
+      </p>
     </div>
-    <p class="text-sm text-secondary">Pitaka keeps financial facts direct and clear.</p>
+
+    <p class="text-sm text-secondary">Personal expense tracking, at your pace.</p>
   </aside>
-  <div class="flex flex-auto items-center justify-center bg-surface p-4 sm:p-12">
-    <div class="flex w-full max-w-80 flex-col sm:min-w-80">
-      <!-- Logo -->
+
+  <section
+    class="flex min-h-dvh min-w-0 flex-auto items-center justify-center px-4 py-16 sm:px-8 lg:p-12"
+    aria-labelledby="sign-up-heading"
+  >
+    <div
+      class="w-full max-w-md rounded-3xl border border-divider bg-surface p-6 shadow-sm sm:p-8 lg:max-w-lg lg:rounded-none lg:border-0 lg:bg-transparent lg:p-12 lg:shadow-none"
+    >
       <img
-        class="w-12 dark:hidden"
+        class="mb-7 h-10 w-10 lg:hidden dark:hidden"
         src="/images/logo/logo.svg"
         alt="Pitaka"
       />
       <img
-        class="hidden w-12 dark:block"
+        class="mb-7 hidden h-10 w-10 lg:hidden dark:block"
         src="/images/logo/logo-on-dark.svg"
         alt="Pitaka"
       />
 
       @if (registeredEmail(); as email) {
-        <!-- Check-your-inbox state. No navigation, no route: the address
-             stays here for the resend control, never the URL or history. -->
-        <h1 class="leading-tight mt-8 text-4xl">Check your inbox</h1>
-        <p class="mt-4 font-medium text-secondary">
-          We sent a confirmation link to
-          <span class="text-text">{{ email }}</span>
-          . The link is short-lived, so confirm soon.
-        </p>
+        <h1
+          id="sign-up-heading"
+          class="leading-tight font-display text-3xl font-semibold sm:text-4xl"
+        >
+          Check your inbox
+        </h1>
+        <div
+          class="leading-relaxed mt-4 space-y-3 text-secondary"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p>
+            We sent a confirmation link to
+            <span class="font-semibold break-all text-text">{{ email }}</span>
+            .
+          </p>
+          <p>Confirm your email before signing in. The link is short-lived, so confirm soon.</p>
+        </div>
 
         <auth-resend-confirmation
-          class="mt-6"
+          class="mt-6 block"
           [email]="email"
         />
 
-        <div class="mt-8 flex items-baseline justify-center font-medium">
-          <div class="text-secondary">Already confirmed?</div>
+        <p class="mt-8 text-center font-medium text-secondary">
+          Already confirmed?
           <a
-            class="ml-1 underline"
+            class="ml-1 font-semibold underline"
             routerLink="/auth/sign-in"
           >
             Sign in
           </a>
-        </div>
+        </p>
       } @else {
-        <!-- Title -->
-        <h1 class="leading-tight mt-8 text-4xl">Sign up</h1>
-        <div class="mt-0.5 flex items-baseline font-medium">
-          <div class="text-secondary">Already have an account?</div>
+        <h1
+          id="sign-up-heading"
+          class="leading-tight font-display text-3xl font-semibold sm:text-4xl"
+        >
+          Create your Profile
+        </h1>
+        <p class="mt-2 font-medium text-secondary">
+          Already have a Profile?
           <a
-            class="ml-1 underline"
+            class="ml-1 font-semibold underline"
             routerLink="/auth/sign-in"
           >
             Sign in
           </a>
-        </div>
+        </p>
 
-        <!-- Sign up form -->
         <form
           class="mt-8"
+          aria-labelledby="sign-up-heading"
+          autocomplete="on"
+          novalidate
+          [attr.aria-busy]="submitting()"
           (submit)="signUp($event)"
         >
-          <!-- Error message -->
           @if (errorMessage(); as message) {
             <div
-              class="bg-error-container text-error mb-4 rounded-lg px-4 py-3 text-sm font-medium"
+              class="bg-error-container text-error mb-4 rounded-2xl px-4 py-3 text-sm font-medium"
               role="alert"
             >
               {{ message }}
@@ -83,12 +114,12 @@
           }
 
           <div class="flex flex-col gap-y-4">
-            <!-- Name field -->
             <mat-form-field class="w-full">
               <mat-label>Name</mat-label>
               <input
                 id="name"
                 matInput
+                autocomplete="name"
                 [formField]="signUpForm.name"
               />
               <mat-error>
@@ -100,12 +131,14 @@
               </mat-error>
             </mat-form-field>
 
-            <!-- Email field -->
             <mat-form-field class="w-full">
               <mat-label>Email address</mat-label>
               <input
                 id="email"
                 matInput
+                type="email"
+                autocomplete="email"
+                inputmode="email"
                 [formField]="signUpForm.email"
               />
               <mat-error>
@@ -117,7 +150,6 @@
               </mat-error>
             </mat-form-field>
 
-            <!-- Password field -->
             <mat-form-field
               appearance="fill"
               class="w-full"
@@ -127,24 +159,26 @@
                 id="password"
                 matInput
                 type="password"
+                autocomplete="new-password"
                 [formField]="signUpForm.password"
                 #passwordField
               />
               <button
                 matIconButton
                 type="button"
+                matSuffix
+                [attr.aria-label]="passwordField.type === 'password' ? 'Show password' : 'Hide password'"
+                [attr.aria-pressed]="passwordField.type === 'text'"
                 (click)="
                   passwordField.type === 'password' ? (passwordField.type = 'text') : (passwordField.type = 'password')
                 "
-                matSuffix
               >
                 @if (passwordField.type === 'password') {
                   <mat-icon
                     class="size-5"
                     svgIcon="eye"
                   ></mat-icon>
-                }
-                @if (passwordField.type === 'text') {
+                } @else {
                   <mat-icon
                     class="size-5"
                     svgIcon="eye-off"
@@ -161,17 +195,24 @@
             </mat-form-field>
           </div>
 
-          <!-- Submit button -->
+          <p
+            class="sr-only"
+            role="status"
+          >
+            @if (submitting()) {
+              Creating your Profile…
+            }
+          </p>
           <button
             type="submit"
             matButton="filled"
             class="mt-6 w-full"
             [disabled]="submitting()"
           >
-            {{ submitting() ? 'Creating your profile…' : 'Create my profile' }}
+            {{ submitting() ? 'Creating your Profile…' : 'Create my Profile' }}
           </button>
         </form>
       }
     </div>
-  </div>
-</div>
+  </section>
+</main>
