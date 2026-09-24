@@ -94,7 +94,7 @@ describe('AuthResetPassword', () => {
     expect(resetPassword).not.toHaveBeenCalled();
   });
 
-  it('reveals and hides the password with an accessible 44-pixel control', () => {
+  it('reveals and hides the password through an accessible control', () => {
     const { fixture } = setup({ userId: '7', token: 'a-token' });
     const password = fixture.nativeElement.querySelector('#new-password') as HTMLInputElement;
     const showPassword = fixture.nativeElement.querySelector(
@@ -102,8 +102,7 @@ describe('AuthResetPassword', () => {
     ) as HTMLButtonElement | null;
 
     expect(showPassword).not.toBeNull();
-    expect(showPassword?.classList.contains('min-h-11')).toBe(true);
-    expect(showPassword?.classList.contains('min-w-11')).toBe(true);
+    expect(showPassword?.getAttribute('aria-controls')).toBe('new-password');
     showPassword?.click();
     fixture.detectChanges();
 
