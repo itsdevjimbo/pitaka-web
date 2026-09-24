@@ -1,4 +1,14 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  Injector,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -6,7 +16,8 @@ import { ApiError } from '@/app/core/api';
 import { AuthService, EmailChangeAddressTakenError, EmailChangeLinkInvalidError } from '@/app/core/auth';
 import { reasonQueryParams, Session, SIGN_IN_ROUTE } from '@/app/core/session';
 
-type ConfirmationState = 'ready' | 'confirming' | 'retry' | 'success' | 'invalid' | 'taken' | 'refresh-failed';
+type ConfirmationState =
+  'ready' | 'confirming' | 'retry' | 'refreshing-profile' | 'success' | 'invalid' | 'taken' | 'refresh-failed';
 
 @Component({
   selector: 'auth-confirm-email-change',
@@ -17,12 +28,23 @@ export default class AuthConfirmEmailChange implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
+  private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stateHeading');
   protected readonly session = inject(Session);
 
   protected readonly state = signal<ConfirmationState>('ready');
+  protected readonly pageTitle = computed(() => confirmationTitles[this.state()]);
+  protected readonly refreshing = signal(false);
+  protected readonly linkedProfileIsActive = computed(
+    () => this.session.isAuthenticated() && this.session.profile()?.id === this.userId,
+  );
   protected userId: number | null = null;
   private token: string | null = null;
   private submitted = false;
+
+  constructor() {
+    this.focusHeadingAfterRender();
+  }
 
   ngOnInit(): void {
     const params = this.route.snapshot.queryParamMap;
@@ -43,16 +65,19 @@ export default class AuthConfirmEmailChange implements OnInit {
       await firstValueFrom(this.auth.confirmEmailChange(this.userId, this.token));
     } catch (error) {
       this.submitted = false;
-      this.state.set(
+      const failureState =
         error instanceof EmailChangeAddressTakenError
           ? 'taken'
           : error instanceof EmailChangeLinkInvalidError
             ? 'invalid'
-            : 'retry',
-      );
+            : 'retry';
+      this.state.set(failureState);
+      if (failureState === 'taken' || failureState === 'invalid') {
+        this.focusHeadingAfterRender();
+      }
       return;
     }
-    await this.continueAfterSuccess();
+    await this.continueAfterSuccess(true);
   }
 
   protected notNow(): void {
@@ -63,8 +88,16 @@ export default class AuthConfirmEmailChange implements OnInit {
     }
   }
 
-  protected continue(): void {
-    void this.continueAfterSuccess();
+  protected async continue(): Promise<void> {
+    if (this.refreshing()) {
+      return;
+    }
+    this.refreshing.set(true);
+    try {
+      await this.continueAfterSuccess();
+    } finally {
+      this.refreshing.set(false);
+    }
   }
 
   protected goToProfile(): void {
@@ -75,14 +108,23 @@ export default class AuthConfirmEmailChange implements OnInit {
     void this.router.navigate([SIGN_IN_ROUTE]);
   }
 
-  private async continueAfterSuccess(): Promise<void> {
+  protected signOut(): void {
+    this.session.signOut();
+  }
+
+  private async continueAfterSuccess(showRefreshState = false): Promise<void> {
     if (!this.session.isAuthenticated()) {
       await this.router.navigate([SIGN_IN_ROUTE], { queryParams: reasonQueryParams('email-changed') });
       return;
     }
     if (this.session.profile()?.id !== this.userId) {
       this.state.set('success');
+      this.focusHeadingAfterRender();
       return;
+    }
+    if (showRefreshState) {
+      this.state.set('refreshing-profile');
+      this.focusHeadingAfterRender();
     }
     try {
       this.session.applyProfileUpdate(await firstValueFrom(this.auth.me()));
@@ -93,7 +135,12 @@ export default class AuthConfirmEmailChange implements OnInit {
         return;
       }
       this.state.set('refresh-failed');
+      this.focusHeadingAfterRender();
     }
+  }
+
+  private focusHeadingAfterRender(): void {
+    afterNextRender(() => this.heading()?.nativeElement.focus(), { injector: this.injector });
   }
 }
 
@@ -102,5 +149,16 @@ function parseUserId(raw: string | null): number | null {
     return null;
   }
   const userId = Number(raw);
-  return Number.isInteger(userId) ? userId : null;
+  return Number.isSafeInteger(userId) && userId > 0 ? userId : null;
 }
+
+const confirmationTitles: Record<ConfirmationState, string> = {
+  ready: 'Confirm email change',
+  confirming: 'Confirm email change',
+  retry: 'Confirm email change',
+  'refreshing-profile': 'Email change confirmed',
+  'refresh-failed': 'Email change confirmed',
+  success: 'Email change confirmed for the linked Profile.',
+  taken: 'This email address is no longer available',
+  invalid: 'This email change link is no longer valid',
+};
