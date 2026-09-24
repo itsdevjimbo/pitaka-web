@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { AppLayout } from './layout/layout';
+import { profileCanDeactivateGuard } from './profile/features/profile/profile.guard';
 
 const routes: Routes = [
   {
@@ -49,6 +50,7 @@ const routes: Routes = [
       },
       {
         path: 'profile',
+        canDeactivate: [profileCanDeactivateGuard],
         loadComponent: () => import('./profile/features/profile/profile'),
       },
     ],

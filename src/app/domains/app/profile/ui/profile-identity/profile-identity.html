@@ -1,13 +1,22 @@
-<aside class="rounded-2xl bg-neutral-100 p-6 text-center dark:bg-neutral-900">
-  <div class="mx-auto flex size-20 items-center justify-center rounded-full bg-neutral-200 dark:bg-neutral-800">
-    <mat-icon
-      class="size-9"
-      svgIcon="user-round"
-    />
-  </div>
+<section class="min-w-0 rounded-2xl border border-divider bg-surface p-5 sm:p-6">
+  <header class="flex min-w-0 items-start gap-4">
+    <span
+      class="flex size-14 shrink-0 items-center justify-center rounded-full bg-soft text-primary-700 dark:text-primary-200"
+    >
+      <mat-icon
+        class="size-7"
+        svgIcon="user-round"
+        aria-hidden="true"
+      />
+    </span>
+    <div class="min-w-0">
+      <h2 class="font-display text-xl font-semibold tracking-tight text-text">Identity</h2>
+      <p class="mt-1 text-sm text-secondary">The name shown across Pitaka.</p>
+    </div>
+  </header>
   @if (editingName()) {
     <form
-      class="my-4 text-left"
+      class="mt-6 flex min-w-0 flex-col gap-y-4"
       (submit)="saveName($event)"
       (keydown.escape)="cancelNameEdit()"
     >
@@ -29,15 +38,16 @@
       </mat-form-field>
       @if (errorMessage(); as message) {
         <p
-          class="-mt-2 mb-3 text-sm text-red-700 dark:text-red-300"
+          class="rounded-xl bg-danger-container p-3 text-sm text-danger"
           role="alert"
         >
           {{ message }}
         </p>
       }
-      <div class="mt-4 flex justify-end gap-2">
+      <div class="flex flex-wrap justify-end gap-2">
         <button
           matButton
+          class="min-h-11"
           type="button"
           [disabled]="submitting()"
           (click)="cancelNameEdit()"
@@ -46,23 +56,38 @@
         </button>
         <button
           matButton="filled"
+          class="min-h-11"
           type="submit"
-          [disabled]="nameForm().invalid() || !hasChangedName() || submitting()"
+          [disabled]="!hasChangedName() || submitting()"
         >
           {{ submitting() ? 'Saving…' : 'Save name' }}
         </button>
       </div>
     </form>
   } @else {
-    <p class="mt-4 text-lg font-bold">{{ profile()?.name }}</p>
+    <div class="mt-6 min-w-0">
+      <p class="text-xs font-semibold tracking-wide text-secondary uppercase">Name</p>
+      <p class="mt-1 font-display text-2xl font-semibold tracking-tight break-words text-text">
+        {{ profile()?.name }}
+      </p>
+    </div>
   }
-  <p class="text-sm text-neutral-500 dark:text-neutral-400">
-    {{ profile()?.email }}
-  </p>
+  @if (pendingFeedback()) {
+    <p
+      class="mt-4 rounded-xl bg-soft p-3 text-sm text-text"
+      role="status"
+    >
+      Saving in progress. Wait for it to finish before closing.
+    </p>
+  }
+  <div class="mt-5 min-w-0 border-t border-divider pt-4">
+    <p class="text-xs font-semibold tracking-wide text-secondary uppercase">Current email</p>
+    <p class="mt-1 text-sm font-medium break-words text-text">{{ profile()?.email }}</p>
+  </div>
   @if (!editingName()) {
     <button
       #editNameAction
-      class="mt-5 w-full"
+      class="mt-5 min-h-11 w-full"
       matButton="outlined"
       type="button"
       (click)="beginNameEdit()"
@@ -72,15 +97,10 @@
   }
   @if (successMessage(); as message) {
     <p
-      class="mt-3 text-sm text-green-700 dark:text-green-300"
+      class="mt-4 rounded-xl bg-success-container p-3 text-sm text-success"
       role="status"
     >
       {{ message }}
     </p>
   }
-  <p
-    class="mt-5 border-t border-neutral-200 pt-4 text-left text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400"
-  >
-    This is the identity Pitaka shows across the app.
-  </p>
-</aside>
+</section>
