@@ -2,8 +2,10 @@
   <!-- The one action, quiet while in flight and through the cooldown -->
   <button
     type="button"
-    matButton
+    matButton="filled"
+    class="min-h-11 w-full justify-center"
     [disabled]="quiet()"
+    [attr.aria-busy]="sending()"
     (click)="resend()"
   >
     @if (sending()) {
@@ -15,11 +17,24 @@
     }
   </button>
 
+  @if (sending()) {
+    <p
+      class="sr-only"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      Sending a new confirmation link…
+    </p>
+  }
+
   <!-- The same line whatever came back (ADR 0015) -->
   @if (hasAsked()) {
     <p
-      class="mt-2 text-sm text-neutral-500 dark:text-neutral-400"
+      class="mt-2 text-sm leading-6 text-secondary"
       role="status"
+      aria-live="polite"
+      aria-atomic="true"
     >
       {{ reassurance }}
     </p>
