@@ -1,81 +1,83 @@
-<section class="flex min-w-0 flex-col gap-4 rounded-2xl border border-divider bg-surface p-4 sm:p-5">
-  <!-- Heading and the switch-scoped count -->
-  <header class="flex min-w-0 items-center justify-between gap-3">
-    <h2
-      class="min-w-0 font-display text-xl tracking-tight break-words"
-      data-category-pane-heading
-      tabindex="-1"
-    >
-      {{ heading() }}
-      <span
-        class="ml-1.5 font-sans text-sm text-secondary tabular-nums"
-        [attr.aria-label]="count() + ' ' + filter() + ' ' + heading().toLowerCase() + ' categories'"
+<section class="flex min-w-0 flex-col gap-4 rounded-2xl border border-divider bg-surface">
+  <div class="flex flex-col gap-4 p-4 sm:p-5">
+    <!-- Heading and the switch-scoped count -->
+    <header class="flex min-w-0 items-center justify-between gap-3">
+      <h2
+        class="min-w-0 font-display text-xl tracking-tight break-words"
+        data-category-pane-heading
+        tabindex="-1"
       >
-        ({{ count() }})
-      </span>
-    </h2>
+        {{ heading() }}
+        <span
+          class="ml-1.5 font-sans text-sm text-secondary tabular-nums"
+          [attr.aria-label]="count() + ' ' + filter() + ' ' + heading().toLowerCase() + ' categories'"
+        >
+          ({{ count() }})
+        </span>
+      </h2>
 
-    <button
-      matIconButton
-      type="button"
-      class="shrink-0"
-      [disabled]="writeBlocked()"
-      (click)="openAdd()"
-      [attr.aria-label]="'Add ' + heading().toLowerCase() + ' category'"
-      [matTooltip]="'Add ' + heading().toLowerCase() + ' category'"
-    >
-      <mat-icon svgIcon="plus" />
-    </button>
-  </header>
-
-  <!-- Search -->
-  <div class="relative min-w-0">
-    <mat-icon
-      class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-secondary"
-      svgIcon="search"
-      aria-hidden="true"
-    />
-    <input
-      type="search"
-      class="min-h-12 w-full min-w-0 rounded-xl border border-divider bg-surface py-2 pr-3 pl-11 text-base text-text placeholder:text-secondary focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:outline-none dark:focus-visible:ring-primary-200"
-      [attr.aria-label]="'Search ' + heading().toLowerCase() + ' categories'"
-      [value]="search()"
-      [placeholder]="'Search ' + heading().toLowerCase() + ' categories'"
-      (input)="onSearch($any($event.target).value)"
-    />
-  </div>
-
-  <!-- Active / Retired / All — Retired is never hidden -->
-  <div
-    class="flex flex-wrap gap-1 rounded-xl bg-soft p-1 text-sm"
-    role="group"
-    [attr.aria-label]="heading() + ' filter'"
-  >
-    @for (option of filters; track option.value) {
       <button
+        matIconButton
         type="button"
-        class="min-h-11 flex-1 cursor-pointer rounded-lg px-2.5 py-1 font-medium text-secondary hover:bg-surface"
-        [class.bg-surface]="filter() === option.value"
-        [class.text-text]="filter() === option.value"
-        [class.shadow-sm]="filter() === option.value"
-        [attr.aria-pressed]="filter() === option.value"
-        (click)="setFilter(option.value)"
+        class="shrink-0"
+        [disabled]="writeBlocked()"
+        (click)="openAdd()"
+        [attr.aria-label]="'Add ' + heading().toLowerCase() + ' category'"
+        [matTooltip]="'Add ' + heading().toLowerCase() + ' category'"
       >
-        {{ option.label }}
+        <mat-icon svgIcon="plus" />
       </button>
+    </header>
+
+    <!-- Search -->
+    <div class="relative min-w-0">
+      <mat-icon
+        class="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-secondary"
+        svgIcon="search"
+        aria-hidden="true"
+      />
+      <input
+        type="search"
+        class="min-h-12 w-full min-w-0 rounded-xl border border-divider bg-surface py-2 pr-3 pl-11 text-base text-text placeholder:text-secondary focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:outline-none dark:focus-visible:ring-primary-200"
+        [attr.aria-label]="'Search ' + heading().toLowerCase() + ' categories'"
+        [value]="search()"
+        [placeholder]="'Search ' + heading().toLowerCase() + ' categories'"
+        (input)="onSearch($any($event.target).value)"
+      />
+    </div>
+
+    <!-- Active / Retired / All — Retired is never hidden -->
+    <div
+      class="flex flex-wrap gap-1 rounded-xl bg-soft p-1 text-sm"
+      role="group"
+      [attr.aria-label]="heading() + ' filter'"
+    >
+      @for (option of filters; track option.value) {
+        <button
+          type="button"
+          class="min-h-11 flex-1 cursor-pointer rounded-lg px-2.5 py-1 font-medium text-secondary hover:bg-surface"
+          [class.bg-surface]="filter() === option.value"
+          [class.text-text]="filter() === option.value"
+          [class.shadow-sm]="filter() === option.value"
+          [attr.aria-pressed]="filter() === option.value"
+          (click)="setFilter(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      }
+    </div>
+
+    <!-- The move a retire/reactivate made, acknowledged inline -->
+    @if (movedAck(); as ack) {
+      <p
+        class="rounded-xl bg-soft px-3 py-2 text-sm text-text"
+        role="status"
+      >
+        <span class="font-medium">{{ ack.name }}</span>
+        {{ ack.verb }} — find it under {{ ack.segment }}.
+      </p>
     }
   </div>
-
-  <!-- The move a retire/reactivate made, acknowledged inline -->
-  @if (movedAck(); as ack) {
-    <p
-      class="rounded-xl bg-soft px-3 py-2 text-sm text-text"
-      role="status"
-    >
-      <span class="font-medium">{{ ack.name }}</span>
-      {{ ack.verb }} — find it under {{ ack.segment }}.
-    </p>
-  }
 
   <!-- Rows, or the pane's own zero state -->
   @if (noMatch()) {
@@ -97,13 +99,18 @@
       </button>
     </div>
   } @else if (emptyMessage(); as message) {
-    <p class="rounded-xl border border-dashed border-divider bg-soft px-4 py-8 text-center text-sm text-secondary">
+    <p class="px-4 py-8 text-center text-sm text-secondary">
       {{ message }}
     </p>
   } @else {
     <ul class="flex min-w-0 flex-col gap-2">
-      @for (category of visible(); track category.id) {
-        <li class="flex min-w-0 flex-col gap-2 rounded-xl border border-divider bg-surface p-3">
+      @for (category of visible(); track category.id; let first = $first; let last = $last) {
+        <li
+          class="flex min-w-0 flex-col gap-2 bg-surface px-4 py-3 sm:px-5"
+          [class.border-t]="!first"
+          [class.border-divider]="!first"
+          [class.rounded-b-2xl]="last"
+        >
           <div class="flex min-w-0 items-center gap-2">
             <span class="leading-snug min-w-0 flex-auto font-medium break-words text-text">
               {{ category.name }}

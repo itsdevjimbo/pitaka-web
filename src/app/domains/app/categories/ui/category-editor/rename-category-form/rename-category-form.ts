@@ -5,9 +5,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { focusFirstInvalidField, partitionServerError } from '@/app/core/forms';
-import { CategoriesService } from '../../data/categories.service';
-import { Category, CATEGORY_NAME_MAX } from '../../data/category';
-import { duplicateNameBinding } from './duplicate-name';
+import { CategoriesService } from '../../../data/categories.service';
+import { Category, CATEGORY_NAME_MAX } from '../../../data/category';
+import { duplicateNameBinding } from '../duplicate-name';
 
 /** The banner line for a rename that failed before it could be attributed. */
 const COULD_NOT_RENAME = 'Something went wrong renaming your category. Please try again.';
