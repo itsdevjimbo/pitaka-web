@@ -1,11 +1,12 @@
 import { inject, Injectable } from '@angular/core';
 import { catchError, map, Observable, of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
+import { GoalContributionUnavailableError } from '../goal-errors';
 import { GoalContributionsService } from './goal-contributions.service';
 
 export type ContributionDeletionResult = 'deleted' | 'stale-absence' | 'recovered-absence';
 
-/** Tracks whether a 404 followed an uncertain delete outcome for each row. */
+/** Tracks whether a 403 or 404 followed an uncertain delete outcome for each row. */
 @Injectable()
 export class ContributionDeletionCoordinator {
   private readonly contributions = inject(GoalContributionsService);
@@ -18,7 +19,7 @@ export class ContributionDeletionCoordinator {
         return 'deleted' as const;
       }),
       catchError((error: unknown) => {
-        if (error instanceof ApiError && error.status === 404) {
+        if (error instanceof GoalContributionUnavailableError) {
           const result = this.uncertain.has(id) ? 'recovered-absence' : 'stale-absence';
           this.uncertain.delete(id);
           return of(result as ContributionDeletionResult);

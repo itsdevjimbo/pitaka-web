@@ -4,6 +4,7 @@ import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
 import { Goal, GoalStatus, NewGoal, UpdateGoal } from './goal';
 import { toGoalCalendarDate, toGoalDateOnly } from './goal-calendar';
+import { GoalUnavailableError, mapUnavailableResourceError } from './goal-errors';
 
 /** The Goal resource sent by every Goals endpoint. */
 type GoalResource = {
@@ -28,7 +29,12 @@ export class GoalsService {
 
   /** One Goal and its server-computed current amount. */
   get(id: number): Observable<Goal> {
-    return this.http.get<GoalResource>(`${this.baseUrl}/api/goals/${id}`).pipe(map(toGoal));
+    return this.http.get<GoalResource>(`${this.baseUrl}/api/goals/${id}`).pipe(
+      map(toGoal),
+      catchError((error: unknown) =>
+        throwError(() => mapUnavailableResourceError(error, (apiError) => new GoalUnavailableError(apiError))),
+      ),
+    );
   }
 
   /** Create a Goal; a duplicate name becomes a field-bound API error. */
@@ -43,18 +49,32 @@ export class GoalsService {
   update(id: number, goal: UpdateGoal): Observable<Goal> {
     return this.http.put<GoalResource>(`${this.baseUrl}/api/goals/${id}`, toGoalRequest(goal)).pipe(
       map(toGoal),
-      catchError((error: unknown) => throwError(() => asNameConflict(error))),
+      catchError((error: unknown) =>
+        throwError(() =>
+          mapUnavailableResourceError(asNameConflict(error), (apiError) => new GoalUnavailableError(apiError)),
+        ),
+      ),
     );
   }
 
   /** Set the explicit Goal lifecycle state. */
   setStatus(id: number, status: GoalStatus): Observable<Goal> {
-    return this.http.patch<GoalResource>(`${this.baseUrl}/api/goals/${id}/status`, { status }).pipe(map(toGoal));
+    return this.http.patch<GoalResource>(`${this.baseUrl}/api/goals/${id}/status`, { status }).pipe(
+      map(toGoal),
+      catchError((error: unknown) =>
+        throwError(() => mapUnavailableResourceError(error, (apiError) => new GoalUnavailableError(apiError))),
+      ),
+    );
   }
 
   /** Delete a Goal and its Contributions; callers reconcile with fresh reads. */
   delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/api/goals/${id}`).pipe(map(() => undefined));
+    return this.http.delete<void>(`${this.baseUrl}/api/goals/${id}`).pipe(
+      map(() => undefined),
+      catchError((error: unknown) =>
+        throwError(() => mapUnavailableResourceError(error, (apiError) => new GoalUnavailableError(apiError))),
+      ),
+    );
   }
 }
 

@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
 import { provideRouter } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
@@ -8,6 +8,7 @@ import { formatPeso } from '@/app/core/money';
 import { withOverlayContainer } from '@/testing/overlay';
 import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal } from '../../data/goal';
+import { GoalUnavailableError } from '../../data/goal-errors';
 import { GoalsService } from '../../data/goals.service';
 import GoalList from './goal-list';
 
@@ -58,6 +59,7 @@ describe('GoalList', () => {
     list: GoalsService['list'],
     overrides: {
       deleteGoal?: GoalsService['delete'];
+      update?: GoalsService['update'];
       listContributions?: GoalContributionsService['list'];
     } = {},
   ) {
@@ -65,9 +67,17 @@ describe('GoalList', () => {
       imports: [GoalList],
       providers: [
         provideIcons(),
+        provideNativeDateAdapter(),
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: GoalsService, useValue: { list, delete: overrides.deleteGoal ?? (() => of(undefined)) } },
+        {
+          provide: GoalsService,
+          useValue: {
+            list,
+            delete: overrides.deleteGoal ?? (() => of(undefined)),
+            update: overrides.update ?? (() => of(DENTAL)),
+          },
+        },
         {
           provide: GoalContributionsService,
           useValue: { list: overrides.listContributions ?? (() => of([])) },
@@ -301,5 +311,93 @@ describe('GoalList', () => {
     expect(deleteGoal).toHaveBeenCalledWith(DENTAL.id);
     expect(text()).toContain('Goal deleted.');
     expect((fixture.nativeElement as HTMLElement).ownerDocument.activeElement?.textContent).toContain('Holiday');
+  });
+
+  it.each([403, 404])(
+    'refreshes the Goal list after a %s ownership failure without exposing its cause',
+    async (status) => {
+      const list = vi
+        .fn<GoalsService['list']>()
+        .mockReturnValueOnce(of([DENTAL]))
+        .mockReturnValueOnce(of([]));
+      const deleteGoal = vi.fn(() =>
+        throwError(() => new GoalUnavailableError(new ApiError('This Goal could not be found.', status))),
+      );
+      const { fixture, text } = setup(list, { deleteGoal });
+      const actions = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        '[aria-label="Actions for Dental work"]',
+      );
+      actions?.click();
+      await settle(fixture);
+      const menuDelete = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+        (button) => button.textContent?.trim() === 'Delete',
+      );
+      menuDelete?.click();
+      await settle(fixture);
+      const confirmation = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[role="alertdialog"]');
+      const confirmDelete = Array.from(confirmation?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (button) => button.textContent?.trim() === 'Delete',
+      );
+      confirmDelete?.click();
+      await settle(fixture);
+
+      expect(deleteGoal).toHaveBeenCalledWith(DENTAL.id);
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(text()).not.toContain('Dental work');
+      expect(text()).not.toContain('You can no longer change this Goal.');
+    },
+  );
+
+  it.each([403, 404])('refreshes after a %s Goal edit failure', async (status) => {
+    const refreshed = new Subject<Goal[]>();
+    const list = vi
+      .fn<GoalsService['list']>()
+      .mockReturnValueOnce(of([DENTAL]))
+      .mockReturnValueOnce(refreshed);
+    const update = vi.fn(() =>
+      throwError(() => new GoalUnavailableError(new ApiError('This Goal could not be found.', status))),
+    );
+    const { fixture, text } = setup(list, { update });
+    const actions = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Actions for Dental work"]',
+    );
+    actions?.click();
+    await settle(fixture);
+    const edit = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Edit',
+    );
+    edit?.click();
+    await settle(fixture);
+    const name = overlay().querySelector<HTMLInputElement>('#goal-name');
+    if (!name) {
+      throw new Error('No Goal name field');
+    }
+    name.value = 'Dental care';
+    name.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const save = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Save changes',
+    );
+    save?.click();
+    await settle(fixture);
+    fixture.detectChanges();
+
+    expect(update).toHaveBeenCalledWith(DENTAL.id, {
+      name: 'Dental care',
+      targetAmount: DENTAL.targetAmount,
+      targetDate: DENTAL.targetDate,
+    });
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(overlay().querySelector<HTMLInputElement>('#goal-name')?.value).toBe('Dental care');
+    expect(overlay().textContent).toContain('This Goal could not be found.');
+    expect(text()).toContain('Dental work');
+    expect(text()).not.toContain('You can no longer change this Goal.');
+
+    refreshed.next([]);
+    refreshed.complete();
+    await settle(fixture);
+
+    expect(overlay().querySelector<HTMLInputElement>('#goal-name')).toBeNull();
+    expect(text()).not.toContain('Dental work');
   });
 });

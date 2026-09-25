@@ -10,6 +10,7 @@ import { RowNotice } from '@/app/core/notices';
 import { ResourceState } from '@/app/core/notices';
 import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal, GoalStatus } from '../../data/goal';
+import { GoalUnavailableError } from '../../data/goal-errors';
 import { GoalsService } from '../../data/goals.service';
 import { EditGoalDialog } from '../../ui/goal-editor/edit-goal-dialog';
 import { NewGoalDialog } from '../../ui/goal-editor/new-goal-dialog';
@@ -87,9 +88,9 @@ export default class GoalList {
   }
 
   /** Read every Goal freshly: each row carries the server-computed progress total. */
-  protected load(): void {
+  protected load(afterRead?: () => void): void {
     if (this.goals() !== null) {
-      this.readGoals();
+      this.readGoals('ordinary', afterRead);
       return;
     }
     this.loading.set(true);
@@ -104,6 +105,7 @@ export default class GoalList {
         next: (goals) => {
           this.goals.set(goals);
           this.loading.set(false);
+          afterRead?.();
         },
         error: (error: unknown) => {
           this.errorMessage.set(error instanceof ApiError ? error.message : LOAD_FAILED);
@@ -131,8 +133,15 @@ export default class GoalList {
   }
   protected openEdit(goal: Goal): void {
     this.clearPrompts();
-    this.dialog
-      .open<EditGoalDialog, Goal, Goal>(EditGoalDialog, { data: goal })
+    const dialogRef = this.dialog.open<EditGoalDialog, Goal, Goal>(EditGoalDialog, { data: goal });
+    dialogRef.componentInstance.unavailable.subscribe(() =>
+      this.load(() => {
+        if (!(this.goals() ?? []).some((item) => item.id === goal.id)) {
+          dialogRef.close();
+        }
+      }),
+    );
+    dialogRef
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((saved) => {
@@ -229,13 +238,7 @@ export default class GoalList {
   }
 
   private failed(id: number, error: unknown, retry: () => void): void {
-    if (error instanceof ApiError && error.status === 404) {
-      this.load();
-      return;
-    }
-
-    if (error instanceof ApiError && error.status === 403) {
-      this.notice.set({ id, message: 'You can no longer change this Goal.' });
+    if (error instanceof GoalUnavailableError) {
       this.load();
       return;
     }

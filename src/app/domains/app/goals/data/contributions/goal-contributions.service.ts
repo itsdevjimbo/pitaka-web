@@ -4,6 +4,7 @@ import { catchError, map, Observable, throwError } from 'rxjs';
 import { ApiError, API_BASE_URL } from '@/app/core/api';
 import { AccountModifiedError } from '@/app/domains/app/accounts';
 import { toGoalCalendarDate, toGoalDateOnly } from '../goal-calendar';
+import { GoalContributionUnavailableError, GoalUnavailableError, mapUnavailableResourceError } from '../goal-errors';
 import { GoalContribution, NewGoalContribution, UpdateGoalContribution } from './goal-contribution';
 
 /** The Contribution resource sent by every Goal-Contributions endpoint. */
@@ -25,9 +26,12 @@ export class GoalContributionsService {
 
   /** One Goal's history, read through the Goal-owned endpoint. */
   list(goalId: number): Observable<GoalContribution[]> {
-    return this.http
-      .get<GoalContributionResource[]>(`${this.baseUrl}/api/goals/${goalId}/contributions`)
-      .pipe(map((resources) => resources.map(toGoalContribution)));
+    return this.http.get<GoalContributionResource[]>(`${this.baseUrl}/api/goals/${goalId}/contributions`).pipe(
+      map((resources) => resources.map(toGoalContribution)),
+      catchError((error: unknown) =>
+        throwError(() => mapUnavailableResourceError(error, (apiError) => new GoalUnavailableError(apiError))),
+      ),
+    );
   }
 
   /** Every Contribution across every Goal, solely for fresh pooled headroom. */
@@ -60,12 +64,26 @@ export class GoalContributionsService {
       .put<GoalContributionResource>(`${this.baseUrl}/api/goal-contributions/${id}`, {
         note: contribution.note,
       })
-      .pipe(map(toGoalContribution));
+      .pipe(
+        map(toGoalContribution),
+        catchError((error: unknown) =>
+          throwError(() =>
+            mapUnavailableResourceError(error, (apiError) => new GoalContributionUnavailableError(apiError)),
+          ),
+        ),
+      );
   }
 
   /** Delete one earmark; the Account money itself remains untouched. */
   delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/api/goal-contributions/${id}`).pipe(map(() => undefined));
+    return this.http.delete<void>(`${this.baseUrl}/api/goal-contributions/${id}`).pipe(
+      map(() => undefined),
+      catchError((error: unknown) =>
+        throwError(() =>
+          mapUnavailableResourceError(error, (apiError) => new GoalContributionUnavailableError(apiError)),
+        ),
+      ),
+    );
   }
 }
 

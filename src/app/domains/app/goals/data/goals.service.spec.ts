@@ -6,6 +6,7 @@ import { ApiError, API_BASE_URL, errorInterceptor } from '@/app/core/api';
 import { AccountModifiedError } from '@/app/domains/app/accounts';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { GoalContributionsService } from './contributions/goal-contributions.service';
+import { GoalContributionUnavailableError, GoalUnavailableError } from './goal-errors';
 import { GoalsService } from './goals.service';
 
 describe('Goals data adapters', () => {
@@ -48,6 +49,27 @@ describe('Goals data adapters', () => {
     await expect(result).resolves.toEqual(goal(8));
   });
 
+  it.each([403, 404])('maps ID-addressed Goal responses with status %s to one unavailable error', async (status) => {
+    const unavailableBody = { title: 'Unavailable', detail: 'Private server wording.' };
+    const unavailable = { status, statusText: status === 403 ? 'Forbidden' : 'Not Found' };
+
+    const read = firstValueFrom(goals.get(8));
+    http.expectOne(`${BASE_URL}/api/goals/8`).flush(unavailableBody, unavailable);
+    await expect(read).rejects.toBeInstanceOf(GoalUnavailableError);
+
+    const updated = firstValueFrom(goals.update(8, { name: 'Holiday', targetAmount: 5000, targetDate: null }));
+    http.expectOne(`${BASE_URL}/api/goals/8`).flush(unavailableBody, unavailable);
+    await expect(updated).rejects.toBeInstanceOf(GoalUnavailableError);
+
+    const statusChange = firstValueFrom(goals.setStatus(8, 'Completed'));
+    http.expectOne(`${BASE_URL}/api/goals/8/status`).flush(unavailableBody, unavailable);
+    await expect(statusChange).rejects.toBeInstanceOf(GoalUnavailableError);
+
+    const deleted = firstValueFrom(goals.delete(8));
+    http.expectOne(`${BASE_URL}/api/goals/8`).flush(unavailableBody, unavailable);
+    await expect(deleted).rejects.toBeInstanceOf(GoalUnavailableError);
+  });
+
   it('normalizes either duplicate Goal-name response into a name field error', async () => {
     const result = firstValueFrom(
       goals.create({
@@ -83,6 +105,48 @@ describe('Goals data adapters', () => {
 
     await expect(first).resolves.toEqual([contribution(3)]);
     await expect(second).resolves.toEqual([contribution(3)]);
+  });
+
+  it.each([403, 404])('maps Goal-owned Contribution reads and ID-addressed writes with status %s', async (status) => {
+    const unavailableBody = { title: 'Unavailable', detail: 'Private server wording.' };
+    const unavailable = { status, statusText: status === 403 ? 'Forbidden' : 'Not Found' };
+
+    const history = firstValueFrom(contributions.list(8));
+    http.expectOne(`${BASE_URL}/api/goals/8/contributions`).flush(unavailableBody, unavailable);
+    await expect(history).rejects.toBeInstanceOf(GoalUnavailableError);
+
+    const updated = firstValueFrom(contributions.update(3, { note: 'Changed' }));
+    http.expectOne(`${BASE_URL}/api/goal-contributions/3`).flush(unavailableBody, unavailable);
+    await expect(updated).rejects.toBeInstanceOf(GoalContributionUnavailableError);
+
+    const deleted = firstValueFrom(contributions.delete(3));
+    http.expectOne(`${BASE_URL}/api/goal-contributions/3`).flush(unavailableBody, unavailable);
+    await expect(deleted).rejects.toBeInstanceOf(GoalContributionUnavailableError);
+  });
+
+  it('leaves a create-time missing body reference as the normalized API error', async () => {
+    const created = firstValueFrom(
+      contributions.create({
+        goalId: 8,
+        accountId: 2,
+        transactionId: null,
+        amount: 12.5,
+        contributionDate: new Date(2026, 8, 13),
+        note: null,
+      }),
+    );
+    http
+      .expectOne(`${BASE_URL}/api/goal-contributions`)
+      .flush(
+        { title: 'Not Found', detail: 'The referenced record does not exist.' },
+        { status: 404, statusText: 'Not Found' },
+      );
+
+    const error = await created.catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).not.toBeInstanceOf(GoalContributionUnavailableError);
+    expect(error).not.toBeInstanceOf(GoalUnavailableError);
+    expect((error as ApiError).status).toBe(404);
   });
 
   it('GETs pooled Contributions and maps the create-only Account conflict', async () => {

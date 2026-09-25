@@ -1,11 +1,15 @@
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS, provideNativeDateAdapter } from '@angular/material/core';
-import { of, Subject } from 'rxjs';
+import { MatSelectHarness } from '@angular/material/select/testing';
+import { of, Subject, throwError } from 'rxjs';
+import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
-import { AccountsService } from '@/app/domains/app/accounts';
+import { Account, AccountsService } from '@/app/domains/app/accounts';
 import { GoalContributionWithAccountName } from '../../data/contributions/contribution-account-name';
 import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal } from '../../data/goal';
+import { GoalContributionUnavailableError } from '../../data/goal-errors';
 import { ContributionForm } from './contribution-form';
 
 const GOAL: Goal = {
@@ -15,6 +19,14 @@ const GOAL: Goal = {
   targetDate: null,
   status: 'Active',
   currentAmount: 1200,
+};
+
+const ACCOUNT: Account = {
+  id: 8,
+  name: 'Everyday cash',
+  type: 'Cash',
+  currentBalance: 500,
+  isActive: true,
 };
 
 const CONTRIBUTION: GoalContributionWithAccountName = {
@@ -30,6 +42,25 @@ const CONTRIBUTION: GoalContributionWithAccountName = {
 };
 
 describe('ContributionForm', () => {
+  async function setupNew(create: GoalContributionsService['create']) {
+    TestBed.configureTestingModule({
+      imports: [ContributionForm],
+      providers: [
+        provideIcons(),
+        provideNativeDateAdapter(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: AccountsService, useValue: { all: () => of([ACCOUNT]) } },
+        { provide: GoalContributionsService, useValue: { all: () => of([]), create } },
+      ],
+    });
+    const fixture = TestBed.createComponent(ContributionForm);
+    fixture.componentRef.setInput('goal', GOAL);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture;
+  }
+
   function setupExisting(update: GoalContributionsService['update']) {
     TestBed.configureTestingModule({
       imports: [ContributionForm],
@@ -113,5 +144,60 @@ describe('ContributionForm', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it.each([403, 404])('reports an unavailable existing Contribution after a %s write failure', async (status) => {
+    const update = vi.fn<GoalContributionsService['update']>(() =>
+      throwError(() => new GoalContributionUnavailableError(new ApiError('Unavailable', status))),
+    );
+    const fixture = setupExisting(update);
+    const unavailable: string[] = [];
+    fixture.componentInstance.unavailable.subscribe((reason) => unavailable.push(reason));
+    const note = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    note.value = 'Revised';
+    note.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    await fixture.whenStable();
+
+    expect(update).toHaveBeenCalledWith(9, { note: 'Revised' });
+    expect(unavailable).toEqual(['missing']);
+    expect(fixture.nativeElement.textContent).not.toContain('Unavailable');
+  });
+
+  it('keeps a create form open and its values after a body-reference 404', async () => {
+    const create = vi.fn<GoalContributionsService['create']>(() =>
+      throwError(() => new ApiError("We couldn't find that. It may have been deleted, or it may not be yours.", 404)),
+    );
+    const fixture = await setupNew(create);
+    const host = fixture.nativeElement as HTMLElement;
+    const unavailable: string[] = [];
+    fixture.componentInstance.unavailable.subscribe((reason) => unavailable.push(reason));
+
+    const account = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatSelectHarness);
+    await account.open();
+    await (await account.getOptions())[0].click();
+    const amount = host.querySelector<HTMLInputElement>('input[type="number"]');
+    const inputs = host.querySelectorAll<HTMLInputElement>('input');
+    const note = inputs.item(inputs.length - 1);
+    if (!amount || !note) {
+      throw new Error('Expected the Contribution amount and note fields');
+    }
+    amount.value = '100';
+    amount.dispatchEvent(new Event('input'));
+    note.value = 'Keep this draft';
+    note.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (host.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(create).toHaveBeenCalledOnce();
+    expect(unavailable).toEqual([]);
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("We couldn't find that.");
+    expect(amount.value).toBe('100');
+    expect(note.value).toBe('Keep this draft');
   });
 });

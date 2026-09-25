@@ -144,3 +144,14 @@ Discard changes dialog when one of those drafts is dismissed. The Profile route
 guard asks once before discarding changed sections, blocks navigation while a
 write is pending, and allows session expiry through after `Session` clears the
 private Profile. The `@if`-owned sections then leave the view with their drafts.
+
+## Amendment (2026-09-25): confirmed Goal absence closes its editor
+
+An edit to an existing Goal that receives the ownership-hiding 403/404 response
+starts a fresh read while keeping the editor, its draft, and the unavailable
+message visible. If that read confirms the Goal is unavailable, the editor
+closes and the refreshed list or detail screen shows its unavailable state. If
+the read still finds the Goal, or cannot confirm absence, the editor stays open.
+This is a narrow failed-save exception: the write response alone never discards
+the draft; only the fresh read can confirm that the Goal editor no longer has a
+resource to edit.

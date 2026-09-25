@@ -1,4 +1,4 @@
-import { Component, inject, signal, viewChild } from '@angular/core';
+import { Component, inject, output, signal, viewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
 import { Goal } from '../../data/goal';
@@ -15,6 +15,7 @@ import { GoalForm } from './goal-form';
       <goals-goal-form
         [goal]="goal"
         (saved)="dialogRef.close($event)"
+        (unavailable)="unavailable.emit()"
         (cancelled)="shell().requestClose()"
         (dirtyChange)="dirty.set($event)"
         (pendingChange)="pending.set($event)"
@@ -25,6 +26,7 @@ import { GoalForm } from './goal-form';
 export class EditGoalDialog {
   protected readonly dialogRef = inject<MatDialogRef<EditGoalDialog, Goal>>(MatDialogRef);
   protected readonly goal = inject<Goal>(MAT_DIALOG_DATA);
+  readonly unavailable = output<void>();
   protected readonly dirty = signal(false);
   protected readonly pending = signal(false);
   protected readonly shell = viewChild.required(DialogShell);

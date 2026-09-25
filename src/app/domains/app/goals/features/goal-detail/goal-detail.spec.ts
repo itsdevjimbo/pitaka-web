@@ -11,6 +11,7 @@ import { withOverlayContainer } from '@/testing/overlay';
 import { GoalContribution } from '../../data/contributions/goal-contribution';
 import { GoalContributionsService } from '../../data/contributions/goal-contributions.service';
 import { Goal } from '../../data/goal';
+import { GoalContributionUnavailableError, GoalUnavailableError } from '../../data/goal-errors';
 import { GoalsService } from '../../data/goals.service';
 import GoalDetail from './goal-detail';
 
@@ -56,6 +57,7 @@ describe('GoalDetail', () => {
       allContributions?: GoalContributionsService['all'];
       deleteContribution?: GoalContributionsService['delete'];
       setStatus?: GoalsService['setStatus'];
+      update?: GoalsService['update'];
       id?: string;
     } = {},
   ) {
@@ -67,6 +69,7 @@ describe('GoalDetail', () => {
     const allContributions = over.allContributions ?? (() => of<GoalContribution[]>([]));
     const deleteContribution = over.deleteContribution ?? (() => of(undefined));
     const setStatus = over.setStatus ?? (() => of(GOAL));
+    const update = over.update ?? (() => of(GOAL));
 
     TestBed.configureTestingModule({
       imports: [GoalDetail],
@@ -75,7 +78,7 @@ describe('GoalDetail', () => {
         provideNativeDateAdapter(),
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
-        { provide: GoalsService, useValue: { get, setStatus } },
+        { provide: GoalsService, useValue: { get, setStatus, update } },
         { provide: GoalContributionsService, useValue: { list, all: allContributions, delete: deleteContribution } },
         { provide: AccountsService, useValue: { all: accounts } },
         { provide: TransactionsService, useValue: { list: transactions, linkedContributions: linked } },
@@ -340,22 +343,26 @@ describe('GoalDetail', () => {
     expect((fixture.nativeElement as HTMLElement).ownerDocument.activeElement?.id).toBe('contributions-heading');
   });
 
-  it('treats an initial deletion 404 as stale history and refreshes the ordinary row away', async () => {
-    const item = contribution();
-    const list = vi
-      .fn()
-      .mockReturnValueOnce(of([item]))
-      .mockReturnValueOnce(of([]));
-    const { fixture, text } = setup({
-      list,
-      deleteContribution: () => throwError(() => new ApiError('Missing', 404)),
-    });
+  it.each([403, 404])(
+    'treats an initial deletion %s as stale history and refreshes the ordinary row away',
+    async (status) => {
+      const item = contribution();
+      const list = vi
+        .fn()
+        .mockReturnValueOnce(of([item]))
+        .mockReturnValueOnce(of([]));
+      const { fixture, text } = setup({
+        list,
+        deleteContribution: () =>
+          throwError(() => new GoalContributionUnavailableError(new ApiError('Unavailable', status))),
+      });
 
-    await askToDeleteContribution(fixture);
-    await confirmContributionDelete(fixture);
+      await askToDeleteContribution(fixture);
+      await confirmContributionDelete(fixture);
 
-    expect(text()).toContain('No Contributions yet');
-  });
+      expect(text()).toContain('No Contributions yet');
+    },
+  );
 
   it('checks current facts after an ambiguous delete without replaying the write', async () => {
     const item = contribution();
@@ -427,7 +434,9 @@ describe('GoalDetail', () => {
     const get = vi
       .fn<GoalsService['get']>()
       .mockReturnValueOnce(of(reached))
-      .mockReturnValueOnce(throwError(() => new ApiError('This Goal is no longer available.', 404)));
+      .mockReturnValueOnce(
+        throwError(() => new GoalUnavailableError(new ApiError('This Goal is no longer available.', 404))),
+      );
     const { fixture, text } = setup({ get, setStatus: () => of({ ...reached, status: 'Completed' }) });
     await openGoalMenu(fixture);
 
@@ -437,6 +446,73 @@ describe('GoalDetail', () => {
     expect(text()).toContain('This Goal is no longer available.');
     expect(text()).toContain('Back to goals');
     expect(text()).not.toContain('Edit goal');
+  });
+
+  it.each([403, 404])('treats a %s Goal write failure as unavailable without exposing ownership', async (status) => {
+    const reached = { ...GOAL, currentAmount: GOAL.targetAmount };
+    const get = vi
+      .fn<GoalsService['get']>()
+      .mockReturnValueOnce(of(reached))
+      .mockReturnValueOnce(
+        throwError(() => new GoalUnavailableError(new ApiError('This Goal is no longer available.', 404))),
+      );
+    const setStatus = vi.fn(() =>
+      throwError(() => new GoalUnavailableError(new ApiError('This Goal is no longer available.', status))),
+    );
+    const { fixture, text } = setup({ get, setStatus });
+    await openGoalMenu(fixture);
+
+    goalMenuButton('Mark complete').click();
+    await settle(fixture);
+
+    expect(setStatus).toHaveBeenCalledWith(GOAL.id, 'Completed');
+    expect(text()).toContain('This Goal is no longer available.');
+    expect(text()).toContain('Back to goals');
+    expect(text()).not.toContain('You can no longer change this Goal.');
+    expect(text()).not.toContain('Edit goal');
+  });
+
+  it.each([403, 404])('refreshes after a %s Goal edit failure', async (status) => {
+    const refreshed = new Subject<Goal>();
+    const get = vi.fn<GoalsService['get']>().mockReturnValueOnce(of(GOAL)).mockReturnValueOnce(refreshed);
+    const update = vi.fn(() =>
+      throwError(() => new GoalUnavailableError(new ApiError('This Goal is no longer available.', status))),
+    );
+    const { fixture, text } = setup({ get, update });
+    await openGoalMenu(fixture);
+
+    goalMenuButton('Edit goal').click();
+    await settle(fixture);
+    const name = overlay().querySelector<HTMLInputElement>('#goal-name');
+    if (!name) {
+      throw new Error('No Goal name field');
+    }
+    name.value = 'Dental care';
+    name.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const save = Array.from(overlay().querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Save changes',
+    );
+    save?.click();
+    await settle(fixture);
+    fixture.detectChanges();
+
+    expect(update).toHaveBeenCalledWith(GOAL.id, {
+      name: 'Dental care',
+      targetAmount: GOAL.targetAmount,
+      targetDate: GOAL.targetDate,
+    });
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(overlay().textContent).toContain('This Goal is no longer available.');
+    expect(overlay().textContent).toContain('Edit goal');
+    expect(overlay().querySelector<HTMLInputElement>('#goal-name')?.value).toBe('Dental care');
+    expect(overlay().textContent).toContain('This Goal is no longer available.');
+
+    refreshed.error(new GoalUnavailableError(new ApiError('This Goal is no longer available.', 404)));
+    await settle(fixture);
+
+    expect(text()).toContain('Back to goals');
+    expect(overlay().querySelector<HTMLInputElement>('#goal-name')).toBeNull();
   });
 
   it('prevents duplicate lifecycle submissions while a status write is pending', async () => {
@@ -474,7 +550,7 @@ describe('GoalDetail', () => {
     expect(failed.text()).toContain('Try again');
 
     TestBed.resetTestingModule();
-    const missing = setup({ get: () => throwError(() => new ApiError('Gone', 404)) });
+    const missing = setup({ get: () => throwError(() => new GoalUnavailableError(new ApiError('Gone', 404))) });
     expect(missing.text()).toContain('Gone');
     expect(missing.text()).toContain('Back to goals');
     expect(missing.text()).not.toContain('Try again');

@@ -68,6 +68,19 @@ describe('authInterceptor', () => {
     expect(session.expire).toHaveBeenCalledTimes(1);
   });
 
+  it.each([403, 404])('does not expire the session on a %s response', async (status) => {
+    configure('a.b.c');
+
+    const result = firstValueFrom(client.delete(`${BASE_URL}/api/goals/42`));
+    http.expectOne(`${BASE_URL}/api/goals/42`).flush(null, {
+      status,
+      statusText: status === 403 ? 'Forbidden' : 'Not Found',
+    });
+
+    await result.catch(() => undefined);
+    expect(session.expire).not.toHaveBeenCalled();
+  });
+
   it('does not treat a 401 on boot verification as a lapse', async () => {
     configure('a.b.c');
 

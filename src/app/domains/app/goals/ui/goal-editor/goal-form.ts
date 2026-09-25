@@ -8,6 +8,7 @@ import { firstValueFrom, timeout, TimeoutError } from 'rxjs';
 import { focusFirstInvalidField, partitionServerError, ServerErrorControls } from '@/app/core/forms';
 import { PesoPipe } from '@/app/core/money';
 import { Goal, GOAL_AMOUNT_MAX, GOAL_AMOUNT_MIN, GOAL_NAME_MAX, NewGoal } from '../../data/goal';
+import { GoalUnavailableError } from '../../data/goal-errors';
 import { GoalsService } from '../../data/goals.service';
 
 type GoalModel = Omit<NewGoal, 'targetAmount'> & { targetAmount: number | null };
@@ -25,6 +26,7 @@ export class GoalForm {
   private service = inject(GoalsService);
   readonly goal = input<Goal | null>(null);
   readonly saved = output<Goal>();
+  readonly unavailable = output<void>();
   readonly cancelled = output<void>();
   readonly dirtyChange = output<boolean>();
   readonly pendingChange = output<boolean>();
@@ -91,6 +93,12 @@ export class GoalForm {
         } catch (error) {
           if (error instanceof TimeoutError) {
             this.errorMessage.set(SAVE_UNCERTAIN);
+            return undefined;
+          }
+          // A write against an existing Goal targets its ID; let the screen confirm whether it still exists.
+          if (this.goal() && error instanceof GoalUnavailableError) {
+            this.errorMessage.set(error.message);
+            this.unavailable.emit();
             return undefined;
           }
           const { boundErrors, bannerMessage } = partitionServerError(

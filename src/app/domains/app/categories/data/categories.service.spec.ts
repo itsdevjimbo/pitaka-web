@@ -304,6 +304,16 @@ describe('CategoriesService', () => {
   });
 
   describe('setActive', () => {
+    it('preserves a 403 refusal for a Pitaka-supplied Category write', async () => {
+      const result = firstValueFrom(service.setActive(7, false));
+
+      http.expectOne(`${CATEGORIES_URL}/7/status`).flush(null, { status: 403, statusText: 'Forbidden' });
+
+      const error = await result.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(403);
+    });
+
     it('PATCHes /{id}/status with isActive false to retire, and returns the row', async () => {
       const result = firstValueFrom(service.setActive(7, false));
 
