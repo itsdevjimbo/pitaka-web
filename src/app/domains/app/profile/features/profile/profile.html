@@ -14,10 +14,10 @@
   }
 
   @if (profile(); as person) {
-    <div class="grid min-w-0 items-start gap-5">
+    <div class="grid min-w-0 items-start gap-5 min-[900px]:grid-cols-[minmax(15rem,0.9fr)_minmax(0,1.6fr)]">
       <profile-identity class="min-w-0" />
 
-      <div class="grid min-w-0 gap-5 min-[900px]:grid-cols-2">
+      <div class="grid min-w-0 gap-5">
         <profile-email class="min-w-0" />
 
         <profile-password class="min-w-0" />
