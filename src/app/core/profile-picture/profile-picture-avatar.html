@@ -1,0 +1,17 @@
+@if (pictureUrl(); as url) {
+  <img
+    [class]="avatarStyles().image"
+    [src]="url"
+    alt=""
+    aria-hidden="true"
+    (error)="profilePictureDecodeFailed(url)"
+  />
+} @else {
+  <span [class]="avatarStyles().fallback">
+    <mat-icon
+      [class]="avatarStyles().icon"
+      svgIcon="user-round"
+      aria-hidden="true"
+    />
+  </span>
+}

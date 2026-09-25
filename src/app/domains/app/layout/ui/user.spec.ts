@@ -9,18 +9,27 @@ import { withOverlayContainer } from '@/testing/overlay';
 import { User } from './user';
 
 describe('User', () => {
-  const ada: Profile = { id: 7, name: 'Ada Lovelace', email: 'ada@example.com', pendingEmail: null };
+  const ada: Profile = { id: 7, name: 'Ada Lovelace', email: 'ada@example.com', pendingEmail: null, hasPicture: false };
   const overlay = withOverlayContainer();
 
   function setup(profile: Profile | null = ada) {
     const signOut = vi.fn();
+    const profilePictureUrl = signal<string | null>(null);
+    const profilePictureDecodeFailed = vi.fn((url: string) => {
+      if (profilePictureUrl() === url) {
+        profilePictureUrl.set(null);
+      }
+    });
 
     TestBed.configureTestingModule({
       imports: [User],
       providers: [
         provideRouter([]),
         provideIcons(),
-        { provide: Session, useValue: { profile: signal(profile), signOut } },
+        {
+          provide: Session,
+          useValue: { profile: signal(profile), profilePictureUrl, profilePictureDecodeFailed, signOut },
+        },
         {
           provide: Theming,
           useValue: { scheme: signal('system'), persistenceNotice: signal(null), setScheme: vi.fn() },
@@ -34,6 +43,7 @@ describe('User', () => {
     return {
       fixture,
       signOut,
+      profilePictureUrl,
       text: () => (fixture.nativeElement as HTMLElement).textContent ?? '',
     };
   }
@@ -43,6 +53,24 @@ describe('User', () => {
 
     expect(text()).toContain('Ada Lovelace');
     expect(text()).toContain('ada@example.com');
+  });
+
+  it('shows a saved Profile picture and falls back to the person icon after a decode failure', () => {
+    const { fixture, profilePictureUrl } = setup();
+    profilePictureUrl.set('blob:saved-profile-picture');
+    fixture.detectChanges();
+
+    const screen = fixture.nativeElement as HTMLElement;
+    const picture = screen.querySelector<HTMLImageElement>('img');
+    expect(picture?.getAttribute('src')).toBe('blob:saved-profile-picture');
+    expect(picture?.getAttribute('alt')).toBe('');
+    expect(picture?.classList.contains('object-cover')).toBe(true);
+
+    picture?.dispatchEvent(new Event('error'));
+    fixture.detectChanges();
+
+    expect(screen.querySelector('img')).toBeNull();
+    expect(screen.querySelector('mat-icon[svgIcon="user-round"]')).not.toBeNull();
   });
 
   it('offers Profile before Appearance in the signed-in menu', async () => {

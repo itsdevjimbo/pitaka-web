@@ -12,12 +12,12 @@ import {
 import { disabled, form, FormField, submit, validate } from '@angular/forms/signals';
 import { MatButton } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIcon } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
 import { EditorDismissal } from '@/app/core/dialog';
 import { focusFirstInvalidField, partitionServerError, type ServerErrorControls } from '@/app/core/forms';
+import { ProfilePictureAvatar } from '@/app/core/profile-picture';
 import { Session } from '@/app/core/session';
 
 const PROFILE_NAME_MAX = 255;
@@ -26,7 +26,7 @@ const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please t
 /** The signed-in identity shown on the Profile page, including name editing. */
 @Component({
   selector: 'profile-identity',
-  imports: [MatButton, MatIcon, MatFormFieldModule, MatInputModule, FormField],
+  imports: [MatButton, MatFormFieldModule, MatInputModule, FormField, ProfilePictureAvatar],
   templateUrl: './profile-identity.html',
 })
 export class ProfileIdentity {

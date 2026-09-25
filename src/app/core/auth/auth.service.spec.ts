@@ -47,12 +47,12 @@ describe('AuthService', () => {
     });
     request.flush({
       token: 'a.b.c',
-      user: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null },
+      user: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null, hasPicture: true },
     });
 
     await expect(result).resolves.toEqual({
       token: 'a.b.c',
-      profile: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null },
+      profile: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null, hasPicture: true },
     });
   });
 
@@ -119,12 +119,12 @@ describe('AuthService', () => {
     firstValueFrom(service.login({ email: 'a@b.co', password: 'x' })).catch(() => undefined);
     const login = http.expectOne(`${BASE_URL}/api/auth/login`);
     expect(login.request.context.get(HANDLES_OWN_401)).toBe(true);
-    login.flush({ token: 't', user: { id: 1, name: 'A', email: 'a@b.co', pendingEmail: null } });
+    login.flush({ token: 't', user: { id: 1, name: 'A', email: 'a@b.co', pendingEmail: null, hasPicture: false } });
 
     firstValueFrom(service.me()).catch(() => undefined);
     const me = http.expectOne(`${BASE_URL}/api/profile`);
     expect(me.request.context.get(HANDLES_OWN_401)).toBe(true);
-    me.flush({ id: 1, name: 'A', email: 'a@b.co', pendingEmail: null });
+    me.flush({ id: 1, name: 'A', email: 'a@b.co', pendingEmail: null, hasPicture: false });
 
     firstValueFrom(service.resendConfirmation('a@b.co'));
     const resend = http.expectOne(`${BASE_URL}/api/auth/resend-confirmation`);
@@ -179,7 +179,7 @@ describe('AuthService', () => {
       password: 'secret12',
     });
     request.flush(
-      { user: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null } },
+      { user: { id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null, hasPicture: true } },
       { status: 201, statusText: 'Created' },
     );
 
@@ -188,6 +188,7 @@ describe('AuthService', () => {
       name: 'Ada',
       email: 'ada@example.com',
       pendingEmail: null,
+      hasPicture: true,
     });
   });
 
@@ -282,22 +283,54 @@ describe('AuthService', () => {
     expect((error as ApiError).message).toBe('Please correct the highlighted fields and try again.');
   });
 
-  it('GETs the live Profile from /api/profile', async () => {
+  it('GETs the live Profile and preserves the picture metadata from /api/profile', async () => {
     const result = firstValueFrom(service.me());
 
     http
       .expectOne(`${BASE_URL}/api/profile`)
-      .flush({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null });
+      .flush({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null, hasPicture: true });
 
     await expect(result).resolves.toEqual({
       id: 7,
       name: 'Ada',
       email: 'ada@example.com',
       pendingEmail: null,
+      hasPicture: true,
     });
   });
 
-  it('PUTs a name to the Profile and returns the complete Profile response', async () => {
+  it('GETs the private Profile picture as binary data and treats 404 as no saved picture', async () => {
+    const picture = new Blob(['picture bytes'], { type: 'image/webp' });
+    const result = firstValueFrom(service.profilePicture());
+
+    const request = http.expectOne(`${BASE_URL}/api/profile/picture`);
+    expect(request.request.method).toBe('GET');
+    expect(request.request.responseType).toBe('blob');
+    request.flush(picture);
+
+    await expect(result).resolves.toBe(picture);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const missing = firstValueFrom(service.profilePicture());
+    http
+      .expectOne(`${BASE_URL}/api/profile/picture`)
+      .error(new ProgressEvent('error'), { status: 404, statusText: 'Not Found' });
+
+    await expect(missing).resolves.toBeNull();
+    warn.mockRestore();
+  });
+
+  it('keeps a private Profile picture storage failure distinct from absence', async () => {
+    const result = firstValueFrom(service.profilePicture());
+
+    http
+      .expectOne(`${BASE_URL}/api/profile/picture`)
+      .error(new ProgressEvent('error'), { status: 500, statusText: 'Internal Server Error' });
+
+    await expect(result).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('PUTs a name to the Profile and returns picture metadata with the complete Profile response', async () => {
     const result = firstValueFrom(service.updateProfile('Augusta Ada King'));
 
     const request = http.expectOne(`${BASE_URL}/api/profile`);
@@ -308,6 +341,7 @@ describe('AuthService', () => {
       name: 'Augusta Ada King',
       email: 'ada@example.com',
       pendingEmail: null,
+      hasPicture: true,
     });
 
     await expect(result).resolves.toEqual({
@@ -315,6 +349,7 @@ describe('AuthService', () => {
       name: 'Augusta Ada King',
       email: 'ada@example.com',
       pendingEmail: null,
+      hasPicture: true,
     });
   });
 
@@ -326,6 +361,7 @@ describe('AuthService', () => {
       name: 'Ada',
       email: 'ada@example.com',
       pendingEmail: 'ada@newmail.com',
+      hasPicture: false,
     });
 
     await expect(result).resolves.toEqual({
@@ -333,6 +369,7 @@ describe('AuthService', () => {
       name: 'Ada',
       email: 'ada@example.com',
       pendingEmail: 'ada@newmail.com',
+      hasPicture: false,
     });
   });
 

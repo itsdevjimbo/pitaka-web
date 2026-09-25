@@ -1,18 +1,18 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, type Subscription } from 'rxjs';
 import { ApiError } from '@/app/core/api';
-import { AuthService, Credentials, Profile, SignInResult } from '@/app/core/auth';
+import { AuthService, type Credentials, type Profile, type SignInResult } from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
 import { reasonQueryParams, SIGN_IN_ROUTE, signInRedirect } from './routing/sign-in-route';
 
 const TOKEN_KEY = 'pitaka.token';
 
 /**
- * Owns the signed-in session: the bearer token, the live Profile, and the
- * transitions between them (sign in, boot verification, and the lapse when the
- * hour runs out).
+ * Owns the signed-in session: the bearer token, the live Profile, its private
+ * picture URL, and the transitions between them (sign in, boot verification,
+ * and the lapse when the hour runs out).
  *
  * The token lives in `localStorage` so a page refresh keeps the person signed
  * in; there is no refresh token, so this whole mechanism has a planned death
@@ -29,12 +29,20 @@ export class Session {
   // State
   private readonly _token = signal<string | null>(this.storage.getItem(TOKEN_KEY));
   private readonly _profile = signal<Profile | null>(null);
+  private readonly _profilePictureUrl = signal<string | null>(null);
+  private profilePictureId: number | null = null;
+  private profilePictureHasPicture: boolean | null = null;
+  private profilePictureGeneration = 0;
+  private profilePictureRequest: Subscription | null = null;
 
   /** The bearer token to attach to API requests, or `null` when signed out. */
   readonly token = this._token.asReadonly();
 
   /** The signed-in person's identity, populated once the server confirms it. */
   readonly profile = this._profile.asReadonly();
+
+  /** A private Blob URL shared by the signed-in Profile and user menu. */
+  readonly profilePictureUrl = this._profilePictureUrl.asReadonly();
 
   /**
    * Whether the server has confirmed this session during this page's life, not
@@ -51,9 +59,11 @@ export class Session {
 
   /** Adopt a freshly minted session: persist the token, hold the Profile. */
   private establish({ token, profile }: SignInResult): void {
+    this.resetProfilePicture();
     this.storage.setItem(TOKEN_KEY, token);
     this._token.set(token);
     this._profile.set(profile);
+    this.syncProfilePicture(profile, token);
   }
 
   /**
@@ -64,6 +74,8 @@ export class Session {
    * Only a 401 clears the session (ADR 0004). A transport failure — the API
    * down, no network — leaves the stored token in place so a refresh once
    * connectivity returns signs the person straight back in.
+   * A response for a token cleared or replaced while this read was pending is
+   * discarded, so it cannot reopen the earlier identity.
    *
    * This method is the sole handler of the 401 on `GET /api/profile`: it clears
    * the token but does not redirect, since it runs before the shell renders and
@@ -72,13 +84,22 @@ export class Session {
    * fire on the same response.
    */
   async verifyBoot(): Promise<void> {
-    if (this._token() === null) {
+    const token = this._token();
+    if (token === null) {
       return;
     }
 
     try {
-      this._profile.set(await firstValueFrom(this.auth.me()));
+      const profile = await firstValueFrom(this.auth.me());
+      if (this._token() !== token) {
+        return;
+      }
+      this._profile.set(profile);
+      this.syncProfilePicture(profile, token);
     } catch (error) {
+      if (this._token() !== token) {
+        return;
+      }
       if (error instanceof ApiError && error.status === 401) {
         this.clear();
       }
@@ -92,7 +113,21 @@ export class Session {
   applyProfileUpdate(profile: Profile): void {
     if (this._profile()?.id === profile.id) {
       this._profile.set(profile);
+      const token = this._token();
+      if (token !== null) {
+        this.syncProfilePicture(profile, token);
+      }
     }
+  }
+
+  /** Drop a picture that the browser could not decode while keeping API metadata intact. */
+  profilePictureDecodeFailed(url: string): void {
+    if (this._profilePictureUrl() !== url) {
+      return;
+    }
+
+    URL.revokeObjectURL(url);
+    this._profilePictureUrl.set(null);
   }
 
   /**
@@ -149,8 +184,68 @@ export class Session {
   }
 
   private clear(): void {
+    this.resetProfilePicture();
     this.storage.removeItem(TOKEN_KEY);
     this._token.set(null);
     this._profile.set(null);
+  }
+
+  /** Share one in-memory picture per session and discard superseded reads. */
+  private syncProfilePicture(profile: Profile, token: string): void {
+    if (this.profilePictureId === profile.id && this.profilePictureHasPicture === profile.hasPicture) {
+      return;
+    }
+
+    this.resetProfilePicture();
+    this.profilePictureId = profile.id;
+    this.profilePictureHasPicture = profile.hasPicture;
+    if (!profile.hasPicture) {
+      return;
+    }
+
+    const generation = this.profilePictureGeneration;
+    this.profilePictureRequest = this.auth.profilePicture().subscribe({
+      next: (picture) => {
+        if (!this.isCurrentProfilePictureRead(generation, token, profile.id)) {
+          return;
+        }
+        if (picture === null) {
+          this.profilePictureRequest = null;
+          return;
+        }
+
+        this._profilePictureUrl.set(URL.createObjectURL(picture));
+        this.profilePictureRequest = null;
+      },
+      error: (error: unknown) => {
+        if (this.isCurrentProfilePictureRead(generation, token, profile.id)) {
+          console.warn('[api] profile-picture read failed', error);
+          this.profilePictureRequest = null;
+        }
+      },
+    });
+  }
+
+  private isCurrentProfilePictureRead(generation: number, token: string, profileId: number): boolean {
+    const profile = this._profile();
+    return (
+      this.profilePictureGeneration === generation &&
+      this._token() === token &&
+      profile?.id === profileId &&
+      profile.hasPicture
+    );
+  }
+
+  private resetProfilePicture(): void {
+    this.profilePictureGeneration += 1;
+    this.profilePictureRequest?.unsubscribe();
+    this.profilePictureRequest = null;
+    const url = this._profilePictureUrl();
+    if (url !== null) {
+      URL.revokeObjectURL(url);
+    }
+    this._profilePictureUrl.set(null);
+    this.profilePictureId = null;
+    this.profilePictureHasPicture = null;
   }
 }

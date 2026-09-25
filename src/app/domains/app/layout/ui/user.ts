@@ -4,23 +4,28 @@ import { MatIcon } from '@angular/material/icon';
 import { MatDivider } from '@angular/material/list';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { RouterLink } from '@angular/router';
+import { ProfilePictureAvatar } from '@/app/core/profile-picture';
 import { Session } from '@/app/core/session';
 import { Scheme, Theming } from '@/app/core/theming';
 
 @Component({
   selector: 'user',
-  imports: [MatDivider, MatIcon, MatMenu, MatMenuItem, MatPseudoCheckbox, MatMenuTrigger, RouterLink],
+  imports: [
+    MatDivider,
+    MatIcon,
+    MatMenu,
+    MatMenuItem,
+    MatPseudoCheckbox,
+    MatMenuTrigger,
+    ProfilePictureAvatar,
+    RouterLink,
+  ],
   template: `
     <button
       class="flex w-full cursor-pointer items-center gap-x-3 rounded-xl p-2 text-left hover:bg-soft"
       [matMenuTriggerFor]="userMenu"
     >
-      <span class="flex size-9 items-center justify-center rounded-lg bg-soft">
-        <mat-icon
-          class="size-5"
-          svgIcon="user-round"
-        />
-      </span>
+      <profile-picture-avatar appearance="user-menu" />
       <div class="flex min-w-0 flex-auto flex-col select-none">
         <div class="truncate font-medium">{{ profile()?.name }}</div>
         <div class="truncate text-sm text-secondary">
