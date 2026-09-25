@@ -44,9 +44,13 @@ export class ProfilePictureRemoval {
   protected readonly successMessage = signal<string | null>(null);
   private operation: ProfilePictureOperation | null = null;
   private writeRevision: ProfileWriteRevision | null = null;
+  private successMessageTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    this.destroyRef.onDestroy(() => this.releaseOperation());
+    this.destroyRef.onDestroy(() => {
+      this.clearSuccessMessageTimeout();
+      this.releaseOperation();
+    });
   }
 
   protected readonly hasSavedPicture = computed(() => this.profile()?.hasPicture === true);
@@ -59,13 +63,14 @@ export class ProfilePictureRemoval {
     this.pendingFeedback.set(true);
   }
 
-  protected askToRemove(): void {
+  requestRemoval(): void {
     if (!this.hasSavedPicture() || this.operationPending()) {
       return;
     }
     this.errorMessage.set(null);
     this.refreshErrorMessage.set(null);
     this.successMessage.set(null);
+    this.clearSuccessMessageTimeout();
     this.pendingFeedback.set(false);
     this.confirming.set(true);
     this.focusAfterRender('#keep-profile-picture');
@@ -102,6 +107,7 @@ export class ProfilePictureRemoval {
     this.errorMessage.set(null);
     this.refreshErrorMessage.set(null);
     this.successMessage.set(null);
+    this.clearSuccessMessageTimeout();
 
     try {
       await firstValueFrom(this.auth.removeProfilePicture());
@@ -164,7 +170,7 @@ export class ProfilePictureRemoval {
         this.focusAfterRender('#retry-profile-picture-refresh');
         return;
       }
-      this.successMessage.set('Profile picture removed.');
+      this.showSuccessMessage('Profile picture removed.');
       this.refreshErrorMessage.set(null);
       this.releaseOperation();
       this.focusPictureChooser();
@@ -191,9 +197,25 @@ export class ProfilePictureRemoval {
     }
   }
 
+  private showSuccessMessage(message: string): void {
+    this.clearSuccessMessageTimeout();
+    this.successMessage.set(message);
+    this.successMessageTimeout = setTimeout(() => {
+      this.successMessageTimeout = null;
+      this.successMessage.set(null);
+    }, 3000);
+  }
+
+  private clearSuccessMessageTimeout(): void {
+    if (this.successMessageTimeout !== null) {
+      clearTimeout(this.successMessageTimeout);
+      this.successMessageTimeout = null;
+    }
+  }
+
   private focusAfterRender(selector: string): void {
     runInInjectionContext(this.injector, () =>
-      afterNextRender(() => this.host.nativeElement.querySelector<HTMLButtonElement>(selector)?.focus()),
+      afterNextRender(() => this.host.nativeElement.parentElement?.querySelector<HTMLButtonElement>(selector)?.focus()),
     );
   }
 

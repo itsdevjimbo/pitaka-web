@@ -1,20 +1,7 @@
-<div class="border-t border-divider px-5 py-4 sm:px-6">
-  @if (hasSavedPicture()) {
-    <button
-      class="min-h-11 w-full"
-      matButton="outlined"
-      type="button"
-      aria-label="Remove Profile picture"
-      [disabled]="operationPending()"
-      (click)="askToRemove()"
-    >
-      Remove picture
-    </button>
-  }
-
+<div class="px-5 sm:px-6">
   @if (confirming()) {
     <section
-      class="rounded-2xl bg-danger-container p-4 text-sm text-danger"
+      class="mt-4 rounded-2xl bg-danger-container p-4 text-sm text-danger"
       role="alertdialog"
       aria-labelledby="remove-profile-picture-title"
       aria-describedby="remove-profile-picture-description"

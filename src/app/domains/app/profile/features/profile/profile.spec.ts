@@ -131,6 +131,15 @@ describe('Profile', () => {
     return button;
   }
 
+  function clickPictureRemoval(root: HTMLElement): HTMLButtonElement {
+    const button = root.querySelector<HTMLButtonElement>('button[aria-label="Remove Profile picture"]');
+    if (!button) {
+      throw new Error('No Profile picture removal button');
+    }
+    button.click();
+    return button;
+  }
+
   function imageFile(name = 'portrait.png', bytes = pngSignature()): File {
     return new File([bytes], name, { type: 'image/png' });
   }
@@ -198,6 +207,7 @@ describe('Profile', () => {
 
     const removeAction = page.querySelector<HTMLButtonElement>('button[aria-label="Remove Profile picture"]');
     expect(removeAction).not.toBeNull();
+    expect(removeAction?.querySelector('mat-icon[svgIcon="x"]')).not.toBeNull();
     removeAction?.click();
     harness.fixture.detectChanges();
 
@@ -238,7 +248,7 @@ describe('Profile', () => {
     await harness.navigateByUrl('/profile', AppProfile);
     const page = harness.routeNativeElement as HTMLElement;
 
-    click(page, 'Remove picture');
+    clickPictureRemoval(page);
     harness.fixture.detectChanges();
     const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
     if (!confirmation) {
@@ -277,7 +287,7 @@ describe('Profile', () => {
     await harness.navigateByUrl('/profile', AppProfile);
     const page = harness.routeNativeElement as HTMLElement;
 
-    click(page, 'Remove picture');
+    clickPictureRemoval(page);
     harness.fixture.detectChanges();
     const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
     if (!confirmation) {
@@ -304,6 +314,46 @@ describe('Profile', () => {
     expect(profile()?.hasPicture).toBe(false);
     expect(pictureUrl()).toBeNull();
     expect(page.textContent).toContain('Profile picture removed.');
+  });
+
+  it('clears the successful Profile picture removal notice after three seconds', async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      const removeProfilePicture = vi.fn(() => of(undefined));
+      setup(signal<Profile | null>({ ...ADA, hasPicture: true }), { removeProfilePicture });
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl('/profile', AppProfile);
+      const page = harness.routeNativeElement as HTMLElement;
+
+      clickPictureRemoval(page);
+      harness.fixture.detectChanges();
+      const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
+      if (!confirmation) {
+        throw new Error('No Profile picture removal confirmation');
+      }
+      buttonNamed(confirmation, 'Remove picture').click();
+      await harness.fixture.whenStable();
+      harness.fixture.detectChanges();
+      expect(page.textContent).toContain('Profile picture removed.');
+
+      const timeoutIndex = setTimeoutSpy.mock.calls.reduce(
+        (lastMatch, [, delay], index) => (delay === 3000 ? index : lastMatch),
+        -1,
+      );
+      expect(timeoutIndex).toBeGreaterThanOrEqual(0);
+      const timeoutCall = setTimeoutSpy.mock.calls[timeoutIndex];
+      const timeoutId = setTimeoutSpy.mock.results[timeoutIndex]?.value;
+      if (!timeoutCall || typeof timeoutCall[0] !== 'function') {
+        throw new Error('Expected a callback for the Profile picture removal notice timeout');
+      }
+      timeoutCall[0]();
+      clearTimeout(timeoutId);
+      harness.fixture.detectChanges();
+
+      expect(page.textContent).not.toContain('Profile picture removed.');
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 
   it('protects changed Profile drafts during navigation and discards only after confirmation', async () => {
@@ -603,7 +653,7 @@ describe('Profile', () => {
     await harness.navigateByUrl('/profile', AppProfile);
     const page = harness.routeNativeElement as HTMLElement;
 
-    click(page, 'Remove picture');
+    clickPictureRemoval(page);
     harness.fixture.detectChanges();
     const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
     if (!confirmation) {
@@ -756,7 +806,7 @@ describe('Profile', () => {
     const page = fixture.nativeElement as HTMLElement;
     expect(page.querySelectorAll('profile-picture-avatar img')).toHaveLength(2);
 
-    page.querySelector<HTMLButtonElement>('button[aria-label="Remove Profile picture"]')?.click();
+    clickPictureRemoval(page);
     fixture.detectChanges();
     const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
     if (!confirmation) {
@@ -855,7 +905,7 @@ describe('Profile', () => {
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;
 
-    page.querySelector<HTMLButtonElement>('button[aria-label="Remove Profile picture"]')?.click();
+    clickPictureRemoval(page);
     fixture.detectChanges();
     const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
     if (!confirmation) {

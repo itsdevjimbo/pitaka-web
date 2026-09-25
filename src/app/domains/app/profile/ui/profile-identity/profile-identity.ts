@@ -12,6 +12,7 @@ import {
 import { disabled, form, FormField, submit, validate } from '@angular/forms/signals';
 import { MatButton } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIcon } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
@@ -27,7 +28,15 @@ const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please t
 /** The signed-in identity shown on the Profile page, including name editing. */
 @Component({
   selector: 'profile-identity',
-  imports: [MatButton, MatFormFieldModule, MatInputModule, FormField, ProfilePictureEditor, ProfilePictureRemoval],
+  imports: [
+    MatButton,
+    MatFormFieldModule,
+    MatInputModule,
+    MatIcon,
+    FormField,
+    ProfilePictureEditor,
+    ProfilePictureRemoval,
+  ],
   templateUrl: './profile-identity.html',
 })
 export class ProfileIdentity {
@@ -36,6 +45,7 @@ export class ProfileIdentity {
   private readonly editorDismissal = inject(EditorDismissal);
 
   protected readonly profile = this.session.profile;
+  protected readonly sessionPictureOperationPending = this.session.profilePictureOperationPending;
   protected readonly editingName = signal(false);
   protected readonly nameModel = signal({ name: '' });
   protected readonly hasChangedName = computed(() => {
@@ -79,6 +89,10 @@ export class ProfileIdentity {
     this.pendingFeedback.set(false);
     this.editingName.set(true);
     this.focusAfterRender(this.nameInput, true);
+  }
+
+  protected requestPictureRemoval(): void {
+    this.pictureRemoval()?.requestRemoval();
   }
 
   hasUnsavedChanges(): boolean {
