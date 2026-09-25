@@ -1,0 +1,126 @@
+<div class="border-t border-divider px-5 py-4 sm:px-6">
+  @if (hasSavedPicture()) {
+    <button
+      class="min-h-11 w-full"
+      matButton="outlined"
+      type="button"
+      aria-label="Remove Profile picture"
+      [disabled]="operationPending()"
+      (click)="askToRemove()"
+    >
+      Remove picture
+    </button>
+  }
+
+  @if (confirming()) {
+    <section
+      class="rounded-2xl bg-danger-container p-4 text-sm text-danger"
+      role="alertdialog"
+      aria-labelledby="remove-profile-picture-title"
+      aria-describedby="remove-profile-picture-description"
+      (keydown.escape)="cancelPrompt()"
+    >
+      <p
+        id="remove-profile-picture-title"
+        class="font-semibold"
+      >
+        Remove the saved Profile picture?
+      </p>
+      <p
+        id="remove-profile-picture-description"
+        class="mt-1"
+      >
+        This returns Profile and the user menu to the person icon. You can choose another picture later.
+      </p>
+      @if (errorMessage(); as message) {
+        <p
+          class="mt-3 rounded-xl bg-surface p-3 text-danger"
+          role="alert"
+        >
+          {{ message }}
+        </p>
+      }
+      @if (operationPending() && !isWritePending()) {
+        <p
+          class="mt-3"
+          role="status"
+        >
+          Another picture change is in progress. Wait for it to finish before removing this picture.
+        </p>
+      }
+      <div class="mt-4 flex flex-wrap justify-end gap-2">
+        <button
+          id="keep-profile-picture"
+          matButton
+          class="min-h-11"
+          type="button"
+          [disabled]="isWritePending()"
+          (click)="cancelPrompt()"
+        >
+          Keep picture
+        </button>
+        <button
+          id="confirm-remove-profile-picture"
+          matButton="filled"
+          class="min-h-11"
+          type="button"
+          [disabled]="isWritePending() || (operationPending() && errorMessage() === null)"
+          (click)="confirmRemoval()"
+        >
+          {{ removing() ? 'Removing…' : errorMessage() ? 'Try again' : 'Remove picture' }}
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (removing()) {
+    <p
+      class="mt-3 rounded-xl bg-soft p-3 text-sm text-text"
+      role="status"
+    >
+      Removing Profile picture…
+    </p>
+  }
+  @if (refreshing()) {
+    <p
+      class="mt-3 rounded-xl bg-soft p-3 text-sm text-text"
+      role="status"
+    >
+      Refreshing Profile…
+    </p>
+  }
+  @if (refreshErrorMessage(); as message) {
+    <div
+      class="mt-3 rounded-xl bg-danger-container p-3 text-sm text-danger"
+      role="alert"
+    >
+      <p>{{ message }}</p>
+      <button
+        id="retry-profile-picture-refresh"
+        matButton
+        class="mt-2 min-h-11"
+        type="button"
+        [disabled]="refreshing()"
+        (click)="retryRefresh()"
+      >
+        {{ refreshing() ? 'Refreshing…' : 'Retry refresh' }}
+      </button>
+    </div>
+  }
+  @if (successMessage(); as message) {
+    <p
+      class="mt-3 rounded-xl bg-success-container p-3 text-sm text-success"
+      role="status"
+    >
+      {{ message }}
+    </p>
+  }
+  @if (pendingFeedback()) {
+    <p
+      class="mt-3 rounded-xl bg-soft p-3 text-sm text-text"
+      role="status"
+    >
+      Removal in progress. Wait for it to finish before closing.
+    </p>
+  }
+</div>

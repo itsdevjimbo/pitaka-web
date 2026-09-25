@@ -46,6 +46,7 @@ describe('ProfileIdentity', () => {
           useValue: {
             profile,
             profilePictureUrl,
+            profilePictureOperationPending: signal(false),
             profilePictureDecodeFailed: vi.fn(),
             beginProfileWrite: vi.fn(() => writeRevision),
             applyProfileWriteUpdate,

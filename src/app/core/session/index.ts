@@ -14,6 +14,8 @@ export type { SignInReason } from './routing/sign-in-route';
 export { Session } from './session';
 export type {
   ProfileField,
+  ProfilePictureOperation,
+  ProfilePictureRemovalRefreshResult,
   ProfileReadRevision,
   ProfileRefreshResult,
   ProfileRevision,

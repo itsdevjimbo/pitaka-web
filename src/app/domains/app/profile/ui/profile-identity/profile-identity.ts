@@ -19,6 +19,7 @@ import { EditorDismissal } from '@/app/core/dialog';
 import { focusFirstInvalidField, partitionServerError, type ServerErrorControls } from '@/app/core/forms';
 import { Session, type ProfileWriteRevision } from '@/app/core/session';
 import { ProfilePictureEditor } from '../profile-picture-editor/profile-picture-editor';
+import { ProfilePictureRemoval } from '../profile-picture-removal/profile-picture-removal';
 
 const PROFILE_NAME_MAX = 255;
 const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please try again.';
@@ -26,7 +27,7 @@ const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please t
 /** The signed-in identity shown on the Profile page, including name editing. */
 @Component({
   selector: 'profile-identity',
-  imports: [MatButton, MatFormFieldModule, MatInputModule, FormField, ProfilePictureEditor],
+  imports: [MatButton, MatFormFieldModule, MatInputModule, FormField, ProfilePictureEditor, ProfilePictureRemoval],
   templateUrl: './profile-identity.html',
 })
 export class ProfileIdentity {
@@ -62,6 +63,7 @@ export class ProfileIdentity {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly pendingFeedback = signal(false);
   private readonly pictureEditor = viewChild(ProfilePictureEditor);
+  private readonly pictureRemoval = viewChild(ProfilePictureRemoval);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   private readonly editNameAction = viewChild<ElementRef<HTMLButtonElement>>('editNameAction');
 
@@ -84,7 +86,11 @@ export class ProfileIdentity {
   }
 
   isWritePending(): boolean {
-    return this.submitting() || (this.pictureEditor()?.isWritePending() ?? false);
+    return (
+      this.submitting() ||
+      (this.pictureEditor()?.isWritePending() ?? false) ||
+      (this.pictureRemoval()?.isWritePending() ?? false)
+    );
   }
 
   notifyWritePending(): void {
@@ -93,6 +99,9 @@ export class ProfileIdentity {
     }
     if (this.pictureEditor()?.isWritePending()) {
       this.pictureEditor()?.notifyWritePending();
+    }
+    if (this.pictureRemoval()?.isWritePending()) {
+      this.pictureRemoval()?.notifyWritePending();
     }
   }
 

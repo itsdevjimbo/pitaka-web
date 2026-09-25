@@ -15,6 +15,11 @@ export type ProfileField = (typeof PROFILE_FIELDS)[number];
 
 export type ProfileRefreshResult = 'refreshed' | 'absent' | 'stale';
 
+export type ProfilePictureRemovalRefreshResult = 'refreshed' | 'picture-present' | 'stale';
+
+/** Exclusive claim shared by upload and removal for the signed-in picture. */
+export type ProfilePictureOperation = { generation: number };
+
 /** Captures which session and identity values a whole-Profile request observed. */
 export type ProfileRevision = {
   sessionGeneration: number;
@@ -66,6 +71,9 @@ export class Session {
   private profilePictureGeneration = 0;
   private profilePictureRequest: Subscription | null = null;
   private profileReadGeneration = 0;
+  private profilePictureOperationGeneration = 0;
+  private activeProfilePictureOperation: ProfilePictureOperation | null = null;
+  private readonly _profilePictureOperationPending = signal(false);
 
   /** The bearer token to attach to API requests, or `null` when signed out. */
   readonly token = this._token.asReadonly();
@@ -75,6 +83,9 @@ export class Session {
 
   /** A private Blob URL shared by the signed-in Profile and user menu. */
   readonly profilePictureUrl = this._profilePictureUrl.asReadonly();
+
+  /** One picture write at a time, shared by every Profile picture control. */
+  readonly profilePictureOperationPending = this._profilePictureOperationPending.asReadonly();
 
   /**
    * Whether the server has confirmed this session during this page's life, not
@@ -96,6 +107,7 @@ export class Session {
   /** Adopt a freshly minted session: persist the token, hold the Profile. */
   private establish({ token, profile }: SignInResult): void {
     this.resetProfilePicture();
+    this.resetProfilePictureOperation();
     this.signInGeneration += 1;
     this.sessionGeneration += 1;
     this.resetProfileFieldVersions();
@@ -186,6 +198,52 @@ export class Session {
     return { ...revision, fields: { ...this.profileFieldVersions }, writeGenerations };
   }
 
+  /** Claim the shared picture-write boundary before validation or network work. */
+  beginProfilePictureOperation(): ProfilePictureOperation | null {
+    if (this._profilePictureOperationPending() || this._profile() === null || this._token() === null) {
+      return null;
+    }
+    const operation = { generation: ++this.profilePictureOperationGeneration };
+    this.activeProfilePictureOperation = operation;
+    this._profilePictureOperationPending.set(true);
+    return operation;
+  }
+
+  /** Reserve `hasPicture` and invalidate whole-Profile reads already in flight. */
+  beginProfilePictureWrite(operation: ProfilePictureOperation): ProfileWriteRevision | null {
+    if (!this.isCurrentProfilePictureOperation(operation)) {
+      return null;
+    }
+    this.profileReadGeneration += 1;
+    return this.beginProfileWrite(['hasPicture']);
+  }
+
+  /** A confirmed removal is authoritative even if a later metadata read fails. */
+  applyProfilePictureRemoval(revision: ProfileWriteRevision): boolean {
+    const profile = this._profile();
+    const generation = revision.writeGenerations.hasPicture;
+    if (
+      profile === null ||
+      !this.isCurrentProfileRevision(revision) ||
+      generation === undefined ||
+      this.pendingProfileWrites.hasPicture !== generation
+    ) {
+      this.releaseProfileWrite(revision, ['hasPicture']);
+      return false;
+    }
+    this.applyProfileWriteUpdate({ ...profile, hasPicture: false }, revision, ['hasPicture']);
+    return this._profile()?.id === profile.id && this._profile()?.hasPicture === false;
+  }
+
+  /** Release the shared picture-write boundary if this session still owns it. */
+  releaseProfilePictureOperation(operation: ProfilePictureOperation): void {
+    if (!this.isCurrentProfilePictureOperation(operation)) {
+      return;
+    }
+    this.activeProfilePictureOperation = null;
+    this._profilePictureOperationPending.set(false);
+  }
+
   /** Merge only the fields still owned by this write, even if a read finished first. */
   applyProfileWriteUpdate(profile: Profile, revision: ProfileWriteRevision, fields: readonly ProfileField[]): void {
     const current = this._profile();
@@ -242,6 +300,32 @@ export class Session {
     }
     this.profileFieldVersions.hasPicture += 1;
     return this.refreshProfile();
+  }
+
+  /** Reconcile identity metadata after removal without loading or restoring an image. */
+  async refreshProfileAfterPictureRemoval(): Promise<ProfilePictureRemovalRefreshResult> {
+    const revision = this.beginProfileRead();
+    if (revision === null) {
+      return 'stale';
+    }
+
+    let updated: Profile;
+    try {
+      updated = await firstValueFrom(this.auth.me());
+    } catch (error) {
+      if (!this.isCurrentProfileRead(revision)) {
+        return 'stale';
+      }
+      if (error instanceof ApiError && error.status === 401) {
+        this.expire();
+      }
+      throw error;
+    }
+
+    if (!this.applyProfile(updated, revision, ['name', 'email', 'pendingEmail'], false)) {
+      return 'stale';
+    }
+    return updated.hasPicture ? 'picture-present' : 'refreshed';
   }
 
   /** Retry refreshing metadata and the saved picture after a successful upload. */
@@ -341,6 +425,7 @@ export class Session {
 
   private clear(): void {
     this.resetProfilePicture();
+    this.resetProfilePictureOperation();
     this.signInGeneration += 1;
     this.sessionGeneration += 1;
     this.resetProfileFieldVersions();
@@ -503,6 +588,14 @@ export class Session {
     return revision.readGeneration === this.profileReadGeneration && this.isCurrentProfileRevision(revision);
   }
 
+  private isCurrentProfilePictureOperation(operation: ProfilePictureOperation): boolean {
+    return (
+      this.activeProfilePictureOperation?.generation === operation.generation &&
+      this._profile() !== null &&
+      this._token() !== null
+    );
+  }
+
   private finishProfileWrite(field: ProfileField, generation: number): void {
     if (this.pendingProfileWrites[field] !== generation) {
       return;
@@ -557,5 +650,11 @@ export class Session {
     this.clearProfilePictureUrl();
     this.profilePictureId = null;
     this.profilePictureHasPicture = null;
+  }
+
+  private resetProfilePictureOperation(): void {
+    this.profilePictureOperationGeneration += 1;
+    this.activeProfilePictureOperation = null;
+    this._profilePictureOperationPending.set(false);
   }
 }
