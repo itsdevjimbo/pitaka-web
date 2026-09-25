@@ -331,6 +331,24 @@ export class AuthService {
       );
   }
 
+  /** Upload or replace the signed-in Profile's private picture. */
+  uploadProfilePicture(file: File): Observable<void> {
+    const form = new FormData();
+    form.append('File', file);
+    return this.http.put<void>(`${this.baseUrl}/api/profile/picture`, form).pipe(
+      map(() => undefined),
+      catchError((error: unknown) => {
+        if (error instanceof ApiError && error.status === 400) {
+          const ruleDetails = Object.values(error.fieldErrors).flat().join(' ');
+          if (ruleDetails.length > 0) {
+            return throwError(() => new ApiError(ruleDetails, error.status));
+          }
+        }
+        return throwError(() => error);
+      }),
+    );
+  }
+
   /** Replace the signed-in Profile's name and return the complete new identity. */
   updateProfile(name: string): Observable<Profile> {
     return this.http.put<Profile>(`${this.baseUrl}/api/profile`, { name });

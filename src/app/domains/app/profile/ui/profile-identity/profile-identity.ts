@@ -17,8 +17,8 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
 import { EditorDismissal } from '@/app/core/dialog';
 import { focusFirstInvalidField, partitionServerError, type ServerErrorControls } from '@/app/core/forms';
-import { ProfilePictureAvatar } from '@/app/core/profile-picture';
-import { Session } from '@/app/core/session';
+import { Session, type ProfileWriteRevision } from '@/app/core/session';
+import { ProfilePictureEditor } from '../profile-picture-editor/profile-picture-editor';
 
 const PROFILE_NAME_MAX = 255;
 const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please try again.';
@@ -26,7 +26,7 @@ const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please t
 /** The signed-in identity shown on the Profile page, including name editing. */
 @Component({
   selector: 'profile-identity',
-  imports: [MatButton, MatFormFieldModule, MatInputModule, FormField, ProfilePictureAvatar],
+  imports: [MatButton, MatFormFieldModule, MatInputModule, FormField, ProfilePictureEditor],
   templateUrl: './profile-identity.html',
 })
 export class ProfileIdentity {
@@ -61,6 +61,7 @@ export class ProfileIdentity {
   protected readonly successMessage = signal<string | null>(null);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly pendingFeedback = signal(false);
+  private readonly pictureEditor = viewChild(ProfilePictureEditor);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   private readonly editNameAction = viewChild<ElementRef<HTMLButtonElement>>('editNameAction');
 
@@ -79,18 +80,32 @@ export class ProfileIdentity {
   }
 
   hasUnsavedChanges(): boolean {
-    return this.editingName() && this.hasChangedName();
+    return this.hasUnsavedNameChanges() || (this.pictureEditor()?.hasUnsavedChanges() ?? false);
   }
 
   isWritePending(): boolean {
-    return this.submitting();
+    return this.submitting() || (this.pictureEditor()?.isWritePending() ?? false);
   }
 
   notifyWritePending(): void {
-    this.pendingFeedback.set(true);
+    if (this.submitting()) {
+      this.pendingFeedback.set(true);
+    }
+    if (this.pictureEditor()?.isWritePending()) {
+      this.pictureEditor()?.notifyWritePending();
+    }
   }
 
   discardUnsavedChanges(): void {
+    this.discardNameChanges();
+    this.pictureEditor()?.discardUnsavedChanges();
+  }
+
+  private hasUnsavedNameChanges(): boolean {
+    return this.editingName() && this.hasChangedName();
+  }
+
+  private discardNameChanges(): void {
     this.editingName.set(false);
     this.nameModel.set({ name: '' });
     this.errorMessage.set(null);
@@ -111,9 +126,13 @@ export class ProfileIdentity {
         this.submitting.set(true);
         this.pendingFeedback.set(false);
         this.errorMessage.set(null);
+        let revision: ProfileWriteRevision | null = null;
         try {
+          revision = this.session.beginProfileWrite(['name']);
           const updated = await firstValueFrom(this.injector.get(AuthService).updateProfile(name));
-          this.session.applyProfileUpdate(updated);
+          if (revision !== null) {
+            this.session.applyProfileWriteUpdate(updated, revision, ['name']);
+          }
           this.editingName.set(false);
           this.successMessage.set('Name updated');
           this.focusAfterRender(this.editNameAction);
@@ -133,6 +152,9 @@ export class ProfileIdentity {
           }
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
+          if (revision !== null) {
+            this.session.releaseProfileWrite(revision, ['name']);
+          }
           this.submitting.set(false);
           this.pendingFeedback.set(false);
         }
@@ -148,13 +170,13 @@ export class ProfileIdentity {
       this.pendingFeedback.set(true);
       return;
     }
-    if (this.hasUnsavedChanges()) {
+    if (this.hasUnsavedNameChanges()) {
       const discard = await firstValueFrom(this.editorDismissal.confirmDiscard());
       if (!discard) {
         return;
       }
     }
-    this.discardUnsavedChanges();
+    this.discardNameChanges();
     this.focusAfterRender(this.editNameAction);
   }
 

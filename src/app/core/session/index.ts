@@ -12,3 +12,10 @@ export {
 } from './routing/sign-in-route';
 export type { SignInReason } from './routing/sign-in-route';
 export { Session } from './session';
+export type {
+  ProfileField,
+  ProfileReadRevision,
+  ProfileRefreshResult,
+  ProfileRevision,
+  ProfileWriteRevision,
+} from './session';

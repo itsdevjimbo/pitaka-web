@@ -25,7 +25,13 @@ describe('ProfileIdentity', () => {
   function setup(updateProfile: AuthService['updateProfile'] = () => of(ADA)) {
     const profile = signal<Profile | null>(ADA);
     const profilePictureUrl = signal<string | null>(null);
-    const applyProfileUpdate = vi.fn((updated: Profile) => profile.set(updated));
+    const writeRevision = {
+      sessionGeneration: 1,
+      profileId: ADA.id,
+      fields: { name: 1, email: 0, pendingEmail: 0, hasPicture: 0 },
+      writeGenerations: { name: 1 },
+    };
+    const applyProfileWriteUpdate = vi.fn((updated: Profile) => profile.set(updated));
 
     TestBed.configureTestingModule({
       imports: [ProfileIdentity],
@@ -37,14 +43,21 @@ describe('ProfileIdentity', () => {
         { provide: AuthService, useValue: { updateProfile } },
         {
           provide: Session,
-          useValue: { profile, profilePictureUrl, profilePictureDecodeFailed: vi.fn(), applyProfileUpdate },
+          useValue: {
+            profile,
+            profilePictureUrl,
+            profilePictureDecodeFailed: vi.fn(),
+            beginProfileWrite: vi.fn(() => writeRevision),
+            applyProfileWriteUpdate,
+            releaseProfileWrite: vi.fn(),
+          },
         },
       ],
     });
 
     const fixture = TestBed.createComponent(ProfileIdentity);
     fixture.detectChanges();
-    return { fixture, applyProfileUpdate };
+    return { fixture, applyProfileWriteUpdate };
   }
 
   async function submitAndSettle(fixture: ComponentFixture<ProfileIdentity>) {
@@ -126,7 +139,7 @@ describe('ProfileIdentity', () => {
 
   it('keeps the editor stable while saving and updates the signed-in identity on success', async () => {
     const response = new Subject<Profile>();
-    const { fixture, applyProfileUpdate } = setup(() => response.asObservable());
+    const { fixture, applyProfileWriteUpdate } = setup(() => response.asObservable());
 
     click(fixture, 'Edit name');
     enterName(fixture, '  Augusta Ada King  ');
@@ -134,7 +147,7 @@ describe('ProfileIdentity', () => {
     fixture.detectChanges();
 
     const input = fixture.nativeElement.querySelector('#profile-name') as HTMLInputElement;
-    const cancel = fixture.nativeElement.querySelector('button[type="button"]') as HTMLButtonElement;
+    const cancel = fixture.nativeElement.querySelector('form button[type="button"]') as HTMLButtonElement;
     const save = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(input).not.toBeNull();
     expect(save).not.toBeNull();
@@ -147,10 +160,9 @@ describe('ProfileIdentity', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(applyProfileUpdate).toHaveBeenCalledWith({
-      ...ADA,
-      name: 'Augusta Ada King',
-    });
+    expect(applyProfileWriteUpdate).toHaveBeenCalledWith({ ...ADA, name: 'Augusta Ada King' }, expect.anything(), [
+      'name',
+    ]);
     expect(fixture.nativeElement.textContent).toContain('Name updated');
     expect(document.activeElement?.textContent).toContain('Edit name');
   });

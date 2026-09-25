@@ -5,7 +5,7 @@ import { provideRouter, Router, RouterOutlet } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { routes } from '@/app/app.routes';
-import { Profile } from '@/app/core/auth';
+import { AuthService, Profile } from '@/app/core/auth';
 import { provideIcons } from '@/app/core/icons';
 import { Session } from '@/app/core/session';
 import { AccountsService } from './accounts';
@@ -153,6 +153,7 @@ describe('the app area routes', () => {
       providers: [
         provideRouter(routes),
         provideIcons(),
+        { provide: AuthService, useValue: { uploadProfilePicture: vi.fn() } },
         {
           provide: Session,
           useValue: {

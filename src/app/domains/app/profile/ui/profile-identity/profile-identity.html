@@ -1,98 +1,90 @@
-<section class="min-w-0 rounded-2xl border border-divider bg-surface p-5 sm:p-6">
-  <header class="flex min-w-0 items-start gap-4">
-    <profile-picture-avatar appearance="profile" />
-    <div class="min-w-0">
-      <h2 class="font-display text-xl font-semibold tracking-tight text-text">Identity</h2>
-      <p class="mt-1 text-sm text-secondary">The name shown across Pitaka.</p>
-    </div>
-  </header>
-  @if (editingName()) {
-    <form
-      class="mt-6 flex min-w-0 flex-col gap-y-4"
-      (submit)="saveName($event)"
-      (keydown.escape)="cancelNameEdit()"
-    >
-      <mat-form-field class="w-full">
-        <mat-label>Name</mat-label>
-        <input
-          #nameInput
-          id="profile-name"
-          matInput
-          [formField]="nameForm.name"
-        />
-        <mat-error>
-          @if (nameForm.name().touched() && nameForm.name().invalid()) {
-            @for (error of nameForm.name().errors(); track error) {
-              {{ error.message }}
+<section class="min-w-0 overflow-hidden rounded-2xl border border-divider bg-surface">
+  <profile-picture-editor class="block" />
+  <div class="min-w-0 border-t border-divider p-5 sm:p-6">
+    @if (editingName()) {
+      <form
+        class="flex min-w-0 flex-col gap-y-4"
+        (submit)="saveName($event)"
+        (keydown.escape)="cancelNameEdit()"
+      >
+        <mat-form-field class="w-full">
+          <mat-label>Name</mat-label>
+          <input
+            #nameInput
+            id="profile-name"
+            matInput
+            [formField]="nameForm.name"
+          />
+          <mat-error>
+            @if (nameForm.name().touched() && nameForm.name().invalid()) {
+              @for (error of nameForm.name().errors(); track error) {
+                {{ error.message }}
+              }
             }
-          }
-        </mat-error>
-      </mat-form-field>
-      @if (errorMessage(); as message) {
-        <p
-          class="rounded-xl bg-danger-container p-3 text-sm text-danger"
-          role="alert"
-        >
-          {{ message }}
+          </mat-error>
+        </mat-form-field>
+        @if (errorMessage(); as message) {
+          <p
+            class="rounded-xl bg-danger-container p-3 text-sm text-danger"
+            role="alert"
+          >
+            {{ message }}
+          </p>
+        }
+        <div class="flex flex-wrap justify-end gap-2">
+          <button
+            matButton
+            class="min-h-11"
+            type="button"
+            [disabled]="submitting()"
+            (click)="cancelNameEdit()"
+          >
+            Cancel
+          </button>
+          <button
+            matButton="filled"
+            class="min-h-11"
+            type="submit"
+            [disabled]="!hasChangedName() || submitting()"
+          >
+            {{ submitting() ? 'Saving…' : 'Save name' }}
+          </button>
+        </div>
+      </form>
+    } @else {
+      <div class="min-w-0">
+        <p class="text-xs font-semibold tracking-wide text-secondary uppercase">Name</p>
+        <p class="mt-1 font-display text-2xl font-semibold tracking-tight break-words text-text">
+          {{ profile()?.name }}
         </p>
-      }
-      <div class="flex flex-wrap justify-end gap-2">
-        <button
-          matButton
-          class="min-h-11"
-          type="button"
-          [disabled]="submitting()"
-          (click)="cancelNameEdit()"
-        >
-          Cancel
-        </button>
-        <button
-          matButton="filled"
-          class="min-h-11"
-          type="submit"
-          [disabled]="!hasChangedName() || submitting()"
-        >
-          {{ submitting() ? 'Saving…' : 'Save name' }}
-        </button>
       </div>
-    </form>
-  } @else {
-    <div class="mt-6 min-w-0">
-      <p class="text-xs font-semibold tracking-wide text-secondary uppercase">Name</p>
-      <p class="mt-1 font-display text-2xl font-semibold tracking-tight break-words text-text">
-        {{ profile()?.name }}
+    }
+    @if (pendingFeedback()) {
+      <p
+        class="mt-4 rounded-xl bg-soft p-3 text-sm text-text"
+        role="status"
+      >
+        Saving in progress. Wait for it to finish before closing.
       </p>
-    </div>
-  }
-  @if (pendingFeedback()) {
-    <p
-      class="mt-4 rounded-xl bg-soft p-3 text-sm text-text"
-      role="status"
-    >
-      Saving in progress. Wait for it to finish before closing.
-    </p>
-  }
-  <div class="mt-5 min-w-0 border-t border-divider pt-4">
-    <p class="text-xs font-semibold tracking-wide text-secondary uppercase">Current email</p>
-    <p class="mt-1 text-sm font-medium break-words text-text">{{ profile()?.email }}</p>
+    }
+    @if (!editingName()) {
+      <button
+        #editNameAction
+        class="mt-5 min-h-11 w-full"
+        matButton="outlined"
+        type="button"
+        (click)="beginNameEdit()"
+      >
+        Edit name
+      </button>
+    }
+    @if (successMessage(); as message) {
+      <p
+        class="mt-4 rounded-xl bg-success-container p-3 text-sm text-success"
+        role="status"
+      >
+        {{ message }}
+      </p>
+    }
   </div>
-  @if (!editingName()) {
-    <button
-      #editNameAction
-      class="mt-5 min-h-11 w-full"
-      matButton="outlined"
-      type="button"
-      (click)="beginNameEdit()"
-    >
-      Edit name
-    </button>
-  }
-  @if (successMessage(); as message) {
-    <p
-      class="mt-4 rounded-xl bg-success-container p-3 text-sm text-success"
-      role="status"
-    >
-      {{ message }}
-    </p>
-  }
 </section>
