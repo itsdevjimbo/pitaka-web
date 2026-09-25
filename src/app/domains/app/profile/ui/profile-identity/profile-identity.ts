@@ -10,7 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { disabled, form, FormField, submit, validate } from '@angular/forms/signals';
-import { MatButton } from '@angular/material/button';
+import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -29,7 +29,7 @@ const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please t
 @Component({
   selector: 'profile-identity',
   imports: [
-    MatButton,
+    MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
     MatIcon,
