@@ -2,7 +2,7 @@ import { Component, inject, signal, viewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
 import { Category } from '../../data/category';
-import { RenameCategoryForm } from './rename-category-form';
+import { RenameCategoryForm } from './rename-category-form/rename-category-form';
 
 /**
  * The *Rename* dialog: the rename form inside the shared shell, seeded with the

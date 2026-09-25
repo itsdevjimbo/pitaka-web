@@ -2,8 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { provideIcons } from '@/app/core/icons';
-import { CategoriesService } from '../../data/categories.service';
-import { Category } from '../../data/category';
+import { CategoriesService } from '../../../data/categories.service';
+import { Category } from '../../../data/category';
 import { RenameCategoryForm } from './rename-category-form';
 
 const GROCERIES: Category = {

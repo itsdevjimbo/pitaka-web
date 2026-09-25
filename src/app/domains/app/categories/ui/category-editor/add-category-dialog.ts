@@ -2,7 +2,7 @@ import { Component, inject, signal, viewChild } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { DialogShell } from '@/app/core/dialog';
 import { Category, CategoryKind } from '../../data/category';
-import { AddCategoryForm } from './add-category-form';
+import { AddCategoryForm } from './add-category-form/add-category-form';
 
 /**
  * The *New category* dialog: the add form inside the shared shell, opened from a
