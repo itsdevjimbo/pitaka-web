@@ -16,6 +16,7 @@ const ADA: Profile = {
   name: 'Ada Lovelace',
   email: 'ada@example.com',
   pendingEmail: null,
+  hasPicture: false,
 };
 
 describe('ProfileIdentity', () => {
@@ -23,6 +24,7 @@ describe('ProfileIdentity', () => {
 
   function setup(updateProfile: AuthService['updateProfile'] = () => of(ADA)) {
     const profile = signal<Profile | null>(ADA);
+    const profilePictureUrl = signal<string | null>(null);
     const applyProfileUpdate = vi.fn((updated: Profile) => profile.set(updated));
 
     TestBed.configureTestingModule({
@@ -33,7 +35,10 @@ describe('ProfileIdentity', () => {
         provideRouter([]),
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
         { provide: AuthService, useValue: { updateProfile } },
-        { provide: Session, useValue: { profile, applyProfileUpdate } },
+        {
+          provide: Session,
+          useValue: { profile, profilePictureUrl, profilePictureDecodeFailed: vi.fn(), applyProfileUpdate },
+        },
       ],
     });
 

@@ -114,6 +114,7 @@ describe('AuthConfirmEmailChange', () => {
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       pendingEmail: 'new@example.com',
+      hasPicture: false,
     };
     const { fixture, navigateByUrl } = setup({ userId: '7', token: 'a-token' }, confirmEmailChange, {
       isAuthenticated: signal(true),
@@ -144,6 +145,7 @@ describe('AuthConfirmEmailChange', () => {
       name: 'Other Profile',
       email: 'other@example.com',
       pendingEmail: null,
+      hasPicture: false,
     };
     const signedInProfile = signal<Profile | null>(otherProfile);
     const applyProfileUpdate = vi.fn((profile: Profile) => signedInProfile.set(profile));
@@ -179,6 +181,7 @@ describe('AuthConfirmEmailChange', () => {
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       pendingEmail: 'new@example.com',
+      hasPicture: false,
     };
     const changedProfile: Profile = {
       ...pendingProfile,
@@ -210,6 +213,7 @@ describe('AuthConfirmEmailChange', () => {
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       pendingEmail: 'new@example.com',
+      hasPicture: false,
     };
     const changedProfile: Profile = {
       ...pendingProfile,
@@ -248,6 +252,7 @@ describe('AuthConfirmEmailChange', () => {
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       pendingEmail: 'new@example.com',
+      hasPicture: false,
     };
     const applyProfileUpdate = vi.fn();
     const { fixture, expire } = setup(
@@ -274,6 +279,7 @@ describe('AuthConfirmEmailChange', () => {
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       pendingEmail: 'new@example.com',
+      hasPicture: false,
     };
     const changedProfile: Profile = {
       ...pendingProfile,
@@ -345,6 +351,7 @@ describe('AuthConfirmEmailChange', () => {
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       pendingEmail: 'new@example.com',
+      hasPicture: false,
     };
     const signedInProfile = signal<Profile | null>(profile);
     const { fixture, navigateByUrl } = setup(
@@ -372,6 +379,7 @@ describe('AuthConfirmEmailChange', () => {
       name: 'Other Profile',
       email: 'other@example.com',
       pendingEmail: null,
+      hasPicture: false,
     };
     const { fixture, signOut } = setup(
       { userId: '7', token: 'a-token' },

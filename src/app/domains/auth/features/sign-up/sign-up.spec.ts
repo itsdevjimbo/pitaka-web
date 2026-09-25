@@ -43,7 +43,9 @@ describe('AuthSignUp', () => {
   it('swaps to the check-your-inbox state, naming the address, on a successful registration', async () => {
     const register = vi
       .fn()
-      .mockReturnValue(of<Profile>({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null }));
+      .mockReturnValue(
+        of<Profile>({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null, hasPicture: false }),
+      );
     const { fixture } = setup(register);
 
     await submitAndSettle(fixture);
@@ -94,7 +96,7 @@ describe('AuthSignUp', () => {
     formElement.dispatchEvent(new Event('submit'));
     expect(register).toHaveBeenCalledTimes(1);
 
-    pendingRegistration.next({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null });
+    pendingRegistration.next({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null, hasPicture: false });
     pendingRegistration.complete();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -105,7 +107,9 @@ describe('AuthSignUp', () => {
   });
 
   it('lets a person reveal and hide the password with an announced control state', () => {
-    const { fixture } = setup(() => of({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null }));
+    const { fixture } = setup(() =>
+      of({ id: 7, name: 'Ada', email: 'ada@example.com', pendingEmail: null, hasPicture: false }),
+    );
     const element = fixture.nativeElement as HTMLElement;
     const password = element.querySelector('#password') as HTMLInputElement;
     const showPassword = Array.from(element.querySelectorAll('button')).find(

@@ -17,6 +17,7 @@ const ADA: Profile = {
   name: 'Ada Lovelace',
   email: 'ada@example.com',
   pendingEmail: null,
+  hasPicture: false,
 };
 
 @Component({
@@ -28,7 +29,11 @@ class Destination {}
 describe('Profile', () => {
   const overlay = withOverlayContainer();
 
-  function setup(profile = signal<Profile | null>(ADA), authService: Partial<AuthService> = {}) {
+  function setup(
+    profile = signal<Profile | null>(ADA),
+    authService: Partial<AuthService> = {},
+    profilePictureUrl = signal<string | null>(null),
+  ) {
     const routes: Routes = [
       { path: 'profile', component: AppProfile, canDeactivate: [profileCanDeactivateGuard] },
       { path: 'elsewhere', component: Destination },
@@ -42,11 +47,20 @@ describe('Profile', () => {
         { provide: AuthService, useValue: authService },
         {
           provide: Session,
-          useValue: { profile, applyProfileUpdate: (updated: Profile) => profile.set(updated) },
+          useValue: {
+            profile,
+            profilePictureUrl,
+            profilePictureDecodeFailed: (url: string) => {
+              if (profilePictureUrl() === url) {
+                profilePictureUrl.set(null);
+              }
+            },
+            applyProfileUpdate: (updated: Profile) => profile.set(updated),
+          },
         },
       ],
     });
-    return { profile };
+    return { profile, profilePictureUrl };
   }
 
   function click(root: HTMLElement, label: string): void {
@@ -105,6 +119,27 @@ describe('Profile', () => {
     expect(page.textContent).not.toContain('ada@example.com');
     expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(true);
     expect(TestBed.inject(Router).url).toBe('/elsewhere');
+  });
+
+  it('shows the saved Profile picture and restores the person icon after an image decode failure', async () => {
+    const { profilePictureUrl } = setup();
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/profile', AppProfile);
+    const page = harness.routeNativeElement as HTMLElement;
+
+    profilePictureUrl.set('blob:saved-profile-picture');
+    harness.fixture.detectChanges();
+
+    const picture = page.querySelector<HTMLImageElement>('img');
+    expect(picture?.getAttribute('src')).toBe('blob:saved-profile-picture');
+    expect(picture?.getAttribute('alt')).toBe('');
+    expect(picture?.classList.contains('object-cover')).toBe(true);
+
+    picture?.dispatchEvent(new Event('error'));
+    harness.fixture.detectChanges();
+
+    expect(page.querySelector('img')).toBeNull();
+    expect(page.querySelector('mat-icon[svgIcon="user-round"]')).not.toBeNull();
   });
 
   it('acknowledges a confirmed email change after the live Profile reflects the new address', async () => {

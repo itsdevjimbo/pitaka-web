@@ -26,6 +26,7 @@ describe('the app area routes', () => {
     name: 'Ada Lovelace',
     email: 'ada@example.com',
     pendingEmail: null,
+    hasPicture: false,
   };
 
   it('sends a signed-in visitor from /app to the Accounts list', async () => {
@@ -154,7 +155,12 @@ describe('the app area routes', () => {
         provideIcons(),
         {
           provide: Session,
-          useValue: { isAuthenticated: () => true, profile: () => ada },
+          useValue: {
+            isAuthenticated: () => true,
+            profile: () => ada,
+            profilePictureUrl: () => null,
+            profilePictureDecodeFailed: vi.fn(),
+          },
         },
       ],
     });

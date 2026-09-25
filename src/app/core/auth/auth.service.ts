@@ -15,6 +15,9 @@ export type Profile = {
    * change reads as absent rather than as still live.
    */
   pendingEmail: string | null;
+
+  /** Whether the Profile has a saved private picture in the API. */
+  hasPicture: boolean;
 };
 
 export type Credentials = {
@@ -315,6 +318,17 @@ export class AuthService {
     return this.http.get<Profile>(`${this.baseUrl}/api/profile`, {
       context: handlesOwn401(),
     });
+  }
+
+  /** Read authenticated image bytes; only 404 means the Profile has no saved picture. */
+  profilePicture(): Observable<Blob | null> {
+    return this.http
+      .get(`${this.baseUrl}/api/profile/picture`, { responseType: 'blob' })
+      .pipe(
+        catchError((error: unknown) =>
+          error instanceof ApiError && error.status === 404 ? of(null) : throwError(() => error),
+        ),
+      );
   }
 
   /** Replace the signed-in Profile's name and return the complete new identity. */

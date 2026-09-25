@@ -16,6 +16,7 @@ const ADA: Profile = {
   name: 'Ada Lovelace',
   email: 'ada@example.com',
   pendingEmail: null,
+  hasPicture: false,
 };
 
 describe('ProfileEmail', () => {
