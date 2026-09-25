@@ -1,0 +1,136 @@
+<section class="min-w-0 rounded-2xl border border-divider bg-surface p-5 sm:p-6">
+  <header class="flex min-w-0 items-start gap-4">
+    <div class="min-w-0">
+      <h2 class="font-display text-xl font-semibold tracking-tight text-text">Profile picture</h2>
+      <p class="mt-1 text-sm text-secondary">Choose a picture to show across Pitaka.</p>
+    </div>
+  </header>
+
+  <div class="mt-5">
+    <label
+      class="text-sm font-medium text-text"
+      for="profile-picture-file"
+    >
+      Choose a picture
+    </label>
+    <input
+      #fileInput
+      id="profile-picture-file"
+      class="mt-2 block min-h-11 w-full rounded-xl border border-divider bg-surface px-3 py-2 text-sm text-text file:mr-3 file:min-h-8 file:rounded-lg file:border-0 file:bg-soft file:px-3 file:font-medium file:text-text"
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      aria-describedby="profile-picture-rules"
+      [disabled]="isWritePending() || refreshErrorMessage() !== null"
+      (change)="selectPicture($event)"
+    />
+    <p
+      id="profile-picture-rules"
+      class="mt-2 text-sm text-secondary"
+    >
+      Use a static JPEG, PNG, or WebP image. Maximum 2 MB and 4096 pixels per dimension.
+    </p>
+  </div>
+
+  @if (validating()) {
+    <p
+      class="mt-4 text-sm text-secondary"
+      role="status"
+    >
+      Checking picture…
+    </p>
+  }
+  @if (saving()) {
+    <p
+      class="mt-4 text-sm text-secondary"
+      role="status"
+    >
+      Saving picture…
+    </p>
+  }
+  @if (previewUrl(); as preview) {
+    <div class="mt-5 flex min-w-0 items-center gap-4 rounded-xl bg-soft p-3">
+      <img
+        class="size-20 shrink-0 rounded-full bg-surface object-cover sm:size-24"
+        [src]="preview"
+        alt="Selected Profile picture preview"
+      />
+      <p class="min-w-0 text-sm text-secondary">Preview. Your saved picture stays in place until you save.</p>
+    </div>
+  }
+
+  @if (errorMessage(); as message) {
+    <p
+      class="mt-4 rounded-xl bg-danger-container p-3 text-sm text-danger"
+      role="alert"
+    >
+      {{ message }}
+    </p>
+  }
+  @if (refreshErrorMessage(); as message) {
+    <div
+      class="mt-4 rounded-xl bg-danger-container p-3 text-sm text-danger"
+      role="alert"
+    >
+      <p>{{ message }}</p>
+      <button
+        class="mt-3 min-h-11"
+        matButton="outlined"
+        type="button"
+        [disabled]="isWritePending()"
+        (click)="retryRefresh()"
+      >
+        {{ refreshing() ? 'Refreshing…' : 'Retry refresh' }}
+      </button>
+    </div>
+  }
+  @if (successMessage(); as message) {
+    <p
+      class="mt-4 rounded-xl bg-success-container p-3 text-sm text-success"
+      role="status"
+    >
+      {{ message }}
+    </p>
+  }
+  @if (pendingFeedback()) {
+    <p
+      class="mt-4 rounded-xl bg-soft p-3 text-sm text-text"
+      role="status"
+    >
+      Saving in progress. Wait for it to finish before closing.
+    </p>
+  }
+
+  @if (previewUrl(); as preview) {
+    <div class="mt-5 flex flex-wrap justify-end gap-2">
+      <button
+        matButton
+        class="min-h-11"
+        type="button"
+        [disabled]="isWritePending()"
+        (click)="cancelSelection()"
+      >
+        Cancel
+      </button>
+      <button
+        matButton="filled"
+        class="min-h-11"
+        type="button"
+        [disabled]="isWritePending()"
+        (click)="savePicture()"
+      >
+        {{ saving() ? 'Saving…' : 'Save picture' }}
+      </button>
+    </div>
+  } @else if (validating()) {
+    <div class="mt-5 flex justify-end">
+      <button
+        matButton
+        class="min-h-11"
+        type="button"
+        (click)="cancelSelection()"
+      >
+        Cancel
+      </button>
+    </div>
+  }
+</section>

@@ -18,7 +18,7 @@ import { AuthService } from '@/app/core/auth';
 import { EditorDismissal } from '@/app/core/dialog';
 import { focusFirstInvalidField, partitionServerError, type ServerErrorControls } from '@/app/core/forms';
 import { ProfilePictureAvatar } from '@/app/core/profile-picture';
-import { Session } from '@/app/core/session';
+import { Session, type ProfileWriteRevision } from '@/app/core/session';
 
 const PROFILE_NAME_MAX = 255;
 const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please try again.';
@@ -111,9 +111,13 @@ export class ProfileIdentity {
         this.submitting.set(true);
         this.pendingFeedback.set(false);
         this.errorMessage.set(null);
+        let revision: ProfileWriteRevision | null = null;
         try {
+          revision = this.session.beginProfileWrite(['name']);
           const updated = await firstValueFrom(this.injector.get(AuthService).updateProfile(name));
-          this.session.applyProfileUpdate(updated);
+          if (revision !== null) {
+            this.session.applyProfileWriteUpdate(updated, revision, ['name']);
+          }
           this.editingName.set(false);
           this.successMessage.set('Name updated');
           this.focusAfterRender(this.editNameAction);
@@ -133,6 +137,9 @@ export class ProfileIdentity {
           }
           return boundErrors.length > 0 ? boundErrors : undefined;
         } finally {
+          if (revision !== null) {
+            this.session.releaseProfileWrite(revision, ['name']);
+          }
           this.submitting.set(false);
           this.pendingFeedback.set(false);
         }

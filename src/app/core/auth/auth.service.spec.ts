@@ -330,6 +330,57 @@ describe('AuthService', () => {
     await expect(result).rejects.toMatchObject({ status: 500 });
   });
 
+  it('uploads the selected file as multipart field File and accepts an empty 204 response', async () => {
+    const file = new File(['image bytes'], 'portrait.png', { type: 'image/png' });
+    const result = firstValueFrom(service.uploadProfilePicture(file));
+
+    const request = http.expectOne(`${BASE_URL}/api/profile/picture`);
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toBeInstanceOf(FormData);
+    expect((request.request.body as FormData).get('File')).toBe(file);
+    expect(request.request.headers.has('Content-Type')).toBe(false);
+    request.flush(null, { status: 204, statusText: 'No Content' });
+
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  it('preserves normalized image-rule details from a rejected picture upload', async () => {
+    const file = new File(['image bytes'], 'portrait.png', { type: 'image/png' });
+    const result = firstValueFrom(service.uploadProfilePicture(file));
+
+    http
+      .expectOne(`${BASE_URL}/api/profile/picture`)
+      .flush(
+        { status: 400, title: 'Bad Request', detail: 'Animated images are not supported.' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+
+    await expect(result).rejects.toMatchObject({
+      status: 400,
+      message: 'Animated images are not supported.',
+    });
+  });
+
+  it('promotes normalized picture validation details to the upload error message', async () => {
+    const file = new File(['image bytes'], 'portrait.png', { type: 'image/png' });
+    const result = firstValueFrom(service.uploadProfilePicture(file));
+
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(
+      {
+        status: 400,
+        title: 'One or more validation errors occurred.',
+        errors: { File: ['Animated images are not supported.'] },
+      },
+      { status: 400, statusText: 'Bad Request' },
+    );
+
+    await expect(result).rejects.toMatchObject({
+      status: 400,
+      message: 'Animated images are not supported.',
+      fieldErrors: {},
+    });
+  });
+
   it('PUTs a name to the Profile and returns picture metadata with the complete Profile response', async () => {
     const result = firstValueFrom(service.updateProfile('Augusta Ada King'));
 

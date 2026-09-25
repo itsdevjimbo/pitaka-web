@@ -26,7 +26,14 @@ describe('AuthConfirmEmailChange', () => {
         { provide: AuthService, useValue: { confirmEmailChange, me: me ?? (() => of(undefined)) } },
         {
           provide: Session,
-          useValue: { isAuthenticated: () => false, profile: () => null, signOut, expire, ...session },
+          useValue: {
+            isAuthenticated: () => false,
+            profile: () => null,
+            beginProfileRead: () => null,
+            signOut,
+            expire,
+            ...session,
+          },
         },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(params) } } },
         { provide: Router, useValue: { navigate, navigateByUrl } },
@@ -148,7 +155,10 @@ describe('AuthConfirmEmailChange', () => {
       hasPicture: false,
     };
     const signedInProfile = signal<Profile | null>(otherProfile);
-    const applyProfileUpdate = vi.fn((profile: Profile) => signedInProfile.set(profile));
+    const applyProfileUpdate = vi.fn((profile: Profile) => {
+      signedInProfile.set(profile);
+      return true;
+    });
     const me = vi.fn(() => of(otherProfile));
     const { fixture, navigateByUrl, signOut } = setup(
       { userId: '7', token: 'a-token' },
@@ -189,7 +199,10 @@ describe('AuthConfirmEmailChange', () => {
       pendingEmail: null,
     };
     const signedInProfile = signal<Profile | null>(pendingProfile);
-    const applyProfileUpdate = vi.fn((profile: Profile) => signedInProfile.set(profile));
+    const applyProfileUpdate = vi.fn((profile: Profile) => {
+      signedInProfile.set(profile);
+      return true;
+    });
     const me = vi.fn(() => of(changedProfile));
     const { fixture, navigateByUrl } = setup(
       { userId: '7', token: 'a-token' },
@@ -202,7 +215,56 @@ describe('AuthConfirmEmailChange', () => {
     await fixture.whenStable();
 
     expect(me).toHaveBeenCalledOnce();
-    expect(applyProfileUpdate).toHaveBeenCalledWith(changedProfile);
+    expect(applyProfileUpdate).toHaveBeenCalledWith(changedProfile, null);
+    expect(signedInProfile()).toEqual(changedProfile);
+    expect(navigateByUrl).toHaveBeenCalledWith('/app/profile', { state: { emailChangeConfirmed: true } });
+  });
+
+  it('keeps a superseded Profile refresh on the retry screen until a fresh read applies', async () => {
+    const pendingProfile: Profile = {
+      id: 7,
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      pendingEmail: 'new@example.com',
+      hasPicture: false,
+    };
+    const changedProfile: Profile = {
+      ...pendingProfile,
+      email: 'new@example.com',
+      pendingEmail: null,
+    };
+    const signedInProfile = signal<Profile | null>(pendingProfile);
+    let applyCount = 0;
+    const applyProfileUpdate = vi.fn((profile: Profile) => {
+      applyCount += 1;
+      if (applyCount === 2) {
+        signedInProfile.set(profile);
+      }
+      return applyCount === 2;
+    });
+    const confirmEmailChange = vi.fn(() => of(undefined));
+    const me = vi.fn(() => of(changedProfile));
+    const { fixture, navigateByUrl } = setup(
+      { userId: '7', token: 'a-token' },
+      confirmEmailChange,
+      { isAuthenticated: signal(true), profile: signedInProfile, applyProfileUpdate },
+      me,
+    );
+    const screen = fixture.nativeElement as HTMLElement;
+
+    button(screen, 'Confirm change').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(screen.textContent).toContain("Your email address changed, but your Profile couldn't be refreshed.");
+    expect(navigateByUrl).not.toHaveBeenCalled();
+    expect(signedInProfile()).toEqual(pendingProfile);
+
+    button(screen, 'Retry Profile refresh').click();
+    await fixture.whenStable();
+
+    expect(confirmEmailChange).toHaveBeenCalledOnce();
+    expect(me).toHaveBeenCalledTimes(2);
     expect(signedInProfile()).toEqual(changedProfile);
     expect(navigateByUrl).toHaveBeenCalledWith('/app/profile', { state: { emailChangeConfirmed: true } });
   });
@@ -221,7 +283,10 @@ describe('AuthConfirmEmailChange', () => {
       pendingEmail: null,
     };
     const signedInProfile = signal<Profile | null>(pendingProfile);
-    const applyProfileUpdate = vi.fn((profile: Profile) => signedInProfile.set(profile));
+    const applyProfileUpdate = vi.fn((profile: Profile) => {
+      signedInProfile.set(profile);
+      return true;
+    });
     const refresh = new Subject<Profile>();
     const { fixture, navigateByUrl } = setup(
       { userId: '7', token: 'a-token' },
@@ -254,7 +319,7 @@ describe('AuthConfirmEmailChange', () => {
       pendingEmail: 'new@example.com',
       hasPicture: false,
     };
-    const applyProfileUpdate = vi.fn();
+    const applyProfileUpdate = vi.fn(() => true);
     const { fixture, expire } = setup(
       { userId: '7', token: 'a-token' },
       undefined,
@@ -287,7 +352,10 @@ describe('AuthConfirmEmailChange', () => {
       pendingEmail: null,
     };
     const signedInProfile = signal<Profile | null>(pendingProfile);
-    const applyProfileUpdate = vi.fn((profile: Profile) => signedInProfile.set(profile));
+    const applyProfileUpdate = vi.fn((profile: Profile) => {
+      signedInProfile.set(profile);
+      return true;
+    });
     const refresh = new Subject<Profile>();
     let reads = 0;
     const me = vi.fn(() => {

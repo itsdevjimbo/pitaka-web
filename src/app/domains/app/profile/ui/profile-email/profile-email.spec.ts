@@ -58,7 +58,10 @@ describe('ProfileEmail', () => {
           provide: AuthService,
           useValue: { requestEmailChange: () => of(undefined), me: () => of(ADA) },
         },
-        { provide: Session, useValue: { profile: signal(ADA), applyProfileUpdate: vi.fn() } },
+        {
+          provide: Session,
+          useValue: { profile: signal(ADA), beginProfileRead: vi.fn(() => null), applyProfileUpdate: vi.fn() },
+        },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -84,7 +87,10 @@ describe('ProfileEmail', () => {
           provide: AuthService,
           useValue: { requestEmailChange: () => of(undefined), me: () => of(ADA) },
         },
-        { provide: Session, useValue: { profile: signal(ADA), applyProfileUpdate: vi.fn() } },
+        {
+          provide: Session,
+          useValue: { profile: signal(ADA), beginProfileRead: vi.fn(() => null), applyProfileUpdate: vi.fn() },
+        },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -103,13 +109,16 @@ describe('ProfileEmail', () => {
   it('reconciles the no-content request from the live Profile read', async () => {
     const requestEmailChange = vi.fn(() => of(undefined));
     const refreshed = { ...ADA, pendingEmail: 'new@example.com' };
-    const applyProfileUpdate = vi.fn();
+    const applyProfileUpdate = vi.fn(() => true);
     TestBed.configureTestingModule({
       imports: [ProfileEmail],
       providers: [
         provideIcons(),
         { provide: AuthService, useValue: { requestEmailChange, me: () => of(refreshed) } },
-        { provide: Session, useValue: { profile: signal(ADA), applyProfileUpdate } },
+        {
+          provide: Session,
+          useValue: { profile: signal(ADA), beginProfileRead: vi.fn(() => null), applyProfileUpdate },
+        },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -122,7 +131,7 @@ describe('ProfileEmail', () => {
     await submit(fixture);
 
     expect(requestEmailChange).toHaveBeenCalledWith('new@example.com', 'secret12');
-    expect(applyProfileUpdate).toHaveBeenCalledWith(refreshed);
+    expect(applyProfileUpdate).toHaveBeenCalledWith(refreshed, null);
     expect(fixture.nativeElement.textContent).toContain('Confirmation email sent to new@example.com');
   });
 
@@ -136,7 +145,14 @@ describe('ProfileEmail', () => {
           provide: AuthService,
           useValue: { requestEmailChange: () => of(undefined), me: () => of(profile) },
         },
-        { provide: Session, useValue: { profile: signal(profile), applyProfileUpdate: vi.fn() } },
+        {
+          provide: Session,
+          useValue: {
+            profile: signal(profile),
+            beginProfileRead: vi.fn(() => null),
+            applyProfileUpdate: vi.fn(),
+          },
+        },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -155,7 +171,10 @@ describe('ProfileEmail', () => {
     const profile = signal<Profile>(pending);
     const refreshed = { ...ADA, pendingEmail: null };
     const cancelEmailChange = vi.fn(() => of(undefined));
-    const applyProfileUpdate = vi.fn((updated: Profile) => profile.set(updated));
+    const applyProfileUpdate = vi.fn((updated: Profile) => {
+      profile.set(updated);
+      return true;
+    });
     TestBed.configureTestingModule({
       imports: [ProfileEmail],
       providers: [
@@ -164,7 +183,7 @@ describe('ProfileEmail', () => {
           provide: AuthService,
           useValue: { cancelEmailChange, me: () => of(refreshed) },
         },
-        { provide: Session, useValue: { profile, applyProfileUpdate } },
+        { provide: Session, useValue: { profile, beginProfileRead: vi.fn(() => null), applyProfileUpdate } },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -185,7 +204,7 @@ describe('ProfileEmail', () => {
     fixture.detectChanges();
 
     expect(cancelEmailChange).toHaveBeenCalledOnce();
-    expect(applyProfileUpdate).toHaveBeenCalledWith(refreshed);
+    expect(applyProfileUpdate).toHaveBeenCalledWith(refreshed, null);
     expect(fixture.nativeElement.textContent).toContain('Email change cancelled');
     expect(fixture.nativeElement.textContent).not.toContain('Pending email change');
   });
@@ -195,7 +214,10 @@ describe('ProfileEmail', () => {
     const profile = signal<Profile>(pending);
     const replacement = { ...ADA, pendingEmail: 'replacement@example.com' };
     const requestEmailChange = vi.fn(() => of(undefined));
-    const applyProfileUpdate = vi.fn((updated: Profile) => profile.set(updated));
+    const applyProfileUpdate = vi.fn((updated: Profile) => {
+      profile.set(updated);
+      return true;
+    });
     TestBed.configureTestingModule({
       imports: [ProfileEmail],
       providers: [
@@ -204,7 +226,7 @@ describe('ProfileEmail', () => {
           provide: AuthService,
           useValue: { requestEmailChange, me: () => of(replacement) },
         },
-        { provide: Session, useValue: { profile, applyProfileUpdate } },
+        { provide: Session, useValue: { profile, beginProfileRead: vi.fn(() => null), applyProfileUpdate } },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -217,7 +239,7 @@ describe('ProfileEmail', () => {
     await submit(fixture);
 
     expect(requestEmailChange).toHaveBeenCalledWith('replacement@example.com', 'secret12');
-    expect(applyProfileUpdate).toHaveBeenCalledWith(replacement);
+    expect(applyProfileUpdate).toHaveBeenCalledWith(replacement, null);
     expect(fixture.nativeElement.textContent).toContain('Confirmation email sent to replacement@example.com');
     expect(fixture.nativeElement.textContent).toContain('Pending email change');
   });
@@ -233,7 +255,14 @@ describe('ProfileEmail', () => {
           provide: AuthService,
           useValue: { requestEmailChange, me: () => of(pending) },
         },
-        { provide: Session, useValue: { profile: signal(pending), applyProfileUpdate: vi.fn() } },
+        {
+          provide: Session,
+          useValue: {
+            profile: signal(pending),
+            beginProfileRead: vi.fn(() => null),
+            applyProfileUpdate: vi.fn(() => true),
+          },
+        },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -259,13 +288,16 @@ describe('ProfileEmail', () => {
       return readCount === 1 ? throwError(() => new Error('network')) : pendingRead.asObservable();
     });
     const requestEmailChange = vi.fn(() => of(undefined));
-    const applyProfileUpdate = vi.fn((updated: Profile) => profile.set(updated));
+    const applyProfileUpdate = vi.fn((updated: Profile) => {
+      profile.set(updated);
+      return true;
+    });
     TestBed.configureTestingModule({
       imports: [ProfileEmail],
       providers: [
         provideIcons(),
         { provide: AuthService, useValue: { requestEmailChange, me } },
-        { provide: Session, useValue: { profile, applyProfileUpdate } },
+        { provide: Session, useValue: { profile, beginProfileRead: vi.fn(() => null), applyProfileUpdate } },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -295,9 +327,53 @@ describe('ProfileEmail', () => {
     fixture.detectChanges();
 
     expect(requestEmailChange).toHaveBeenCalledOnce();
-    expect(applyProfileUpdate).toHaveBeenCalledWith(refreshed);
+    expect(applyProfileUpdate).toHaveBeenCalledWith(refreshed, null);
     expect(fixture.nativeElement.textContent).not.toContain("Profile couldn't be refreshed");
     expect(fixture.nativeElement.textContent).toContain('Pending email change');
+  });
+
+  it('keeps the pending address visible and offers a retry when a Profile read is stale', async () => {
+    const profile = signal<Profile>(ADA);
+    const refreshed = { ...ADA, pendingEmail: 'new@example.com' };
+    const requestEmailChange = vi.fn(() => of(undefined));
+    let updateCount = 0;
+    const applyProfileUpdate = vi.fn((updated: Profile) => {
+      updateCount += 1;
+      if (updateCount === 2) {
+        profile.set(updated);
+      }
+      return updateCount === 2;
+    });
+    const me = vi.fn(() => of(refreshed));
+    TestBed.configureTestingModule({
+      imports: [ProfileEmail],
+      providers: [
+        provideIcons(),
+        { provide: AuthService, useValue: { requestEmailChange, me } },
+        { provide: Session, useValue: { profile, beginProfileRead: vi.fn(() => null), applyProfileUpdate } },
+      ],
+    });
+    const fixture = TestBed.createComponent(ProfileEmail);
+    fixture.detectChanges();
+
+    click(fixture, 'Change email');
+    fixture.detectChanges();
+    enter(fixture, '#new-email-address', 'new@example.com');
+    enter(fixture, 'input[type="password"]', 'secret12');
+    await submit(fixture);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Pending email change');
+    expect(fixture.nativeElement.textContent).toContain("Profile couldn't be refreshed");
+
+    click(fixture, 'Retry refresh');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(requestEmailChange).toHaveBeenCalledOnce();
+    expect(me).toHaveBeenCalledTimes(2);
+    expect(fixture.nativeElement.textContent).toContain('Pending email change');
+    expect(fixture.nativeElement.textContent).not.toContain("Profile couldn't be refreshed");
   });
 
   it('keeps an address-in-use conflict distinct and attached to the new address', async () => {
@@ -312,7 +388,10 @@ describe('ProfileEmail', () => {
             me: () => of(ADA),
           },
         },
-        { provide: Session, useValue: { profile: signal(ADA), applyProfileUpdate: vi.fn() } },
+        {
+          provide: Session,
+          useValue: { profile: signal(ADA), beginProfileRead: vi.fn(() => null), applyProfileUpdate: vi.fn() },
+        },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);
@@ -345,7 +424,10 @@ describe('ProfileEmail', () => {
           provide: AuthService,
           useValue: { requestEmailChange: () => of(undefined), me: () => of(ADA) },
         },
-        { provide: Session, useValue: { profile: signal(ADA), applyProfileUpdate: vi.fn() } },
+        {
+          provide: Session,
+          useValue: { profile: signal(ADA), beginProfileRead: vi.fn(() => null), applyProfileUpdate: vi.fn() },
+        },
       ],
     });
     const fixture = TestBed.createComponent(ProfileEmail);

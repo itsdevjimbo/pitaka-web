@@ -268,8 +268,12 @@ export class ProfileEmail {
     }
     this.refreshing.set(true);
     try {
+      const revision = this.session.beginProfileRead();
       const profile = await firstValueFrom(this.injector.get(AuthService).me());
-      this.session.applyProfileUpdate(profile);
+      if (!this.session.applyProfileUpdate(profile, revision)) {
+        this.refreshNeeded.set(true);
+        return;
+      }
       this.localPendingEmail.set(undefined);
       this.refreshNeeded.set(false);
     } catch {

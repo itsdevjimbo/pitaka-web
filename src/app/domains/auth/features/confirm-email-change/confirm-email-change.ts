@@ -127,7 +127,22 @@ export default class AuthConfirmEmailChange implements OnInit {
       this.focusHeadingAfterRender();
     }
     try {
-      this.session.applyProfileUpdate(await firstValueFrom(this.auth.me()));
+      const revision = this.session.beginProfileRead();
+      const profile = await firstValueFrom(this.auth.me());
+      if (!this.session.applyProfileUpdate(profile, revision)) {
+        if (!this.session.isAuthenticated()) {
+          await this.router.navigate([SIGN_IN_ROUTE], { queryParams: reasonQueryParams('email-changed') });
+          return;
+        }
+        if (this.session.profile()?.id !== this.userId) {
+          this.state.set('success');
+          this.focusHeadingAfterRender();
+          return;
+        }
+        this.state.set('refresh-failed');
+        this.focusHeadingAfterRender();
+        return;
+      }
       await this.router.navigateByUrl('/app/profile', { state: { emailChangeConfirmed: true } });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {

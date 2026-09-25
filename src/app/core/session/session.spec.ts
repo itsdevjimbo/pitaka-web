@@ -3,7 +3,9 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL, errorInterceptor } from '@/app/core/api';
+import { AuthService, type Profile } from '@/app/core/auth';
 import { LocalStorage } from '@/app/core/local-storage';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { authInterceptor } from './auth.interceptor';
@@ -231,6 +233,370 @@ describe('Session', () => {
     expect(session.profile()?.hasPicture).toBe(true);
     expect(session.profilePictureUrl()).toBeNull();
     warn.mockRestore();
+  });
+
+  it('treats a missing image response as an absent saved picture', async () => {
+    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const boot = session.verifyBoot();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await boot;
+
+    http
+      .expectOne(`${BASE_URL}/api/profile/picture`)
+      .error(new ProgressEvent('error'), { status: 404, statusText: 'Not Found' });
+
+    expect(session.profile()?.hasPicture).toBe(false);
+    expect(session.profilePictureUrl()).toBeNull();
+  });
+
+  it('refreshes a replaced picture without letting an older Profile response undo newer identity fields', async () => {
+    const objectUrls = stubObjectUrls('blob:unused');
+    objectUrls.createObjectURL
+      .mockReturnValueOnce('blob:old-profile-picture')
+      .mockReturnValueOnce('blob:new-profile-picture');
+    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const boot = session.verifyBoot();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await boot;
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['old picture']));
+
+    const olderRead = session.beginProfileRead();
+    const refreshing = session.refreshProfileAfterPictureUpload();
+    const profileRequest = http.expectOne(`${BASE_URL}/api/profile`);
+    const currentProfile = session.profile() as Profile;
+    const nameWrite = session.beginProfileWrite(['name']);
+    if (nameWrite === null) {
+      throw new Error('Expected the verified session to reserve a name update');
+    }
+    session.applyProfileWriteUpdate({ ...currentProfile, name: 'Augusta Ada King' }, nameWrite, ['name']);
+    const renamedProfile = session.profile() as Profile;
+    const emailWrite = session.beginProfileWrite(['email']);
+    if (emailWrite === null) {
+      throw new Error('Expected the verified session to reserve an email update');
+    }
+    session.applyProfileWriteUpdate({ ...renamedProfile, email: 'ada.new@example.com' }, emailWrite, ['email']);
+    profileRequest.flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await Promise.resolve();
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['new picture']));
+    await expect(refreshing).resolves.toBe('refreshed');
+
+    session.applyProfileUpdate(
+      { id: 7, name: 'Ada', email: 'old@example.com', pendingEmail: null, hasPicture: false },
+      olderRead,
+    );
+
+    expect(session.profile()).toEqual({
+      id: 7,
+      name: 'Augusta Ada King',
+      email: 'ada.new@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    expect(session.profilePictureUrl()).toBe('blob:new-profile-picture');
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith('blob:old-profile-picture');
+  });
+
+  it('keeps the displayed picture through a failed refresh and replaces it after recovery', async () => {
+    const objectUrls = stubObjectUrls('blob:unused');
+    objectUrls.createObjectURL
+      .mockReturnValueOnce('blob:current-picture')
+      .mockReturnValueOnce('blob:refreshed-picture');
+    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const boot = session.verifyBoot();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await boot;
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['old picture']));
+
+    const failedRefresh = session.refreshProfile();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await Promise.resolve();
+    http
+      .expectOne(`${BASE_URL}/api/profile/picture`)
+      .error(new ProgressEvent('error'), { status: 500, statusText: 'Internal Server Error' });
+    await expect(failedRefresh).rejects.toMatchObject({ status: 500 });
+    expect(session.profilePictureUrl()).toBe('blob:current-picture');
+
+    const recoveredRefresh = session.refreshProfile();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await Promise.resolve();
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['new picture']));
+    await expect(recoveredRefresh).resolves.toBe('refreshed');
+
+    expect(session.profilePictureUrl()).toBe('blob:refreshed-picture');
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith('blob:current-picture');
+  });
+
+  it('reports confirmed missing metadata separately from a failed refresh', async () => {
+    const objectUrls = stubObjectUrls('blob:old-profile-picture');
+    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const boot = session.verifyBoot();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await boot;
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['old picture']));
+
+    const refreshing = session.refreshProfileAfterPictureUpload();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+
+    await expect(refreshing).resolves.toBe('absent');
+    expect(session.profile()?.hasPicture).toBe(false);
+    expect(session.profilePictureUrl()).toBeNull();
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith('blob:old-profile-picture');
+  });
+
+  it('keeps the latest-started whole-Profile refresh when an earlier response arrives first', async () => {
+    const session = await verifiedSession();
+    const earlierRefresh = session.refreshProfile();
+    const earlierRequest = http.expectOne(`${BASE_URL}/api/profile`);
+    const laterRefresh = session.refreshProfile();
+    const laterRequest = http.expectOne(`${BASE_URL}/api/profile`);
+
+    earlierRequest.flush({
+      id: 7,
+      name: 'Older response',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+    await expect(earlierRefresh).resolves.toBe('stale');
+    laterRequest.flush({
+      id: 7,
+      name: 'Newer response',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+
+    await expect(laterRefresh).resolves.toBe('absent');
+    expect(session.profile()?.name).toBe('Newer response');
+  });
+
+  it('orders ProfileEmail reads against picture refreshes through the shared Session owner', async () => {
+    const session = await verifiedSession();
+    const earlierRevision = session.beginProfileRead();
+    if (earlierRevision === null) {
+      throw new Error('Expected the verified session to begin a Profile read');
+    }
+    const earlierRead = firstValueFrom(TestBed.inject(AuthService).me());
+    const earlierRequest = http.expectOne(`${BASE_URL}/api/profile`);
+    const laterRefresh = session.refreshProfile();
+    const laterRequest = http.expectOne(`${BASE_URL}/api/profile`);
+
+    earlierRequest.flush({
+      id: 7,
+      name: 'Older ProfileEmail read',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+    session.applyProfileUpdate(await earlierRead, earlierRevision);
+    expect(session.profile()?.name).toBe('Ada');
+
+    laterRequest.flush({
+      id: 7,
+      name: 'Newer picture refresh',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+    await expect(laterRefresh).resolves.toBe('absent');
+    expect(session.profile()?.name).toBe('Newer picture refresh');
+  });
+
+  it('does not let a Profile read suppress a name write that is still pending', async () => {
+    const session = await verifiedSession();
+    const writeRevision = session.beginProfileWrite(['name']);
+    if (writeRevision === null) {
+      throw new Error('Expected the verified session to reserve a name update');
+    }
+    const refreshing = session.refreshProfile();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Name from the older read',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+
+    await expect(refreshing).resolves.toBe('absent');
+    expect(session.profile()?.name).toBe('Ada');
+
+    session.applyProfileWriteUpdate(
+      { id: 7, name: 'Name from the completed write', email: 'ada@example.com', pendingEmail: null, hasPicture: false },
+      writeRevision,
+      ['name'],
+    );
+
+    expect(session.profile()?.name).toBe('Name from the completed write');
+  });
+
+  it('ignores a superseded picture read when a newer Profile refresh starts', async () => {
+    const objectUrls = stubObjectUrls('blob:unused');
+    objectUrls.createObjectURL.mockReturnValueOnce('blob:current-picture').mockReturnValueOnce('blob:latest-picture');
+    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const boot = session.verifyBoot();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await boot;
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['current picture']));
+
+    const earlierRefresh = session.refreshProfile();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await Promise.resolve();
+    const earlierPictureRead = http.expectOne(`${BASE_URL}/api/profile/picture`);
+
+    const laterRefresh = session.refreshProfile();
+    const laterProfileRead = http.expectOne(`${BASE_URL}/api/profile`);
+    earlierPictureRead.flush(new Blob(['superseded picture']));
+    await expect(earlierRefresh).resolves.toBe('stale');
+    expect(session.profilePictureUrl()).toBe('blob:current-picture');
+
+    laterProfileRead.flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await Promise.resolve();
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['latest picture']));
+    await expect(laterRefresh).resolves.toBe('refreshed');
+
+    expect(session.profilePictureUrl()).toBe('blob:latest-picture');
+    expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not expire a session for a superseded Profile refresh 401', async () => {
+    const session = await verifiedSession();
+    const earlierRefresh = session.refreshProfile();
+    const earlierRequest = http.expectOne(`${BASE_URL}/api/profile`);
+    const laterRefresh = session.refreshProfile();
+    const laterRequest = http.expectOne(`${BASE_URL}/api/profile`);
+
+    earlierRequest.flush(null, { status: 401, statusText: 'Unauthorized' });
+    await expect(earlierRefresh).resolves.toBe('stale');
+    expect(session.isAuthenticated()).toBe(true);
+    expect(storage.getItem(TOKEN_KEY)).toBe('live-token');
+
+    laterRequest.flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+    await expect(laterRefresh).resolves.toBe('absent');
+    expect(session.isAuthenticated()).toBe(true);
+  });
+
+  it('reports a confirmed missing picture response separately from a failed refresh', async () => {
+    const objectUrls = stubObjectUrls('blob:old-profile-picture');
+    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const boot = session.verifyBoot();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await boot;
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['old picture']));
+
+    const refreshing = session.refreshProfileAfterPictureUpload();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await Promise.resolve();
+    http
+      .expectOne(`${BASE_URL}/api/profile/picture`)
+      .error(new ProgressEvent('error'), { status: 404, statusText: 'Not Found' });
+
+    await expect(refreshing).resolves.toBe('absent');
+    expect(session.profile()?.hasPicture).toBe(false);
+    expect(session.profilePictureUrl()).toBeNull();
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith('blob:old-profile-picture');
+  });
+
+  it('ignores a Profile refresh that finishes after the signed-in session has ended', async () => {
+    const session = await verifiedSession();
+    const refreshing = session.refreshProfile();
+    const profileRequest = http.expectOne(`${BASE_URL}/api/profile`);
+
+    session.signOut();
+    profileRequest.flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+
+    await expect(refreshing).resolves.toBe('stale');
+    expect(session.profile()).toBeNull();
+    http.expectNone(`${BASE_URL}/api/profile/picture`);
   });
 
   it('cancels an earlier session picture read and keeps the newer session image', async () => {
