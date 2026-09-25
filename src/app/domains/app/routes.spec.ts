@@ -160,6 +160,7 @@ describe('the app area routes', () => {
             isAuthenticated: () => true,
             profile: () => ada,
             profilePictureUrl: () => null,
+            profilePictureOperationPending: () => false,
             profilePictureDecodeFailed: vi.fn(),
           },
         },

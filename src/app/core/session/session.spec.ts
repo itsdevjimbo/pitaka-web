@@ -391,6 +391,149 @@ describe('Session', () => {
     expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith('blob:old-profile-picture');
   });
 
+  it('keeps a removed picture absent across delayed metadata and newer identity writes', async () => {
+    const objectUrls = stubObjectUrls('blob:saved-profile-picture');
+    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const boot = session.verifyBoot();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await boot;
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['saved picture']));
+
+    const earlierRead = session.beginProfileRead();
+    const operation = session.beginProfilePictureOperation();
+    if (operation === null) {
+      throw new Error('Expected the signed-in Profile to claim its picture operation');
+    }
+    const write = session.beginProfilePictureWrite(operation);
+    if (write === null) {
+      throw new Error('Expected the picture operation to reserve hasPicture');
+    }
+    session.applyProfilePictureRemoval(write);
+
+    expect(session.profile()?.hasPicture).toBe(false);
+    expect(session.profilePictureUrl()).toBeNull();
+    expect(session.profilePictureOperationPending()).toBe(true);
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith('blob:saved-profile-picture');
+
+    const refreshing = session.refreshProfileAfterPictureRemoval();
+    const profileRequest = http.expectOne(`${BASE_URL}/api/profile`);
+    const current = session.profile();
+    if (current === null) {
+      throw new Error('Expected the Profile to remain signed in');
+    }
+    const nameWrite = session.beginProfileWrite(['name']);
+    if (nameWrite === null) {
+      throw new Error('Expected the Profile to reserve a name update');
+    }
+    session.applyProfileWriteUpdate({ ...current, name: 'Augusta Ada King' }, nameWrite, ['name']);
+    const renamed = session.profile();
+    if (renamed === null) {
+      throw new Error('Expected the renamed Profile to remain signed in');
+    }
+    const emailWrite = session.beginProfileWrite(['email']);
+    if (emailWrite === null) {
+      throw new Error('Expected the Profile to reserve an email update');
+    }
+    session.applyProfileWriteUpdate({ ...renamed, email: 'ada.new@example.com' }, emailWrite, ['email']);
+
+    profileRequest.flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await expect(refreshing).resolves.toBe('picture-present');
+    session.applyProfileUpdate(
+      { id: 7, name: 'Old Ada', email: 'old@example.com', pendingEmail: null, hasPicture: true },
+      earlierRead,
+    );
+    session.releaseProfilePictureOperation(operation);
+
+    expect(session.profile()).toEqual({
+      id: 7,
+      name: 'Augusta Ada King',
+      email: 'ada.new@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+    expect(session.profilePictureUrl()).toBeNull();
+    expect(session.profilePictureOperationPending()).toBe(false);
+    expect(objectUrls.createObjectURL).toHaveBeenCalledOnce();
+  });
+
+  it('cancels an in-flight saved-picture read when removal succeeds', async () => {
+    const session = configure({ [TOKEN_KEY]: 'live-token' });
+    const boot = session.verifyBoot();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: true,
+    });
+    await boot;
+    const pictureRead = http.expectOne(`${BASE_URL}/api/profile/picture`);
+    const operation = session.beginProfilePictureOperation();
+    if (operation === null) {
+      throw new Error('Expected the signed-in Profile to claim its picture operation');
+    }
+    const write = session.beginProfilePictureWrite(operation);
+    if (write === null) {
+      throw new Error('Expected the picture operation to reserve hasPicture');
+    }
+
+    session.applyProfilePictureRemoval(write);
+
+    expect(pictureRead.cancelled).toBe(true);
+    expect(session.profile()?.hasPicture).toBe(false);
+    expect(session.profilePictureUrl()).toBeNull();
+    session.releaseProfilePictureOperation(operation);
+  });
+
+  it('discards a removal refresh after the session ends', async () => {
+    const session = await verifiedSession();
+    const refreshing = session.refreshProfileAfterPictureRemoval();
+    const request = http.expectOne(`${BASE_URL}/api/profile`);
+
+    session.signOut();
+    request.flush({
+      id: 7,
+      name: 'Ada',
+      email: 'ada@example.com',
+      pendingEmail: null,
+      hasPicture: false,
+    });
+
+    await expect(refreshing).resolves.toBe('stale');
+    expect(session.profile()).toBeNull();
+  });
+
+  it('allows only one Profile picture operation at a time and clears it on session expiry', async () => {
+    const session = await verifiedSession();
+    const operation = session.beginProfilePictureOperation();
+    if (operation === null) {
+      throw new Error('Expected the signed-in Profile to claim its picture operation');
+    }
+
+    expect(session.beginProfilePictureOperation()).toBeNull();
+    expect(session.profilePictureOperationPending()).toBe(true);
+
+    session.expire();
+
+    expect(session.profilePictureOperationPending()).toBe(false);
+    expect(session.profile()).toBeNull();
+    expect(dialogs.closeAll).toHaveBeenCalledOnce();
+    session.releaseProfilePictureOperation(operation);
+    expect(session.beginProfilePictureOperation()).toBeNull();
+  });
+
   it('keeps the latest-started whole-Profile refresh when an earlier response arrives first', async () => {
     const session = await verifiedSession();
     const earlierRefresh = session.refreshProfile();

@@ -6,7 +6,7 @@
   accept="image/jpeg,image/png,image/webp"
   aria-hidden="true"
   tabindex="-1"
-  [disabled]="isWritePending() || refreshErrorMessage() !== null"
+  [disabled]="operationPending() || isWritePending() || refreshErrorMessage() !== null"
   (change)="selectPicture($event)"
 />
 
@@ -22,7 +22,7 @@
       type="button"
       aria-label="Choose a Profile picture"
       title="Choose a Profile picture"
-      [disabled]="isWritePending() || refreshErrorMessage() !== null"
+      [disabled]="operationPending() || isWritePending() || refreshErrorMessage() !== null"
       (click)="openFileDialog()"
     >
       <profile-picture-avatar

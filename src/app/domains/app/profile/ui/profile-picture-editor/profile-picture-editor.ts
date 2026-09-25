@@ -16,7 +16,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService } from '@/app/core/auth';
 import { ProfilePictureAvatar } from '@/app/core/profile-picture';
-import { Session } from '@/app/core/session';
+import { Session, type ProfilePictureOperation, type ProfileWriteRevision } from '@/app/core/session';
 import { validateProfilePicture } from './profile-picture-validation';
 
 const UPLOAD_FAILED = 'Something went wrong uploading your Profile picture. Please try again.';
@@ -43,6 +43,7 @@ export class ProfilePictureEditor {
   protected readonly refreshErrorMessage = signal<string | null>(null);
   protected readonly successMessage = signal<string | null>(null);
   protected readonly refreshing = signal(false);
+  protected readonly operationPending = this.session.profilePictureOperationPending;
   protected readonly hasEditorContent = computed(
     () =>
       this.validating() ||
@@ -55,12 +56,15 @@ export class ProfilePictureEditor {
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
   private readonly pictureAction = viewChild<ElementRef<HTMLButtonElement>>('pictureAction');
   private selectionGeneration = 0;
+  private operation: ProfilePictureOperation | null = null;
+  private writeRevision: ProfileWriteRevision | null = null;
   private successMessageTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.destroyRef.onDestroy(() => {
       this.selectionGeneration += 1;
       this.clearSuccessMessageTimeout();
+      this.releaseOperation();
     });
   }
 
@@ -82,15 +86,22 @@ export class ProfilePictureEditor {
     this.pendingFeedback.set(false);
     this.errorMessage.set(null);
     this.clearSuccessMessage();
+    this.releaseOperation();
   }
 
   protected async selectPicture(event: Event): Promise<void> {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0] ?? null;
     input.value = '';
-    if (file === null || this.isWritePending()) {
+    if (file === null || this.isWritePending() || this.operationPending()) {
       return;
     }
+
+    const operation = this.session.beginProfilePictureOperation();
+    if (operation === null) {
+      return;
+    }
+    this.operation = operation;
 
     const generation = ++this.selectionGeneration;
     this.errorMessage.set(null);
@@ -106,6 +117,7 @@ export class ProfilePictureEditor {
     this.validating.set(false);
     if (!result.valid) {
       this.errorMessage.set(result.message);
+      this.releaseOperation();
       return;
     }
 
@@ -113,16 +125,23 @@ export class ProfilePictureEditor {
   }
 
   protected openFileDialog(): void {
-    if (this.isWritePending() || this.refreshErrorMessage() !== null) {
+    if (this.isWritePending() || this.operationPending() || this.refreshErrorMessage() !== null) {
       return;
     }
     this.fileInput()?.nativeElement.click();
   }
 
   private async uploadPicture(file: File): Promise<void> {
-    if (this.validating() || this.isWritePending()) {
+    if (this.validating() || this.isWritePending() || this.operation === null) {
       return;
     }
+
+    const revision = this.session.beginProfilePictureWrite(this.operation);
+    if (revision === null) {
+      this.releaseOperation();
+      return;
+    }
+    this.writeRevision = revision;
 
     this.saving.set(true);
     this.pendingFeedback.set(false);
@@ -132,20 +151,30 @@ export class ProfilePictureEditor {
     try {
       await firstValueFrom(this.auth.uploadProfilePicture(file));
     } catch (error) {
+      this.session.releaseProfileWrite(revision, ['hasPicture']);
+      this.writeRevision = null;
       if (!this.destroyRef.destroyed) {
         this.errorMessage.set(uploadErrorMessage(error));
         this.saving.set(false);
       }
+      this.releaseOperation();
       return;
     }
 
+    this.session.releaseProfileWrite(revision, ['hasPicture']);
+    this.writeRevision = null;
+
     if (this.destroyRef.destroyed) {
+      this.releaseOperation();
       return;
     }
-    await this.refreshSavedPicture(true);
+    const refreshed = await this.refreshSavedPicture(true);
     if (!this.destroyRef.destroyed) {
       this.saving.set(false);
       this.focusPictureAction();
+    }
+    if (refreshed) {
+      this.releaseOperation();
     }
   }
 
@@ -153,37 +182,59 @@ export class ProfilePictureEditor {
     if (this.refreshing()) {
       return;
     }
+    if (this.operation === null) {
+      this.operation = this.session.beginProfilePictureOperation();
+      if (this.operation === null) {
+        return;
+      }
+    }
     this.refreshing.set(true);
     this.pendingFeedback.set(false);
-    await this.refreshSavedPicture();
+    const refreshed = await this.refreshSavedPicture();
     if (!this.destroyRef.destroyed) {
       this.refreshing.set(false);
     }
+    if (refreshed) {
+      this.releaseOperation();
+    }
   }
 
-  private async refreshSavedPicture(pictureWasUploaded = false): Promise<void> {
+  private async refreshSavedPicture(pictureWasUploaded = false): Promise<boolean> {
     try {
       const refreshed = pictureWasUploaded
         ? await this.session.refreshProfileAfterPictureUpload()
         : await this.session.refreshProfile();
       if (this.destroyRef.destroyed) {
-        return;
+        return false;
       }
       if (refreshed === 'stale') {
         this.refreshErrorMessage.set(REFRESH_FAILED);
-        return;
+        return false;
       }
       this.refreshErrorMessage.set(null);
       if (refreshed === 'absent') {
         this.errorMessage.set(PICTURE_ABSENT);
-        return;
+        return true;
       }
       this.errorMessage.set(null);
       this.showSuccessMessage('Profile picture saved.');
+      return true;
     } catch {
       if (!this.destroyRef.destroyed) {
         this.refreshErrorMessage.set(REFRESH_FAILED);
       }
+      return false;
+    }
+  }
+
+  private releaseOperation(): void {
+    if (this.writeRevision !== null) {
+      this.session.releaseProfileWrite(this.writeRevision, ['hasPicture']);
+      this.writeRevision = null;
+    }
+    if (this.operation !== null) {
+      this.session.releaseProfilePictureOperation(this.operation);
+      this.operation = null;
     }
   }
 

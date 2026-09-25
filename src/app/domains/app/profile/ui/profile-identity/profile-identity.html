@@ -1,5 +1,24 @@
 <section class="min-w-0 overflow-hidden rounded-2xl border border-divider bg-surface">
-  <profile-picture-editor class="block" />
+  <div class="group/profile-picture relative">
+    <profile-picture-editor class="block" />
+    @if (profile()?.hasPicture) {
+      <button
+        class="absolute top-6 left-[calc(50%_+_2.125rem)] z-10 size-11 rounded-full bg-surface text-danger shadow-md ring-1 ring-divider transition-opacity hover:bg-danger-container hover:opacity-100 focus-visible:!opacity-100 disabled:cursor-not-allowed disabled:opacity-50 sm:left-[calc(50%_+_2.625rem)] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-has-[button:hover]/profile-picture:opacity-100"
+        matIconButton
+        type="button"
+        aria-label="Remove Profile picture"
+        title="Remove Profile picture"
+        [disabled]="sessionPictureOperationPending()"
+        (click)="requestPictureRemoval()"
+      >
+        <mat-icon
+          svgIcon="x"
+          aria-hidden="true"
+        />
+      </button>
+    }
+  </div>
+  <profile-picture-removal />
   <div class="min-w-0 border-t border-divider p-5 sm:p-6">
     @if (editingName()) {
       <form

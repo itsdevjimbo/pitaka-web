@@ -344,6 +344,17 @@ describe('AuthService', () => {
     await expect(result).resolves.toBeUndefined();
   });
 
+  it('removes a saved Profile picture with DELETE and accepts an empty 204 response', async () => {
+    const result = firstValueFrom(service.removeProfilePicture());
+
+    const request = http.expectOne(`${BASE_URL}/api/profile/picture`);
+    expect(request.request.method).toBe('DELETE');
+    expect(request.request.body).toBeNull();
+    request.flush(null, { status: 204, statusText: 'No Content' });
+
+    await expect(result).resolves.toBeUndefined();
+  });
+
   it('preserves normalized image-rule details from a rejected picture upload', async () => {
     const file = new File(['image bytes'], 'portrait.png', { type: 'image/png' });
     const result = firstValueFrom(service.uploadProfilePicture(file));

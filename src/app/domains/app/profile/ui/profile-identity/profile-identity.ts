@@ -12,6 +12,7 @@ import {
 import { disabled, form, FormField, submit, validate } from '@angular/forms/signals';
 import { MatButton } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIcon } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '@/app/core/auth';
@@ -19,6 +20,7 @@ import { EditorDismissal } from '@/app/core/dialog';
 import { focusFirstInvalidField, partitionServerError, type ServerErrorControls } from '@/app/core/forms';
 import { Session, type ProfileWriteRevision } from '@/app/core/session';
 import { ProfilePictureEditor } from '../profile-picture-editor/profile-picture-editor';
+import { ProfilePictureRemoval } from '../profile-picture-removal/profile-picture-removal';
 
 const PROFILE_NAME_MAX = 255;
 const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please try again.';
@@ -26,7 +28,15 @@ const COULD_NOT_UPDATE_NAME = 'Something went wrong updating your name. Please t
 /** The signed-in identity shown on the Profile page, including name editing. */
 @Component({
   selector: 'profile-identity',
-  imports: [MatButton, MatFormFieldModule, MatInputModule, FormField, ProfilePictureEditor],
+  imports: [
+    MatButton,
+    MatFormFieldModule,
+    MatInputModule,
+    MatIcon,
+    FormField,
+    ProfilePictureEditor,
+    ProfilePictureRemoval,
+  ],
   templateUrl: './profile-identity.html',
 })
 export class ProfileIdentity {
@@ -35,6 +45,7 @@ export class ProfileIdentity {
   private readonly editorDismissal = inject(EditorDismissal);
 
   protected readonly profile = this.session.profile;
+  protected readonly sessionPictureOperationPending = this.session.profilePictureOperationPending;
   protected readonly editingName = signal(false);
   protected readonly nameModel = signal({ name: '' });
   protected readonly hasChangedName = computed(() => {
@@ -62,6 +73,7 @@ export class ProfileIdentity {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly pendingFeedback = signal(false);
   private readonly pictureEditor = viewChild(ProfilePictureEditor);
+  private readonly pictureRemoval = viewChild(ProfilePictureRemoval);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   private readonly editNameAction = viewChild<ElementRef<HTMLButtonElement>>('editNameAction');
 
@@ -79,12 +91,20 @@ export class ProfileIdentity {
     this.focusAfterRender(this.nameInput, true);
   }
 
+  protected requestPictureRemoval(): void {
+    this.pictureRemoval()?.requestRemoval();
+  }
+
   hasUnsavedChanges(): boolean {
     return this.hasUnsavedNameChanges() || (this.pictureEditor()?.hasUnsavedChanges() ?? false);
   }
 
   isWritePending(): boolean {
-    return this.submitting() || (this.pictureEditor()?.isWritePending() ?? false);
+    return (
+      this.submitting() ||
+      (this.pictureEditor()?.isWritePending() ?? false) ||
+      (this.pictureRemoval()?.isWritePending() ?? false)
+    );
   }
 
   notifyWritePending(): void {
@@ -93,6 +113,9 @@ export class ProfileIdentity {
     }
     if (this.pictureEditor()?.isWritePending()) {
       this.pictureEditor()?.notifyWritePending();
+    }
+    if (this.pictureRemoval()?.isWritePending()) {
+      this.pictureRemoval()?.notifyWritePending();
     }
   }
 

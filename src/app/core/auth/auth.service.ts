@@ -349,6 +349,11 @@ export class AuthService {
     );
   }
 
+  /** Remove the signed-in Profile's private picture. */
+  removeProfilePicture(): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/api/profile/picture`).pipe(map(() => undefined));
+  }
+
   /** Replace the signed-in Profile's name and return the complete new identity. */
   updateProfile(name: string): Observable<Profile> {
     return this.http.put<Profile>(`${this.baseUrl}/api/profile`, { name });

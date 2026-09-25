@@ -52,8 +52,10 @@ describe('Profile', () => {
     sessionActions: {
       refreshProfile?: () => Promise<ProfileRefreshResult>;
       refreshProfileAfterPictureUpload?: () => Promise<ProfileRefreshResult>;
+      refreshProfileAfterPictureRemoval?: () => Promise<'refreshed' | 'picture-present' | 'stale'>;
     } = {},
   ) {
+    const pictureOperationPending = signal(false);
     const routes: Routes = [
       { path: 'profile', component: AppProfile, canDeactivate: [profileCanDeactivateGuard] },
       { path: 'elsewhere', component: Destination },
@@ -78,10 +80,31 @@ describe('Profile', () => {
             captureProfileRevision: () => null,
             beginProfileRead: () => null,
             beginProfileWrite: () => null,
+            profilePictureOperationPending: pictureOperationPending,
+            beginProfilePictureOperation: vi.fn(() => {
+              if (pictureOperationPending()) {
+                return null;
+              }
+              pictureOperationPending.set(true);
+              return { generation: 1 };
+            }),
+            beginProfilePictureWrite: vi.fn(() => ({
+              sessionGeneration: 0,
+              profileId: 7,
+              fields: { name: 0, email: 0, pendingEmail: 0, hasPicture: 1 },
+              writeGenerations: { hasPicture: 1 },
+            })),
+            releaseProfilePictureOperation: vi.fn(() => pictureOperationPending.set(false)),
+            applyProfilePictureRemoval: vi.fn(() => {
+              profile.update((current) => (current === null ? null : { ...current, hasPicture: false }));
+              profilePictureUrl.set(null);
+              return true;
+            }),
             applyProfileWriteUpdate: vi.fn(),
             releaseProfileWrite: vi.fn(),
             refreshProfile: vi.fn(async () => 'refreshed' as const),
             refreshProfileAfterPictureUpload: vi.fn(async () => 'refreshed' as const),
+            refreshProfileAfterPictureRemoval: vi.fn(async () => 'refreshed' as const),
             applyProfileUpdate: (updated: Profile) => {
               profile.set(updated);
               return true;
@@ -95,13 +118,26 @@ describe('Profile', () => {
   }
 
   function click(root: HTMLElement, label: string): void {
-    const button = Array.from(root.querySelectorAll('button')).find(
+    buttonNamed(root, label).click();
+  }
+
+  function buttonNamed(root: HTMLElement, label: string): HTMLButtonElement {
+    const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
       (candidate) => candidate.textContent?.trim() === label,
     );
     if (!button) {
       throw new Error(`No button labelled "${label}"`);
     }
+    return button;
+  }
+
+  function clickPictureRemoval(root: HTMLElement): HTMLButtonElement {
+    const button = root.querySelector<HTMLButtonElement>('button[aria-label="Remove Profile picture"]');
+    if (!button) {
+      throw new Error('No Profile picture removal button');
+    }
     button.click();
+    return button;
   }
 
   function imageFile(name = 'portrait.png', bytes = pngSignature()): File {
@@ -160,6 +196,164 @@ describe('Profile', () => {
     portrait.click();
 
     expect(openFileChooser).toHaveBeenCalledOnce();
+  });
+
+  it('offers saved-picture removal with confirmation and makes cancellation a no-op', async () => {
+    const removeProfilePicture = vi.fn(() => of(undefined));
+    setup(signal<Profile | null>({ ...ADA, hasPicture: true }), { removeProfilePicture });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/profile', AppProfile);
+    const page = harness.routeNativeElement as HTMLElement;
+
+    const removeAction = page.querySelector<HTMLButtonElement>('button[aria-label="Remove Profile picture"]');
+    expect(removeAction).not.toBeNull();
+    expect(removeAction?.querySelector('mat-icon[svgIcon="x"]')).not.toBeNull();
+    removeAction?.click();
+    harness.fixture.detectChanges();
+
+    const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
+    expect(confirmation?.textContent).toContain('Remove the saved Profile picture?');
+    expect(document.activeElement?.textContent?.trim()).toBe('Keep picture');
+    const keepPicture = Array.from(confirmation?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+      (button) => button.textContent?.trim() === 'Keep picture',
+    );
+    keepPicture?.click();
+    harness.fixture.detectChanges();
+
+    expect(page.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.activeElement).toBe(removeAction);
+    expect(removeProfilePicture).not.toHaveBeenCalled();
+
+    removeAction?.click();
+    harness.fixture.detectChanges();
+    page
+      .querySelector<HTMLElement>('[role="alertdialog"]')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    harness.fixture.detectChanges();
+
+    expect(page.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.activeElement).toBe(removeAction);
+    expect(removeProfilePicture).not.toHaveBeenCalled();
+  });
+
+  it('keeps a failed removal recoverable and retains the saved Profile picture until retry succeeds', async () => {
+    const removeProfilePicture = vi
+      .fn()
+      .mockReturnValueOnce(throwError(() => new ApiError('The request timed out. Please try again.', 504)))
+      .mockReturnValueOnce(of(undefined));
+    const profile = signal<Profile | null>({ ...ADA, hasPicture: true });
+    const pictureUrl = signal<string | null>('blob:saved-profile-picture');
+    setup(profile, { removeProfilePicture }, pictureUrl);
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/profile', AppProfile);
+    const page = harness.routeNativeElement as HTMLElement;
+
+    clickPictureRemoval(page);
+    harness.fixture.detectChanges();
+    const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
+    if (!confirmation) {
+      throw new Error('No Profile picture removal confirmation');
+    }
+    buttonNamed(confirmation, 'Remove picture').click();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+
+    expect(removeProfilePicture).toHaveBeenCalledOnce();
+    expect(profile()?.hasPicture).toBe(true);
+    expect(pictureUrl()).toBe('blob:saved-profile-picture');
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain('The request timed out. Please try again.');
+    expect(buttonNamed(confirmation, 'Try again').textContent?.trim()).toBe('Try again');
+
+    buttonNamed(confirmation, 'Try again').click();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+
+    expect(removeProfilePicture).toHaveBeenCalledTimes(2);
+    expect(profile()?.hasPicture).toBe(false);
+    expect(page.querySelector('button[aria-label="Remove Profile picture"]')).toBeNull();
+    expect(page.textContent).toContain('Profile picture removed.');
+  });
+
+  it('reports metadata refresh failure after removal and recovers without restoring the picture', async () => {
+    const removeProfilePicture = vi.fn(() => of(undefined));
+    const refreshProfileAfterPictureRemoval = vi
+      .fn()
+      .mockResolvedValueOnce('stale' as const)
+      .mockResolvedValueOnce('refreshed' as const);
+    const profile = signal<Profile | null>({ ...ADA, hasPicture: true });
+    const pictureUrl = signal<string | null>('blob:removed-profile-picture');
+    setup(profile, { removeProfilePicture }, pictureUrl, { refreshProfileAfterPictureRemoval });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/profile', AppProfile);
+    const page = harness.routeNativeElement as HTMLElement;
+
+    clickPictureRemoval(page);
+    harness.fixture.detectChanges();
+    const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
+    if (!confirmation) {
+      throw new Error('No Profile picture removal confirmation');
+    }
+    buttonNamed(confirmation, 'Remove picture').click();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+
+    expect(removeProfilePicture).toHaveBeenCalledOnce();
+    expect(profile()?.hasPicture).toBe(false);
+    expect(pictureUrl()).toBeNull();
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain(
+      'Your picture was removed, but the Profile could not be refreshed.',
+    );
+    expect(page.textContent).toContain('Retry refresh');
+
+    click(page, 'Retry refresh');
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+
+    expect(refreshProfileAfterPictureRemoval).toHaveBeenCalledTimes(2);
+    expect(removeProfilePicture).toHaveBeenCalledOnce();
+    expect(profile()?.hasPicture).toBe(false);
+    expect(pictureUrl()).toBeNull();
+    expect(page.textContent).toContain('Profile picture removed.');
+  });
+
+  it('clears the successful Profile picture removal notice after three seconds', async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      const removeProfilePicture = vi.fn(() => of(undefined));
+      setup(signal<Profile | null>({ ...ADA, hasPicture: true }), { removeProfilePicture });
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl('/profile', AppProfile);
+      const page = harness.routeNativeElement as HTMLElement;
+
+      clickPictureRemoval(page);
+      harness.fixture.detectChanges();
+      const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
+      if (!confirmation) {
+        throw new Error('No Profile picture removal confirmation');
+      }
+      buttonNamed(confirmation, 'Remove picture').click();
+      await harness.fixture.whenStable();
+      harness.fixture.detectChanges();
+      expect(page.textContent).toContain('Profile picture removed.');
+
+      const timeoutIndex = setTimeoutSpy.mock.calls.reduce(
+        (lastMatch, [, delay], index) => (delay === 3000 ? index : lastMatch),
+        -1,
+      );
+      expect(timeoutIndex).toBeGreaterThanOrEqual(0);
+      const timeoutCall = setTimeoutSpy.mock.calls[timeoutIndex];
+      const timeoutId = setTimeoutSpy.mock.results[timeoutIndex]?.value;
+      if (!timeoutCall || typeof timeoutCall[0] !== 'function') {
+        throw new Error('Expected a callback for the Profile picture removal notice timeout');
+      }
+      timeoutCall[0]();
+      clearTimeout(timeoutId);
+      harness.fixture.detectChanges();
+
+      expect(page.textContent).not.toContain('Profile picture removed.');
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 
   it('protects changed Profile drafts during navigation and discards only after confirmation', async () => {
@@ -244,7 +438,7 @@ describe('Profile', () => {
       profilePictureUrl.set('blob:saved-profile-picture');
       return 'refreshed' as const;
     });
-    setup(signal<Profile | null>(ADA), { uploadProfilePicture }, profilePictureUrl, {
+    setup(signal<Profile | null>({ ...ADA, hasPicture: true }), { uploadProfilePicture }, profilePictureUrl, {
       refreshProfileAfterPictureUpload,
     });
     const harness = await RouterTestingHarness.create();
@@ -417,7 +611,7 @@ describe('Profile', () => {
       profilePictureUrl.set('blob:saved-profile-picture');
       return 'refreshed' as const;
     });
-    setup(signal<Profile | null>(ADA), { uploadProfilePicture }, profilePictureUrl, {
+    setup(signal<Profile | null>({ ...ADA, hasPicture: true }), { uploadProfilePicture }, profilePictureUrl, {
       refreshProfileAfterPictureUpload,
     });
     const harness = await RouterTestingHarness.create();
@@ -431,6 +625,7 @@ describe('Profile', () => {
       'profile-picture-editor button[aria-label="Choose a Profile picture"]',
     );
     expect(pictureAction?.disabled).toBe(true);
+    expect(page.querySelector<HTMLButtonElement>('button[aria-label="Remove Profile picture"]')?.disabled).toBe(true);
     expect(uploadProfilePicture).toHaveBeenCalledOnce();
     expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(false);
     harness.fixture.detectChanges();
@@ -447,6 +642,38 @@ describe('Profile', () => {
         .querySelector('profile-identity profile-picture-editor button[aria-label="Choose a Profile picture"] img')
         ?.getAttribute('src'),
     ).toBe('blob:saved-profile-picture');
+    expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(true);
+  });
+
+  it('blocks navigation and upload while a confirmed Profile picture removal is pending', async () => {
+    const removal = new Subject<void>();
+    const removeProfilePicture = vi.fn(() => removal.asObservable());
+    setup(signal<Profile | null>({ ...ADA, hasPicture: true }), { removeProfilePicture });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/profile', AppProfile);
+    const page = harness.routeNativeElement as HTMLElement;
+
+    clickPictureRemoval(page);
+    harness.fixture.detectChanges();
+    const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
+    if (!confirmation) {
+      throw new Error('No Profile picture removal confirmation');
+    }
+    buttonNamed(confirmation, 'Remove picture').click();
+    await vi.waitFor(() => expect(removeProfilePicture).toHaveBeenCalledOnce());
+    harness.fixture.detectChanges();
+
+    expect(page.querySelector<HTMLButtonElement>('button[aria-label="Choose a Profile picture"]')?.disabled).toBe(true);
+    expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(false);
+    harness.fixture.detectChanges();
+    expect(page.textContent).toContain('Removal in progress. Wait for it to finish before closing.');
+
+    removal.next(undefined);
+    removal.complete();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+
+    expect(page.querySelector('button[aria-label="Remove Profile picture"]')).toBeNull();
     expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(true);
   });
 
@@ -529,6 +756,179 @@ describe('Profile', () => {
     expect(profileImage?.getAttribute('src')).toBe('blob:uploaded-profile-picture');
     expect(userMenuImage?.getAttribute('src')).toBe('blob:uploaded-profile-picture');
     expect(objectUrls.createObjectURL).toHaveBeenCalledOnce();
+    http.verify();
+  });
+
+  it('removes the saved picture through DELETE and restores both shared identity fallbacks', async () => {
+    const objectUrls = stubImageHandling(['blob:saved-profile-picture']);
+    const stored = new Map<string, string>();
+    TestBed.configureTestingModule({
+      imports: [ProfilePictureIntegrationHost],
+      providers: [
+        provideRouter([{ path: 'profile', component: AppProfile, canDeactivate: [profileCanDeactivateGuard] }]),
+        provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: BASE_URL },
+        {
+          provide: LocalStorage,
+          useValue: {
+            getItem: (key: string) => stored.get(key) ?? null,
+            setItem: (key: string, value: string) => void stored.set(key, value),
+            removeItem: (key: string) => void stored.delete(key),
+          },
+        },
+        provideIcons(),
+        provideDialogDefaults(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        {
+          provide: Theming,
+          useValue: { scheme: signal('light'), persistenceNotice: signal(null), setScheme: vi.fn() },
+        },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(Session);
+    const signIn = session.signIn({ email: 'ada@example.com', password: 'secret12' });
+    http.expectOne(`${BASE_URL}/api/auth/login`).flush({
+      token: 'picture-removal-token',
+      user: { ...ADA, hasPicture: true },
+    });
+    await signIn;
+    const pictureRequest = http.expectOne(`${BASE_URL}/api/profile/picture`);
+    expect(pictureRequest.request.method).toBe('GET');
+    pictureRequest.flush(new Blob(['saved image'], { type: 'image/png' }));
+
+    const fixture = TestBed.createComponent(ProfilePictureIntegrationHost);
+    fixture.detectChanges();
+    await TestBed.inject(Router).navigateByUrl('/profile');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelectorAll('profile-picture-avatar img')).toHaveLength(2);
+
+    clickPictureRemoval(page);
+    fixture.detectChanges();
+    const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
+    if (!confirmation) {
+      throw new Error('No Profile picture removal confirmation');
+    }
+    buttonNamed(confirmation, 'Remove picture').click();
+    fixture.detectChanges();
+
+    const removal = http.expectOne(`${BASE_URL}/api/profile/picture`);
+    expect(removal.request.method).toBe('DELETE');
+    expect(removal.request.headers.get('Authorization')).toBe('Bearer picture-removal-token');
+    removal.flush(null, { status: 204, statusText: 'No Content' });
+    await Promise.resolve();
+    http
+      .expectOne(`${BASE_URL}/api/profile`)
+      .error(new ProgressEvent('error'), { status: 500, statusText: 'Internal Server Error' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(session.profile()?.hasPicture).toBe(false);
+    expect(session.profilePictureUrl()).toBeNull();
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain(
+      'Your picture was removed, but the Profile could not be refreshed.',
+    );
+    expect(page.querySelector('profile-identity profile-picture-avatar img')).toBeNull();
+    expect(page.querySelector('user profile-picture-avatar img')).toBeNull();
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith('blob:saved-profile-picture');
+
+    const refreshAlert = page.querySelector<HTMLElement>('[role="alert"]');
+    if (!refreshAlert) {
+      throw new Error('No Profile refresh alert');
+    }
+    buttonNamed(refreshAlert, 'Retry refresh').click();
+    http.expectOne(`${BASE_URL}/api/profile`).flush({ ...ADA, hasPicture: false });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(session.profile()?.hasPicture).toBe(false);
+    expect(session.profilePictureUrl()).toBeNull();
+    expect(page.querySelector('profile-identity profile-picture-avatar img')).toBeNull();
+    expect(page.querySelector('user profile-picture-avatar img')).toBeNull();
+    expect(page.querySelector('profile-identity mat-icon[svgIcon="user-round"]')).not.toBeNull();
+    expect(page.querySelector('user mat-icon[svgIcon="user-round"]')).not.toBeNull();
+    expect(page.querySelector('[role="status"]')?.textContent).toContain('Profile picture removed.');
+    expect((document.activeElement as HTMLButtonElement | null)?.getAttribute('aria-label')).toBe(
+      'Choose a Profile picture',
+    );
+    http.expectNone(`${BASE_URL}/api/profile/picture`);
+    http.verify();
+  });
+
+  it('expires the rendered Profile route when picture removal returns an unauthorized response', async () => {
+    const stored = new Map<string, string>();
+    TestBed.configureTestingModule({
+      imports: [ProfilePictureIntegrationHost],
+      providers: [
+        provideRouter([
+          { path: 'profile', component: AppProfile, canDeactivate: [profileCanDeactivateGuard] },
+          { path: 'auth/sign-in', component: Destination },
+        ]),
+        provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: BASE_URL },
+        {
+          provide: LocalStorage,
+          useValue: {
+            getItem: (key: string) => stored.get(key) ?? null,
+            setItem: (key: string, value: string) => void stored.set(key, value),
+            removeItem: (key: string) => void stored.delete(key),
+          },
+        },
+        provideIcons(),
+        provideDialogDefaults(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        {
+          provide: Theming,
+          useValue: { scheme: signal('light'), persistenceNotice: signal(null), setScheme: vi.fn() },
+        },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(Session);
+    const signIn = session.signIn({ email: 'ada@example.com', password: 'secret12' });
+    http.expectOne(`${BASE_URL}/api/auth/login`).flush({
+      token: 'picture-removal-expiry-token',
+      user: { ...ADA, hasPicture: true },
+    });
+    await signIn;
+    http.expectOne(`${BASE_URL}/api/profile/picture`).flush(new Blob(['saved image'], { type: 'image/png' }));
+
+    const fixture = TestBed.createComponent(ProfilePictureIntegrationHost);
+    fixture.detectChanges();
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/profile');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+
+    clickPictureRemoval(page);
+    fixture.detectChanges();
+    const confirmation = page.querySelector<HTMLElement>('[role="alertdialog"]');
+    if (!confirmation) {
+      throw new Error('No Profile picture removal confirmation');
+    }
+    buttonNamed(confirmation, 'Remove picture').click();
+    fixture.detectChanges();
+
+    const removal = http.expectOne(`${BASE_URL}/api/profile/picture`);
+    expect(removal.request.method).toBe('DELETE');
+    removal.flush(null, { status: 401, statusText: 'Unauthorized' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(session.isAuthenticated()).toBe(false);
+    expect(session.profile()).toBeNull();
+    expect(session.token()).toBeNull();
+    expect(session.profilePictureOperationPending()).toBe(false);
+    expect(router.parseUrl(router.url).queryParams).toEqual({
+      returnUrl: '/profile',
+      reason: 'session-expired',
+    });
+    expect(page.textContent).toContain('Destination');
     http.verify();
   });
 
