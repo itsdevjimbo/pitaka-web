@@ -13,7 +13,7 @@ type SupportedImage = {
   animated: boolean;
 };
 
-export type ProfilePictureValidation = { valid: true; preview: Blob } | { valid: false; message: string };
+export type ProfilePictureValidation = { valid: true } | { valid: false; message: string };
 
 /** Check the encoded image itself before using its dimensions or trusting its MIME type. */
 export async function validateProfilePicture(file: File): Promise<ProfilePictureValidation> {
@@ -36,9 +36,9 @@ export async function validateProfilePicture(file: File): Promise<ProfilePicture
     return { valid: false, message: IMAGE_RULES.animated };
   }
 
-  const preview = new Blob([file], { type: image.mimeType });
+  const imageBlob = new Blob([file], { type: image.mimeType });
   try {
-    const { width, height } = await decodedDimensions(preview);
+    const { width, height } = await decodedDimensions(imageBlob);
     if (width <= 0 || height <= 0) {
       return { valid: false, message: IMAGE_RULES.invalid };
     }
@@ -49,7 +49,7 @@ export async function validateProfilePicture(file: File): Promise<ProfilePicture
     return { valid: false, message: IMAGE_RULES.invalid };
   }
 
-  return { valid: true, preview };
+  return { valid: true };
 }
 
 function inspectImageBytes(bytes: Uint8Array): SupportedImage | null {

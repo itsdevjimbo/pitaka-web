@@ -34,8 +34,7 @@ export class ProfilePictureAvatar {
   private readonly session = inject(Session);
 
   readonly appearance = input.required<ProfilePictureAppearance>();
-  readonly previewUrl = input<string | null>(null);
-  protected readonly pictureUrl = computed(() => this.previewUrl() ?? this.session.profilePictureUrl());
+  protected readonly pictureUrl = computed(() => this.session.profilePictureUrl());
   protected readonly avatarStyles = computed(() => AVATAR_STYLES[this.appearance()]);
 
   protected profilePictureDecodeFailed(url: string): void {

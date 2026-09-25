@@ -1,6 +1,7 @@
 import {
   afterNextRender,
   Component,
+  computed,
   DestroyRef,
   ElementRef,
   inject,
@@ -10,10 +11,10 @@ import {
   viewChild,
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService } from '@/app/core/auth';
-import { EditorDismissal } from '@/app/core/dialog';
 import { ProfilePictureAvatar } from '@/app/core/profile-picture';
 import { Session } from '@/app/core/session';
 import { validateProfilePicture } from './profile-picture-validation';
@@ -23,10 +24,10 @@ const REFRESH_FAILED = 'Your picture was uploaded, but the saved Profile picture
 const PICTURE_ABSENT =
   'Your upload completed, but the server reports no saved Profile picture. Choose a picture to try again.';
 
-/** Selects, previews, and uploads a private Profile picture. */
+/** Selects and uploads a private Profile picture. */
 @Component({
   selector: 'profile-picture-editor',
-  imports: [MatButton, ProfilePictureAvatar],
+  imports: [MatButton, MatTooltipModule, ProfilePictureAvatar],
   templateUrl: './profile-picture-editor.html',
 })
 export class ProfilePictureEditor {
@@ -34,9 +35,7 @@ export class ProfilePictureEditor {
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly session = inject(Session);
-  private readonly editorDismissal = inject(EditorDismissal);
 
-  protected readonly previewUrl = signal<string | null>(null);
   protected readonly validating = signal(false);
   protected readonly saving = signal(false);
   protected readonly pendingFeedback = signal(false);
@@ -44,20 +43,29 @@ export class ProfilePictureEditor {
   protected readonly refreshErrorMessage = signal<string | null>(null);
   protected readonly successMessage = signal<string | null>(null);
   protected readonly refreshing = signal(false);
+  protected readonly hasEditorContent = computed(
+    () =>
+      this.validating() ||
+      this.saving() ||
+      this.pendingFeedback() ||
+      this.errorMessage() !== null ||
+      this.refreshErrorMessage() !== null ||
+      this.successMessage() !== null,
+  );
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
   private readonly pictureAction = viewChild<ElementRef<HTMLButtonElement>>('pictureAction');
-  private selectedFile: File | null = null;
   private selectionGeneration = 0;
+  private successMessageTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.destroyRef.onDestroy(() => {
       this.selectionGeneration += 1;
-      this.releasePreview();
+      this.clearSuccessMessageTimeout();
     });
   }
 
   hasUnsavedChanges(): boolean {
-    return this.validating() || this.previewUrl() !== null;
+    return this.validating();
   }
 
   isWritePending(): boolean {
@@ -73,9 +81,7 @@ export class ProfilePictureEditor {
     this.validating.set(false);
     this.pendingFeedback.set(false);
     this.errorMessage.set(null);
-    this.successMessage.set(null);
-    this.selectedFile = null;
-    this.releasePreview();
+    this.clearSuccessMessage();
   }
 
   protected async selectPicture(event: Event): Promise<void> {
@@ -87,11 +93,9 @@ export class ProfilePictureEditor {
     }
 
     const generation = ++this.selectionGeneration;
-    this.selectedFile = null;
-    this.releasePreview();
     this.errorMessage.set(null);
     this.refreshErrorMessage.set(null);
-    this.successMessage.set(null);
+    this.clearSuccessMessage();
     this.pendingFeedback.set(false);
     this.validating.set(true);
 
@@ -105,8 +109,7 @@ export class ProfilePictureEditor {
       return;
     }
 
-    this.selectedFile = file;
-    this.previewUrl.set(URL.createObjectURL(result.preview));
+    await this.uploadPicture(file);
   }
 
   protected openFileDialog(): void {
@@ -116,9 +119,8 @@ export class ProfilePictureEditor {
     this.fileInput()?.nativeElement.click();
   }
 
-  protected async savePicture(): Promise<void> {
-    const file = this.selectedFile;
-    if (file === null || this.validating() || this.isWritePending()) {
+  private async uploadPicture(file: File): Promise<void> {
+    if (this.validating() || this.isWritePending()) {
       return;
     }
 
@@ -126,7 +128,7 @@ export class ProfilePictureEditor {
     this.pendingFeedback.set(false);
     this.errorMessage.set(null);
     this.refreshErrorMessage.set(null);
-    this.successMessage.set(null);
+    this.clearSuccessMessage();
     try {
       await firstValueFrom(this.auth.uploadProfilePicture(file));
     } catch (error) {
@@ -140,28 +142,11 @@ export class ProfilePictureEditor {
     if (this.destroyRef.destroyed) {
       return;
     }
-    this.selectedFile = null;
-    this.releasePreview();
     await this.refreshSavedPicture(true);
     if (!this.destroyRef.destroyed) {
       this.saving.set(false);
       this.focusPictureAction();
     }
-  }
-
-  protected async cancelSelection(): Promise<void> {
-    if (this.isWritePending()) {
-      this.pendingFeedback.set(true);
-      return;
-    }
-    if (this.hasUnsavedChanges()) {
-      const discard = await firstValueFrom(this.editorDismissal.confirmDiscard());
-      if (!discard) {
-        return;
-      }
-    }
-    this.discardUnsavedChanges();
-    this.focusPictureAction();
   }
 
   protected async retryRefresh(): Promise<void> {
@@ -194,7 +179,7 @@ export class ProfilePictureEditor {
         return;
       }
       this.errorMessage.set(null);
-      this.successMessage.set('Profile picture saved.');
+      this.showSuccessMessage('Profile picture saved.');
     } catch {
       if (!this.destroyRef.destroyed) {
         this.refreshErrorMessage.set(REFRESH_FAILED);
@@ -202,16 +187,29 @@ export class ProfilePictureEditor {
     }
   }
 
-  private releasePreview(): void {
-    const url = this.previewUrl();
-    if (url !== null) {
-      URL.revokeObjectURL(url);
-      this.previewUrl.set(null);
-    }
-  }
-
   private focusPictureAction(): void {
     runInInjectionContext(this.injector, () => afterNextRender(() => this.pictureAction()?.nativeElement.focus()));
+  }
+
+  private showSuccessMessage(message: string): void {
+    this.clearSuccessMessageTimeout();
+    this.successMessage.set(message);
+    this.successMessageTimeout = setTimeout(() => {
+      this.successMessageTimeout = null;
+      this.successMessage.set(null);
+    }, 3000);
+  }
+
+  private clearSuccessMessage(): void {
+    this.clearSuccessMessageTimeout();
+    this.successMessage.set(null);
+  }
+
+  private clearSuccessMessageTimeout(): void {
+    if (this.successMessageTimeout !== null) {
+      clearTimeout(this.successMessageTimeout);
+      this.successMessageTimeout = null;
+    }
   }
 }
 

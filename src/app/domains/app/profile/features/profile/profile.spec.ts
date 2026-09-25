@@ -119,7 +119,7 @@ describe('Profile', () => {
     return bytes.buffer;
   }
 
-  function stubImageHandling(urls = ['blob:profile-picture-draft'], dimensions = { width: 32, height: 32 }) {
+  function stubImageHandling(urls = ['blob:saved-profile-picture'], dimensions = { width: 32, height: 32 }) {
     const NativeURL = globalThis.URL;
     let urlIndex = 0;
     const createObjectURL = vi.fn(() => urls[Math.min(urlIndex++, urls.length - 1)]);
@@ -195,7 +195,7 @@ describe('Profile', () => {
   });
 
   it('allows the shared session-expiry teardown to clear the Profile and leave the route', async () => {
-    const { revokeObjectURL } = stubImageHandling();
+    const { createObjectURL } = stubImageHandling();
     const { profile } = setup();
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/profile', AppProfile);
@@ -204,7 +204,7 @@ describe('Profile', () => {
     expect(page.textContent).toContain('Ada Lovelace');
     choosePicture(page, imageFile());
     await harness.fixture.whenStable();
-    expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).not.toBeNull();
+    expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).toBeNull();
     profile.set(null);
     harness.fixture.detectChanges();
 
@@ -212,7 +212,7 @@ describe('Profile', () => {
     expect(page.textContent).not.toContain('ada@example.com');
     expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(true);
     expect(TestBed.inject(Router).url).toBe('/elsewhere');
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:profile-picture-draft');
+    expect(createObjectURL).not.toHaveBeenCalled();
   });
 
   it('shows the saved Profile picture and restores the person icon after an image decode failure', async () => {
@@ -236,50 +236,39 @@ describe('Profile', () => {
     expect(page.querySelector('mat-icon[svgIcon="user-round"]')).not.toBeNull();
   });
 
-  it('previews a selected picture and releases the draft when Cancel is chosen', async () => {
-    const { revokeObjectURL } = stubImageHandling([
-      'blob:first-profile-picture-draft',
-      'blob:replacement-profile-picture-draft',
-    ]);
-    setup();
+  it('automatically uploads a selected picture without showing a local preview', async () => {
+    const { createObjectURL, revokeObjectURL } = stubImageHandling();
+    const profilePictureUrl = signal<string | null>(null);
+    const uploadProfilePicture = vi.fn(() => of(undefined));
+    const refreshProfileAfterPictureUpload = vi.fn(async () => {
+      profilePictureUrl.set('blob:saved-profile-picture');
+      return 'refreshed' as const;
+    });
+    setup(signal<Profile | null>(ADA), { uploadProfilePicture }, profilePictureUrl, {
+      refreshProfileAfterPictureUpload,
+    });
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/profile', AppProfile);
     const page = harness.routeNativeElement as HTMLElement;
-    choosePicture(page, imageFile());
+    const file = imageFile();
+    choosePicture(page, file);
     await harness.fixture.whenStable();
     harness.fixture.detectChanges();
 
-    choosePicture(page, imageFile('replacement.png'));
-    await harness.fixture.whenStable();
-    harness.fixture.detectChanges();
-
-    const preview = page.querySelector<HTMLImageElement>('profile-picture-editor profile-picture-avatar img');
-    expect(preview?.getAttribute('src')).toBe('blob:replacement-profile-picture-draft');
-    expect(page.textContent).toContain('JPEG, PNG, or WebP');
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:first-profile-picture-draft');
-
-    const firstNavigation = TestBed.inject(Router).navigateByUrl('/elsewhere');
-    await vi.waitFor(() => expect(overlay().querySelector('[role="alertdialog"]')).not.toBeNull());
-    click(overlay(), 'Keep editing');
-    expect(await firstNavigation).toBe(false);
-
-    click(page, 'Cancel');
-    await harness.fixture.whenStable();
-    expect(overlay().textContent).toContain('Discard changes?');
-    click(overlay(), 'Discard changes');
-    await harness.fixture.whenStable();
-    harness.fixture.detectChanges();
-
-    expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).toBeNull();
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:replacement-profile-picture-draft');
-    expect(document.activeElement).toBe(
-      page.querySelector('profile-picture-editor button[aria-label="Choose a Profile picture"]'),
+    expect(uploadProfilePicture).toHaveBeenCalledOnce();
+    expect(uploadProfilePicture).toHaveBeenCalledWith(file);
+    expect(refreshProfileAfterPictureUpload).toHaveBeenCalledOnce();
+    expect(page.querySelector('profile-picture-editor profile-picture-avatar img')?.getAttribute('src')).toBe(
+      'blob:saved-profile-picture',
     );
+    expect(page.textContent).toContain('Profile picture saved.');
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
     expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(true);
   });
 
   it('accepts JPEG, PNG, and WebP from their bytes even when the filename and declared type disagree', async () => {
-    stubImageHandling(['blob:jpeg-preview', 'blob:png-preview', 'blob:webp-preview']);
+    stubImageHandling();
     setup();
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/profile', AppProfile);
@@ -290,13 +279,11 @@ describe('Profile', () => {
       new File([webpHeader()], 'portrait.jpeg', { type: 'image/jpeg' }),
     ];
 
-    for (const [index, file] of selections.entries()) {
+    for (const file of selections) {
       choosePicture(page, file);
       await harness.fixture.whenStable();
       harness.fixture.detectChanges();
-      expect(
-        page.querySelector<HTMLImageElement>('profile-picture-editor profile-picture-avatar img')?.getAttribute('src'),
-      ).toBe(['blob:jpeg-preview', 'blob:png-preview', 'blob:webp-preview'][index]);
+      expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).toBeNull();
     }
   });
 
@@ -342,7 +329,7 @@ describe('Profile', () => {
   });
 
   it('keeps a rejected upload selected for retry and distinguishes upload success from refresh failure', async () => {
-    const { revokeObjectURL } = stubImageHandling();
+    stubImageHandling();
     const profilePictureUrl = signal<string | null>('blob:previous-saved-picture');
     const uploadProfilePicture = vi
       .fn()
@@ -370,9 +357,6 @@ describe('Profile', () => {
     const file = imageFile();
     choosePicture(page, file);
     await harness.fixture.whenStable();
-
-    click(page, 'Save picture');
-    await harness.fixture.whenStable();
     harness.fixture.detectChanges();
 
     expect(page.querySelector('[role="alert"]')?.textContent).toContain(
@@ -381,7 +365,7 @@ describe('Profile', () => {
     expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).not.toBeNull();
     expect(profilePictureUrl()).toBe('blob:previous-saved-picture');
 
-    click(page, 'Save picture');
+    choosePicture(page, file);
     await harness.fixture.whenStable();
     harness.fixture.detectChanges();
 
@@ -392,7 +376,6 @@ describe('Profile', () => {
     );
     expect(page.querySelector('[role="alert"]')?.textContent).toContain('could not be refreshed');
     expect(page.querySelector('[role="alert"]')?.textContent).toContain('Retry refresh');
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:profile-picture-draft');
     expect(refreshProfileAfterPictureUpload).toHaveBeenCalledOnce();
 
     click(page, 'Retry refresh');
@@ -417,8 +400,6 @@ describe('Profile', () => {
     const page = harness.routeNativeElement as HTMLElement;
     choosePicture(page, imageFile());
     await harness.fixture.whenStable();
-    click(page, 'Save picture');
-    await harness.fixture.whenStable();
     harness.fixture.detectChanges();
 
     expect(page.querySelector('[role="alert"]')?.textContent).toContain('server reports no saved Profile picture');
@@ -428,7 +409,7 @@ describe('Profile', () => {
   });
 
   it('blocks navigation and duplicate uploads while the picture write is pending', async () => {
-    const { revokeObjectURL } = stubImageHandling();
+    stubImageHandling();
     const upload = new Subject<void>();
     const uploadProfilePicture = vi.fn(() => upload.asObservable());
     const profilePictureUrl = signal<string | null>(null);
@@ -443,15 +424,13 @@ describe('Profile', () => {
     await harness.navigateByUrl('/profile', AppProfile);
     const page = harness.routeNativeElement as HTMLElement;
     choosePicture(page, imageFile());
-    await harness.fixture.whenStable();
-    click(page, 'Save picture');
+    await vi.waitFor(() => expect(uploadProfilePicture).toHaveBeenCalledOnce());
     harness.fixture.detectChanges();
 
-    const saveButton = Array.from(page.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => button.textContent?.trim() === 'Saving…',
+    const pictureAction = page.querySelector<HTMLButtonElement>(
+      'profile-picture-editor button[aria-label="Choose a Profile picture"]',
     );
-    expect(saveButton?.disabled).toBe(true);
-    saveButton?.click();
+    expect(pictureAction?.disabled).toBe(true);
     expect(uploadProfilePicture).toHaveBeenCalledOnce();
     expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(false);
     harness.fixture.detectChanges();
@@ -463,7 +442,6 @@ describe('Profile', () => {
     harness.fixture.detectChanges();
 
     expect(refreshProfileAfterPictureUpload).toHaveBeenCalledOnce();
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:profile-picture-draft');
     expect(
       page
         .querySelector('profile-identity profile-picture-editor button[aria-label="Choose a Profile picture"] img')
@@ -473,7 +451,7 @@ describe('Profile', () => {
   });
 
   it('updates the Profile and user menu together after a successful picture upload', async () => {
-    const objectUrls = stubImageHandling(['blob:picture-preview', 'blob:uploaded-profile-picture']);
+    const objectUrls = stubImageHandling(['blob:uploaded-profile-picture']);
     const stored = new Map<string, string>();
     TestBed.configureTestingModule({
       imports: [ProfilePictureIntegrationHost],
@@ -516,11 +494,18 @@ describe('Profile', () => {
 
     const page = fixture.nativeElement as HTMLElement;
     choosePicture(page, imageFile());
-    await fixture.whenStable();
-    click(page, 'Save picture');
     fixture.detectChanges();
 
-    const upload = http.expectOne(`${BASE_URL}/api/profile/picture`);
+    const uploadRequest: { value: ReturnType<typeof http.expectOne> | null } = { value: null };
+    await vi.waitFor(() => {
+      const requests = http.match(`${BASE_URL}/api/profile/picture`);
+      expect(requests).toHaveLength(1);
+      uploadRequest.value = requests[0] ?? null;
+    });
+    const upload = uploadRequest.value;
+    if (upload === null) {
+      throw new Error('Expected the Profile picture upload');
+    }
     expect(upload.request.method).toBe('PUT');
     expect(upload.request.headers.get('Authorization')).toBe('Bearer picture-upload-token');
     expect((upload.request.body as FormData).get('File')).toBeInstanceOf(File);
@@ -543,7 +528,7 @@ describe('Profile', () => {
     expect(session.profile()?.hasPicture).toBe(true);
     expect(profileImage?.getAttribute('src')).toBe('blob:uploaded-profile-picture');
     expect(userMenuImage?.getAttribute('src')).toBe('blob:uploaded-profile-picture');
-    expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(2);
+    expect(objectUrls.createObjectURL).toHaveBeenCalledOnce();
     http.verify();
   });
 
