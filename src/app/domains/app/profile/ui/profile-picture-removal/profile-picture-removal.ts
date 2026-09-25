@@ -220,12 +220,6 @@ export class ProfilePictureRemoval {
   }
 
   private focusPictureChooser(): void {
-    runInInjectionContext(this.injector, () =>
-      afterNextRender(() =>
-        this.host.nativeElement.parentElement
-          ?.querySelector<HTMLButtonElement>('profile-picture-editor button[aria-label="Choose a Profile picture"]')
-          ?.focus(),
-      ),
-    );
+    this.focusAfterRender('profile-picture-editor button[aria-label="Choose a Profile picture"]');
   }
 }
