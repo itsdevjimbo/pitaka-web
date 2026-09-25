@@ -6,12 +6,11 @@ import { Session } from '@/app/core/session';
 import { ProfileEmail } from '../../ui/profile-email/profile-email';
 import { ProfileIdentity } from '../../ui/profile-identity/profile-identity';
 import { ProfilePassword } from '../../ui/profile-password/profile-password';
-import { ProfilePictureEditor } from '../../ui/profile-picture-editor/profile-picture-editor';
 
 /** The Profile dashboard groups identity, email, and password settings. */
 @Component({
   selector: 'app-profile',
-  imports: [ProfileEmail, ProfileIdentity, ProfilePassword, ProfilePictureEditor],
+  imports: [ProfileEmail, ProfileIdentity, ProfilePassword],
   templateUrl: './profile.html',
   host: { class: 'flex flex-auto flex-col' },
 })
@@ -21,7 +20,6 @@ export default class AppProfile {
   private readonly editorDismissal = inject(EditorDismissal);
 
   private readonly identityEditor = viewChild(ProfileIdentity);
-  private readonly pictureEditor = viewChild(ProfilePictureEditor);
   private readonly emailEditor = viewChild(ProfileEmail);
   private readonly passwordEditor = viewChild(ProfilePassword);
 
@@ -34,7 +32,7 @@ export default class AppProfile {
       return true;
     }
 
-    const editors = [this.identityEditor(), this.pictureEditor(), this.emailEditor(), this.passwordEditor()].filter(
+    const editors = [this.identityEditor(), this.emailEditor(), this.passwordEditor()].filter(
       (editor): editor is Exclude<typeof editor, undefined> => editor !== undefined,
     );
     const pending = editors.find((editor) => editor.isWritePending());

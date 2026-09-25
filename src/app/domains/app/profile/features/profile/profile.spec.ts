@@ -141,6 +141,27 @@ describe('Profile', () => {
     fileInput.dispatchEvent(new Event('change'));
   }
 
+  it('opens the native file chooser from the portrait control inside Identity', async () => {
+    setup();
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/profile', AppProfile);
+    const page = harness.routeNativeElement as HTMLElement;
+    const identity = page.querySelector('profile-identity');
+    const pictureEditor = page.querySelector('profile-picture-editor');
+    const portrait = identity?.querySelector<HTMLButtonElement>('button[aria-label="Choose a Profile picture"]');
+    const fileInput = page.querySelector<HTMLInputElement>('#profile-picture-file');
+
+    expect(identity?.contains(pictureEditor)).toBe(true);
+    if (!portrait || !fileInput) {
+      throw new Error('Expected the Identity portrait control and Profile picture chooser');
+    }
+    const openFileChooser = vi.spyOn(fileInput, 'click');
+
+    portrait.click();
+
+    expect(openFileChooser).toHaveBeenCalledOnce();
+  });
+
   it('protects changed Profile drafts during navigation and discards only after confirmation', async () => {
     setup();
     const harness = await RouterTestingHarness.create();
@@ -183,7 +204,7 @@ describe('Profile', () => {
     expect(page.textContent).toContain('Ada Lovelace');
     choosePicture(page, imageFile());
     await harness.fixture.whenStable();
-    expect(page.querySelector('img[alt="Selected Profile picture preview"]')).not.toBeNull();
+    expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).not.toBeNull();
     profile.set(null);
     harness.fixture.detectChanges();
 
@@ -232,7 +253,7 @@ describe('Profile', () => {
     await harness.fixture.whenStable();
     harness.fixture.detectChanges();
 
-    const preview = page.querySelector<HTMLImageElement>('img[alt="Selected Profile picture preview"]');
+    const preview = page.querySelector<HTMLImageElement>('profile-picture-editor profile-picture-avatar img');
     expect(preview?.getAttribute('src')).toBe('blob:replacement-profile-picture-draft');
     expect(page.textContent).toContain('JPEG, PNG, or WebP');
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:first-profile-picture-draft');
@@ -249,9 +270,11 @@ describe('Profile', () => {
     await harness.fixture.whenStable();
     harness.fixture.detectChanges();
 
-    expect(page.querySelector('img[alt="Selected Profile picture preview"]')).toBeNull();
+    expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).toBeNull();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:replacement-profile-picture-draft');
-    expect(document.activeElement).toBe(page.querySelector('#profile-picture-file'));
+    expect(document.activeElement).toBe(
+      page.querySelector('profile-picture-editor button[aria-label="Choose a Profile picture"]'),
+    );
     expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(true);
   });
 
@@ -272,7 +295,7 @@ describe('Profile', () => {
       await harness.fixture.whenStable();
       harness.fixture.detectChanges();
       expect(
-        page.querySelector<HTMLImageElement>('img[alt="Selected Profile picture preview"]')?.getAttribute('src'),
+        page.querySelector<HTMLImageElement>('profile-picture-editor profile-picture-avatar img')?.getAttribute('src'),
       ).toBe(['blob:jpeg-preview', 'blob:png-preview', 'blob:webp-preview'][index]);
     }
   });
@@ -314,7 +337,7 @@ describe('Profile', () => {
       await harness.fixture.whenStable();
       harness.fixture.detectChanges();
       expect(page.querySelector('[role="alert"]')?.textContent).toContain(selection.message);
-      expect(page.querySelector('img[alt="Selected Profile picture preview"]')).toBeNull();
+      expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).toBeNull();
     }
   });
 
@@ -355,7 +378,7 @@ describe('Profile', () => {
     expect(page.querySelector('[role="alert"]')?.textContent).toContain(
       'The server rejected this image. Please choose another picture.',
     );
-    expect(page.querySelector('img[alt="Selected Profile picture preview"]')).not.toBeNull();
+    expect(page.querySelector('profile-picture-editor profile-picture-avatar img')).not.toBeNull();
     expect(profilePictureUrl()).toBe('blob:previous-saved-picture');
 
     click(page, 'Save picture');
@@ -364,7 +387,9 @@ describe('Profile', () => {
 
     expect(uploadProfilePicture).toHaveBeenCalledTimes(2);
     expect(uploadProfilePicture).toHaveBeenNthCalledWith(2, file);
-    expect(page.querySelector('img[alt="Selected Profile picture preview"]')).toBeNull();
+    expect(page.querySelector('profile-picture-editor profile-picture-avatar img')?.getAttribute('src')).toBe(
+      'blob:previous-saved-picture',
+    );
     expect(page.querySelector('[role="alert"]')?.textContent).toContain('could not be refreshed');
     expect(page.querySelector('[role="alert"]')?.textContent).toContain('Retry refresh');
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:profile-picture-draft');
@@ -439,9 +464,11 @@ describe('Profile', () => {
 
     expect(refreshProfileAfterPictureUpload).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:profile-picture-draft');
-    expect(page.querySelector('profile-picture-avatar[appearance="profile"] img')?.getAttribute('src')).toBe(
-      'blob:saved-profile-picture',
-    );
+    expect(
+      page
+        .querySelector('profile-identity profile-picture-editor button[aria-label="Choose a Profile picture"] img')
+        ?.getAttribute('src'),
+    ).toBe('blob:saved-profile-picture');
     expect(await TestBed.inject(Router).navigateByUrl('/elsewhere')).toBe(true);
   });
 
@@ -506,7 +533,9 @@ describe('Profile', () => {
     fixture.detectChanges();
 
     const profileImage = page
-      .querySelector('profile-picture-avatar[appearance="profile"]')
+      .querySelector(
+        'profile-identity profile-picture-editor button[aria-label="Choose a Profile picture"] profile-picture-avatar',
+      )
       ?.querySelector<HTMLImageElement>('img');
     const userMenuImage = page
       .querySelector('user profile-picture-avatar[appearance="user-menu"]')

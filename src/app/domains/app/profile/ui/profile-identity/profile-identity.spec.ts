@@ -147,7 +147,7 @@ describe('ProfileIdentity', () => {
     fixture.detectChanges();
 
     const input = fixture.nativeElement.querySelector('#profile-name') as HTMLInputElement;
-    const cancel = fixture.nativeElement.querySelector('button[type="button"]') as HTMLButtonElement;
+    const cancel = fixture.nativeElement.querySelector('form button[type="button"]') as HTMLButtonElement;
     const save = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(input).not.toBeNull();
     expect(save).not.toBeNull();

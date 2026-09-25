@@ -14,6 +14,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '@/app/core/api';
 import { AuthService } from '@/app/core/auth';
 import { EditorDismissal } from '@/app/core/dialog';
+import { ProfilePictureAvatar } from '@/app/core/profile-picture';
 import { Session } from '@/app/core/session';
 import { validateProfilePicture } from './profile-picture-validation';
 
@@ -25,7 +26,7 @@ const PICTURE_ABSENT =
 /** Selects, previews, and uploads a private Profile picture. */
 @Component({
   selector: 'profile-picture-editor',
-  imports: [MatButton],
+  imports: [MatButton, ProfilePictureAvatar],
   templateUrl: './profile-picture-editor.html',
 })
 export class ProfilePictureEditor {
@@ -44,6 +45,7 @@ export class ProfilePictureEditor {
   protected readonly successMessage = signal<string | null>(null);
   protected readonly refreshing = signal(false);
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
+  private readonly pictureAction = viewChild<ElementRef<HTMLButtonElement>>('pictureAction');
   private selectedFile: File | null = null;
   private selectionGeneration = 0;
 
@@ -107,6 +109,13 @@ export class ProfilePictureEditor {
     this.previewUrl.set(URL.createObjectURL(result.preview));
   }
 
+  protected openFileDialog(): void {
+    if (this.isWritePending() || this.refreshErrorMessage() !== null) {
+      return;
+    }
+    this.fileInput()?.nativeElement.click();
+  }
+
   protected async savePicture(): Promise<void> {
     const file = this.selectedFile;
     if (file === null || this.validating() || this.isWritePending()) {
@@ -136,7 +145,7 @@ export class ProfilePictureEditor {
     await this.refreshSavedPicture(true);
     if (!this.destroyRef.destroyed) {
       this.saving.set(false);
-      this.focusFileInput();
+      this.focusPictureAction();
     }
   }
 
@@ -152,7 +161,7 @@ export class ProfilePictureEditor {
       }
     }
     this.discardUnsavedChanges();
-    this.focusFileInput();
+    this.focusPictureAction();
   }
 
   protected async retryRefresh(): Promise<void> {
@@ -201,8 +210,8 @@ export class ProfilePictureEditor {
     }
   }
 
-  private focusFileInput(): void {
-    runInInjectionContext(this.injector, () => afterNextRender(() => this.fileInput()?.nativeElement.focus()));
+  private focusPictureAction(): void {
+    runInInjectionContext(this.injector, () => afterNextRender(() => this.pictureAction()?.nativeElement.focus()));
   }
 }
 
