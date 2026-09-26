@@ -1,0 +1,32 @@
+name: Promote Production Build
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: production-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Refresh main for ancestry validation
+        run: git fetch --no-tags origin main:refs/remotes/origin/main
+
+      - name: Preserve the checked web build in an immutable Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_IMMUTABILITY_TOKEN: ${{ secrets.RELEASE_IMMUTABILITY_TOKEN }}
+        run: node scripts/promote-web-build-release.mjs "$GITHUB_SHA" "$GITHUB_REF_NAME"
