@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
@@ -12,6 +12,12 @@ const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 export function validateSourceRevision(sourceRevision) {
   if (!SHA_PATTERN.test(sourceRevision)) {
     throw new Error(`Expected a full 40-character source SHA, received: ${sourceRevision}`);
+  }
+}
+
+export function validateRepository(repository) {
+  if (!REPOSITORY_PATTERN.test(repository)) {
+    throw new Error(`Expected an owner/repository name, received: ${repository}`);
   }
 }
 
@@ -35,7 +41,7 @@ export function webBuildArtifactNames(sourceRevision, runId, runAttempt) {
   };
 }
 
-function sha256(value) {
+export function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
@@ -168,9 +174,7 @@ export async function packageWebBuild({
   nodeVersion = process.version,
   npmVersion = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim(),
 }) {
-  if (!REPOSITORY_PATTERN.test(repository)) {
-    throw new Error(`Expected an owner/repository name, received: ${repository}`);
-  }
+  validateRepository(repository);
 
   const names = webBuildArtifactNames(sourceRevision, runId, runAttempt);
   const browserDirectory = resolve(buildDirectory);
@@ -246,9 +250,7 @@ function normalizeArchiveMember(member) {
 }
 
 export async function verifyWebBuildArtifact({ artifactDirectory, sourceRevision, repository, runId, runAttempt }) {
-  if (!REPOSITORY_PATTERN.test(repository)) {
-    throw new Error(`Expected an owner/repository name, received: ${repository}`);
-  }
+  validateRepository(repository);
 
   const rootDirectory = resolve(artifactDirectory);
   const expectedNames = webBuildArtifactNames(sourceRevision, runId ?? 1, runAttempt ?? 1);

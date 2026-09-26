@@ -164,10 +164,7 @@ test('downloads the artifact from a successful run with the requested head SHA',
     const url = new URL(input);
     if (url.pathname.endsWith('/actions/runs')) {
       return responseJson({
-        workflow_runs: [
-          successfulCiRun(99, 'b'.repeat(40)),
-          successfulCiRun(runId),
-        ],
+        workflow_runs: [successfulCiRun(99, 'b'.repeat(40)), successfulCiRun(runId)],
       });
     }
     if (url.pathname.endsWith('/actions/workflows/publish-build.yml/runs')) {
@@ -373,9 +370,11 @@ test('retrieves an existing immutable release after the Actions artifact expires
   const apiBaseUrl = 'https://api.test';
   const versionTag = 'v1.2.3';
   const publicationRunId = 941;
+  let actionsRunLookups = 0;
   const fetchImpl = async (input) => {
     const url = new URL(input);
     if (url.pathname.endsWith('/actions/runs')) {
+      actionsRunLookups += 1;
       return responseJson({ workflow_runs: [successfulCiRun(401)] });
     }
     if (url.pathname.endsWith('/actions/workflows/publish-build.yml/runs')) {
@@ -445,4 +444,50 @@ test('retrieves an existing immutable release after the Actions artifact expires
   assert.equal(result.source, 'release');
   assert.equal(result.releaseTag, versionTag);
   assert.equal(result.archiveSha256, manifest.archive.sha256);
+
+  const lookupsBeforeRequiredRelease = actionsRunLookups;
+  const requiredReleaseResult = await downloadWebBuild({
+    sourceRevision,
+    destinationDirectory: join(directory, 'release-only-download'),
+    repository,
+    releaseTag: versionTag,
+    requireRelease: true,
+    token: 'test-token',
+    apiBaseUrl,
+    fetchImpl,
+  });
+
+  assert.equal(requiredReleaseResult.source, 'release');
+  assert.equal(actionsRunLookups, lookupsBeforeRequiredRelease);
+});
+
+test('requires the published immutable Release instead of falling back to Actions bytes', async () => {
+  const directory = await createTemporaryDirectory();
+  const apiBaseUrl = 'https://api.test';
+  let actionsLookupCount = 0;
+  const fetchImpl = async (input) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith(`/releases/tags/v1.2.4`)) {
+      return new Response('not found', { status: 404 });
+    }
+    if (url.pathname.endsWith('/actions/runs')) {
+      actionsLookupCount += 1;
+    }
+    return new Response('not found', { status: 404 });
+  };
+
+  await assert.rejects(
+    downloadWebBuild({
+      sourceRevision,
+      destinationDirectory: join(directory, 'download'),
+      repository,
+      releaseTag: 'v1.2.4',
+      requireRelease: true,
+      token: 'test-token',
+      apiBaseUrl,
+      fetchImpl,
+    }),
+    /Immutable release v1\.2\.4 was not found/,
+  );
+  assert.equal(actionsLookupCount, 0);
 });

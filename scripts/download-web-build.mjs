@@ -2,23 +2,16 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { githubApiHeaders, githubApiUrl, nextGitHubApiPage } from './github-api.mjs';
 import {
   isMainModule,
+  validateRepository,
   validateSourceRevision,
   verifyWebBuildArtifact,
   webBuildArtifactNames,
 } from './web-build-artifact.mjs';
 
 const DEFAULT_REPOSITORY = 'itsdevjimbo/pitaka-web';
-const GITHUB_API_VERSION = '2026-03-10';
-
-function githubApiHeaders(token) {
-  return {
-    Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token}`,
-    'X-GitHub-Api-Version': GITHUB_API_VERSION,
-  };
-}
 
 function getToken() {
   const existingToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
@@ -32,17 +25,6 @@ function getToken() {
   }
 
   throw new Error('Set GH_TOKEN or GITHUB_TOKEN with Actions: read access to itsdevjimbo/pitaka-web.');
-}
-
-function nextPage(linkHeader) {
-  const links = linkHeader?.split(',') ?? [];
-  for (const link of links) {
-    const match = link.match(/<([^>]+)>;\s*rel="next"/);
-    if (match) {
-      return match[1];
-    }
-  }
-  return undefined;
 }
 
 async function getJsonPages(url, token, fetchImpl) {
@@ -64,16 +46,12 @@ async function getJsonPages(url, token, fetchImpl) {
     } else {
       results.push(body);
     }
-    pageUrl = nextPage(response.headers.get('link'));
+    pageUrl = nextGitHubApiPage(response.headers.get('link'));
   }
   return results;
 }
 
-function apiUrl(apiBaseUrl, repository, pathname, query = '') {
-  return `${apiBaseUrl.replace(/\/$/, '')}/repos/${repository}/${pathname}${query}`;
-}
-
-async function listSuccessfulMainRuns({ sourceRevision, repository, token, apiBaseUrl, fetchImpl }) {
+export async function listSuccessfulMainRuns({ sourceRevision, repository, token, apiBaseUrl, fetchImpl }) {
   const query = new URLSearchParams({
     head_sha: sourceRevision,
     branch: 'main',
@@ -81,7 +59,7 @@ async function listSuccessfulMainRuns({ sourceRevision, repository, token, apiBa
     status: 'completed',
     per_page: '100',
   });
-  const runs = await getJsonPages(apiUrl(apiBaseUrl, repository, 'actions/runs', `?${query}`), token, fetchImpl);
+  const runs = await getJsonPages(githubApiUrl(apiBaseUrl, repository, 'actions/runs', `?${query}`), token, fetchImpl);
   return runs
     .filter(
       (run) =>
@@ -104,7 +82,7 @@ async function listSuccessfulArtifactRuns({ sourceRevision, repository, token, a
     per_page: '100',
   });
   const runs = await getJsonPages(
-    apiUrl(apiBaseUrl, repository, 'actions/workflows/publish-build.yml/runs', `?${query}`),
+    githubApiUrl(apiBaseUrl, repository, 'actions/workflows/publish-build.yml/runs', `?${query}`),
     token,
     fetchImpl,
   );
@@ -129,7 +107,7 @@ function artifactIdentityFromName(name, sourceRevision) {
 
 async function listRunArtifacts({ workflowRunId, sourceRevision, ciRuns, repository, token, apiBaseUrl, fetchImpl }) {
   const artifacts = await getJsonPages(
-    apiUrl(apiBaseUrl, repository, `actions/runs/${workflowRunId}/artifacts`, '?per_page=100'),
+    githubApiUrl(apiBaseUrl, repository, `actions/runs/${workflowRunId}/artifacts`, '?per_page=100'),
     token,
     fetchImpl,
   );
@@ -221,7 +199,9 @@ async function downloadActionsBuild({ sourceRevision, repository, token, apiBase
     const matchingNames = new Set();
     for (const { artifact, identity } of runArtifacts) {
       if (matchingNames.has(artifact.name)) {
-        throw new Error(`Artifact publication run ${run.id} contains duplicate web build artifacts named ${artifact.name}.`);
+        throw new Error(
+          `Artifact publication run ${run.id} contains duplicate web build artifacts named ${artifact.name}.`,
+        );
       }
       matchingNames.add(artifact.name);
       if (artifact.expired) {
@@ -304,7 +284,7 @@ async function downloadReleaseBuild({
   workspace,
 }) {
   const releaseResponse = await fetchImpl(
-    apiUrl(apiBaseUrl, repository, `releases/tags/${encodeURIComponent(releaseTag)}`),
+    githubApiUrl(apiBaseUrl, repository, `releases/tags/${encodeURIComponent(releaseTag)}`),
     {
       headers: githubApiHeaders(token),
     },
@@ -322,7 +302,7 @@ async function downloadReleaseBuild({
     );
   }
   const taggedCommitResponse = await fetchImpl(
-    apiUrl(apiBaseUrl, repository, `commits/${encodeURIComponent(releaseTag)}`),
+    githubApiUrl(apiBaseUrl, repository, `commits/${encodeURIComponent(releaseTag)}`),
     {
       headers: githubApiHeaders(token),
     },
@@ -366,7 +346,7 @@ async function downloadReleaseBuild({
 
   const manifest = await verifyWebBuildArtifact({ artifactDirectory, sourceRevision, repository });
   const ciAttemptResponse = await fetchImpl(
-    apiUrl(apiBaseUrl, repository, `actions/runs/${manifest.ci.runId}/attempts/${manifest.ci.runAttempt}`),
+    githubApiUrl(apiBaseUrl, repository, `actions/runs/${manifest.ci.runId}/attempts/${manifest.ci.runAttempt}`),
     {
       headers: githubApiHeaders(token),
     },
@@ -411,16 +391,18 @@ export async function downloadWebBuild({
   destinationDirectory,
   repository = DEFAULT_REPOSITORY,
   releaseTag,
+  requireRelease = false,
   token,
   apiBaseUrl = 'https://api.github.com',
   fetchImpl = fetch,
 }) {
   validateSourceRevision(sourceRevision);
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
-    throw new Error(`Expected an owner/repository name, received: ${repository}`);
-  }
+  validateRepository(repository);
   if (!destinationDirectory) {
     throw new Error('A destination directory is required.');
+  }
+  if (requireRelease && !releaseTag) {
+    throw new Error('Pass --release-tag <tag> with --require-release to require a public immutable Release.');
   }
   if (!token) {
     throw new Error('Set GH_TOKEN or GITHUB_TOKEN with Actions: read access to itsdevjimbo/pitaka-web.');
@@ -428,12 +410,9 @@ export async function downloadWebBuild({
 
   const workspace = await mkdtemp(join(tmpdir(), 'pitaka-web-build-download-'));
   try {
-    const actions = await downloadActionsBuild({ sourceRevision, repository, token, apiBaseUrl, fetchImpl, workspace });
     let selectedBuild;
     let source = 'actions';
-    if (actions.status === 'available') {
-      selectedBuild = actions.candidate;
-    } else if (releaseTag) {
+    if (requireRelease) {
       selectedBuild = await downloadReleaseBuild({
         sourceRevision,
         repository,
@@ -445,9 +424,32 @@ export async function downloadWebBuild({
       });
       source = 'release';
     } else {
-      throw new Error(
-        `${actions.reason} Pass --release-tag <tag> to retrieve an existing immutable production release. No source rebuild was attempted.`,
-      );
+      const actions = await downloadActionsBuild({
+        sourceRevision,
+        repository,
+        token,
+        apiBaseUrl,
+        fetchImpl,
+        workspace,
+      });
+      if (actions.status === 'available') {
+        selectedBuild = actions.candidate;
+      } else if (releaseTag) {
+        selectedBuild = await downloadReleaseBuild({
+          sourceRevision,
+          repository,
+          releaseTag,
+          token,
+          apiBaseUrl,
+          fetchImpl,
+          workspace,
+        });
+        source = 'release';
+      } else {
+        throw new Error(
+          `${actions.reason} Pass --release-tag <tag> to retrieve an existing immutable production release. No source rebuild was attempted.`,
+        );
+      }
     }
 
     await copyArtifactToDestination(selectedBuild.artifactDirectory, destinationDirectory, sourceRevision);
@@ -470,22 +472,25 @@ async function cli() {
   const [sourceRevision, destinationDirectory, ...options] = process.argv.slice(2);
   if (!sourceRevision || !destinationDirectory) {
     throw new Error(
-      'Usage: download-web-build.mjs <full-sha> <destination-directory> [--release-tag <immutable-version-tag>]',
+      'Usage: download-web-build.mjs <full-sha> <destination-directory> [--release-tag <immutable-version-tag>] [--require-release]',
     );
   }
 
   let releaseTag;
+  let requireRelease = false;
   for (let index = 0; index < options.length; index += 1) {
     if (options[index] === '--release-tag' && options[index + 1]) {
       releaseTag = options[index + 1];
       index += 1;
+    } else if (options[index] === '--require-release') {
+      requireRelease = true;
     } else {
       throw new Error(`Unknown option: ${options[index]}`);
     }
   }
 
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? getToken();
-  const result = await downloadWebBuild({ sourceRevision, destinationDirectory, releaseTag, token });
+  const result = await downloadWebBuild({ sourceRevision, destinationDirectory, releaseTag, requireRelease, token });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
