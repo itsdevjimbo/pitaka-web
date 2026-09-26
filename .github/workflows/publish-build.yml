@@ -55,7 +55,7 @@ jobs:
           node scripts/package-web-build.mjs dist/pitaka/browser "$OUTPUT_DIRECTORY" "$SOURCE_REVISION" "$GITHUB_REPOSITORY" "$CI_RUN_ID" "$CI_RUN_ATTEMPT" >/dev/null
           manifest="$(node scripts/verify-web-build-artifact.mjs "$OUTPUT_DIRECTORY" "$SOURCE_REVISION" "$GITHUB_REPOSITORY" "$CI_RUN_ID" "$CI_RUN_ATTEMPT")"
           archive_name="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.name)' "$manifest")"
-          archive_size="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.sizeBytes)' "$manifest")"
+          archive_size="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).archive.sizeBytes))' "$manifest")"
           archive_sha="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.sha256)' "$manifest")"
           printf 'Checked static build: `%s` (%s bytes, SHA-256 `%s`).\n' "$archive_name" "$archive_size" "$archive_sha" >> "$GITHUB_STEP_SUMMARY"
 
