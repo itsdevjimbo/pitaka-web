@@ -45,11 +45,11 @@ individual immutable assets cannot be deleted or replaced. See
 [GitHub's immutable release documentation](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
 
 These requirements, including version-tag promotion, were agreed during the design
-interview. Implementation is tracked separately: [main artifacts #291](https://github.com/itsdevjimbo/pitaka-web/issues/291),
-[version-tag promotion #293](https://github.com/itsdevjimbo/pitaka-web/issues/293), and
-[serving-image retirement #294](https://github.com/itsdevjimbo/pitaka-web/issues/294).
-The checked-in workflows still build and publish the web image and keep the
-temporary Actions archive. They do not yet implement durable promotion or
-retention enforcement.
-The existing web image publication stays in place until the coordinated deployment consumer handoff in
-[deploy issue #194](https://github.com/itsdevjimbo/pitaka/issues/194) is accepted.
+interview. Implementation is tracked separately: [main artifacts #291](https://github.com/itsdevjimbo/pitaka-web/issues/291)
+and [version-tag promotion #293](https://github.com/itsdevjimbo/pitaka-web/issues/293).
+CI runs tests only. After successful main CI, the `Publish Web Build` workflow
+runs format and lint checks, builds the production browser output, and uploads
+the temporary Actions archive. It does not yet implement durable promotion or
+retention enforcement. The separate
+[deployment consumer #194](https://github.com/itsdevjimbo/pitaka/issues/194)
+owns static serving and API proxying.

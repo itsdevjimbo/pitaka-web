@@ -51,6 +51,31 @@ function responseJson(body) {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
+function successfulCiRun(id, headSha = sourceRevision) {
+  return {
+    id,
+    name: 'CI',
+    head_sha: headSha,
+    head_branch: 'main',
+    event: 'push',
+    status: 'completed',
+    conclusion: 'success',
+    run_attempt: 1,
+  };
+}
+
+function successfulPublicationRun(id) {
+  return {
+    id,
+    name: 'Publish Web Build',
+    head_sha: sourceRevision,
+    head_branch: 'main',
+    event: 'workflow_run',
+    status: 'completed',
+    conclusion: 'success',
+  };
+}
+
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
@@ -133,36 +158,22 @@ test('downloads the artifact from a successful run with the requested head SHA',
   const zipContents = await readFile(zipPath);
   const apiBaseUrl = 'https://api.test';
   const runId = 101;
+  const publicationRunId = 901;
   const artifactId = 501;
   const fetchImpl = async (input) => {
     const url = new URL(input);
     if (url.pathname.endsWith('/actions/runs')) {
       return responseJson({
         workflow_runs: [
-          {
-            id: 99,
-            name: 'CI',
-            head_sha: 'b'.repeat(40),
-            head_branch: 'main',
-            event: 'push',
-            status: 'completed',
-            conclusion: 'success',
-            run_attempt: 1,
-          },
-          {
-            id: runId,
-            name: 'CI',
-            head_sha: sourceRevision,
-            head_branch: 'main',
-            event: 'push',
-            status: 'completed',
-            conclusion: 'success',
-            run_attempt: 1,
-          },
+          successfulCiRun(99, 'b'.repeat(40)),
+          successfulCiRun(runId),
         ],
       });
     }
-    if (url.pathname.endsWith(`/actions/runs/${runId}/artifacts`)) {
+    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+      return responseJson({ workflow_runs: [successfulPublicationRun(publicationRunId)] });
+    }
+    if (url.pathname.endsWith(`/actions/runs/${publicationRunId}/artifacts`)) {
       return responseJson({
         artifacts: [
           {
@@ -199,7 +210,7 @@ test('downloads the artifact from a successful run with the requested head SHA',
   );
 });
 
-test('rejects successful retries for the same SHA when their archive bytes conflict', async () => {
+test('rejects successful attempts for the same SHA when their archive bytes conflict', async () => {
   const directory = await createTemporaryDirectory();
   const first = await createArtifact(join(directory, 'first'), { runId: 201 });
   const secondRoot = join(directory, 'second');
@@ -208,24 +219,21 @@ test('rejects successful retries for the same SHA when their archive bytes confl
   const firstZip = await readFile(zipArtifact(first.artifactDirectory, first.manifest));
   const secondZip = await readFile(zipArtifact(second.artifactDirectory, second.manifest));
   const apiBaseUrl = 'https://api.test';
-  const runs = [first, second].map(({ manifest }, index) => ({
-    id: 201 + index,
-    name: 'CI',
-    head_sha: sourceRevision,
-    head_branch: 'main',
-    event: 'push',
-    status: 'completed',
-    conclusion: 'success',
-    run_attempt: 1,
+  const ciRuns = [successfulCiRun(201), successfulCiRun(202)];
+  const publicationRuns = [first, second].map(({ manifest }, index) => ({
+    ...successfulPublicationRun(801 + index),
     artifactName: manifest.actionsArtifact.name,
     artifactId: 601 + index,
   }));
   const fetchImpl = async (input) => {
     const url = new URL(input);
     if (url.pathname.endsWith('/actions/runs')) {
-      return responseJson({ workflow_runs: runs });
+      return responseJson({ workflow_runs: ciRuns });
     }
-    const run = runs.find(({ id }) => url.pathname.endsWith(`/actions/runs/${id}/artifacts`));
+    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+      return responseJson({ workflow_runs: publicationRuns });
+    }
+    const run = publicationRuns.find(({ id }) => url.pathname.endsWith(`/actions/runs/${id}/artifacts`));
     if (run) {
       return responseJson({
         artifacts: [
@@ -256,7 +264,7 @@ test('rejects successful retries for the same SHA when their archive bytes confl
       apiBaseUrl,
       fetchImpl,
     }),
-    /Conflicting successful CI retries produced different web bytes/,
+    /Conflicting successful CI attempts produced different web bytes/,
   );
 });
 
@@ -265,35 +273,18 @@ test('does not choose a remaining retry when another matching artifact has expir
   const { artifactDirectory, manifest } = await createArtifact(directory, { runId: 251 });
   const zipContents = await readFile(zipArtifact(artifactDirectory, manifest));
   const apiBaseUrl = 'https://api.test';
+  const publicationRuns = [851, 852].map((id) => successfulPublicationRun(id));
   const fetchImpl = async (input) => {
     const url = new URL(input);
     if (url.pathname.endsWith('/actions/runs')) {
       return responseJson({
-        workflow_runs: [
-          {
-            id: 251,
-            name: 'CI',
-            head_sha: sourceRevision,
-            head_branch: 'main',
-            event: 'push',
-            status: 'completed',
-            conclusion: 'success',
-            run_attempt: 1,
-          },
-          {
-            id: 252,
-            name: 'CI',
-            head_sha: sourceRevision,
-            head_branch: 'main',
-            event: 'push',
-            status: 'completed',
-            conclusion: 'success',
-            run_attempt: 1,
-          },
-        ],
+        workflow_runs: [successfulCiRun(251), successfulCiRun(252)],
       });
     }
-    if (url.pathname.endsWith('/actions/runs/251/artifacts')) {
+    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+      return responseJson({ workflow_runs: publicationRuns });
+    }
+    if (url.pathname.endsWith('/actions/runs/851/artifacts')) {
       return responseJson({
         artifacts: [
           {
@@ -305,7 +296,7 @@ test('does not choose a remaining retry when another matching artifact has expir
         ],
       });
     }
-    if (url.pathname.endsWith('/actions/runs/252/artifacts')) {
+    if (url.pathname.endsWith('/actions/runs/852/artifacts')) {
       return responseJson({
         artifacts: [
           {
@@ -331,7 +322,7 @@ test('does not choose a remaining retry when another matching artifact has expir
       apiBaseUrl,
       fetchImpl,
     }),
-    /matching retry artifact .* has expired.*No source rebuild was attempted/,
+    /matching successful CI attempt .* has an expired artifact.*No source rebuild was attempted/,
   );
 });
 
@@ -341,22 +332,12 @@ test('reports expired Actions bytes and does not select another revision', async
   const fetchImpl = async (input) => {
     const url = new URL(input);
     if (url.pathname.endsWith('/actions/runs')) {
-      return responseJson({
-        workflow_runs: [
-          {
-            id: 301,
-            name: 'CI',
-            head_sha: sourceRevision,
-            head_branch: 'main',
-            event: 'push',
-            status: 'completed',
-            conclusion: 'success',
-            run_attempt: 1,
-          },
-        ],
-      });
+      return responseJson({ workflow_runs: [successfulCiRun(301)] });
     }
-    if (url.pathname.endsWith('/actions/runs/301/artifacts')) {
+    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+      return responseJson({ workflow_runs: [successfulPublicationRun(901)] });
+    }
+    if (url.pathname.endsWith('/actions/runs/901/artifacts')) {
       return responseJson({
         artifacts: [
           {
@@ -391,25 +372,16 @@ test('retrieves an existing immutable release after the Actions artifact expires
   const sidecar = await readFile(join(artifactDirectory, sidecarName));
   const apiBaseUrl = 'https://api.test';
   const versionTag = 'v1.2.3';
+  const publicationRunId = 941;
   const fetchImpl = async (input) => {
     const url = new URL(input);
     if (url.pathname.endsWith('/actions/runs')) {
-      return responseJson({
-        workflow_runs: [
-          {
-            id: 401,
-            name: 'CI',
-            head_sha: sourceRevision,
-            head_branch: 'main',
-            event: 'push',
-            status: 'completed',
-            conclusion: 'success',
-            run_attempt: 1,
-          },
-        ],
-      });
+      return responseJson({ workflow_runs: [successfulCiRun(401)] });
     }
-    if (url.pathname.endsWith('/actions/runs/401/artifacts')) {
+    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+      return responseJson({ workflow_runs: [successfulPublicationRun(publicationRunId)] });
+    }
+    if (url.pathname.endsWith(`/actions/runs/${publicationRunId}/artifacts`)) {
       return responseJson({
         artifacts: [
           {

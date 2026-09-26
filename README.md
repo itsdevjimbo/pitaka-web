@@ -31,19 +31,23 @@ npm test
 npm run build
 ```
 
-CI runs formatting, standards checks, lint, tests, and a production build on
-pushes to branches and pull requests targeting `main`. Only a successful push to
-`main` uploads the checked browser files.
+CI runs the standards, web-build, and application test suites on pushes and pull
+requests targeting `main`. `Code Quality` checks formatting and lint on pull
+requests and non-main branch pushes. After a successful CI run for a push to
+`main`, `Publish Web Build` checks formatting and lint, builds the production
+browser files, and uploads the exact-SHA artifact.
 
 ## Downloadable production web build
 
-After all CI checks pass for a push to `main`, CI publishes a temporary Actions
-artifact containing `pitaka-web-<full-SHA>.tar.gz` and its sidecar manifest. The
-archive extracts with `index.html` at its root. The manifest records the source
-repository and SHA, successful CI run and attempt, Node/npm/Angular build
-toolchain, production build configuration, per-file asset identity, archive
-SHA-256, and archive size. The archive checksum is kept in the sidecar because
-putting it inside the archive would make the checksum self-referential.
+After CI passes for a push to `main`, `Publish Web Build` runs formatting and
+lint checks and creates a production build from the exact successful CI SHA. It
+uploads a temporary Actions artifact containing
+`pitaka-web-<full-SHA>.tar.gz` and its sidecar manifest. The archive extracts with
+`index.html` at its root. The manifest records the source repository and SHA,
+successful CI run and attempt, Node/npm/Angular build toolchain, production
+build configuration, per-file asset identity, archive SHA-256, and archive
+size. The archive checksum is kept in the sidecar because putting it inside the
+archive would make the checksum self-referential.
 
 Actions artifacts expire after 14 days. Download an exact build with Node 24,
 `tar` and `unzip` on `PATH`, and a GitHub token with `Actions: read` access to
@@ -84,11 +88,10 @@ production versions.
 
 #291 implements the temporary Actions artifact and exact-SHA downloader. The
 version-tag promotion and durable-retention workflow is tracked separately in
-[durable promotion #293](https://github.com/itsdevjimbo/pitaka-web/issues/293);
-serving-image retirement is tracked in
-[#294](https://github.com/itsdevjimbo/pitaka-web/issues/294). When production
-selects a version tag, use the successful build for that exact tagged commit and
-preserve its archive and manifest in an immutable release before deployment.
+[durable promotion #293](https://github.com/itsdevjimbo/pitaka-web/issues/293).
+When production selects a version tag, use the successful build for that exact
+tagged commit and preserve its archive and manifest in an immutable release before
+deployment.
 Attach both files to a draft release, then publish it with GitHub release
 immutability enabled. The downloader checks the release tag's commit, immutability,
 manifest, and original successful CI run. If neither the Actions artifact nor an
@@ -96,43 +99,7 @@ existing release copy is available, promotion must fail instead of rebuilding.
 Only production-selected builds need durable storage. Selection and successful
 deployment are separate records.
 
-After consumer handoff, the separate deploy repository owns environment
-composition, Nginx, Compose, and deployment control. This repository keeps the
-current serving image and Nginx configuration until the handoff described by
-[deploy issue #194](https://github.com/itsdevjimbo/pitaka/issues/194) is accepted.
-
-## Current production web image (transition)
-
-The compatibility serving image is published to the public Docker Hub
-repository `jimbodev0530/pitaka-web` after the `CI` workflow succeeds for a
-push to `main`. #291 builds it from the same verified static archive described
-above, checks both supported architectures and container behavior, and verifies
-the immutable `sha-<full-commit-sha>` image before advancing the moving `main`
-tag. Image publishing does not apply environment state or act as a deployment
-controller.
-
-Before the first successful publish:
-
-1. Create the public `pitaka-web` repository in the Docker Hub namespace
-   `jimbodev0530`.
-2. Create a Docker Hub access token with read and write access to that
-   repository. Add it to the GitHub repository actions secrets as
-   `DOCKERHUB_TOKEN`, and add the matching account name as
-   `DOCKERHUB_USERNAME`.
-3. In the Docker Hub repository's **Settings → General → Tag mutability**,
-   make tags matching `^sha-[0-9a-f]{40}$` immutable. The publish workflow also
-   checks an existing commit tag's revision and never rebuilds or replaces it.
-
-Run the image with an API upstream that the container can resolve and reach:
-
-```sh
-docker run --rm -p 8080:8080 \
-  jimbodev0530/pitaka-web:main
-```
-
-Production browser requests remain relative to the same origin at `/api`; the
-serving layer forwards those requests to its configured API upstream without
-changing their paths. `API_UPSTREAM` is read when the image starts and defaults
-to `http://api:8080`. Set it to the API origin without a path suffix when the
-upstream uses a different hostname. Browser routes fall back to `index.html`,
-and API errors keep their upstream status and response body.
+The separate deploy repository owns environment composition, static serving,
+API proxying, and deployment control. Production browser requests use the
+same-origin `/api` path; the deploy-owned serving layer forwards those requests
+to the API.

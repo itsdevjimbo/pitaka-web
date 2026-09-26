@@ -20,11 +20,13 @@ with enforcement and documentation kept in a separate commit for review.
 One raw `textContent` assertion was aligned with formatter-normalized template
 whitespace in its own commit; rendered wording and application behavior are unchanged.
 
-The full source tree now passes `npm run check:format`, and CI runs that check after
-installing dependencies. The changed-file checker remains in CI and available for
-local formatting and zero-warning lint feedback. Completion was verified with the
-full-source format check, standards enforcement tests, changed-file checks, full
-lint, application tests, and the production build.
+The full source tree now passes `npm run check:format`. The `Code Quality` workflow
+runs formatting, changed-file, and lint checks on pull requests and non-main branch
+pushes. The `Publish Web Build` workflow repeats formatting and lint checks after
+successful main CI before building and uploading the artifact. CI runs the standards,
+artifact, and application test suites. Completion was verified with the full-source
+format check, standards enforcement tests, changed-file checks, full lint,
+application tests, and the production build.
 
 ## 2. Component test migrations
 
@@ -127,7 +129,8 @@ result; its rerun outside the sandbox passed.
 
 The repository-wide inspection is complete: fixture-cast diagnostics are resolved,
 documentation agrees with the intended boundaries, and every resource domain has
-been audited. Full-source formatting passes and is enforced in CI. The runtime and
+been audited. Full-source formatting passes and is enforced by Code Quality and
+Publish Web Build workflows. CI runs the test suites only. The runtime and
 import remediations linked from section 4 remain separate follow-up work; record
 completed batches and their verification here as they land, and do not mark a batch
 complete from a search count alone.

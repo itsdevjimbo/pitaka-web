@@ -90,28 +90,56 @@ async function listSuccessfulMainRuns({ sourceRevision, repository, token, apiBa
     .sort((left, right) => Number(left.id) - Number(right.id));
 }
 
-function attemptFromArtifactName(name, sourceRevision, runId) {
-  const prefix = `pitaka-web-${sourceRevision}-run-${runId}-attempt-`;
-  if (!name.startsWith(prefix)) {
-    return undefined;
-  }
-  const attempt = name.slice(prefix.length);
-  return /^\d+$/.test(attempt) ? Number(attempt) : undefined;
-}
-
-async function listRunArtifacts({ runId, sourceRevision, repository, token, apiBaseUrl, fetchImpl }) {
-  const artifacts = await getJsonPages(
-    apiUrl(apiBaseUrl, repository, `actions/runs/${runId}/artifacts`, '?per_page=100'),
+async function listSuccessfulArtifactRuns({ sourceRevision, repository, token, apiBaseUrl, fetchImpl }) {
+  const query = new URLSearchParams({
+    head_sha: sourceRevision,
+    branch: 'main',
+    event: 'workflow_run',
+    status: 'completed',
+    per_page: '100',
+  });
+  const runs = await getJsonPages(
+    apiUrl(apiBaseUrl, repository, 'actions/workflows/publish-web-build.yml/runs', `?${query}`),
     token,
     fetchImpl,
   );
-  const expectedPrefix = `pitaka-web-${sourceRevision}-run-${runId}-attempt-`;
+  return runs.filter(
+    (run) =>
+      run.name === 'Publish Web Build' &&
+      run.head_sha === sourceRevision &&
+      run.head_branch === 'main' &&
+      run.event === 'workflow_run' &&
+      run.status === 'completed' &&
+      run.conclusion === 'success',
+  );
+}
+
+function artifactIdentityFromName(name, sourceRevision) {
+  const match = name.match(new RegExp(`^pitaka-web-${sourceRevision}-run-(\\d+)-attempt-(\\d+)$`));
+  if (!match) {
+    return undefined;
+  }
+  return { ciRunId: Number(match[1]), ciRunAttempt: Number(match[2]) };
+}
+
+async function listRunArtifacts({ workflowRunId, sourceRevision, ciRuns, repository, token, apiBaseUrl, fetchImpl }) {
+  const artifacts = await getJsonPages(
+    apiUrl(apiBaseUrl, repository, `actions/runs/${workflowRunId}/artifacts`, '?per_page=100'),
+    token,
+    fetchImpl,
+  );
+  const ciRunAttempts = new Map(ciRuns.map((run) => [Number(run.id), Number(run.run_attempt)]));
   return artifacts
     .map((artifact) => ({
       artifact,
-      attempt: attemptFromArtifactName(artifact.name, sourceRevision, runId),
+      identity: artifactIdentityFromName(artifact.name, sourceRevision),
     }))
-    .filter(({ artifact, attempt }) => artifact.name.startsWith(expectedPrefix) && attempt !== undefined);
+    .filter(
+      ({ identity }) =>
+        identity !== undefined &&
+        ciRunAttempts.has(identity.ciRunId) &&
+        identity.ciRunAttempt <= ciRunAttempts.get(identity.ciRunId),
+    );
 }
 
 async function downloadResponse(url, token, fetchImpl, label) {
@@ -160,30 +188,35 @@ async function unpackAndVerifyZip({ zipContents, workspace, sourceRevision, repo
 }
 
 async function downloadActionsBuild({ sourceRevision, repository, token, apiBaseUrl, fetchImpl, workspace }) {
-  const runs = await listSuccessfulMainRuns({ sourceRevision, repository, token, apiBaseUrl, fetchImpl });
-  if (runs.length === 0) {
+  const ciRuns = await listSuccessfulMainRuns({ sourceRevision, repository, token, apiBaseUrl, fetchImpl });
+  if (ciRuns.length === 0) {
     return { status: 'missing', reason: `No successful main CI run exists for ${sourceRevision}.` };
   }
 
+  const artifactRuns = await listSuccessfulArtifactRuns({
+    sourceRevision,
+    repository,
+    token,
+    apiBaseUrl,
+    fetchImpl,
+  });
   const candidates = [];
   let expiredCount = 0;
   let missingCount = 0;
-  for (const run of runs) {
+  for (const run of artifactRuns) {
     const runArtifacts = await listRunArtifacts({
-      runId: run.id,
+      workflowRunId: run.id,
       sourceRevision,
+      ciRuns,
       repository,
       token,
       apiBaseUrl,
       fetchImpl,
     });
     const matchingNames = new Set();
-    for (const { artifact, attempt } of runArtifacts) {
-      if (attempt > Number(run.run_attempt)) {
-        continue;
-      }
+    for (const { artifact, identity } of runArtifacts) {
       if (matchingNames.has(artifact.name)) {
-        throw new Error(`CI run ${run.id} contains duplicate web build artifacts named ${artifact.name}.`);
+        throw new Error(`Artifact publication run ${run.id} contains duplicate web build artifacts named ${artifact.name}.`);
       }
       matchingNames.add(artifact.name);
       if (artifact.expired) {
@@ -202,19 +235,22 @@ async function downloadActionsBuild({ sourceRevision, repository, token, apiBase
         continue;
       }
 
-      const attemptDirectory = join(workspace, `run-${run.id}-attempt-${attempt}`);
+      const attemptDirectory = join(
+        workspace,
+        `run-${identity.ciRunId}-attempt-${identity.ciRunAttempt}-publication-${run.id}`,
+      );
       await mkdir(attemptDirectory);
       const unpacked = await unpackAndVerifyZip({
         zipContents: artifactContents,
         workspace: attemptDirectory,
         sourceRevision,
         repository,
-        runId: run.id,
-        runAttempt: attempt,
+        runId: identity.ciRunId,
+        runAttempt: identity.ciRunAttempt,
       });
       candidates.push({
-        runId: Number(run.id),
-        runAttempt: attempt,
+        runId: identity.ciRunId,
+        runAttempt: identity.ciRunAttempt,
         artifactId: Number(artifact.id),
         artifactDirectory: unpacked.artifactDirectory,
         manifest: unpacked.manifest,
@@ -229,8 +265,8 @@ async function downloadActionsBuild({ sourceRevision, repository, token, apiBase
     const reason =
       expiredCount > 0
         ? `The 14-day Actions artifact for ${sourceRevision} has expired.`
-        : missingCount > 0
-          ? `The successful CI run for ${sourceRevision} has no matching artifact; it may be missing or past its 14-day retention.`
+        : missingCount > 0 || artifactRuns.length === 0
+          ? `A successful CI run for ${sourceRevision} has no matching web build artifact; it may be missing or past its 14-day retention.`
           : `No downloadable artifact exists for ${sourceRevision}.`;
     return { status: expiredCount > 0 ? 'expired' : 'missing', reason };
   }
@@ -238,14 +274,14 @@ async function downloadActionsBuild({ sourceRevision, repository, token, apiBase
   if (expiredCount > 0) {
     return {
       status: 'ambiguous',
-      reason: `At least one matching retry artifact for ${sourceRevision} has expired, so its bytes cannot be compared with the remaining artifact.`,
+      reason: `At least one matching successful CI attempt for ${sourceRevision} has an expired artifact, so its bytes cannot be compared with the remaining artifact.`,
     };
   }
 
   const archiveDigests = new Set(candidates.map(({ manifest }) => manifest.archive.sha256));
   if (archiveDigests.size !== 1) {
     throw new Error(
-      `Conflicting successful CI retries produced different web bytes for ${sourceRevision}; refusing to choose one.`,
+      `Conflicting successful CI attempts produced different web bytes for ${sourceRevision}; refusing to choose one.`,
     );
   }
 
