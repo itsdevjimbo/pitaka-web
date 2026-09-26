@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL, errorInterceptor, handlesOwn401 } from '@/app/core/api';
+import { environment as productionEnvironment } from '@/environments/environment.prod';
 import { TEST_API_BASE_URL as BASE_URL } from '@/testing/api-base-url';
 import { authInterceptor } from './auth.interceptor';
 import { Session } from './session';
@@ -12,13 +13,13 @@ describe('authInterceptor', () => {
   let client: HttpClient;
   let session: { token: ReturnType<typeof vi.fn>; expire: ReturnType<typeof vi.fn> };
 
-  function configure(token: string | null) {
+  function configure(token: string | null, baseUrl = BASE_URL) {
     session = { token: vi.fn().mockReturnValue(token), expire: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
         provideHttpClientTesting(),
-        { provide: API_BASE_URL, useValue: BASE_URL },
+        { provide: API_BASE_URL, useValue: baseUrl },
         { provide: Session, useValue: session },
       ],
     });
@@ -46,6 +47,21 @@ describe('authInterceptor', () => {
     const request = http.expectOne('https://example.com/widgets');
     expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush({});
+  });
+
+  it('scopes same-origin production requests to the relative API path', () => {
+    configure('a.b.c', productionEnvironment.apiBaseUrl);
+
+    client.get('/api/profile').subscribe();
+    client.get('/assets/version.json').subscribe();
+
+    const apiRequest = http.expectOne('/api/profile');
+    expect(apiRequest.request.headers.get('Authorization')).toBe('Bearer a.b.c');
+    apiRequest.flush({});
+
+    const assetRequest = http.expectOne('/assets/version.json');
+    expect(assetRequest.request.headers.has('Authorization')).toBe(false);
+    assetRequest.flush({});
   });
 
   it('sends no Authorization header when the session is empty', () => {

@@ -1,0 +1,84 @@
+name: Publish Build
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish-artifact:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_REVISION: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
+      CI_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+      ARTIFACT_NAME: pitaka-web-${{ github.event.workflow_run.head_sha }}-run-${{ github.event.workflow_run.id }}-attempt-${{ github.event.workflow_run.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Confirm the exact CI run succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}")"
+          jq -e --arg sha "$SOURCE_REVISION" --argjson attempt "$CI_RUN_ATTEMPT" \
+            '.name == "CI" and .head_sha == $sha and .head_branch == "main" and .event == "push" and .status == "completed" and .conclusion == "success" and .run_attempt == $attempt' \
+            <<< "$run_json" >/dev/null
+
+      - run: npm ci
+
+      - run: npm run build -- --configuration production
+
+      - name: Package the checked production browser build
+        id: package
+        env:
+          OUTPUT_DIRECTORY: ${{ runner.temp }}/pitaka-web-artifact
+        shell: bash
+        run: |
+          node scripts/package-web-build.mjs dist/pitaka/browser "$OUTPUT_DIRECTORY" "$SOURCE_REVISION" "$GITHUB_REPOSITORY" "$CI_RUN_ID" "$CI_RUN_ATTEMPT" >/dev/null
+          manifest="$(node scripts/verify-web-build-artifact.mjs "$OUTPUT_DIRECTORY" "$SOURCE_REVISION" "$GITHUB_REPOSITORY" "$CI_RUN_ID" "$CI_RUN_ATTEMPT")"
+          archive_name="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.name)' "$manifest")"
+          archive_size="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.sizeBytes)' "$manifest")"
+          archive_sha="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.sha256)' "$manifest")"
+          printf 'Checked static build: `%s` (%s bytes, SHA-256 `%s`).\n' "$archive_name" "$archive_size" "$archive_sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the temporary exact-SHA web artifact
+        id: artifact
+        uses: actions/upload-artifact@v4
+        env:
+          OUTPUT_DIRECTORY: ${{ runner.temp }}/pitaka-web-artifact
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.OUTPUT_DIRECTORY }}/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Report Actions artifact storage size
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
+        run: |
+          artifact_size="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" --jq '.size_in_bytes' 2>/dev/null || true)"
+          if [[ "$artifact_size" =~ ^[0-9]+$ ]]; then
+            printf 'Actions artifact storage size: %s bytes.\n' "$artifact_size" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::warning::Could not read the Actions artifact storage size; use repository Actions storage usage to monitor it.'
+          fi

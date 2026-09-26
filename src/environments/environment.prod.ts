@@ -4,8 +4,6 @@
  */
 export const environment = {
   production: true,
-  // TODO: point at the deployed Pitaka API origin. The API is a separate
-  // deployment from this client (see `API_BASE_URL`), so this must be the
-  // absolute cross-origin URL, not a same-origin path.
-  apiBaseUrl: 'https://api.pitaka.example',
+  // Production requests stay same-origin; the serving layer forwards /api.
+  apiBaseUrl: '',
 };

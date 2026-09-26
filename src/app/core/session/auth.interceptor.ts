@@ -29,7 +29,8 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const session = inject(Session);
   const baseUrl = inject(API_BASE_URL);
 
-  const forApi = request.url.startsWith(baseUrl);
+  const apiPath = `${baseUrl}/api`;
+  const forApi = request.url === apiPath || request.url.startsWith(`${apiPath}/`);
   const token = session.token();
 
   const outgoing = forApi && token ? request.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : request;

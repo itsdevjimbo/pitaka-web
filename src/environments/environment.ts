@@ -5,6 +5,6 @@
  */
 export const environment = {
   production: false,
-  /** Absolute origin of the Pitaka API — bound to the `API_BASE_URL` token. */
+  /** API origin in development; production uses a same-origin `/api` path. */
   apiBaseUrl: 'http://pitaka.localhost',
 };
