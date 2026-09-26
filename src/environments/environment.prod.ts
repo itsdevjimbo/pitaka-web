@@ -4,6 +4,6 @@
  */
 export const environment = {
   production: true,
-  // The production web image proxies this same-origin path to the API service.
+  // Production requests stay same-origin; the serving layer forwards /api.
   apiBaseUrl: '',
 };

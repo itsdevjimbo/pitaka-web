@@ -2,8 +2,9 @@
 
 set -euo pipefail
 
-image_ref="${1:?Usage: scripts/verify-web-image.sh <image-reference> <source-revision>}"
-source_revision="${2:?Usage: scripts/verify-web-image.sh <image-reference> <source-revision>}"
+image_ref="${1:?Usage: scripts/verify-web-image.sh <image-reference> <source-revision> <bundle-sha256>}"
+source_revision="${2:?Usage: scripts/verify-web-image.sh <image-reference> <source-revision> <bundle-sha256>}"
+bundle_sha256="${3:?Usage: scripts/verify-web-image.sh <image-reference> <source-revision> <bundle-sha256>}"
 network_name="pitaka-web-smoke-${GITHUB_RUN_ID:-local}-$$"
 api_name="${network_name}-api"
 web_name="${network_name}-web"
@@ -32,8 +33,13 @@ for architecture in amd64 arm64; do
     exit 1
   fi
   actual_revision="$(docker image inspect "$image_ref" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+  actual_bundle_sha="$(docker image inspect "$image_ref" --format '{{ index .Config.Labels "org.pitaka.web.archive.sha256" }}')"
   if [ "$actual_revision" != "$source_revision" ]; then
     echo "The linux/${architecture} image has source revision ${actual_revision}, expected ${source_revision}." >&2
+    exit 1
+  fi
+  if [ "$actual_bundle_sha" != "$bundle_sha256" ]; then
+    echo "The linux/${architecture} image has web bundle checksum ${actual_bundle_sha}, expected ${bundle_sha256}." >&2
     exit 1
   fi
 done
@@ -84,4 +90,4 @@ if [ "$failure_status" != '503' ] || [ "$(cat "$temporary_directory/api-error.tx
   exit 1
 fi
 
-echo "Verified $image_ref: linux/amd64 and linux/arm64 manifests and source labels, SPA refresh, relative API requests, path forwarding, and upstream error status."
+echo "Verified $image_ref: linux/amd64 and linux/arm64 manifests, source and bundle labels, SPA refresh, relative API requests, path forwarding, and upstream error status."

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   publish-image:
@@ -21,11 +22,63 @@ jobs:
     env:
       IMAGE: jimbodev0530/pitaka-web
       SOURCE_REVISION: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
+      CI_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+    outputs:
+      bundle_sha256: ${{ steps.artifact.outputs.archive_sha256 }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
+
+      - name: Resolve the artifact from this exact successful CI run
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: pitaka-web-${{ github.event.workflow_run.head_sha }}-run-${{ github.event.workflow_run.id }}-attempt-${{ github.event.workflow_run.run_attempt }}
+        shell: bash
+        run: |
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}")"
+          jq -e --arg sha "$SOURCE_REVISION" --argjson attempt "$CI_RUN_ATTEMPT" \
+            '.head_sha == $sha and .head_branch == "main" and .event == "push" and .status == "completed" and .conclusion == "success" and .run_attempt == $attempt' \
+            <<< "$run_json" >/dev/null
+
+          artifacts_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}/artifacts?per_page=100")"
+          artifact_ids="$(jq -c --arg name "$ARTIFACT_NAME" '[.artifacts[] | select(.name == $name and .expired == false) | .id]' <<< "$artifacts_json")"
+          artifact_count="$(jq 'length' <<< "$artifact_ids")"
+          if [[ "$artifact_count" != '1' ]]; then
+            matching="$(jq -c --arg name "$ARTIFACT_NAME" '[.artifacts[] | select(.name == $name) | {id, expired, expires_at}]' <<< "$artifacts_json")"
+            if [[ "$matching" == '[]' ]]; then
+              echo "No artifact named ${ARTIFACT_NAME} belongs to successful CI run ${CI_RUN_ID}." >&2
+            else
+              echo "Artifact ${ARTIFACT_NAME} is expired or ambiguous: ${matching}." >&2
+            fi
+            exit 1
+          fi
+          echo "artifact_id=$(jq -r '.[0]' <<< "$artifact_ids")" >> "$GITHUB_OUTPUT"
+
+      - name: Download the resolved artifact by ID
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.resolve.outputs.artifact_id }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/pitaka-web-artifact
+
+      - name: Verify the archive and extract the checked static bytes
+        id: artifact
+        env:
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/pitaka-web-artifact
+        shell: bash
+        run: |
+          manifest="$(node scripts/verify-web-build-artifact.mjs "$ARTIFACT_DIRECTORY" "$SOURCE_REVISION" "$GITHUB_REPOSITORY" "$CI_RUN_ID" "$CI_RUN_ATTEMPT")"
+          archive_name="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.name)' "$manifest")"
+          archive_sha="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.sha256)' "$manifest")"
+          mkdir -p web-image
+          tar --extract --gzip --file "$ARTIFACT_DIRECTORY/$archive_name" --directory web-image --no-same-owner
+          echo "archive_sha256=$archive_sha" >> "$GITHUB_OUTPUT"
+          printf 'Verified checked bundle `%s` with SHA-256 `%s`.\n' "$archive_name" "$archive_sha" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -36,6 +89,8 @@ jobs:
 
       - name: Check for an existing immutable commit tag
         id: tag
+        env:
+          EXPECTED_ARCHIVE_SHA256: ${{ steps.artifact.outputs.archive_sha256 }}
         shell: bash
         run: |
           tag="sha-${SOURCE_REVISION}"
@@ -43,8 +98,13 @@ jobs:
           if [[ "$status" == 'present' ]]; then
             docker pull --platform linux/amd64 "${IMAGE}:${tag}"
             published_revision="$(docker image inspect "${IMAGE}:${tag}" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+            published_archive_sha="$(docker image inspect "${IMAGE}:${tag}" --format '{{ index .Config.Labels "org.pitaka.web.archive.sha256" }}')"
             if [[ "$published_revision" != "$SOURCE_REVISION" ]]; then
               echo "Refusing to reuse ${IMAGE}:${tag}: its source revision is ${published_revision}." >&2
+              exit 1
+            fi
+            if [[ "$published_archive_sha" != "$EXPECTED_ARCHIVE_SHA256" ]]; then
+              echo "Refusing to reuse ${IMAGE}:${tag}: its web bundle checksum is ${published_archive_sha}." >&2
               exit 1
             fi
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -61,21 +121,23 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
-          build-args: VCS_REF=${{ env.SOURCE_REVISION }}
+          build-args: |
+            VCS_REF=${{ env.SOURCE_REVISION }}
+            WEB_ARCHIVE_SHA256=${{ steps.artifact.outputs.archive_sha256 }}
 
-  promote-main:
+  verify-image:
     needs: publish-image
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
-    concurrency:
-      group: pitaka-web-main
-      queue: max
     env:
       IMAGE: jimbodev0530/pitaka-web
       SOURCE_REVISION: ${{ github.event.workflow_run.head_sha }}
+      BUNDLE_SHA256: ${{ needs.publish-image.outputs.bundle_sha256 }}
+    outputs:
+      bundle_sha256: ${{ needs.publish-image.outputs.bundle_sha256 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -89,7 +151,38 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Promote only a newer successful main build
+      - name: Verify the immutable image before promotion
+        shell: bash
+        run: scripts/verify-web-image.sh "${IMAGE}:sha-${SOURCE_REVISION}" "$SOURCE_REVISION" "$BUNDLE_SHA256"
+
+  promote-main:
+    needs: verify-image
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pitaka-web-main
+      queue: max
+    env:
+      IMAGE: jimbodev0530/pitaka-web
+      SOURCE_REVISION: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_BUNDLE_SHA256: ${{ needs.verify-image.outputs.bundle_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Promote only a newer verified main build
         shell: bash
         run: |
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
@@ -106,12 +199,17 @@ jobs:
 
           docker pull --platform linux/amd64 "${IMAGE}:main"
           current_revision="$(docker image inspect "${IMAGE}:main" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+          current_bundle_sha="$(docker image inspect "${IMAGE}:main" --format '{{ index .Config.Labels "org.pitaka.web.archive.sha256" }}')"
           if [[ -z "$current_revision" ]]; then
             echo "The current main image has no source revision label; refusing to replace it." >&2
             exit 1
           fi
           if [[ "$current_revision" == "$SOURCE_REVISION" ]]; then
-            echo 'The main image already points to this successful CI commit.'
+            if [[ "$current_bundle_sha" != "$SOURCE_BUNDLE_SHA256" ]]; then
+              echo "The main image already has this source revision with a different web bundle checksum." >&2
+              exit 1
+            fi
+            echo 'The main image already points to this verified CI build.'
             exit 0
           fi
           if ! git cat-file -e "${current_revision}^{commit}" 2>/dev/null \
@@ -121,28 +219,3 @@ jobs:
           fi
 
           docker buildx imagetools create --tag "${IMAGE}:main" "${IMAGE}:sha-${SOURCE_REVISION}"
-
-  verify-image:
-    needs: [publish-image, promote-main]
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
-    runs-on: ubuntu-latest
-    env:
-      IMAGE: jimbodev0530/pitaka-web
-      SOURCE_REVISION: ${{ github.event.workflow_run.head_sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Pull and verify both architecture manifests and container behavior
-        run: scripts/verify-web-image.sh "${IMAGE}:sha-${SOURCE_REVISION}" "$SOURCE_REVISION"

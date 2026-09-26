@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   check:
@@ -25,6 +28,8 @@ jobs:
 
       - run: npm run test:standards
 
+      - run: npm run test:web-build
+
       - run: npm run check:changed -- "$BASE_OPTION" "$BASE_REF"
         env:
           BASE_OPTION: ${{ github.event_name == 'pull_request' && '--base' || '--since' }}
@@ -35,4 +40,43 @@ jobs:
 
       - run: npm test
 
-      - run: npm run build
+      - run: npm run build -- --configuration production
+
+      - name: Package the checked production browser build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SOURCE_REVISION: ${{ github.sha }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+          OUTPUT_DIRECTORY: ${{ runner.temp }}/pitaka-web-artifact
+        run: |
+          manifest="$(node scripts/package-web-build.mjs dist/pitaka/browser "$OUTPUT_DIRECTORY" "$SOURCE_REVISION" "$SOURCE_REPOSITORY" "$CI_RUN_ID" "$CI_RUN_ATTEMPT")"
+          archive_name="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.name)' "$manifest")"
+          archive_size="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.sizeBytes)' "$manifest")"
+          archive_sha="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).archive.sha256)' "$manifest")"
+          printf 'Checked static build: `%s` (%s bytes, SHA-256 `%s`).\n' "$archive_name" "$archive_size" "$archive_sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the temporary exact-SHA web artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitaka-web-${{ github.sha }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pitaka-web-artifact/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Report Actions artifact storage size
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
+        run: |
+          artifact_size="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" --jq '.size_in_bytes' 2>/dev/null || true)"
+          if [[ "$artifact_size" =~ ^[0-9]+$ ]]; then
+            printf 'Actions artifact size: %s bytes.\n' "$artifact_size" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::warning::Could not read the Actions artifact storage size; use repository Actions storage usage to monitor it.'
+          fi

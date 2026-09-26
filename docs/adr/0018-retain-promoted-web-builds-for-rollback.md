@@ -48,7 +48,8 @@ These requirements, including version-tag promotion, were agreed during the desi
 interview. Implementation is tracked separately: [main artifacts #291](https://github.com/itsdevjimbo/pitaka-web/issues/291),
 [version-tag promotion #293](https://github.com/itsdevjimbo/pitaka-web/issues/293), and
 [serving-image retirement #294](https://github.com/itsdevjimbo/pitaka-web/issues/294).
-The checked-in workflows still build and publish the web image; they do not yet
-implement archive publication, durable promotion or retention enforcement.
+The checked-in workflows still build and publish the web image and keep the
+temporary Actions archive. They do not yet implement durable promotion or
+retention enforcement.
 The existing web image publication stays in place until the coordinated deployment consumer handoff in
 [deploy issue #194](https://github.com/itsdevjimbo/pitaka/issues/194) is accepted.
