@@ -67,7 +67,7 @@ function successfulCiRun(id, headSha = sourceRevision) {
 function successfulPublicationRun(id) {
   return {
     id,
-    name: 'Publish Web Build',
+    name: 'Publish Build',
     head_sha: sourceRevision,
     head_branch: 'main',
     event: 'workflow_run',
@@ -170,7 +170,7 @@ test('downloads the artifact from a successful run with the requested head SHA',
         ],
       });
     }
-    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+    if (url.pathname.endsWith('/actions/workflows/publish-build.yml/runs')) {
       return responseJson({ workflow_runs: [successfulPublicationRun(publicationRunId)] });
     }
     if (url.pathname.endsWith(`/actions/runs/${publicationRunId}/artifacts`)) {
@@ -230,7 +230,7 @@ test('rejects successful attempts for the same SHA when their archive bytes conf
     if (url.pathname.endsWith('/actions/runs')) {
       return responseJson({ workflow_runs: ciRuns });
     }
-    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+    if (url.pathname.endsWith('/actions/workflows/publish-build.yml/runs')) {
       return responseJson({ workflow_runs: publicationRuns });
     }
     const run = publicationRuns.find(({ id }) => url.pathname.endsWith(`/actions/runs/${id}/artifacts`));
@@ -281,7 +281,7 @@ test('does not choose a remaining retry when another matching artifact has expir
         workflow_runs: [successfulCiRun(251), successfulCiRun(252)],
       });
     }
-    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+    if (url.pathname.endsWith('/actions/workflows/publish-build.yml/runs')) {
       return responseJson({ workflow_runs: publicationRuns });
     }
     if (url.pathname.endsWith('/actions/runs/851/artifacts')) {
@@ -334,7 +334,7 @@ test('reports expired Actions bytes and does not select another revision', async
     if (url.pathname.endsWith('/actions/runs')) {
       return responseJson({ workflow_runs: [successfulCiRun(301)] });
     }
-    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+    if (url.pathname.endsWith('/actions/workflows/publish-build.yml/runs')) {
       return responseJson({ workflow_runs: [successfulPublicationRun(901)] });
     }
     if (url.pathname.endsWith('/actions/runs/901/artifacts')) {
@@ -378,7 +378,7 @@ test('retrieves an existing immutable release after the Actions artifact expires
     if (url.pathname.endsWith('/actions/runs')) {
       return responseJson({ workflow_runs: [successfulCiRun(401)] });
     }
-    if (url.pathname.endsWith('/actions/workflows/publish-web-build.yml/runs')) {
+    if (url.pathname.endsWith('/actions/workflows/publish-build.yml/runs')) {
       return responseJson({ workflow_runs: [successfulPublicationRun(publicationRunId)] });
     }
     if (url.pathname.endsWith(`/actions/runs/${publicationRunId}/artifacts`)) {

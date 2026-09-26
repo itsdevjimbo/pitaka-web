@@ -31,23 +31,21 @@ npm test
 npm run build
 ```
 
-CI runs the standards, web-build, and application test suites on pushes and pull
-requests targeting `main`. `Code Quality` checks formatting and lint on pull
-requests and non-main branch pushes. After a successful CI run for a push to
-`main`, `Publish Web Build` checks formatting and lint, builds the production
-browser files, and uploads the exact-SHA artifact.
+CI runs formatting, changed-file, lint, standards, web-build, and application
+test checks on pushes and pull requests targeting `main`. After a successful CI
+run for a push to `main`, the separate `Publish Build` workflow builds the
+production browser files and uploads the exact-SHA artifact.
 
 ## Downloadable production web build
 
-After CI passes for a push to `main`, `Publish Web Build` runs formatting and
-lint checks and creates a production build from the exact successful CI SHA. It
-uploads a temporary Actions artifact containing
-`pitaka-web-<full-SHA>.tar.gz` and its sidecar manifest. The archive extracts with
-`index.html` at its root. The manifest records the source repository and SHA,
-successful CI run and attempt, Node/npm/Angular build toolchain, production
-build configuration, per-file asset identity, archive SHA-256, and archive
-size. The archive checksum is kept in the sidecar because putting it inside the
-archive would make the checksum self-referential.
+After CI passes for a push to `main`, `Publish Build` creates the production
+browser output from the exact successful CI SHA and uploads a temporary Actions
+artifact containing `pitaka-web-<full-SHA>.tar.gz` and its sidecar manifest. The
+archive extracts with `index.html` at its root. The manifest records the source
+repository and SHA, successful CI run and attempt, Node/npm/Angular build
+toolchain, production build configuration, per-file asset identity, archive
+SHA-256, and archive size. The archive checksum is kept in the sidecar because
+putting it inside the archive would make the checksum self-referential.
 
 Actions artifacts expire after 14 days. Download an exact build with Node 24,
 `tar` and `unzip` on `PATH`, and a GitHub token with `Actions: read` access to

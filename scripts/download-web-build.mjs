@@ -104,13 +104,13 @@ async function listSuccessfulArtifactRuns({ sourceRevision, repository, token, a
     per_page: '100',
   });
   const runs = await getJsonPages(
-    apiUrl(apiBaseUrl, repository, 'actions/workflows/publish-web-build.yml/runs', `?${query}`),
+    apiUrl(apiBaseUrl, repository, 'actions/workflows/publish-build.yml/runs', `?${query}`),
     token,
     fetchImpl,
   );
   return runs.filter(
     (run) =>
-      run.name === 'Publish Web Build' &&
+      run.name === 'Publish Build' &&
       run.head_sha === sourceRevision &&
       run.head_branch === 'main' &&
       run.event === 'workflow_run' &&

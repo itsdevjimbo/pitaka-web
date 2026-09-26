@@ -1,4 +1,4 @@
-name: Publish Web Build
+name: Publish Build
 
 on:
   workflow_run:
@@ -44,10 +44,6 @@ jobs:
             <<< "$run_json" >/dev/null
 
       - run: npm ci
-
-      - run: npm run check:format
-
-      - run: npm run lint
 
       - run: npm run build -- --configuration production
 

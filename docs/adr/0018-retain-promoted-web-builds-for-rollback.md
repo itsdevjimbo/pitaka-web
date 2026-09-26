@@ -47,9 +47,9 @@ individual immutable assets cannot be deleted or replaced. See
 These requirements, including version-tag promotion, were agreed during the design
 interview. Implementation is tracked separately: [main artifacts #291](https://github.com/itsdevjimbo/pitaka-web/issues/291)
 and [version-tag promotion #293](https://github.com/itsdevjimbo/pitaka-web/issues/293).
-CI runs tests only. After successful main CI, the `Publish Web Build` workflow
-runs format and lint checks, builds the production browser output, and uploads
-the temporary Actions archive. It does not yet implement durable promotion or
+CI runs formatting, lint, and test checks. After successful main CI, the
+`Publish Build` workflow builds the production browser output and uploads the
+temporary Actions archive. It does not yet implement durable promotion or
 retention enforcement. The separate
 [deployment consumer #194](https://github.com/itsdevjimbo/pitaka/issues/194)
 owns static serving and API proxying.
