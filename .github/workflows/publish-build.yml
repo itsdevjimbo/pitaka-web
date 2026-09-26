@@ -21,7 +21,6 @@ jobs:
       CI_RUN_ID: ${{ github.event.workflow_run.id }}
       CI_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
       ARTIFACT_NAME: pitaka-web-${{ github.event.workflow_run.head_sha }}-run-${{ github.event.workflow_run.id }}-attempt-${{ github.event.workflow_run.run_attempt }}
-      OUTPUT_DIRECTORY: ${{ runner.temp }}/pitaka-web-artifact
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,6 +48,8 @@ jobs:
 
       - name: Package the checked production browser build
         id: package
+        env:
+          OUTPUT_DIRECTORY: ${{ runner.temp }}/pitaka-web-artifact
         shell: bash
         run: |
           manifest="$(node scripts/package-web-build.mjs dist/pitaka/browser "$OUTPUT_DIRECTORY" "$SOURCE_REVISION" "$GITHUB_REPOSITORY" "$CI_RUN_ID" "$CI_RUN_ATTEMPT")"
@@ -60,6 +61,8 @@ jobs:
       - name: Upload the temporary exact-SHA web artifact
         id: artifact
         uses: actions/upload-artifact@v4
+        env:
+          OUTPUT_DIRECTORY: ${{ runner.temp }}/pitaka-web-artifact
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.OUTPUT_DIRECTORY }}/*
