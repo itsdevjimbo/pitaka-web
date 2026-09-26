@@ -1,9 +1,8 @@
 import { InjectionToken, ValueProvider } from '@angular/core';
 
 /**
- * Absolute origin of the Pitaka API, e.g. `http://localhost:5044`. The API is a
- * separate deployment from this client, so every request is cross-origin and
- * every URL is built from this token rather than assumed same-origin.
+ * Base URL for the Pitaka API. It can be an absolute origin in development or
+ * an empty string when production requests use the same-origin `/api` path.
  */
 export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL');
 

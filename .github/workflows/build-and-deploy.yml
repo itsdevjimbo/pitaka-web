@@ -1,0 +1,148 @@
+name: Build and Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  publish-image:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pitaka-web-sha-${{ github.event.workflow_run.head_sha }}
+      queue: max
+    env:
+      IMAGE: jimbodev0530/pitaka-web
+      SOURCE_REVISION: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Check for an existing immutable commit tag
+        id: tag
+        shell: bash
+        run: |
+          tag="sha-${SOURCE_REVISION}"
+          status="$(scripts/docker-hub-manifest-status.sh "${IMAGE}:${tag}")"
+          if [[ "$status" == 'present' ]]; then
+            docker pull --platform linux/amd64 "${IMAGE}:${tag}"
+            published_revision="$(docker image inspect "${IMAGE}:${tag}" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+            if [[ "$published_revision" != "$SOURCE_REVISION" ]]; then
+              echo "Refusing to reuse ${IMAGE}:${tag}: its source revision is ${published_revision}." >&2
+              exit 1
+            fi
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish the immutable commit image
+        if: steps.tag.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          build-args: VCS_REF=${{ env.SOURCE_REVISION }}
+
+  promote-main:
+    needs: publish-image
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pitaka-web-main
+      queue: max
+    env:
+      IMAGE: jimbodev0530/pitaka-web
+      SOURCE_REVISION: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Promote only a newer successful main build
+        shell: bash
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$SOURCE_REVISION" origin/main; then
+            echo "The successful CI commit is no longer on main; leaving the main image unchanged."
+            exit 0
+          fi
+
+          status="$(scripts/docker-hub-manifest-status.sh "${IMAGE}:main")"
+          if [[ "$status" == 'missing' ]]; then
+            docker buildx imagetools create --tag "${IMAGE}:main" "${IMAGE}:sha-${SOURCE_REVISION}"
+            exit 0
+          fi
+
+          docker pull --platform linux/amd64 "${IMAGE}:main"
+          current_revision="$(docker image inspect "${IMAGE}:main" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+          if [[ -z "$current_revision" ]]; then
+            echo "The current main image has no source revision label; refusing to replace it." >&2
+            exit 1
+          fi
+          if [[ "$current_revision" == "$SOURCE_REVISION" ]]; then
+            echo 'The main image already points to this successful CI commit.'
+            exit 0
+          fi
+          if ! git cat-file -e "${current_revision}^{commit}" 2>/dev/null \
+            || ! git merge-base --is-ancestor "$current_revision" "$SOURCE_REVISION"; then
+            echo "The candidate $SOURCE_REVISION is not newer than the published main revision $current_revision; leaving main unchanged."
+            exit 0
+          fi
+
+          docker buildx imagetools create --tag "${IMAGE}:main" "${IMAGE}:sha-${SOURCE_REVISION}"
+
+  verify-image:
+    needs: [publish-image, promote-main]
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: jimbodev0530/pitaka-web
+      SOURCE_REVISION: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull and verify both architecture manifests and container behavior
+        run: scripts/verify-web-image.sh "${IMAGE}:sha-${SOURCE_REVISION}" "$SOURCE_REVISION"
