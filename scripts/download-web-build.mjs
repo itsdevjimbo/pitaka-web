@@ -10,6 +10,15 @@ import {
 } from './web-build-artifact.mjs';
 
 const DEFAULT_REPOSITORY = 'itsdevjimbo/pitaka-web';
+const GITHUB_API_VERSION = '2026-03-10';
+
+function githubApiHeaders(token) {
+  return {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${token}`,
+    'X-GitHub-Api-Version': GITHUB_API_VERSION,
+  };
+}
 
 function getToken() {
   const existingToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
@@ -41,11 +50,7 @@ async function getJsonPages(url, token, fetchImpl) {
   let pageUrl = url;
   while (pageUrl) {
     const response = await fetchImpl(pageUrl, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2026-03-10',
-      },
+      headers: githubApiHeaders(token),
     });
     if (!response.ok) {
       throw new Error(`GitHub API request failed with HTTP ${response.status}: ${pageUrl}`);
@@ -301,11 +306,7 @@ async function downloadReleaseBuild({
   const releaseResponse = await fetchImpl(
     apiUrl(apiBaseUrl, repository, `releases/tags/${encodeURIComponent(releaseTag)}`),
     {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2026-03-10',
-      },
+      headers: githubApiHeaders(token),
     },
   );
   if (releaseResponse.status === 404) {
@@ -323,11 +324,7 @@ async function downloadReleaseBuild({
   const taggedCommitResponse = await fetchImpl(
     apiUrl(apiBaseUrl, repository, `commits/${encodeURIComponent(releaseTag)}`),
     {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2026-03-10',
-      },
+      headers: githubApiHeaders(token),
     },
   );
   if (!taggedCommitResponse.ok) {
@@ -371,11 +368,7 @@ async function downloadReleaseBuild({
   const ciAttemptResponse = await fetchImpl(
     apiUrl(apiBaseUrl, repository, `actions/runs/${manifest.ci.runId}/attempts/${manifest.ci.runAttempt}`),
     {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2026-03-10',
-      },
+      headers: githubApiHeaders(token),
     },
   );
   if (!ciAttemptResponse.ok) {
