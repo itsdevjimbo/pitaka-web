@@ -49,7 +49,13 @@ interview. Implementation is tracked separately: [main artifacts #291](https://g
 and [version-tag promotion #293](https://github.com/itsdevjimbo/pitaka-web/issues/293).
 CI runs formatting, lint, and test checks. After successful main CI, the
 `Publish Build` workflow builds the production browser output and uploads the
-temporary Actions archive. It does not yet implement durable promotion or
-retention enforcement. The separate
+temporary Actions archive. The `Promote Production Build` workflow now handles
+stable `vMAJOR.MINOR.PATCH` tags: it verifies main ancestry and exact-SHA CI,
+requires repository release immutability, preserves the verified archive and
+manifest in a public immutable Release, and records selection separately from
+deployment outcome. `docs/operations/production-web-releases.md` documents
+repository setup, credentials, downloads, monitoring, and manual retention
+review. Automated expiry and deployment success tracking remain outside this
+source repository. The separate
 [deployment consumer #194](https://github.com/itsdevjimbo/pitaka/issues/194)
 owns static serving and API proxying.
