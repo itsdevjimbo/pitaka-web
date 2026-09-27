@@ -97,7 +97,16 @@ existing release copy is available, promotion must fail instead of rebuilding.
 Only production-selected builds need durable storage. Selection and successful
 deployment are separate records.
 
-The separate deploy repository owns environment composition, static serving,
-API proxying, and deployment control. Production browser requests use the
-same-origin `/api` path; the deploy-owned serving layer forwards those requests
-to the API.
+The web repo publishes verified static archives and immutable copies for
+production. It no longer builds or publishes a serving image or owns the Nginx
+configuration. The private `itsdevjimbo/pitaka-deploy` repository selects an
+exact archive, verifies its manifest and checksum, mounts the checked bytes into
+its Nginx runtime, and owns environment composition, API proxying, and deployment
+control. Production browser requests use the same-origin `/api` path; the
+deploy-owned serving layer forwards exact `/api` and `/api/` paths with their
+query strings and upstream status and body intact. SPA fallback applies only to
+non-API routes.
+
+Existing published web images remain available for active deployments and
+rollback. Do not remove an image that a deployment still uses or needs for
+rollback; registry image retention is separate from stopping image publication.
