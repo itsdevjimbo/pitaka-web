@@ -9,6 +9,7 @@ import {
   requireSuccessfulWorkflowRun,
   requireWorkflow,
 } from './github-workflow-provenance.mjs';
+import { isPositiveInteger } from './value-validation.mjs';
 import { verifyPromotedWebRelease } from './verify-promoted-web-release.mjs';
 import { isMainModule, sha256, verifyWebBuildArtifact, webBuildArtifactNames } from './web-build-artifact.mjs';
 
@@ -31,10 +32,6 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function positiveInteger(value) {
-  return Number.isSafeInteger(value) && value > 0;
-}
-
 function isSafeAssetName(value) {
   return (
     typeof value === 'string' &&
@@ -46,7 +43,7 @@ function isSafeAssetName(value) {
 }
 
 function requirePositiveInteger(value, description) {
-  if (!positiveInteger(value)) {
+  if (!isPositiveInteger(value)) {
     fail(`${description} must be a positive integer.`);
   }
 }
@@ -216,8 +213,8 @@ function validatePublisherArtifact(artifact, publisherRun, sourceSha, now) {
     fail('The uploaded Actions artifact has expired.');
   }
   if (
-    !positiveInteger(Number(artifact.id)) ||
-    !positiveInteger(Number(artifact.size_in_bytes)) ||
+    !isPositiveInteger(Number(artifact.id)) ||
+    !isPositiveInteger(Number(artifact.size_in_bytes)) ||
     artifact.expired !== false ||
     artifact.workflow_run?.id !== publisherRun.id ||
     artifact.workflow_run?.head_sha !== sourceSha ||
@@ -658,15 +655,22 @@ function isAncestor(ancestor, descendant, execFileSyncImpl) {
   }
 }
 
+function sourceAncestry(candidateSha, currentSha, execFileSyncImpl) {
+  if (isAncestor(currentSha, candidateSha, execFileSyncImpl)) {
+    return 'candidate-descends';
+  }
+  if (isAncestor(candidateSha, currentSha, execFileSyncImpl)) {
+    return 'candidate-ancestor';
+  }
+  return 'divergent';
+}
+
 export function compareWebSelections(candidate, current, { execFileSyncImpl = execFileSync } = {}) {
   if (stableJson(candidate) === stableJson(current)) {
     return 'already-current';
   }
   if (candidate.source.kind === 'release' && candidate.sourceSha !== current.sourceSha) {
-    if (
-      isAncestor(candidate.sourceSha, current.sourceSha, execFileSyncImpl) ||
-      isAncestor(current.sourceSha, candidate.sourceSha, execFileSyncImpl)
-    ) {
+    if (sourceAncestry(candidate.sourceSha, current.sourceSha, execFileSyncImpl) !== 'divergent') {
       return 'superseded';
     }
     fail(
@@ -691,10 +695,11 @@ export function compareWebSelections(candidate, current, { execFileSyncImpl = ex
     }
     return comparePublicationIdentity(candidate.source, current.source) > 0 ? 'advance' : 'superseded';
   }
-  if (isAncestor(current.sourceSha, candidate.sourceSha, execFileSyncImpl)) {
+  const ancestry = sourceAncestry(candidate.sourceSha, current.sourceSha, execFileSyncImpl);
+  if (ancestry === 'candidate-descends') {
     return 'advance';
   }
-  if (isAncestor(candidate.sourceSha, current.sourceSha, execFileSyncImpl)) {
+  if (ancestry === 'candidate-ancestor') {
     return 'superseded';
   }
   fail(
@@ -823,7 +828,7 @@ async function resolveBotIdentity({ token, apiBaseUrl, appSlug, fetchImpl }) {
     headers: githubApiHeaders(token),
   });
   const bot = await readJsonResponse(response, 'Resolving the GitHub App bot identity');
-  if (!positiveInteger(bot.id) || bot.login !== `${appSlug}[bot]`) {
+  if (!isPositiveInteger(bot.id) || bot.login !== `${appSlug}[bot]`) {
     fail('GitHub did not return the bot identity for the deploy App.');
   }
   const email = `${bot.id}+${bot.login}@users.noreply.github.com`;
@@ -1062,7 +1067,7 @@ async function prepareReleaseCli() {
     eventType: 'verified immutable Release promotion',
     sourceSha: process.env.PROMOTION_RUN_SHA,
     promotionRun:
-      positiveInteger(promotionRunId) && positiveInteger(promotionRunAttempt)
+      isPositiveInteger(promotionRunId) && isPositiveInteger(promotionRunAttempt)
         ? { id: promotionRunId, attempt: promotionRunAttempt }
         : undefined,
     release: process.env.RELEASE_TAG ? { tag: process.env.RELEASE_TAG } : undefined,
@@ -1188,9 +1193,9 @@ async function applyCli(candidatePath) {
     } else if (
       prepared.web.source.kind !== 'release' ||
       !isObject(prepared.promotionRun) ||
-      !positiveInteger(prepared.promotionRun.id) ||
-      !positiveInteger(prepared.promotionRun.attempt) ||
-      !positiveInteger(prepared.promotionRun.workflowId) ||
+      !isPositiveInteger(prepared.promotionRun.id) ||
+      !isPositiveInteger(prepared.promotionRun.attempt) ||
+      !isPositiveInteger(prepared.promotionRun.workflowId) ||
       !isObject(prepared.release) ||
       prepared.release.id !== prepared.web.source.releaseId ||
       prepared.release.tag !== prepared.web.source.tag ||

@@ -1,3 +1,5 @@
+import { isPositiveInteger } from './value-validation.mjs';
+
 function reject(fail, message) {
   if (fail) {
     fail(message);
@@ -5,14 +7,10 @@ function reject(fail, message) {
   throw new Error(message);
 }
 
-function positiveInteger(value) {
-  return Number.isSafeInteger(value) && value > 0;
-}
-
 export function requireWorkflow(workflow, { name, path, fail }) {
   if (
     !workflow ||
-    !positiveInteger(workflow.id) ||
+    !isPositiveInteger(workflow.id) ||
     workflow.name !== name ||
     workflow.path !== path ||
     workflow.state !== 'active'

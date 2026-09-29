@@ -8,16 +8,13 @@ import {
   requireSuccessfulWorkflowRun,
   requireWorkflow,
 } from './github-workflow-provenance.mjs';
+import { isPositiveInteger } from './value-validation.mjs';
 import { isMainModule, sha256, verifyWebBuildArtifact, webBuildArtifactNames } from './web-build-artifact.mjs';
 
 const WEB_REPOSITORY = 'itsdevjimbo/pitaka-web';
 const DEFAULT_API_BASE_URL = 'https://api.github.com';
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const VERSION_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-
-function positiveInteger(value) {
-  return Number.isSafeInteger(value) && value > 0;
-}
 
 function fail(message) {
   throw new Error(message);
@@ -49,8 +46,8 @@ function releaseAssets(release, sourceSha, tag) {
     if (
       !expectedNames.includes(asset.name) ||
       selected.has(asset.name) ||
-      !positiveInteger(asset.id) ||
-      !positiveInteger(asset.size) ||
+      !isPositiveInteger(asset.id) ||
+      !isPositiveInteger(asset.size) ||
       asset.state !== 'uploaded'
     ) {
       fail(`Release ${tag} has an unexpected, duplicate, or incomplete asset identity.`);
@@ -93,7 +90,7 @@ export async function verifyPromotedWebRelease({
 }) {
   const runId = Number(promotionRunId);
   const runAttempt = Number(promotionRunAttempt);
-  if (!positiveInteger(runId) || !positiveInteger(runAttempt)) {
+  if (!isPositiveInteger(runId) || !isPositiveInteger(runAttempt)) {
     fail('Promotion workflow run ID and attempt must be positive integers.');
   }
   if (!FULL_SHA.test(expectedSourceSha ?? '')) {
@@ -164,11 +161,11 @@ export async function verifyPromotedWebRelease({
       token,
       fetchImpl,
     });
-    if (positiveInteger(release.id) && release.tag_name === releaseTag) {
+    if (isPositiveInteger(release.id) && release.tag_name === releaseTag) {
       verification.release = { id: release.id, tag: releaseTag };
     }
     if (
-      !positiveInteger(release.id) ||
+      !isPositiveInteger(release.id) ||
       release.tag_name !== releaseTag ||
       release.draft !== false ||
       release.prerelease !== false ||
