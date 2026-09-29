@@ -515,41 +515,20 @@ export async function verifyPublishedActionsBuild({
   }
 }
 
-export async function prepareActionsSelection({
-  workflowRunId,
-  workflowRunAttempt,
-  expectedSourceSha,
-  token,
-  apiBaseUrl,
-  fetchImpl,
-  execFileSyncImpl,
-  now,
-  runnerTemp = tmpdir(),
-}) {
+async function prepareVerifiedSelection({ runnerTemp, eventType, verify, additionalCandidateFields }) {
   const workspace = await mkdtemp(join(runnerTemp, 'pitaka-web-local-selection-'));
   try {
-    const verified = await verifyPublishedActionsBuild({
-      workflowRunId,
-      workflowRunAttempt,
-      expectedSourceSha,
-      token,
-      apiBaseUrl,
-      fetchImpl,
-      execFileSyncImpl,
-      now,
-      workspace,
-    });
+    const verified = await verify(workspace);
+    validateWebSelection(verified.web);
     const candidatePath = join(workspace, 'candidate.json');
     await writeFile(
       candidatePath,
       `${JSON.stringify(
         {
           schemaVersion: 1,
-          eventType: 'successful-publish-build',
+          eventType,
           sourceSha: verified.web.sourceSha,
-          publisherRun: verified.publisherRun,
-          ciRun: verified.ciRun,
-          artifactDirectory: verified.artifactDirectory,
+          ...additionalCandidateFields(verified),
           web: verified.web,
         },
         null,
@@ -564,6 +543,40 @@ export async function prepareActionsSelection({
   }
 }
 
+export async function prepareActionsSelection({
+  workflowRunId,
+  workflowRunAttempt,
+  expectedSourceSha,
+  token,
+  apiBaseUrl,
+  fetchImpl,
+  execFileSyncImpl,
+  now,
+  runnerTemp = tmpdir(),
+}) {
+  return prepareVerifiedSelection({
+    runnerTemp,
+    eventType: 'successful-publish-build',
+    verify: (workspace) =>
+      verifyPublishedActionsBuild({
+        workflowRunId,
+        workflowRunAttempt,
+        expectedSourceSha,
+        token,
+        apiBaseUrl,
+        fetchImpl,
+        execFileSyncImpl,
+        now,
+        workspace,
+      }),
+    additionalCandidateFields: (verified) => ({
+      publisherRun: verified.publisherRun,
+      ciRun: verified.ciRun,
+      artifactDirectory: verified.artifactDirectory,
+    }),
+  });
+}
+
 export async function prepareReleaseSelection({
   promotionRunId,
   promotionRunAttempt,
@@ -576,42 +589,27 @@ export async function prepareReleaseSelection({
   runnerTemp = tmpdir(),
   verifyReleaseImpl = verifyPromotedWebRelease,
 }) {
-  const workspace = await mkdtemp(join(runnerTemp, 'pitaka-web-local-selection-'));
-  try {
-    const verified = await verifyReleaseImpl({
-      promotionRunId,
-      promotionRunAttempt,
-      expectedSourceSha,
-      releaseTag,
-      token,
-      apiBaseUrl,
-      fetchImpl,
-      execFileSyncImpl,
-    });
-    validateWebSelection(verified.web);
-    const candidatePath = join(workspace, 'candidate.json');
-    await writeFile(
-      candidatePath,
-      `${JSON.stringify(
-        {
-          schemaVersion: 1,
-          eventType: 'verified-immutable-release-promotion',
-          sourceSha: verified.web.sourceSha,
-          promotionRun: verified.promotionRun,
-          ciRun: verified.ciRun,
-          release: verified.release,
-          web: verified.web,
-        },
-        null,
-        2,
-      )}\n`,
-      { flag: 'wx', mode: 0o600 },
-    );
-    return { candidatePath, ...verified };
-  } catch (error) {
-    await rm(workspace, { recursive: true, force: true });
-    throw error;
-  }
+  return prepareVerifiedSelection({
+    runnerTemp,
+    eventType: 'verified-immutable-release-promotion',
+    verify: (workspace) =>
+      verifyReleaseImpl({
+        promotionRunId,
+        promotionRunAttempt,
+        expectedSourceSha,
+        releaseTag,
+        token,
+        apiBaseUrl,
+        fetchImpl,
+        execFileSyncImpl,
+        workspace,
+      }),
+    additionalCandidateFields: (verified) => ({
+      promotionRun: verified.promotionRun,
+      ciRun: verified.ciRun,
+      release: verified.release,
+    }),
+  });
 }
 
 function stableJson(value) {
