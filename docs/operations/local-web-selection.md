@@ -3,8 +3,10 @@
 `Select Local Web Build` runs after a successful `Publish Build` completion. It
 rechecks the exact publisher run, successful main `CI` attempt, uploaded artifact,
 manifest, archive, and asset hashes before requesting a deploy-repository token.
-It updates only `web` in `pitaka-deploy/versions/local.json` and reads the record
-back before reporting success. Selecting inputs for the local stack does not run
+It validates the existing web selection, updates only `web` in
+`pitaka-deploy/versions/local.json`, and reads that selection back before reporting
+success. It preserves the API, configuration, and supporting image fields without
+validating them. Selecting inputs for the local stack does not run
 smoke, apply, or report a deployment.
 
 ## GitHub configuration
@@ -26,7 +28,5 @@ cannot be verified, publish a new successful main build to establish a new
 checked identity. A divergent or removed source SHA requires human review; do
 not force the local selection backward.
 
-The updater mirrors the current `schemaVersion: 1` checks in
-`pitaka-deploy/pitaka_deploy/versions.mjs` so it can validate the entire record
-without executing code from the repository it is authorized to write. Keep that
-mirror aligned if the deploy record schema changes.
+The updater validates the web selection in the deploy record. Validation of the
+remaining deployment fields belongs to `pitaka-deploy`.

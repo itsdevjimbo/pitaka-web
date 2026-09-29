@@ -13,8 +13,6 @@ export const DEFAULT_API_BASE_URL = 'https://api.github.com';
 
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
-const DOCKER_IMAGE = /^[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}$/;
-const REQUIRED_IMAGES = ['nginx', 'mysql', 'seaweedfs', 'smtp4dev', 'awscli'];
 const MAX_MANIFEST_BYTES = 1_048_576;
 
 export class LocalWebSelectionError extends Error {}
@@ -106,7 +104,7 @@ function validateActionsSource(source, sourceSha) {
   }
 }
 
-export function validateWebSelection(web, options = {}) {
+export function validateWebSelection(web) {
   if (!isObject(web) || web.repository !== WEB_REPOSITORY || !FULL_SHA.test(web.sourceSha ?? '')) {
     fail('Web selection must record its repository and full source SHA.');
   }
@@ -115,7 +113,7 @@ export function validateWebSelection(web, options = {}) {
   }
 
   if (web.source.kind === 'actions') {
-    validateActionsSource(web.source, web.sourceSha, options);
+    validateActionsSource(web.source, web.sourceSha);
   } else if (web.source.kind === 'release') {
     validateReleaseSource(web.source, web.sourceSha);
   } else {
@@ -146,65 +144,11 @@ export function validateWebSelection(web, options = {}) {
   }
 }
 
-// Keep these schemaVersion 1 constraints aligned with pitaka-deploy's
-// pitaka_deploy/versions.mjs without executing code from the write target.
-export function validateVersionRecord(record, options = {}) {
-  if (!isObject(record) || record.schemaVersion !== 1) {
-    fail('Version record must use schemaVersion 1.');
+export function validateRecordWebSelection(record) {
+  if (!isObject(record)) {
+    fail('Deploy version record must be a JSON object.');
   }
-  if (record.environment !== 'local') {
-    fail("This Compose stack accepts only an environment named 'local'.");
-  }
-
-  const configuration = record.configuration;
-  if (!isObject(configuration) || !configuration.revision) {
-    fail('Version record is missing its configuration revision.');
-  }
-  if (configuration.origin !== 'http://localhost:8080') {
-    fail('Local origin must be http://localhost:8080.');
-  }
-  if (!Array.isArray(configuration.secretReferences) || !configuration.secretReferences.includes('secrets/local.env')) {
-    fail('Configuration must reference secrets/local.env.');
-  }
-
-  validateWebSelection(record.web, options);
-
-  const api = record.api;
-  if (!isObject(api) || api.repository !== 'jimbodev0530/pitaka-api') {
-    fail('Version record is missing the expected API repository selection.');
-  }
-  if (!FULL_SHA.test(api.sourceSha ?? '') || api.sourceTag !== `sha-${api.sourceSha}`) {
-    fail('API source must record a full SHA and its fixed sha-<full-SHA> tag.');
-  }
-  if (typeof api.digest !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(api.digest)) {
-    fail('API image must record an immutable sha256 digest.');
-  }
-  if (api.image !== `${api.repository}@${api.digest}`) {
-    fail('API image must use its repository and recorded digest, without a tag alias.');
-  }
-  if (!['linux/amd64', 'linux/arm64'].includes(api.platform)) {
-    fail('API platform must be linux/amd64 or linux/arm64.');
-  }
-
-  if (!isObject(record.images)) {
-    fail('Version record is missing its supporting image pins.');
-  }
-  for (const imageName of REQUIRED_IMAGES) {
-    const image = record.images[imageName];
-    if (!isObject(image) || !image.version) {
-      fail(`Supporting image ${imageName} must record a version.`);
-    }
-    if (typeof image.reference !== 'string' || !DOCKER_IMAGE.test(image.reference)) {
-      fail(`Supporting image ${imageName} must be pinned by sha256 digest.`);
-    }
-    const referenceTag = image.reference.split('@', 1)[0].split(':').at(-1);
-    if (referenceTag !== image.version) {
-      fail(`Supporting image ${imageName} version does not match its pinned image reference.`);
-    }
-    if (['latest', 'main', 'master'].includes(referenceTag.toLowerCase())) {
-      fail(`Supporting image ${imageName} cannot use a moving alias tag.`);
-    }
-  }
+  validateWebSelection(record.web);
 }
 
 function apiUrl(apiBaseUrl, repository, path, query = '') {
@@ -577,7 +521,7 @@ export async function verifyPublishedActionsBuild({
     );
 
     const zipResponse = await fetchImpl(artifact.archive_download_url, {
-      headers: githubApiHeaders(token, 'application/octet-stream'),
+      headers: githubApiHeaders(token),
     });
     if (!zipResponse.ok) {
       throw describeHttpError('Downloading the checked Actions artifact', zipResponse);
@@ -804,7 +748,7 @@ async function performWrite({
   fetchImpl,
 }) {
   const nextRecord = { ...record, web: candidate };
-  validateVersionRecord(nextRecord);
+  validateRecordWebSelection(nextRecord);
   const content = `${JSON.stringify(nextRecord, null, 2)}\n`;
   const message = [
     `Select checked web build ${candidate.sourceSha}`,
@@ -907,7 +851,7 @@ export async function applyLocalWebSelection({
         await pauseBeforeRetry(cycle, undefined, sleepImpl);
         continue;
       }
-      validateVersionRecord(current.record);
+      validateRecordWebSelection(current.record);
       if (report.before === undefined) {
         report.before = current.record.web;
       }
@@ -948,7 +892,7 @@ export async function applyLocalWebSelection({
 
       try {
         const afterWrite = await readDeployVersion({ token, apiBaseUrl, fetchImpl });
-        validateVersionRecord(afterWrite.record);
+        validateRecordWebSelection(afterWrite.record);
         report.after = afterWrite.record.web;
         const finalDecision = compareWebSelections(candidate, afterWrite.record.web, {
           execFileSyncImpl,
@@ -977,7 +921,7 @@ export async function applyLocalWebSelection({
     if (token && report.before !== undefined) {
       try {
         const finalState = await readDeployVersion({ token, apiBaseUrl, fetchImpl });
-        validateVersionRecord(finalState.record);
+        validateRecordWebSelection(finalState.record);
         report.after = finalState.record.web;
       } catch {
         report.after = undefined;

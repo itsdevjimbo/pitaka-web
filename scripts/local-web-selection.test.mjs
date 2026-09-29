@@ -9,7 +9,7 @@ import {
   applyLocalWebSelection,
   compareWebSelections,
   prepareActionsSelection,
-  validateVersionRecord,
+  validateRecordWebSelection,
   writeSelectionSummary,
 } from './local-web-selection.mjs';
 import { packageWebBuild } from './web-build-artifact.mjs';
@@ -276,7 +276,8 @@ async function makePublisherFixture(t, { missingArtifact = false, expired = fals
     status: 'completed',
     conclusion: 'success',
   };
-  const fetchImpl = async (url) => {
+  const artifactDownloadRequests = [];
+  const fetchImpl = async (url, options) => {
     const parsed = new URL(url);
     if (parsed.pathname === '/repos/itsdevjimbo/pitaka-web/actions/workflows/publish-build.yml') {
       return responseJson({
@@ -302,11 +303,12 @@ async function makePublisherFixture(t, { missingArtifact = false, expired = fals
       return responseJson(artifact);
     }
     if (parsed.pathname === '/repos/itsdevjimbo/pitaka-web/actions/artifacts/800/zip') {
+      artifactDownloadRequests.push({ headers: options?.headers });
       return new Response(zipContents);
     }
     return responseJson({ message: `unexpected request ${url}` }, 500);
   };
-  return { root, artifact, publisherRun, ciRun, zipContents, fetchImpl };
+  return { root, artifact, publisherRun, ciRun, zipContents, artifactDownloadRequests, fetchImpl };
 }
 
 test('verifies the exact publisher, CI attempt, artifact identity and web bytes', async (t) => {
@@ -330,6 +332,10 @@ test('verifies the exact publisher, CI attempt, artifact identity and web bytes'
   assert.equal(prepared.web.source.ciRunAttempt, 2);
   assert.match(prepared.web.manifest.sha256, /^[a-f0-9]{64}$/);
   assert.ok(prepared.web.archive.sizeBytes > 0);
+  assert.equal(
+    new Headers(fixture.artifactDownloadRequests[0].headers).get('accept'),
+    'application/vnd.github+json',
+  );
   const candidate = JSON.parse(await readFile(prepared.candidatePath, 'utf8'));
   assert.equal(candidate.web.source.artifactName, fixture.artifact.name);
 });
@@ -433,7 +439,7 @@ test('writes only web and preserves a concurrent non-web edit after a conflict',
     deploy.calls.writes[1].payload.committer.email,
     '123456+pitaka-deploy-bot[bot]@users.noreply.github.com',
   );
-  validateVersionRecord(deploy.getRecord());
+  validateRecordWebSelection(deploy.getRecord());
 });
 
 test('does not create a commit when the exact checked selection is already current', () => {
@@ -588,24 +594,27 @@ test('does not retry a deploy App authorization rejection', async () => {
   assert.equal(deploy.calls.put, 1);
 });
 
-test('validates the entire existing deploy version before attempting a write', async () => {
-  const invalid = validVersionRecord(makeActionsWeb({ sourceSha: CURRENT_SHA }));
-  invalid.images.mysql.reference = `mysql:latest@sha256:${'1'.repeat(64)}`;
-  invalid.images.mysql.version = 'latest';
-  const deploy = makeDeployApi({ currentRecord: invalid });
-  await assert.rejects(
-    applyLocalWebSelection({
-      candidate: makeActionsWeb({ sourceSha: SOURCE_SHA }),
-      token: 'deploy-token',
-      appSlug: 'pitaka-deploy-bot',
-      fetchImpl: deploy.fetchImpl,
-      execFileSyncImpl: gitExec(new Set([`${CURRENT_SHA}:${SOURCE_SHA}`])),
-      now: () => NOW,
-      sleepImpl: async () => {},
-    }),
-    /moving alias tag/,
-  );
-  assert.equal(deploy.calls.put, 0);
+test('selects web while preserving unrelated deploy fields without validating them', async () => {
+  const current = validVersionRecord(makeActionsWeb({ sourceSha: CURRENT_SHA }));
+  current.api.image = 'managed by the API publisher';
+  current.images.mysql.reference = 'managed by the stack owner';
+  current.configuration.origin = 'managed by the stack owner';
+  const deploy = makeDeployApi({ currentRecord: current });
+  const result = await applyLocalWebSelection({
+    candidate: makeActionsWeb({ sourceSha: SOURCE_SHA }),
+    token: 'deploy-token',
+    appSlug: 'pitaka-deploy-bot',
+    fetchImpl: deploy.fetchImpl,
+    execFileSyncImpl: gitExec(new Set([`${CURRENT_SHA}:${SOURCE_SHA}`])),
+    now: () => NOW,
+    sleepImpl: async () => {},
+  });
+  assert.equal(result.outcome, 'applied');
+  assert.equal(deploy.calls.put, 1);
+  assert.deepEqual(deploy.getRecord().api, current.api);
+  assert.deepEqual(deploy.getRecord().images, current.images);
+  assert.deepEqual(deploy.getRecord().configuration, current.configuration);
+  assert.equal(deploy.getRecord().web.sourceSha, SOURCE_SHA);
 });
 
 test('writes a failure summary with source, attempts and recovery details', async (t) => {
