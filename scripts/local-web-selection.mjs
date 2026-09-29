@@ -577,7 +577,7 @@ export async function verifyPublishedActionsBuild({
     );
 
     const zipResponse = await fetchImpl(artifact.archive_download_url, {
-      headers: githubApiHeaders(token, 'application/octet-stream'),
+      headers: githubApiHeaders(token),
     });
     if (!zipResponse.ok) {
       throw describeHttpError('Downloading the checked Actions artifact', zipResponse);

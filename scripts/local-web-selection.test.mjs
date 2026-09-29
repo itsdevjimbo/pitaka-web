@@ -276,7 +276,8 @@ async function makePublisherFixture(t, { missingArtifact = false, expired = fals
     status: 'completed',
     conclusion: 'success',
   };
-  const fetchImpl = async (url) => {
+  const artifactDownloadRequests = [];
+  const fetchImpl = async (url, options) => {
     const parsed = new URL(url);
     if (parsed.pathname === '/repos/itsdevjimbo/pitaka-web/actions/workflows/publish-build.yml') {
       return responseJson({
@@ -302,11 +303,12 @@ async function makePublisherFixture(t, { missingArtifact = false, expired = fals
       return responseJson(artifact);
     }
     if (parsed.pathname === '/repos/itsdevjimbo/pitaka-web/actions/artifacts/800/zip') {
+      artifactDownloadRequests.push({ headers: options?.headers });
       return new Response(zipContents);
     }
     return responseJson({ message: `unexpected request ${url}` }, 500);
   };
-  return { root, artifact, publisherRun, ciRun, zipContents, fetchImpl };
+  return { root, artifact, publisherRun, ciRun, zipContents, artifactDownloadRequests, fetchImpl };
 }
 
 test('verifies the exact publisher, CI attempt, artifact identity and web bytes', async (t) => {
@@ -330,6 +332,10 @@ test('verifies the exact publisher, CI attempt, artifact identity and web bytes'
   assert.equal(prepared.web.source.ciRunAttempt, 2);
   assert.match(prepared.web.manifest.sha256, /^[a-f0-9]{64}$/);
   assert.ok(prepared.web.archive.sizeBytes > 0);
+  assert.equal(
+    new Headers(fixture.artifactDownloadRequests[0].headers).get('accept'),
+    'application/vnd.github+json',
+  );
   const candidate = JSON.parse(await readFile(prepared.candidatePath, 'utf8'));
   assert.equal(candidate.web.source.artifactName, fixture.artifact.name);
 });
