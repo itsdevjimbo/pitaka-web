@@ -9,6 +9,7 @@ import {
   applyLocalWebSelection,
   compareWebSelections,
   prepareActionsSelection,
+  prepareReleaseSelection,
   validateRecordWebSelection,
   writeSelectionSummary,
 } from './local-web-selection.mjs';
@@ -332,10 +333,7 @@ test('verifies the exact publisher, CI attempt, artifact identity and web bytes'
   assert.equal(prepared.web.source.ciRunAttempt, 2);
   assert.match(prepared.web.manifest.sha256, /^[a-f0-9]{64}$/);
   assert.ok(prepared.web.archive.sizeBytes > 0);
-  assert.equal(
-    new Headers(fixture.artifactDownloadRequests[0].headers).get('accept'),
-    'application/vnd.github+json',
-  );
+  assert.equal(new Headers(fixture.artifactDownloadRequests[0].headers).get('accept'), 'application/vnd.github+json');
   const candidate = JSON.parse(await readFile(prepared.candidatePath, 'utf8'));
   assert.equal(candidate.web.source.artifactName, fixture.artifact.name);
 });
@@ -475,6 +473,132 @@ test('keeps a same-SHA immutable Release selected over an Actions retry', () => 
     compareWebSelections(makeReleaseWeb(SOURCE_SHA), makeActionsWeb({ sourceSha: CURRENT_SHA })),
     'superseded',
   );
+});
+
+test('upgrades matching selected Actions bytes to the verified immutable Release', async () => {
+  const current = validVersionRecord(makeActionsWeb({ sourceSha: SOURCE_SHA }));
+  const deploy = makeDeployApi({ currentRecord: current });
+  const release = makeReleaseWeb(SOURCE_SHA);
+  const result = await applyLocalWebSelection({
+    candidate: release,
+    promotionRun: { id: 900, attempt: 2, workflowId: 901 },
+    token: 'deploy-token',
+    appSlug: 'pitaka-deploy-bot',
+    fetchImpl: deploy.fetchImpl,
+    now: () => NOW,
+    sleepImpl: async () => {},
+  });
+
+  assert.equal(result.outcome, 'applied');
+  assert.equal(result.writeAttempts, 1);
+  assert.equal(deploy.calls.put, 1);
+  assert.equal(deploy.getRecord().web.source.kind, 'release');
+  assert.equal(deploy.getRecord().web.archive.sha256, current.web.archive.sha256);
+  assert.equal(deploy.getRecord().web.assetIdentitySha256, current.web.assetIdentitySha256);
+  assert.deepEqual(deploy.getRecord().api, current.api);
+  assert.deepEqual(deploy.getRecord().images, current.images);
+  assert.deepEqual(result.promotionRun, { id: 900, attempt: 2, workflowId: 901 });
+});
+
+test('fails the Release handoff when a same-SHA selected Actions build has different bytes', async () => {
+  const current = validVersionRecord(makeActionsWeb({ sourceSha: SOURCE_SHA }));
+  const deploy = makeDeployApi({ currentRecord: current });
+  const release = makeReleaseWeb(SOURCE_SHA);
+  release.archive.sha256 = '0'.repeat(64);
+
+  await assert.rejects(
+    applyLocalWebSelection({
+      candidate: release,
+      token: 'deploy-token',
+      appSlug: 'pitaka-deploy-bot',
+      fetchImpl: deploy.fetchImpl,
+      now: () => NOW,
+      sleepImpl: async () => {},
+    }),
+    /does not match the selected Actions build bytes/,
+  );
+  assert.equal(deploy.calls.put, 0);
+  assert.deepEqual(deploy.getRecord().web, current.web);
+});
+
+test('keeps an existing Release when promotion repeats or names another source SHA', async () => {
+  const currentWeb = makeReleaseWeb(CURRENT_SHA);
+  const current = validVersionRecord(currentWeb);
+  const sameRelease = makeDeployApi({ currentRecord: current });
+  const repeated = await applyLocalWebSelection({
+    candidate: makeReleaseWeb(CURRENT_SHA),
+    token: 'deploy-token',
+    appSlug: 'pitaka-deploy-bot',
+    fetchImpl: sameRelease.fetchImpl,
+    now: () => NOW,
+    sleepImpl: async () => {},
+  });
+  assert.equal(repeated.outcome, 'already current');
+  assert.equal(sameRelease.calls.put, 0);
+
+  const anotherPromotion = makeDeployApi({ currentRecord: current });
+  const ignored = await applyLocalWebSelection({
+    candidate: makeReleaseWeb(SOURCE_SHA),
+    token: 'deploy-token',
+    appSlug: 'pitaka-deploy-bot',
+    fetchImpl: anotherPromotion.fetchImpl,
+    now: () => NOW,
+    sleepImpl: async () => {},
+  });
+  assert.equal(ignored.outcome, 'validly superseded');
+  assert.equal(anotherPromotion.calls.put, 0);
+  assert.equal(anotherPromotion.getRecord().web.sourceSha, CURRENT_SHA);
+});
+
+test('does not replace a concurrently selected newer Actions candidate with an older Release', async () => {
+  const current = validVersionRecord(makeActionsWeb({ sourceSha: SOURCE_SHA }));
+  let advanced = false;
+  const deploy = makeDeployApi({
+    currentRecord: current,
+    beforeRead: async ({ setRecord }) => {
+      if (!advanced) {
+        advanced = true;
+        setRecord(validVersionRecord(makeActionsWeb({ sourceSha: LATER_SHA, workflowRunId: 700 })));
+      }
+    },
+  });
+  const result = await applyLocalWebSelection({
+    candidate: makeReleaseWeb(SOURCE_SHA),
+    token: 'deploy-token',
+    appSlug: 'pitaka-deploy-bot',
+    fetchImpl: deploy.fetchImpl,
+    now: () => NOW,
+    sleepImpl: async () => {},
+  });
+
+  assert.equal(result.outcome, 'validly superseded');
+  assert.equal(deploy.calls.put, 0);
+  assert.equal(deploy.getRecord().web.sourceSha, LATER_SHA);
+});
+
+test('writes a verified Release candidate with its promotion provenance to temporary storage', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pitaka-web-release-candidate-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const prepared = await prepareReleaseSelection({
+    promotionRunId: 900,
+    promotionRunAttempt: 2,
+    expectedSourceSha: SOURCE_SHA,
+    releaseTag: 'v1.2.3',
+    token: 'read-token',
+    runnerTemp: root,
+    verifyReleaseImpl: async () => ({
+      web: makeReleaseWeb(SOURCE_SHA),
+      promotionRun: { id: 900, attempt: 2, workflowId: 901 },
+      release: { id: 700, tag: 'v1.2.3' },
+      ciRun: { id: 125, attempt: 2 },
+    }),
+  });
+  const candidate = JSON.parse(await readFile(prepared.candidatePath, 'utf8'));
+
+  assert.equal(candidate.eventType, 'verified-immutable-release-promotion');
+  assert.equal(candidate.promotionRun.id, 900);
+  assert.equal(candidate.release.tag, 'v1.2.3');
+  assert.equal(candidate.web.source.kind, 'release');
 });
 
 test('orders different source SHAs by ancestry and fails for divergence', () => {
@@ -637,4 +761,28 @@ test('writes a failure summary with source, attempts and recovery details', asyn
   assert.match(summary, /Write attempts: 3/);
   assert.match(summary, /Outcome: failed/);
   assert.match(summary, /Inspect pitaka-deploy\/main/);
+});
+
+test('includes the promotion run and immutable Release in the handoff summary', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pitaka-web-release-summary-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const summaryPath = join(root, 'summary.md');
+  await writeSelectionSummary(summaryPath, {
+    eventType: 'verified immutable Release promotion',
+    sourceSha: SOURCE_SHA,
+    promotionRun: { id: 900, attempt: 2 },
+    release: { id: 700, tag: 'v1.2.3' },
+    ciRun: { id: 125, attempt: 2 },
+    before: makeActionsWeb({ sourceSha: SOURCE_SHA }),
+    after: makeReleaseWeb(SOURCE_SHA),
+    writeAttempts: 1,
+    outcome: 'applied',
+    recovery: 'No recovery is needed.',
+  });
+  const summary = await readFile(summaryPath, 'utf8');
+
+  assert.match(summary, /Promotion run: 900, attempt 2/);
+  assert.match(summary, /Immutable Release: v1\.2\.3 \(ID 700\)/);
+  assert.match(summary, /Outcome: applied/);
+  assert.match(summary, /does not run smoke, apply, or report deployment success/);
 });

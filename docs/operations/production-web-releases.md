@@ -44,6 +44,13 @@ https://github.com/itsdevjimbo/pitaka-web/releases/download/<version-tag>/pitaka
 https://github.com/itsdevjimbo/pitaka-web/releases/download/<version-tag>/pitaka-web-<full-source-sha>.manifest.json
 ```
 
+After `Promote Production Build` succeeds, `Select Local Web Build` verifies the
+promotion run, tag, immutable Release, public assets, and exact-SHA CI provenance.
+It upgrades `pitaka-deploy/versions/local.json` only if that file still selects
+the same SHA through Actions and the archive and asset tree hashes match. A failed
+selection handoff fails its own workflow while leaving the published Release
+available for retry.
+
 Deployment automation can retrieve temporary Actions artifacts with a token
 that has **Actions: read**. The existing downloader verifies the complete
 archive before returning it. A production deployment must wait for the
