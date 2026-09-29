@@ -10,7 +10,7 @@ import {
   requireWorkflow,
 } from './github-workflow-provenance.mjs';
 import { isPositiveInteger } from './value-validation.mjs';
-import { verifyPromotedWebRelease } from './verify-promoted-web-release.mjs';
+import { verifyImmutableWebRelease, verifyPromotedWebRelease } from './verify-promoted-web-release.mjs';
 import { isMainModule, sha256, verifyWebBuildArtifact, webBuildArtifactNames } from './web-build-artifact.mjs';
 
 export const WEB_REPOSITORY = 'itsdevjimbo/pitaka-web';
@@ -354,6 +354,11 @@ export async function verifyPublishedActionsBuild({
   }
   const ownWorkspace = workspace ?? (await mkdtemp(join(tmpdir(), 'pitaka-web-local-selection-')));
   const ownsWorkspace = workspace === undefined;
+  const verification = {
+    sourceSha: expectedSourceSha,
+    publisherRun: undefined,
+    ciRun: undefined,
+  };
   try {
     const publisherWorkflow = requireWorkflow(
       await getJson({
@@ -387,6 +392,12 @@ export async function verifyPublishedActionsBuild({
       fail('The completed Publish Build run does not record a full source SHA.');
     }
     const sourceSha = publisherRun.head_sha;
+    verification.sourceSha = sourceSha;
+    verification.publisherRun = {
+      id: publisherRun.id,
+      attempt: publisherRun.run_attempt,
+      workflowId: publisherWorkflow.id,
+    };
     if (expectedSourceSha && expectedSourceSha !== sourceSha) {
       fail('The completed publisher run SHA does not match its workflow_run event.');
     }
@@ -476,6 +487,7 @@ export async function verifyPublishedActionsBuild({
         fail,
       },
     );
+    verification.ciRun = { id: ciRun.id, attempt: ciRun.run_attempt };
 
     const zipResponse = await fetchImpl(artifact.archive_download_url, {
       headers: githubApiHeaders(token),
@@ -511,7 +523,9 @@ export async function verifyPublishedActionsBuild({
     if (ownsWorkspace) {
       await rm(ownWorkspace, { recursive: true, force: true });
     }
-    throw error;
+    const verificationError = error instanceof Error ? error : new Error(String(error));
+    verificationError.actionsVerification = verification;
+    throw verificationError;
   }
 }
 
@@ -553,10 +567,11 @@ export async function prepareActionsSelection({
   execFileSyncImpl,
   now,
   runnerTemp = tmpdir(),
+  eventType = 'successful-publish-build',
 }) {
   return prepareVerifiedSelection({
     runnerTemp,
-    eventType: 'successful-publish-build',
+    eventType,
     verify: (workspace) =>
       verifyPublishedActionsBuild({
         workflowRunId,
@@ -612,6 +627,68 @@ export async function prepareReleaseSelection({
   });
 }
 
+export async function prepareReconciliationSelection({
+  sourceType,
+  publisherRunId,
+  publisherRunAttempt,
+  releaseTag,
+  token,
+  apiBaseUrl,
+  fetchImpl,
+  execFileSyncImpl,
+  now,
+  runnerTemp = tmpdir(),
+  verifyReleaseImpl = verifyImmutableWebRelease,
+}) {
+  if (!['actions', 'release'].includes(sourceType)) {
+    fail("Manual reconciliation source type must be 'actions' or 'release'.");
+  }
+  if (sourceType === 'actions') {
+    if (!isPositiveInteger(Number(publisherRunId)) || !isPositiveInteger(Number(publisherRunAttempt))) {
+      fail('Actions reconciliation requires a positive publisher run ID and attempt.');
+    }
+    if (releaseTag) {
+      fail('Actions reconciliation does not accept a Release tag.');
+    }
+    return prepareActionsSelection({
+      workflowRunId: Number(publisherRunId),
+      workflowRunAttempt: Number(publisherRunAttempt),
+      token,
+      apiBaseUrl,
+      fetchImpl,
+      execFileSyncImpl,
+      now,
+      runnerTemp,
+      eventType: 'manual-actions-reconciliation',
+    });
+  }
+
+  if (publisherRunId || publisherRunAttempt) {
+    fail('Release reconciliation does not accept a publisher run ID or attempt.');
+  }
+  if (!releaseTag) {
+    fail('Release reconciliation requires an immutable Release tag.');
+  }
+  return prepareVerifiedSelection({
+    runnerTemp,
+    eventType: 'manual-release-reconciliation',
+    verify: (workspace) =>
+      verifyReleaseImpl({
+        expectedSourceSha: undefined,
+        releaseTag,
+        token,
+        apiBaseUrl,
+        fetchImpl,
+        execFileSyncImpl,
+        workspace,
+      }),
+    additionalCandidateFields: (verified) => ({
+      release: verified.release,
+      ciRun: verified.ciRun,
+    }),
+  });
+}
+
 function stableJson(value) {
   if (Array.isArray(value)) {
     return `[${value.map(stableJson).join(',')}]`;
@@ -663,11 +740,15 @@ function sourceAncestry(candidateSha, currentSha, execFileSyncImpl) {
   return 'divergent';
 }
 
-export function compareWebSelections(candidate, current, { execFileSyncImpl = execFileSync } = {}) {
+export function compareWebSelections(
+  candidate,
+  current,
+  { execFileSyncImpl = execFileSync, allowReleaseSourceAdvance = false } = {},
+) {
   if (stableJson(candidate) === stableJson(current)) {
     return 'already-current';
   }
-  if (candidate.source.kind === 'release' && candidate.sourceSha !== current.sourceSha) {
+  if (candidate.source.kind === 'release' && candidate.sourceSha !== current.sourceSha && !allowReleaseSourceAdvance) {
     if (sourceAncestry(candidate.sourceSha, current.sourceSha, execFileSyncImpl) !== 'divergent') {
       return 'superseded';
     }
@@ -843,6 +924,8 @@ export async function applyLocalWebSelection({
   execFileSyncImpl = execFileSync,
   now = () => new Date(),
   eventType,
+  verifySelectedSourceReachability = false,
+  allowReleaseSourceAdvance = false,
   sleepImpl = (duration) => new Promise((resolveSleep) => setTimeout(resolveSleep, duration)),
 }) {
   const report = {
@@ -873,6 +956,15 @@ export async function applyLocalWebSelection({
     if (candidate.source.kind === 'actions' && Date.parse(candidate.source.expiresAt) <= now().getTime()) {
       fail('The checked Actions artifact expired before the deploy selection could be written.');
     }
+    if (verifySelectedSourceReachability) {
+      // A rerun may outlive a main-history rewrite. Refresh once, then reject every removed selection we observe.
+      assertSourceReachableFromMain({
+        sourceSha: candidate.sourceSha,
+        execFileSyncImpl,
+        fail,
+        description: 'Checked source SHA',
+      });
+    }
     const botIdentity = await resolveBotIdentity({ token, apiBaseUrl, appSlug, fetchImpl });
 
     for (let cycle = 0; cycle < 3; cycle += 1) {
@@ -890,7 +982,19 @@ export async function applyLocalWebSelection({
       if (report.before === undefined) {
         report.before = current.record.web;
       }
-      const decision = compareWebSelections(candidate, current.record.web, { execFileSyncImpl });
+      if (verifySelectedSourceReachability) {
+        assertSourceReachableFromMain({
+          sourceSha: current.record.web.sourceSha,
+          execFileSyncImpl,
+          fail,
+          description: 'Selected SHA',
+          fetchMain: false,
+        });
+      }
+      const decision = compareWebSelections(candidate, current.record.web, {
+        execFileSyncImpl,
+        allowReleaseSourceAdvance,
+      });
       if (decision === 'already-current') {
         report.after = current.record.web;
         return { ...report, outcome: report.writeAttempts > 0 ? 'applied' : 'already current' };
@@ -928,9 +1032,19 @@ export async function applyLocalWebSelection({
       try {
         const afterWrite = await readDeployVersion({ token, apiBaseUrl, fetchImpl });
         validateRecordWebSelection(afterWrite.record);
+        if (verifySelectedSourceReachability) {
+          assertSourceReachableFromMain({
+            sourceSha: afterWrite.record.web.sourceSha,
+            execFileSyncImpl,
+            fail,
+            description: 'Selected SHA',
+            fetchMain: false,
+          });
+        }
         report.after = afterWrite.record.web;
         const finalDecision = compareWebSelections(candidate, afterWrite.record.web, {
           execFileSyncImpl,
+          allowReleaseSourceAdvance,
         });
         if (finalDecision === 'already-current') {
           return { ...report, outcome: 'applied' };
@@ -1022,6 +1136,26 @@ function writeOutput(name, value, outputPath) {
   return writeFile(outputPath, `${name}=${value}\n`, { flag: 'a' });
 }
 
+async function writePreparedCandidateOutputs(prepared) {
+  const outputPath = process.env.GITHUB_OUTPUT;
+  await writeOutput('candidate_path', prepared.candidatePath, outputPath);
+  await writeOutput('source_sha', prepared.web.sourceSha, outputPath);
+  if (prepared.publisherRun) {
+    await writeOutput('publisher_run_id', prepared.publisherRun.id, outputPath);
+    await writeOutput('publisher_run_attempt', prepared.publisherRun.attempt, outputPath);
+  }
+  if (prepared.promotionRun) {
+    await writeOutput('promotion_run_id', prepared.promotionRun.id, outputPath);
+    await writeOutput('promotion_run_attempt', prepared.promotionRun.attempt, outputPath);
+  }
+  if (prepared.release) {
+    await writeOutput('release_id', prepared.release.id, outputPath);
+    await writeOutput('release_tag', prepared.release.tag, outputPath);
+  }
+  await writeOutput('ci_run_id', prepared.ciRun.id, outputPath);
+  await writeOutput('ci_run_attempt', prepared.ciRun.attempt, outputPath);
+}
+
 async function prepareCli(workflowRunId, workflowRunAttempt) {
   const report = {
     sourceSha: process.env.PUBLISH_RUN_SHA,
@@ -1041,14 +1175,12 @@ async function prepareCli(workflowRunId, workflowRunAttempt) {
     });
     report.sourceSha = prepared.web.sourceSha;
     report.ciRun = prepared.ciRun;
-    await writeOutput('candidate_path', prepared.candidatePath, process.env.GITHUB_OUTPUT);
-    await writeOutput('source_sha', prepared.web.sourceSha, process.env.GITHUB_OUTPUT);
-    await writeOutput('publisher_run_id', prepared.publisherRun.id, process.env.GITHUB_OUTPUT);
-    await writeOutput('publisher_run_attempt', prepared.publisherRun.attempt, process.env.GITHUB_OUTPUT);
-    await writeOutput('ci_run_id', prepared.ciRun.id, process.env.GITHUB_OUTPUT);
-    await writeOutput('ci_run_attempt', prepared.ciRun.attempt, process.env.GITHUB_OUTPUT);
+    await writePreparedCandidateOutputs(prepared);
     return;
   } catch (error) {
+    report.sourceSha = error.actionsVerification?.sourceSha ?? report.sourceSha;
+    report.publisherRun = error.actionsVerification?.publisherRun ?? report.publisherRun;
+    report.ciRun = error.actionsVerification?.ciRun ?? report.ciRun;
     report.outcome = 'failed';
     report.recovery =
       'Correct the source run or artifact issue. If its artifact has expired, publish a new successful main CI build.';
@@ -1086,15 +1218,9 @@ async function prepareReleaseCli() {
     report.promotionRun = prepared.promotionRun;
     report.release = prepared.release;
     report.ciRun = prepared.ciRun;
-    await writeOutput('candidate_path', prepared.candidatePath, process.env.GITHUB_OUTPUT);
-    await writeOutput('source_sha', prepared.web.sourceSha, process.env.GITHUB_OUTPUT);
-    await writeOutput('promotion_run_id', prepared.promotionRun.id, process.env.GITHUB_OUTPUT);
-    await writeOutput('promotion_run_attempt', prepared.promotionRun.attempt, process.env.GITHUB_OUTPUT);
-    await writeOutput('release_id', prepared.release.id, process.env.GITHUB_OUTPUT);
-    await writeOutput('release_tag', prepared.release.tag, process.env.GITHUB_OUTPUT);
-    await writeOutput('ci_run_id', prepared.ciRun.id, process.env.GITHUB_OUTPUT);
-    await writeOutput('ci_run_attempt', prepared.ciRun.attempt, process.env.GITHUB_OUTPUT);
+    await writePreparedCandidateOutputs(prepared);
   } catch (error) {
+    report.sourceSha = error.releaseVerification?.sourceSha ?? report.sourceSha;
     report.promotionRun = error.releaseVerification?.promotionRun ?? report.promotionRun;
     report.release = error.releaseVerification?.release ?? report.release;
     report.ciRun = error.releaseVerification?.ciRun ?? report.ciRun;
@@ -1105,6 +1231,107 @@ async function prepareReleaseCli() {
     process.stderr.write(`::error title=Local web Release verification failed::${safeAnnotation(error.message)}\n`);
     throw error;
   }
+}
+
+async function prepareReconciliationCli(sourceType, publisherRunId, publisherRunAttempt, releaseTag) {
+  const actionsSource = sourceType === 'actions';
+  const report = {
+    eventType: `manual ${sourceType || 'unknown'} reconciliation`,
+    publisherRun:
+      actionsSource && isPositiveInteger(Number(publisherRunId)) && isPositiveInteger(Number(publisherRunAttempt))
+        ? { id: Number(publisherRunId), attempt: Number(publisherRunAttempt) }
+        : undefined,
+    release: !actionsSource && releaseTag ? { tag: releaseTag } : undefined,
+    before: undefined,
+    after: undefined,
+    writeAttempts: 0,
+  };
+  try {
+    const prepared = await prepareReconciliationSelection({
+      sourceType,
+      publisherRunId,
+      publisherRunAttempt,
+      releaseTag,
+      token: process.env.GITHUB_TOKEN,
+      apiBaseUrl: process.env.GITHUB_API_URL ?? DEFAULT_API_BASE_URL,
+    });
+    report.sourceSha = prepared.web.sourceSha;
+    report.publisherRun = prepared.publisherRun;
+    report.release = prepared.release;
+    report.ciRun = prepared.ciRun;
+    await writePreparedCandidateOutputs(prepared);
+  } catch (error) {
+    report.sourceSha = error.actionsVerification?.sourceSha ?? error.releaseVerification?.sourceSha ?? report.sourceSha;
+    report.publisherRun = error.actionsVerification?.publisherRun ?? report.publisherRun;
+    report.release = error.releaseVerification?.release ?? report.release;
+    report.ciRun = error.actionsVerification?.ciRun ?? error.releaseVerification?.ciRun ?? report.ciRun;
+    report.outcome = 'failed';
+    report.recovery = actionsSource
+      ? 'Correct the publisher run or artifact issue and retry reconciliation while the Actions artifact is available. If it expired, explicitly reconcile an independently verified immutable Release for the same SHA or publish a new checked build.'
+      : 'Correct the Release, provenance, or input issue, then retry reconciliation with the immutable Release tag.';
+    await writeSelectionSummary(process.env.GITHUB_STEP_SUMMARY, report);
+    process.stderr.write(
+      `::error title=Local web reconciliation verification failed::${safeAnnotation(error.message)}\n`,
+    );
+    throw error;
+  }
+}
+
+const PREPARED_CANDIDATE_MODES = Object.freeze({
+  'successful-publish-build': {
+    sourceKind: 'actions',
+    reportEventType: 'successful Publish Build completion',
+    requiresPromotionRun: false,
+    allowReleaseSourceAdvance: false,
+  },
+  'verified-immutable-release-promotion': {
+    sourceKind: 'release',
+    reportEventType: 'verified immutable Release promotion',
+    requiresPromotionRun: true,
+    allowReleaseSourceAdvance: false,
+  },
+  'manual-actions-reconciliation': {
+    sourceKind: 'actions',
+    reportEventType: 'manual Actions reconciliation',
+    requiresPromotionRun: false,
+    allowReleaseSourceAdvance: false,
+  },
+  'manual-release-reconciliation': {
+    sourceKind: 'release',
+    reportEventType: 'manual immutable Release reconciliation',
+    requiresPromotionRun: false,
+    allowReleaseSourceAdvance: true,
+  },
+});
+
+function preparedCandidateMode(eventType) {
+  return Object.hasOwn(PREPARED_CANDIDATE_MODES, eventType) ? PREPARED_CANDIDATE_MODES[eventType] : undefined;
+}
+
+export function applyFailureRecovery(error, mode = {}) {
+  const message = error instanceof Error ? error.message : String(error);
+  const attempts = error?.selectionReport?.writeAttempts ?? 0;
+  if (/Deploy repository.*(?:record|JSON|base64)|Web selection|web (?:source|archive|manifest)/i.test(message)) {
+    return 'Repair pitaka-deploy/main versions/local.json so its web record is valid, then rerun the handoff or reconciliation.';
+  }
+  if (/expired|inaccessible source|artifact.*(?:missing|corrupt)/i.test(message)) {
+    return 'For an unavailable Actions artifact, reconcile an independently verified immutable Release for the same SHA or publish a new checked build identity.';
+  }
+  if (/bytes|hash|checksum|provenance|does not match/i.test(message)) {
+    return 'Verify the selected run or Release provenance and checked bytes, correct the mismatched source, then rerun without editing record fields manually.';
+  }
+  if (/unrelated|no longer reachable/i.test(message)) {
+    return 'Review the selected and requested SHAs against pitaka-web/main; do not force a rollback or replace the deploy record until their ordering is resolved.';
+  }
+  if (attempts >= 3 || error?.retryable === true) {
+    return 'Inspect concurrent edits or GitHub API availability, confirm pitaka-deploy/main is stable, then rerun after the three attempts are exhausted.';
+  }
+  if ([401, 403, 422].includes(error?.status) || /token|App slug|bot identity|permission/i.test(message)) {
+    return 'Check the pitaka-deploy GitHub App installation, Contents write permission, configured key, and branch rules, then rerun the handoff.';
+  }
+  return mode.sourceKind === 'release'
+    ? 'Inspect the error annotation and pitaka-deploy/main, correct the rejected Release or deploy write, then rerun with the same immutable tag.'
+    : 'Inspect the error annotation and pitaka-deploy/main, correct the rejected publisher source or deploy write, then rerun while the artifact is available.';
 }
 
 function parsePreparedCandidate(candidatePath) {
@@ -1129,13 +1356,25 @@ async function applyCli(candidatePath) {
       !isObject(prepared.web) ||
       !FULL_SHA.test(prepared.sourceSha ?? '') ||
       prepared.sourceSha !== prepared.web.sourceSha;
-    const actionsCandidate = prepared.eventType === 'successful-publish-build';
-    const releaseCandidate = prepared.eventType === 'verified-immutable-release-promotion';
-    if (commonCandidateIsInvalid || (!actionsCandidate && !releaseCandidate)) {
+    const mode = preparedCandidateMode(prepared?.eventType);
+    if (mode) {
+      report = {
+        eventType: mode.reportEventType,
+        sourceSha: prepared?.sourceSha,
+        publisherRun: prepared?.publisherRun,
+        ciRun: prepared?.ciRun,
+        promotionRun: prepared?.promotionRun,
+        release: prepared?.release,
+        before: undefined,
+        after: undefined,
+        writeAttempts: 0,
+      };
+    }
+    if (commonCandidateIsInvalid || !mode) {
       fail('The verified web build candidate data is incomplete or inconsistent.');
     }
     validateWebSelection(prepared.web);
-    if (actionsCandidate) {
+    if (mode.sourceKind === 'actions') {
       if (
         !isObject(prepared.publisherRun) ||
         !isObject(prepared.ciRun) ||
@@ -1190,10 +1429,12 @@ async function applyCli(candidatePath) {
       }
     } else if (
       prepared.web.source.kind !== 'release' ||
-      !isObject(prepared.promotionRun) ||
-      !isPositiveInteger(prepared.promotionRun.id) ||
-      !isPositiveInteger(prepared.promotionRun.attempt) ||
-      !isPositiveInteger(prepared.promotionRun.workflowId) ||
+      (mode.requiresPromotionRun &&
+        (!isObject(prepared.promotionRun) ||
+          !isPositiveInteger(prepared.promotionRun.id) ||
+          !isPositiveInteger(prepared.promotionRun.attempt) ||
+          !isPositiveInteger(prepared.promotionRun.workflowId))) ||
+      (!mode.requiresPromotionRun && prepared.promotionRun !== undefined) ||
       !isObject(prepared.release) ||
       prepared.release.id !== prepared.web.source.releaseId ||
       prepared.release.tag !== prepared.web.source.tag ||
@@ -1204,23 +1445,15 @@ async function applyCli(candidatePath) {
       fail('The verified immutable Release candidate data is incomplete or inconsistent.');
     }
 
-    report = {
-      sourceSha: prepared.sourceSha,
-      publisherRun: prepared.publisherRun,
-      ciRun: prepared.ciRun,
-      promotionRun: prepared.promotionRun,
-      release: prepared.release,
-      before: undefined,
-      after: undefined,
-      writeAttempts: 0,
-    };
     const result = await applyLocalWebSelection({
       candidate: prepared.web,
       promotionRun: prepared.promotionRun,
       token: process.env.DEPLOY_APP_TOKEN,
       appSlug: process.env.DEPLOY_APP_SLUG,
       apiBaseUrl: process.env.GITHUB_API_URL ?? DEFAULT_API_BASE_URL,
-      eventType: actionsCandidate ? 'successful Publish Build completion' : 'verified immutable Release promotion',
+      eventType: mode.reportEventType,
+      verifySelectedSourceReachability: true,
+      allowReleaseSourceAdvance: mode.allowReleaseSourceAdvance,
     });
     report = result;
     report.recovery = 'No recovery is needed.';
@@ -1235,11 +1468,10 @@ async function applyCli(candidatePath) {
       sourceSha: prepared?.sourceSha ?? report.sourceSha,
       publisherRun: prepared?.publisherRun ?? report.publisherRun,
       ciRun: prepared?.ciRun ?? report.ciRun,
+      promotionRun: prepared?.promotionRun ?? report.promotionRun,
+      release: prepared?.release ?? report.release,
       outcome: 'failed',
-      recovery:
-        prepared?.eventType === 'verified-immutable-release-promotion'
-          ? 'Correct the reported issue and rerun this handoff; the verified immutable Release remains available.'
-          : 'Correct the reported issue and rerun this handoff while the source artifact is still available. If expired, publish a new successful main CI build.',
+      recovery: applyFailureRecovery(error, preparedCandidateMode(prepared?.eventType)),
     };
     await writeSelectionSummary(process.env.GITHUB_STEP_SUMMARY, report);
     process.stderr.write(`::error title=Local web selection handoff failed::${safeAnnotation(error.message)}\n`);
@@ -1261,12 +1493,16 @@ async function cli() {
     await prepareReleaseCli();
     return;
   }
+  if (mode === 'prepare-reconciliation' && args.length === 4) {
+    await prepareReconciliationCli(args[0], args[1], args[2], args[3]);
+    return;
+  }
   if (mode === 'apply' && args.length === 1) {
     await applyCli(args[0]);
     return;
   }
   throw new Error(
-    'Usage: select-local-web-build.mjs prepare <publisher-run-id> <publisher-run-attempt> | prepare-release | apply <verified-candidate-path>',
+    'Usage: select-local-web-build.mjs prepare <publisher-run-id> <publisher-run-attempt> | prepare-release | prepare-reconciliation <actions|release> <publisher-run-id-or-empty> <publisher-run-attempt-or-empty> <release-tag-or-empty> | apply <verified-candidate-path>',
   );
 }
 

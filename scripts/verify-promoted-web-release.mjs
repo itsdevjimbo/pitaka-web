@@ -77,6 +77,188 @@ async function downloadPublicAsset({ asset, fetchImpl }) {
   return contents;
 }
 
+function validateReleaseVerificationInput(releaseTag, token) {
+  if (!VERSION_TAG.test(releaseTag ?? '')) {
+    fail(`Expected a stable production tag in vMAJOR.MINOR.PATCH form, received: ${releaseTag ?? '(empty)'}.`);
+  }
+  if (!token) {
+    fail('A repository Actions and Release read token is required to verify the immutable web Release.');
+  }
+}
+
+async function verifyImmutableWebReleaseInWorkspace({
+  expectedSourceSha,
+  releaseTag,
+  token,
+  apiBaseUrl,
+  fetchImpl,
+  execFileSyncImpl,
+  workspace,
+  verification,
+}) {
+  const taggedCommit = await getJson({
+    apiBaseUrl,
+    pathname: `commits/${encodeURIComponent(releaseTag)}`,
+    token,
+    fetchImpl,
+  });
+  if (!FULL_SHA.test(taggedCommit.sha ?? '')) {
+    fail(`Version tag ${releaseTag} does not resolve to a full source SHA.`);
+  }
+  const sourceSha = taggedCommit.sha;
+  verification.sourceSha = sourceSha;
+  if (expectedSourceSha && sourceSha !== expectedSourceSha) {
+    fail(`Version tag ${releaseTag} resolves to ${sourceSha}, not promoted SHA ${expectedSourceSha}.`);
+  }
+  assertSourceReachableFromMain({
+    sourceSha,
+    execFileSyncImpl,
+    fail,
+    description: 'Release source SHA',
+  });
+
+  const release = await getJson({
+    apiBaseUrl,
+    pathname: `releases/tags/${encodeURIComponent(releaseTag)}`,
+    token,
+    fetchImpl,
+  });
+  if (isPositiveInteger(release.id) && release.tag_name === releaseTag) {
+    verification.release = { id: release.id, tag: releaseTag };
+  }
+  if (
+    !isPositiveInteger(release.id) ||
+    release.tag_name !== releaseTag ||
+    release.draft !== false ||
+    release.prerelease !== false ||
+    release.immutable !== true ||
+    !Number.isFinite(Date.parse(release.published_at))
+  ) {
+    fail(`Release ${releaseTag} is not a published immutable Release.`);
+  }
+
+  const { archiveName, manifestName, selected } = releaseAssets(release, sourceSha, releaseTag);
+  const artifactDirectory = join(workspace, 'release-assets');
+  await mkdir(artifactDirectory, { recursive: true });
+  for (const name of [archiveName, manifestName]) {
+    const contents = await downloadPublicAsset({ asset: selected.get(name), fetchImpl });
+    await writeFile(join(artifactDirectory, name), contents, { flag: 'wx', mode: 0o600 });
+  }
+  const entries = (await readdir(artifactDirectory)).sort();
+  if (JSON.stringify(entries) !== JSON.stringify([archiveName, manifestName].sort())) {
+    fail(`Release ${releaseTag} did not provide exactly the checked archive and manifest.`);
+  }
+  for (const name of entries) {
+    const info = await lstat(join(artifactDirectory, name));
+    if (!info.isFile() || info.isSymbolicLink()) {
+      fail(`Release ${releaseTag} contains an unsupported asset: ${name}`);
+    }
+  }
+
+  const manifest = await verifyWebBuildArtifact({
+    artifactDirectory,
+    sourceRevision: sourceSha,
+    repository: WEB_REPOSITORY,
+  });
+  const ciWorkflow = requireWorkflow(
+    await getJson({ apiBaseUrl, pathname: 'actions/workflows/ci.yml', token, fetchImpl }),
+    { name: 'CI', path: '.github/workflows/ci.yml', fail },
+  );
+  const ciRun = requireSuccessfulWorkflowRun(
+    await getJson({
+      apiBaseUrl,
+      pathname: `actions/runs/${manifest.ci.runId}/attempts/${manifest.ci.runAttempt}`,
+      token,
+      fetchImpl,
+    }),
+    {
+      id: manifest.ci.runId,
+      attempt: manifest.ci.runAttempt,
+      workflow: ciWorkflow,
+      event: 'push',
+      headBranch: 'main',
+      sourceSha,
+      repository: WEB_REPOSITORY,
+      fail,
+    },
+  );
+  verification.ciRun = { id: ciRun.id, attempt: ciRun.run_attempt };
+
+  const archiveBytes = await readFile(join(artifactDirectory, archiveName));
+  const manifestBytes = await readFile(join(artifactDirectory, manifestName));
+  const archiveAsset = selected.get(archiveName);
+  const manifestAsset = selected.get(manifestName);
+  return {
+    web: {
+      repository: WEB_REPOSITORY,
+      sourceSha,
+      source: {
+        kind: 'release',
+        releaseId: release.id,
+        tag: releaseTag,
+        url: archiveAsset.browser_download_url,
+        sourceSha,
+        immutable: true,
+        archiveAssetId: archiveAsset.id,
+        manifestAssetId: manifestAsset.id,
+        archiveAssetUrl: archiveAsset.url,
+        manifestAssetUrl: manifestAsset.url,
+        ciRunId: ciRun.id,
+        ciRunAttempt: ciRun.run_attempt,
+      },
+      manifest: { name: manifestName, sha256: sha256(manifestBytes) },
+      archive: { name: archiveName, sha256: sha256(archiveBytes), sizeBytes: archiveBytes.byteLength },
+      assetIdentitySha256: manifest.assets.treeSha256,
+    },
+    release: { id: release.id, tag: releaseTag },
+    ciRun: { id: ciRun.id, attempt: ciRun.run_attempt },
+  };
+}
+
+async function withReleaseWorkspace({ workspace, verification, verify }) {
+  const ownWorkspace = workspace ?? (await mkdtemp(join(tmpdir(), 'pitaka-web-release-selection-')));
+  const ownsWorkspace = workspace === undefined;
+  try {
+    return await verify(ownWorkspace);
+  } catch (error) {
+    const verificationError = error instanceof Error ? error : new Error(String(error));
+    verificationError.releaseVerification = verification;
+    throw verificationError;
+  } finally {
+    if (ownsWorkspace) {
+      await rm(ownWorkspace, { recursive: true, force: true });
+    }
+  }
+}
+
+export async function verifyImmutableWebRelease({
+  expectedSourceSha,
+  releaseTag,
+  token,
+  apiBaseUrl = DEFAULT_API_BASE_URL,
+  fetchImpl = fetch,
+  execFileSyncImpl = execFileSync,
+  workspace,
+}) {
+  validateReleaseVerificationInput(releaseTag, token);
+  const verification = { sourceSha: expectedSourceSha, release: undefined, ciRun: undefined };
+  return withReleaseWorkspace({
+    workspace,
+    verification,
+    verify: (releaseWorkspace) =>
+      verifyImmutableWebReleaseInWorkspace({
+        expectedSourceSha,
+        releaseTag,
+        token,
+        apiBaseUrl,
+        fetchImpl,
+        execFileSyncImpl,
+        workspace: releaseWorkspace,
+        verification,
+      }),
+  });
+}
+
 export async function verifyPromotedWebRelease({
   promotionRunId,
   promotionRunAttempt,
@@ -96,172 +278,62 @@ export async function verifyPromotedWebRelease({
   if (!FULL_SHA.test(expectedSourceSha ?? '')) {
     fail('Promotion workflow run must identify a full source SHA.');
   }
-  if (!VERSION_TAG.test(releaseTag ?? '')) {
-    fail(`Expected a stable production tag in vMAJOR.MINOR.PATCH form, received: ${releaseTag ?? '(empty)'}.`);
-  }
-  if (!token) {
-    fail('A repository Actions and Release read token is required to verify the promoted web Release.');
-  }
-  const ownWorkspace = workspace ?? (await mkdtemp(join(tmpdir(), 'pitaka-web-release-selection-')));
-  const ownsWorkspace = workspace === undefined;
-  const verification = { promotionRun: undefined, release: undefined, ciRun: undefined };
-  try {
-    const promotionWorkflow = requireWorkflow(
-      await getJson({
-        apiBaseUrl,
-        pathname: 'actions/workflows/promote-production-build.yml',
+  validateReleaseVerificationInput(releaseTag, token);
+  const verification = {
+    sourceSha: expectedSourceSha,
+    promotionRun: undefined,
+    release: undefined,
+    ciRun: undefined,
+  };
+  return withReleaseWorkspace({
+    workspace,
+    verification,
+    verify: async (releaseWorkspace) => {
+      const promotionWorkflow = requireWorkflow(
+        await getJson({
+          apiBaseUrl,
+          pathname: 'actions/workflows/promote-production-build.yml',
+          token,
+          fetchImpl,
+        }),
+        { name: 'Promote Production Build', path: '.github/workflows/promote-production-build.yml', fail },
+      );
+      const promotionRun = requireSuccessfulWorkflowRun(
+        await getJson({
+          apiBaseUrl,
+          pathname: `actions/runs/${runId}/attempts/${runAttempt}`,
+          token,
+          fetchImpl,
+        }),
+        {
+          id: runId,
+          attempt: runAttempt,
+          workflow: promotionWorkflow,
+          event: 'push',
+          headBranch: releaseTag,
+          sourceSha: expectedSourceSha,
+          repository: WEB_REPOSITORY,
+          fail,
+        },
+      );
+      verification.promotionRun = {
+        id: promotionRun.id,
+        attempt: promotionRun.run_attempt,
+        workflowId: promotionWorkflow.id,
+      };
+      const verified = await verifyImmutableWebReleaseInWorkspace({
+        expectedSourceSha,
+        releaseTag,
         token,
-        fetchImpl,
-      }),
-      { name: 'Promote Production Build', path: '.github/workflows/promote-production-build.yml', fail },
-    );
-    const promotionRun = requireSuccessfulWorkflowRun(
-      await getJson({
         apiBaseUrl,
-        pathname: `actions/runs/${runId}/attempts/${runAttempt}`,
-        token,
         fetchImpl,
-      }),
-      {
-        id: runId,
-        attempt: runAttempt,
-        workflow: promotionWorkflow,
-        event: 'push',
-        headBranch: releaseTag,
-        sourceSha: expectedSourceSha,
-        repository: WEB_REPOSITORY,
-        fail,
-      },
-    );
-    verification.promotionRun = {
-      id: promotionRun.id,
-      attempt: promotionRun.run_attempt,
-      workflowId: promotionWorkflow.id,
-    };
-    assertSourceReachableFromMain({
-      sourceSha: promotionRun.head_sha,
-      execFileSyncImpl,
-      fail,
-      description: 'Promoted source SHA',
-    });
-
-    const taggedCommit = await getJson({
-      apiBaseUrl,
-      pathname: `commits/${encodeURIComponent(releaseTag)}`,
-      token,
-      fetchImpl,
-    });
-    if (taggedCommit.sha !== expectedSourceSha) {
-      fail(`Version tag ${releaseTag} resolves to ${taggedCommit.sha}, not promoted SHA ${expectedSourceSha}.`);
-    }
-
-    const release = await getJson({
-      apiBaseUrl,
-      pathname: `releases/tags/${encodeURIComponent(releaseTag)}`,
-      token,
-      fetchImpl,
-    });
-    if (isPositiveInteger(release.id) && release.tag_name === releaseTag) {
-      verification.release = { id: release.id, tag: releaseTag };
-    }
-    if (
-      !isPositiveInteger(release.id) ||
-      release.tag_name !== releaseTag ||
-      release.draft !== false ||
-      release.prerelease !== false ||
-      release.immutable !== true ||
-      !Number.isFinite(Date.parse(release.published_at))
-    ) {
-      fail(`Release ${releaseTag} is not a published immutable Release.`);
-    }
-
-    const { archiveName, manifestName, selected } = releaseAssets(release, expectedSourceSha, releaseTag);
-    const artifactDirectory = join(ownWorkspace, 'release-assets');
-    await mkdir(artifactDirectory, { recursive: true });
-    for (const name of [archiveName, manifestName]) {
-      const contents = await downloadPublicAsset({ asset: selected.get(name), fetchImpl });
-      await writeFile(join(artifactDirectory, name), contents, { flag: 'wx', mode: 0o600 });
-    }
-    const entries = (await readdir(artifactDirectory)).sort();
-    if (JSON.stringify(entries) !== JSON.stringify([archiveName, manifestName].sort())) {
-      fail(`Release ${releaseTag} did not provide exactly the checked archive and manifest.`);
-    }
-    for (const name of entries) {
-      const info = await lstat(join(artifactDirectory, name));
-      if (!info.isFile() || info.isSymbolicLink()) {
-        fail(`Release ${releaseTag} contains an unsupported asset: ${name}`);
-      }
-    }
-
-    const manifest = await verifyWebBuildArtifact({
-      artifactDirectory,
-      sourceRevision: expectedSourceSha,
-      repository: WEB_REPOSITORY,
-    });
-    const ciWorkflow = requireWorkflow(
-      await getJson({ apiBaseUrl, pathname: 'actions/workflows/ci.yml', token, fetchImpl }),
-      { name: 'CI', path: '.github/workflows/ci.yml', fail },
-    );
-    const ciRun = requireSuccessfulWorkflowRun(
-      await getJson({
-        apiBaseUrl,
-        pathname: `actions/runs/${manifest.ci.runId}/attempts/${manifest.ci.runAttempt}`,
-        token,
-        fetchImpl,
-      }),
-      {
-        id: manifest.ci.runId,
-        attempt: manifest.ci.runAttempt,
-        workflow: ciWorkflow,
-        event: 'push',
-        headBranch: 'main',
-        sourceSha: expectedSourceSha,
-        repository: WEB_REPOSITORY,
-        fail,
-      },
-    );
-    verification.ciRun = { id: ciRun.id, attempt: ciRun.run_attempt };
-
-    const archiveBytes = await readFile(join(artifactDirectory, archiveName));
-    const manifestBytes = await readFile(join(artifactDirectory, manifestName));
-    const archiveAsset = selected.get(archiveName);
-    const manifestAsset = selected.get(manifestName);
-    const web = {
-      repository: WEB_REPOSITORY,
-      sourceSha: expectedSourceSha,
-      source: {
-        kind: 'release',
-        releaseId: release.id,
-        tag: releaseTag,
-        url: archiveAsset.browser_download_url,
-        sourceSha: expectedSourceSha,
-        immutable: true,
-        archiveAssetId: archiveAsset.id,
-        manifestAssetId: manifestAsset.id,
-        archiveAssetUrl: archiveAsset.url,
-        manifestAssetUrl: manifestAsset.url,
-        ciRunId: ciRun.id,
-        ciRunAttempt: ciRun.run_attempt,
-      },
-      manifest: { name: manifestName, sha256: sha256(manifestBytes) },
-      archive: { name: archiveName, sha256: sha256(archiveBytes), sizeBytes: archiveBytes.byteLength },
-      assetIdentitySha256: manifest.assets.treeSha256,
-    };
-    return {
-      web,
-      promotionRun: { id: promotionRun.id, attempt: promotionRun.run_attempt, workflowId: promotionWorkflow.id },
-      release: { id: release.id, tag: releaseTag },
-      ciRun: { id: ciRun.id, attempt: ciRun.run_attempt },
-    };
-  } catch (error) {
-    const verificationError = error instanceof Error ? error : new Error(String(error));
-    verificationError.releaseVerification = verification;
-    throw verificationError;
-  } finally {
-    if (ownsWorkspace) {
-      await rm(ownWorkspace, { recursive: true, force: true });
-    }
-  }
+        execFileSyncImpl,
+        workspace: releaseWorkspace,
+        verification,
+      });
+      return { ...verified, promotionRun: verification.promotionRun };
+    },
+  });
 }
 
 async function cli() {

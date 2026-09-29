@@ -44,6 +44,14 @@ GitHub permits deleting an immutable release, but its tag name cannot be reused;
 individual immutable assets cannot be deleted or replaced. See
 [GitHub's immutable release documentation](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
 
+Manual local-selection reconciliation may name an immutable Release tag without
+also naming the promotion workflow run. The reconciler independently resolves the
+tag to a commit still reachable from `main`, verifies Release immutability and its
+exact public asset identities and bytes, and verifies the manifest's exact-SHA
+successful `CI` attempt. That evidence is sufficient to recover a missed local
+selection handoff for those durable bytes. It does not establish a new promotion
+or a successful deployment.
+
 These requirements, including version-tag promotion, were agreed during the design
 interview. Implementation is tracked separately: [main artifacts #291](https://github.com/itsdevjimbo/pitaka-web/issues/291)
 and [version-tag promotion #293](https://github.com/itsdevjimbo/pitaka-web/issues/293).

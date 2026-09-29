@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { verifyPromotedWebRelease } from './verify-promoted-web-release.mjs';
+import { verifyImmutableWebRelease, verifyPromotedWebRelease } from './verify-promoted-web-release.mjs';
 import { packageWebBuild } from './web-build-artifact.mjs';
 
 const API_BASE_URL = 'https://api.github.com';
@@ -15,10 +15,18 @@ function responseJson(value, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 }
 
-function gitExec() {
+function gitExec({ reachable = true } = {}) {
   return (command, args) => {
-    if (command === 'git' && (args[0] === 'fetch' || args[0] === 'merge-base')) {
+    if (command === 'git' && args[0] === 'fetch') {
       return Buffer.alloc(0);
+    }
+    if (command === 'git' && args[0] === 'merge-base') {
+      if (reachable) {
+        return Buffer.alloc(0);
+      }
+      const error = new Error('not an ancestor');
+      error.status = 1;
+      throw error;
     }
     throw new Error(`Unexpected command: ${command} ${args.join(' ')}`);
   };
@@ -158,6 +166,37 @@ test('verifies the successful promotion, immutable Release, public bytes, and ex
   assert.equal(verified.promotionRun.attempt, 2);
   assert.equal(fixture.publicRequests.length, 2);
   assert.ok(fixture.publicRequests.every(({ headers }) => Object.keys(headers).length === 0));
+});
+
+test('derives a verified immutable Release selection from its explicit tag', async (t) => {
+  const fixture = await makeReleaseFixture(t);
+  const verified = await verifyImmutableWebRelease({
+    releaseTag: RELEASE_TAG,
+    token: 'read-token',
+    fetchImpl: fixture.fetchImpl,
+    execFileSyncImpl: gitExec(),
+  });
+
+  assert.equal(verified.web.sourceSha, SOURCE_SHA);
+  assert.equal(verified.web.source.kind, 'release');
+  assert.equal(verified.release.id, fixture.release.id);
+  assert.equal(verified.release.tag, RELEASE_TAG);
+  assert.deepEqual(verified.ciRun, { id: 125, attempt: 2 });
+  assert.equal(fixture.publicRequests.length, 2);
+});
+
+test('rejects a manually selected Release whose tag target was removed from main', async (t) => {
+  const fixture = await makeReleaseFixture(t);
+  await assert.rejects(
+    verifyImmutableWebRelease({
+      releaseTag: RELEASE_TAG,
+      token: 'read-token',
+      fetchImpl: fixture.fetchImpl,
+      execFileSyncImpl: gitExec({ reachable: false }),
+    }),
+    /no longer reachable from pitaka-web\/main/,
+  );
+  assert.equal(fixture.publicRequests.length, 0);
 });
 
 test('rejects a Release that is not published and immutable', async (t) => {

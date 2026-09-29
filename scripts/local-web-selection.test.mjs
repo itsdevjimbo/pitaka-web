@@ -6,9 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
+  applyFailureRecovery,
   applyLocalWebSelection,
   compareWebSelections,
   prepareActionsSelection,
+  prepareReconciliationSelection,
   prepareReleaseSelection,
   validateRecordWebSelection,
   writeSelectionSummary,
@@ -338,6 +340,132 @@ test('verifies the exact publisher, CI attempt, artifact identity and web bytes'
   assert.equal(candidate.web.source.artifactName, fixture.artifact.name);
 });
 
+test('derives a manual Actions reconciliation candidate from only the publisher run identity', async (t) => {
+  const fixture = await makePublisherFixture(t);
+  const prepared = await prepareReconciliationSelection({
+    sourceType: 'actions',
+    publisherRunId: '500',
+    publisherRunAttempt: '1',
+    releaseTag: '',
+    token: 'read-token',
+    fetchImpl: fixture.fetchImpl,
+    execFileSyncImpl: gitExec(new Set([`${SOURCE_SHA}:refs/remotes/origin/main`])),
+    now: () => NOW,
+  });
+  t.after(() => rm(prepared.workspace, { recursive: true, force: true }));
+
+  const candidate = JSON.parse(await readFile(prepared.candidatePath, 'utf8'));
+  assert.equal(candidate.eventType, 'manual-actions-reconciliation');
+  assert.equal(candidate.sourceSha, SOURCE_SHA);
+  assert.equal(candidate.publisherRun.id, 500);
+  assert.equal(candidate.publisherRun.attempt, 1);
+  assert.equal(candidate.web.source.artifactId, 800);
+});
+
+test('derives a manual Release reconciliation candidate from only the immutable tag', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pitaka-web-release-reconciliation-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const prepared = await prepareReconciliationSelection({
+    sourceType: 'release',
+    publisherRunId: '',
+    publisherRunAttempt: '',
+    releaseTag: 'v1.2.3',
+    token: 'read-token',
+    runnerTemp: root,
+    verifyReleaseImpl: async (options) => {
+      assert.equal(options.releaseTag, 'v1.2.3');
+      assert.equal(options.expectedSourceSha, undefined);
+      return {
+        web: makeReleaseWeb(SOURCE_SHA),
+        release: { id: 700, tag: 'v1.2.3' },
+        ciRun: { id: 125, attempt: 2 },
+      };
+    },
+  });
+
+  const candidate = JSON.parse(await readFile(prepared.candidatePath, 'utf8'));
+  assert.equal(candidate.eventType, 'manual-release-reconciliation');
+  assert.equal(candidate.sourceSha, SOURCE_SHA);
+  assert.equal(candidate.release.tag, 'v1.2.3');
+  assert.equal(candidate.promotionRun, undefined);
+  assert.equal(candidate.web.source.kind, 'release');
+});
+
+test('rejects mixed or incomplete manual reconciliation inputs before source verification', async () => {
+  await assert.rejects(
+    prepareReconciliationSelection({
+      sourceType: 'actions',
+      publisherRunId: '500',
+      publisherRunAttempt: '1',
+      releaseTag: 'v1.2.3',
+      token: 'read-token',
+    }),
+    /does not accept a Release tag/,
+  );
+  await assert.rejects(
+    prepareReconciliationSelection({
+      sourceType: 'release',
+      publisherRunId: '500',
+      publisherRunAttempt: '',
+      releaseTag: 'v1.2.3',
+      token: 'read-token',
+    }),
+    /does not accept a publisher run ID or attempt/,
+  );
+  await assert.rejects(
+    prepareReconciliationSelection({
+      sourceType: 'release',
+      publisherRunId: '',
+      publisherRunAttempt: '',
+      releaseTag: '',
+      token: 'read-token',
+      verifyReleaseImpl: async () => {
+        throw new Error('source verification should not run without a tag');
+      },
+    }),
+    /requires an immutable Release tag/,
+  );
+});
+
+test('reports manual source provenance when candidate bytes change before apply', async (t) => {
+  const fixture = await makePublisherFixture(t);
+  const prepared = await prepareReconciliationSelection({
+    sourceType: 'actions',
+    publisherRunId: '500',
+    publisherRunAttempt: '1',
+    releaseTag: '',
+    token: 'read-token',
+    fetchImpl: fixture.fetchImpl,
+    execFileSyncImpl: gitExec(new Set([`${SOURCE_SHA}:refs/remotes/origin/main`])),
+    now: () => NOW,
+  });
+  const summaryPath = join(fixture.root, 'summary.md');
+  await writeFile(join(prepared.artifactDirectory, prepared.web.archive.name), 'tampered');
+
+  assert.throws(
+    () =>
+      execFileSync(
+        process.execPath,
+        [join(import.meta.dirname, 'local-web-selection.mjs'), 'apply', prepared.candidatePath],
+        {
+          env: {
+            ...process.env,
+            DEPLOY_APP_SLUG: 'pitaka-deploy-bot',
+            DEPLOY_APP_TOKEN: 'deploy-token',
+            GITHUB_STEP_SUMMARY: summaryPath,
+          },
+          encoding: 'utf8',
+        },
+      ),
+    /checked publisher artifact bytes changed/,
+  );
+  const summary = await readFile(summaryPath, 'utf8');
+  assert.match(summary, /Event type: manual Actions reconciliation/);
+  assert.match(summary, /Source SHA: `aaaaaaaa/);
+  assert.match(summary, /Publisher run: 500, attempt 1/);
+  assert.match(summary, /Outcome: failed/);
+});
+
 test('rejects a publication with no uploaded candidate', async (t) => {
   const fixture = await makePublisherFixture(t, { missingArtifact: true });
   await assert.rejects(
@@ -580,6 +708,95 @@ test('does not replace a concurrently selected newer Actions candidate with an o
   assert.equal(deploy.getRecord().web.sourceSha, LATER_SHA);
 });
 
+test('a rerun stops when the selected SHA was removed from main', async () => {
+  const current = validVersionRecord(makeActionsWeb({ sourceSha: LATER_SHA, workflowRunId: 700 }));
+  const deploy = makeDeployApi({ currentRecord: current });
+
+  await assert.rejects(
+    applyLocalWebSelection({
+      candidate: makeActionsWeb({ sourceSha: SOURCE_SHA }),
+      token: 'deploy-token',
+      appSlug: 'pitaka-deploy-bot',
+      fetchImpl: deploy.fetchImpl,
+      execFileSyncImpl: gitExec(new Set([`${SOURCE_SHA}:refs/remotes/origin/main`, `${SOURCE_SHA}:${LATER_SHA}`])),
+      now: () => NOW,
+      eventType: 'successful Publish Build completion',
+      verifySelectedSourceReachability: true,
+      sleepImpl: async () => {},
+    }),
+    /Selected SHA .* is no longer reachable from pitaka-web\/main/,
+  );
+  assert.equal(deploy.calls.put, 0);
+});
+
+test('manual reconciliation accepts already-current and validly superseded selections without a commit', async () => {
+  const currentRelease = validVersionRecord(makeReleaseWeb(SOURCE_SHA));
+  const alreadyCurrentDeploy = makeDeployApi({ currentRecord: currentRelease });
+  const alreadyCurrent = await applyLocalWebSelection({
+    candidate: makeReleaseWeb(SOURCE_SHA),
+    token: 'deploy-token',
+    appSlug: 'pitaka-deploy-bot',
+    fetchImpl: alreadyCurrentDeploy.fetchImpl,
+    execFileSyncImpl: gitExec(new Set([`${SOURCE_SHA}:refs/remotes/origin/main`])),
+    eventType: 'manual immutable Release reconciliation',
+    verifySelectedSourceReachability: true,
+    now: () => NOW,
+    sleepImpl: async () => {},
+  });
+  assert.equal(alreadyCurrent.outcome, 'already current');
+  assert.equal(alreadyCurrentDeploy.calls.put, 0);
+
+  const newer = validVersionRecord(makeActionsWeb({ sourceSha: LATER_SHA, workflowRunId: 700 }));
+  const supersededDeploy = makeDeployApi({ currentRecord: newer });
+  const superseded = await applyLocalWebSelection({
+    candidate: makeActionsWeb({ sourceSha: SOURCE_SHA }),
+    token: 'deploy-token',
+    appSlug: 'pitaka-deploy-bot',
+    fetchImpl: supersededDeploy.fetchImpl,
+    execFileSyncImpl: gitExec(
+      new Set([
+        `${SOURCE_SHA}:refs/remotes/origin/main`,
+        `${LATER_SHA}:refs/remotes/origin/main`,
+        `${SOURCE_SHA}:${LATER_SHA}`,
+      ]),
+    ),
+    eventType: 'manual Actions reconciliation',
+    verifySelectedSourceReachability: true,
+    now: () => NOW,
+    sleepImpl: async () => {},
+  });
+  assert.equal(superseded.outcome, 'validly superseded');
+  assert.equal(supersededDeploy.calls.put, 0);
+});
+
+test('manual Release reconciliation advances an older selected SHA with verified durable bytes', async () => {
+  const current = validVersionRecord(makeActionsWeb({ sourceSha: CURRENT_SHA }));
+  const deploy = makeDeployApi({ currentRecord: current });
+  const result = await applyLocalWebSelection({
+    candidate: makeReleaseWeb(SOURCE_SHA),
+    token: 'deploy-token',
+    appSlug: 'pitaka-deploy-bot',
+    fetchImpl: deploy.fetchImpl,
+    execFileSyncImpl: gitExec(
+      new Set([
+        `${CURRENT_SHA}:${SOURCE_SHA}`,
+        `${CURRENT_SHA}:refs/remotes/origin/main`,
+        `${SOURCE_SHA}:refs/remotes/origin/main`,
+      ]),
+    ),
+    eventType: 'manual immutable Release reconciliation',
+    verifySelectedSourceReachability: true,
+    allowReleaseSourceAdvance: true,
+    now: () => NOW,
+    sleepImpl: async () => {},
+  });
+
+  assert.equal(result.outcome, 'applied');
+  assert.equal(deploy.calls.put, 1);
+  assert.equal(deploy.getRecord().web.sourceSha, SOURCE_SHA);
+  assert.equal(deploy.getRecord().web.source.kind, 'release');
+});
+
 test('fails a promoted Release handoff when its SHA is unrelated to the selected SHA', async () => {
   const current = validVersionRecord(makeActionsWeb({ sourceSha: CURRENT_SHA }));
   const deploy = makeDeployApi({ currentRecord: current });
@@ -785,6 +1002,31 @@ test('writes a failure summary with source, attempts and recovery details', asyn
   assert.match(summary, /Write attempts: 3/);
   assert.match(summary, /Outcome: failed/);
   assert.match(summary, /Inspect pitaka-deploy\/main/);
+});
+
+test('gives concrete recovery for deploy authorization, malformed records, and exhausted retries', () => {
+  assert.match(
+    applyFailureRecovery(Object.assign(new Error('Writing failed with HTTP 403.'), { status: 403 }), {
+      sourceKind: 'actions',
+    }),
+    /App installation.*Contents write.*branch rules/,
+  );
+  assert.match(
+    applyFailureRecovery(new Error('Deploy repository version record is not valid JSON.'), {
+      sourceKind: 'release',
+    }),
+    /Repair pitaka-deploy\/main versions\/local\.json/,
+  );
+  assert.match(
+    applyFailureRecovery(
+      Object.assign(new Error('Writing failed with HTTP 409.'), {
+        retryable: true,
+        selectionReport: { writeAttempts: 3 },
+      }),
+      { sourceKind: 'actions' },
+    ),
+    /concurrent edits or GitHub API availability.*three attempts/,
+  );
 });
 
 test('includes the promotion run and immutable Release in the handoff summary', async (t) => {
