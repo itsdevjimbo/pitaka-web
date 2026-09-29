@@ -3,6 +3,11 @@ import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { githubApiHeaders, githubApiUrl } from './github-api.mjs';
+import {
+  assertSourceReachableFromMain,
+  requireSuccessfulWorkflowRun,
+  requireWorkflow,
+} from './github-workflow-provenance.mjs';
 import { isMainModule, sha256, verifyWebBuildArtifact, webBuildArtifactNames } from './web-build-artifact.mjs';
 
 const WEB_REPOSITORY = 'itsdevjimbo/pitaka-web';
@@ -10,12 +15,12 @@ const DEFAULT_API_BASE_URL = 'https://api.github.com';
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const VERSION_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
-function fail(message) {
-  throw new Error(message);
-}
-
 function positiveInteger(value) {
   return Number.isSafeInteger(value) && value > 0;
+}
+
+function fail(message) {
+  throw new Error(message);
 }
 
 async function getJson({ apiBaseUrl, pathname, token, fetchImpl }) {
@@ -30,54 +35,6 @@ async function getJson({ apiBaseUrl, pathname, token, fetchImpl }) {
     return await response.json();
   } catch {
     fail(`GitHub API request for ${pathname} returned invalid JSON.`);
-  }
-}
-
-function requireWorkflow(workflow, { name, path }) {
-  if (
-    !workflow ||
-    !positiveInteger(workflow.id) ||
-    workflow.name !== name ||
-    workflow.path !== path ||
-    workflow.state !== 'active'
-  ) {
-    fail(`The ${name} workflow identity is missing or inactive.`);
-  }
-  return workflow;
-}
-
-function requireSuccessfulRun(run, { id, attempt, workflow, event, headBranch, sourceSha }) {
-  if (
-    !run ||
-    run.id !== id ||
-    run.run_attempt !== attempt ||
-    run.name !== workflow.name ||
-    run.workflow_id !== workflow.id ||
-    run.head_sha !== sourceSha ||
-    run.head_branch !== headBranch ||
-    run.head_repository?.full_name !== WEB_REPOSITORY ||
-    run.event !== event ||
-    run.status !== 'completed' ||
-    run.conclusion !== 'success'
-  ) {
-    fail(`The exact successful ${workflow.name} run does not match the required source SHA, ref, and attempt.`);
-  }
-  return run;
-}
-
-function assertMainAncestry(sourceSha, execFileSyncImpl) {
-  execFileSyncImpl('git', ['fetch', '--no-tags', 'origin', 'main:refs/remotes/origin/main'], {
-    stdio: 'ignore',
-  });
-  try {
-    execFileSyncImpl('git', ['merge-base', '--is-ancestor', sourceSha, 'refs/remotes/origin/main'], {
-      stdio: 'ignore',
-    });
-  } catch (error) {
-    if (error.status === 1) {
-      fail(`Promoted source SHA ${sourceSha} is no longer reachable from pitaka-web/main; review it manually.`);
-    }
-    throw error;
   }
 }
 
@@ -159,9 +116,9 @@ export async function verifyPromotedWebRelease({
         token,
         fetchImpl,
       }),
-      { name: 'Promote Production Build', path: '.github/workflows/promote-production-build.yml' },
+      { name: 'Promote Production Build', path: '.github/workflows/promote-production-build.yml', fail },
     );
-    const promotionRun = requireSuccessfulRun(
+    const promotionRun = requireSuccessfulWorkflowRun(
       await getJson({
         apiBaseUrl,
         pathname: `actions/runs/${runId}/attempts/${runAttempt}`,
@@ -175,6 +132,8 @@ export async function verifyPromotedWebRelease({
         event: 'push',
         headBranch: releaseTag,
         sourceSha: expectedSourceSha,
+        repository: WEB_REPOSITORY,
+        fail,
       },
     );
     verification.promotionRun = {
@@ -182,7 +141,12 @@ export async function verifyPromotedWebRelease({
       attempt: promotionRun.run_attempt,
       workflowId: promotionWorkflow.id,
     };
-    assertMainAncestry(promotionRun.head_sha, execFileSyncImpl);
+    assertSourceReachableFromMain({
+      sourceSha: promotionRun.head_sha,
+      execFileSyncImpl,
+      fail,
+      description: 'Promoted source SHA',
+    });
 
     const taggedCommit = await getJson({
       apiBaseUrl,
@@ -239,9 +203,9 @@ export async function verifyPromotedWebRelease({
     });
     const ciWorkflow = requireWorkflow(
       await getJson({ apiBaseUrl, pathname: 'actions/workflows/ci.yml', token, fetchImpl }),
-      { name: 'CI', path: '.github/workflows/ci.yml' },
+      { name: 'CI', path: '.github/workflows/ci.yml', fail },
     );
-    const ciRun = requireSuccessfulRun(
+    const ciRun = requireSuccessfulWorkflowRun(
       await getJson({
         apiBaseUrl,
         pathname: `actions/runs/${manifest.ci.runId}/attempts/${manifest.ci.runAttempt}`,
@@ -255,6 +219,8 @@ export async function verifyPromotedWebRelease({
         event: 'push',
         headBranch: 'main',
         sourceSha: expectedSourceSha,
+        repository: WEB_REPOSITORY,
+        fail,
       },
     );
     verification.ciRun = { id: ciRun.id, attempt: ciRun.run_attempt };

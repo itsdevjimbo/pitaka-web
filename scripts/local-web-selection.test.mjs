@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -470,7 +470,9 @@ test('orders same-SHA publications by publisher run and attempt', () => {
 test('keeps a same-SHA immutable Release selected over an Actions retry', () => {
   assert.equal(compareWebSelections(makeActionsWeb(), makeReleaseWeb(SOURCE_SHA)), 'superseded');
   assert.equal(
-    compareWebSelections(makeReleaseWeb(SOURCE_SHA), makeActionsWeb({ sourceSha: CURRENT_SHA })),
+    compareWebSelections(makeReleaseWeb(SOURCE_SHA), makeActionsWeb({ sourceSha: CURRENT_SHA }), {
+      execFileSyncImpl: gitExec(new Set([`${SOURCE_SHA}:${CURRENT_SHA}`])),
+    }),
     'superseded',
   );
 });
@@ -542,6 +544,7 @@ test('keeps an existing Release when promotion repeats or names another source S
     token: 'deploy-token',
     appSlug: 'pitaka-deploy-bot',
     fetchImpl: anotherPromotion.fetchImpl,
+    execFileSyncImpl: gitExec(new Set([`${SOURCE_SHA}:${CURRENT_SHA}`])),
     now: () => NOW,
     sleepImpl: async () => {},
   });
@@ -567,6 +570,7 @@ test('does not replace a concurrently selected newer Actions candidate with an o
     token: 'deploy-token',
     appSlug: 'pitaka-deploy-bot',
     fetchImpl: deploy.fetchImpl,
+    execFileSyncImpl: gitExec(new Set([`${SOURCE_SHA}:${LATER_SHA}`])),
     now: () => NOW,
     sleepImpl: async () => {},
   });
@@ -574,6 +578,26 @@ test('does not replace a concurrently selected newer Actions candidate with an o
   assert.equal(result.outcome, 'validly superseded');
   assert.equal(deploy.calls.put, 0);
   assert.equal(deploy.getRecord().web.sourceSha, LATER_SHA);
+});
+
+test('fails a promoted Release handoff when its SHA is unrelated to the selected SHA', async () => {
+  const current = validVersionRecord(makeActionsWeb({ sourceSha: CURRENT_SHA }));
+  const deploy = makeDeployApi({ currentRecord: current });
+
+  await assert.rejects(
+    applyLocalWebSelection({
+      candidate: makeReleaseWeb(SOURCE_SHA),
+      token: 'deploy-token',
+      appSlug: 'pitaka-deploy-bot',
+      fetchImpl: deploy.fetchImpl,
+      execFileSyncImpl: gitExec(),
+      now: () => NOW,
+      sleepImpl: async () => {},
+    }),
+    /unrelated/,
+  );
+  assert.equal(deploy.calls.put, 0);
+  assert.equal(deploy.getRecord().web.sourceSha, CURRENT_SHA);
 });
 
 test('writes a verified Release candidate with its promotion provenance to temporary storage', async (t) => {

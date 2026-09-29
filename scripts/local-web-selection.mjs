@@ -4,6 +4,11 @@ import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { githubApiHeaders, githubApiUrl, nextGitHubApiPage } from './github-api.mjs';
+import {
+  assertSourceReachableFromMain,
+  requireSuccessfulWorkflowRun,
+  requireWorkflow,
+} from './github-workflow-provenance.mjs';
 import { verifyPromotedWebRelease } from './verify-promoted-web-release.mjs';
 import { isMainModule, sha256, verifyWebBuildArtifact, webBuildArtifactNames } from './web-build-artifact.mjs';
 
@@ -202,38 +207,6 @@ async function getJsonPages({ apiBaseUrl, repository, path, token, fetchImpl }) 
   return results;
 }
 
-function requireWorkflow(workflow, { name, path }) {
-  if (
-    !isObject(workflow) ||
-    !positiveInteger(workflow.id) ||
-    workflow.name !== name ||
-    workflow.path !== path ||
-    workflow.state !== 'active'
-  ) {
-    fail(`The ${name} workflow identity is missing or inactive.`);
-  }
-  return workflow;
-}
-
-function requireSuccessfulRun(run, { id, attempt, workflow, repository, event, sourceSha }) {
-  if (
-    !isObject(run) ||
-    run.id !== id ||
-    run.run_attempt !== attempt ||
-    run.name !== workflow.name ||
-    run.workflow_id !== workflow.id ||
-    (sourceSha !== undefined && run.head_sha !== sourceSha) ||
-    run.head_branch !== 'main' ||
-    run.event !== event ||
-    run.status !== 'completed' ||
-    run.conclusion !== 'success' ||
-    run.head_repository?.full_name !== repository
-  ) {
-    fail(`The exact successful ${workflow.name} run does not match the required main SHA and attempt.`);
-  }
-  return run;
-}
-
 function validatePublisherArtifact(artifact, publisherRun, sourceSha, now) {
   const identity = artifact.name?.match(new RegExp(`^pitaka-web-${sourceSha}-run-(\\d+)-attempt-(\\d+)$`));
   if (!identity) {
@@ -276,22 +249,6 @@ function validatePublisherArtifact(artifact, publisherRun, sourceSha, now) {
     ciRunId: Number(identity[1]),
     ciRunAttempt: Number(identity[2]),
   };
-}
-
-function assertMainAncestry(sourceSha, execFileSyncImpl) {
-  execFileSyncImpl('git', ['fetch', '--no-tags', 'origin', 'main:refs/remotes/origin/main'], {
-    stdio: 'ignore',
-  });
-  try {
-    execFileSyncImpl('git', ['merge-base', '--is-ancestor', sourceSha, 'refs/remotes/origin/main'], {
-      stdio: 'ignore',
-    });
-  } catch (error) {
-    if (error.status === 1) {
-      fail(`Source SHA ${sourceSha} is no longer reachable from pitaka-web/main; review it manually.`);
-    }
-    throw error;
-  }
 }
 
 function verifyZipContents(zipPath, expectedNames, execFileSyncImpl) {
@@ -409,9 +366,9 @@ export async function verifyPublishedActionsBuild({
         token,
         fetchImpl,
       }),
-      { name: 'Publish Build', path: '.github/workflows/publish-build.yml' },
+      { name: 'Publish Build', path: '.github/workflows/publish-build.yml', fail },
     );
-    const publisherRun = requireSuccessfulRun(
+    const publisherRun = requireSuccessfulWorkflowRun(
       await getJson({
         apiBaseUrl,
         repository: WEB_REPOSITORY,
@@ -426,6 +383,7 @@ export async function verifyPublishedActionsBuild({
         repository: WEB_REPOSITORY,
         event: 'workflow_run',
         sourceSha: undefined,
+        fail,
       },
     );
     if (!FULL_SHA.test(publisherRun.head_sha ?? '')) {
@@ -435,7 +393,7 @@ export async function verifyPublishedActionsBuild({
     if (expectedSourceSha && expectedSourceSha !== sourceSha) {
       fail('The completed publisher run SHA does not match its workflow_run event.');
     }
-    assertMainAncestry(sourceSha, execFileSyncImpl);
+    assertSourceReachableFromMain({ sourceSha, execFileSyncImpl, fail });
 
     const artifacts = await getJsonPages({
       apiBaseUrl,
@@ -499,11 +457,11 @@ export async function verifyPublishedActionsBuild({
         token,
         fetchImpl,
       }),
-      { name: 'CI', path: '.github/workflows/ci.yml' },
+      { name: 'CI', path: '.github/workflows/ci.yml', fail },
     );
     const ciRunId = selected.ciRunId;
     const ciRunAttempt = selected.ciRunAttempt;
-    const ciRun = requireSuccessfulRun(
+    const ciRun = requireSuccessfulWorkflowRun(
       await getJson({
         apiBaseUrl,
         repository: WEB_REPOSITORY,
@@ -518,6 +476,7 @@ export async function verifyPublishedActionsBuild({
         repository: WEB_REPOSITORY,
         event: 'push',
         sourceSha,
+        fail,
       },
     );
 
@@ -704,7 +663,15 @@ export function compareWebSelections(candidate, current, { execFileSyncImpl = ex
     return 'already-current';
   }
   if (candidate.source.kind === 'release' && candidate.sourceSha !== current.sourceSha) {
-    return 'superseded';
+    if (
+      isAncestor(candidate.sourceSha, current.sourceSha, execFileSyncImpl) ||
+      isAncestor(current.sourceSha, candidate.sourceSha, execFileSyncImpl)
+    ) {
+      return 'superseded';
+    }
+    fail(
+      `Selected SHA ${current.sourceSha} and promoted SHA ${candidate.sourceSha} are unrelated; review the selection manually.`,
+    );
   }
   if (candidate.sourceSha === current.sourceSha) {
     if (candidate.source.kind === 'release') {
