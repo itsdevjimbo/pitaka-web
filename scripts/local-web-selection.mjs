@@ -4,6 +4,13 @@ import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { githubApiHeaders, githubApiUrl, nextGitHubApiPage } from './github-api.mjs';
+import {
+  assertSourceReachableFromMain,
+  requireSuccessfulWorkflowRun,
+  requireWorkflow,
+} from './github-workflow-provenance.mjs';
+import { isPositiveInteger } from './value-validation.mjs';
+import { verifyPromotedWebRelease } from './verify-promoted-web-release.mjs';
 import { isMainModule, sha256, verifyWebBuildArtifact, webBuildArtifactNames } from './web-build-artifact.mjs';
 
 export const WEB_REPOSITORY = 'itsdevjimbo/pitaka-web';
@@ -25,10 +32,6 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function positiveInteger(value) {
-  return Number.isSafeInteger(value) && value > 0;
-}
-
 function isSafeAssetName(value) {
   return (
     typeof value === 'string' &&
@@ -40,7 +43,7 @@ function isSafeAssetName(value) {
 }
 
 function requirePositiveInteger(value, description) {
-  if (!positiveInteger(value)) {
+  if (!isPositiveInteger(value)) {
     fail(`${description} must be a positive integer.`);
   }
 }
@@ -201,38 +204,6 @@ async function getJsonPages({ apiBaseUrl, repository, path, token, fetchImpl }) 
   return results;
 }
 
-function requireWorkflow(workflow, { name, path }) {
-  if (
-    !isObject(workflow) ||
-    !positiveInteger(workflow.id) ||
-    workflow.name !== name ||
-    workflow.path !== path ||
-    workflow.state !== 'active'
-  ) {
-    fail(`The ${name} workflow identity is missing or inactive.`);
-  }
-  return workflow;
-}
-
-function requireSuccessfulRun(run, { id, attempt, workflow, repository, event, sourceSha }) {
-  if (
-    !isObject(run) ||
-    run.id !== id ||
-    run.run_attempt !== attempt ||
-    run.name !== workflow.name ||
-    run.workflow_id !== workflow.id ||
-    (sourceSha !== undefined && run.head_sha !== sourceSha) ||
-    run.head_branch !== 'main' ||
-    run.event !== event ||
-    run.status !== 'completed' ||
-    run.conclusion !== 'success' ||
-    run.head_repository?.full_name !== repository
-  ) {
-    fail(`The exact successful ${workflow.name} run does not match the required main SHA and attempt.`);
-  }
-  return run;
-}
-
 function validatePublisherArtifact(artifact, publisherRun, sourceSha, now) {
   const identity = artifact.name?.match(new RegExp(`^pitaka-web-${sourceSha}-run-(\\d+)-attempt-(\\d+)$`));
   if (!identity) {
@@ -242,8 +213,8 @@ function validatePublisherArtifact(artifact, publisherRun, sourceSha, now) {
     fail('The uploaded Actions artifact has expired.');
   }
   if (
-    !positiveInteger(Number(artifact.id)) ||
-    !positiveInteger(Number(artifact.size_in_bytes)) ||
+    !isPositiveInteger(Number(artifact.id)) ||
+    !isPositiveInteger(Number(artifact.size_in_bytes)) ||
     artifact.expired !== false ||
     artifact.workflow_run?.id !== publisherRun.id ||
     artifact.workflow_run?.head_sha !== sourceSha ||
@@ -275,22 +246,6 @@ function validatePublisherArtifact(artifact, publisherRun, sourceSha, now) {
     ciRunId: Number(identity[1]),
     ciRunAttempt: Number(identity[2]),
   };
-}
-
-function assertMainAncestry(sourceSha, execFileSyncImpl) {
-  execFileSyncImpl('git', ['fetch', '--no-tags', 'origin', 'main:refs/remotes/origin/main'], {
-    stdio: 'ignore',
-  });
-  try {
-    execFileSyncImpl('git', ['merge-base', '--is-ancestor', sourceSha, 'refs/remotes/origin/main'], {
-      stdio: 'ignore',
-    });
-  } catch (error) {
-    if (error.status === 1) {
-      fail(`Source SHA ${sourceSha} is no longer reachable from pitaka-web/main; review it manually.`);
-    }
-    throw error;
-  }
 }
 
 function verifyZipContents(zipPath, expectedNames, execFileSyncImpl) {
@@ -408,9 +363,9 @@ export async function verifyPublishedActionsBuild({
         token,
         fetchImpl,
       }),
-      { name: 'Publish Build', path: '.github/workflows/publish-build.yml' },
+      { name: 'Publish Build', path: '.github/workflows/publish-build.yml', fail },
     );
-    const publisherRun = requireSuccessfulRun(
+    const publisherRun = requireSuccessfulWorkflowRun(
       await getJson({
         apiBaseUrl,
         repository: WEB_REPOSITORY,
@@ -425,6 +380,7 @@ export async function verifyPublishedActionsBuild({
         repository: WEB_REPOSITORY,
         event: 'workflow_run',
         sourceSha: undefined,
+        fail,
       },
     );
     if (!FULL_SHA.test(publisherRun.head_sha ?? '')) {
@@ -434,7 +390,7 @@ export async function verifyPublishedActionsBuild({
     if (expectedSourceSha && expectedSourceSha !== sourceSha) {
       fail('The completed publisher run SHA does not match its workflow_run event.');
     }
-    assertMainAncestry(sourceSha, execFileSyncImpl);
+    assertSourceReachableFromMain({ sourceSha, execFileSyncImpl, fail });
 
     const artifacts = await getJsonPages({
       apiBaseUrl,
@@ -498,11 +454,11 @@ export async function verifyPublishedActionsBuild({
         token,
         fetchImpl,
       }),
-      { name: 'CI', path: '.github/workflows/ci.yml' },
+      { name: 'CI', path: '.github/workflows/ci.yml', fail },
     );
     const ciRunId = selected.ciRunId;
     const ciRunAttempt = selected.ciRunAttempt;
-    const ciRun = requireSuccessfulRun(
+    const ciRun = requireSuccessfulWorkflowRun(
       await getJson({
         apiBaseUrl,
         repository: WEB_REPOSITORY,
@@ -517,6 +473,7 @@ export async function verifyPublishedActionsBuild({
         repository: WEB_REPOSITORY,
         event: 'push',
         sourceSha,
+        fail,
       },
     );
 
@@ -558,41 +515,20 @@ export async function verifyPublishedActionsBuild({
   }
 }
 
-export async function prepareActionsSelection({
-  workflowRunId,
-  workflowRunAttempt,
-  expectedSourceSha,
-  token,
-  apiBaseUrl,
-  fetchImpl,
-  execFileSyncImpl,
-  now,
-  runnerTemp = tmpdir(),
-}) {
+async function prepareVerifiedSelection({ runnerTemp, eventType, verify, additionalCandidateFields }) {
   const workspace = await mkdtemp(join(runnerTemp, 'pitaka-web-local-selection-'));
   try {
-    const verified = await verifyPublishedActionsBuild({
-      workflowRunId,
-      workflowRunAttempt,
-      expectedSourceSha,
-      token,
-      apiBaseUrl,
-      fetchImpl,
-      execFileSyncImpl,
-      now,
-      workspace,
-    });
+    const verified = await verify(workspace);
+    validateWebSelection(verified.web);
     const candidatePath = join(workspace, 'candidate.json');
     await writeFile(
       candidatePath,
       `${JSON.stringify(
         {
           schemaVersion: 1,
-          eventType: 'successful-publish-build',
+          eventType,
           sourceSha: verified.web.sourceSha,
-          publisherRun: verified.publisherRun,
-          ciRun: verified.ciRun,
-          artifactDirectory: verified.artifactDirectory,
+          ...additionalCandidateFields(verified),
           web: verified.web,
         },
         null,
@@ -605,6 +541,75 @@ export async function prepareActionsSelection({
     await rm(workspace, { recursive: true, force: true });
     throw error;
   }
+}
+
+export async function prepareActionsSelection({
+  workflowRunId,
+  workflowRunAttempt,
+  expectedSourceSha,
+  token,
+  apiBaseUrl,
+  fetchImpl,
+  execFileSyncImpl,
+  now,
+  runnerTemp = tmpdir(),
+}) {
+  return prepareVerifiedSelection({
+    runnerTemp,
+    eventType: 'successful-publish-build',
+    verify: (workspace) =>
+      verifyPublishedActionsBuild({
+        workflowRunId,
+        workflowRunAttempt,
+        expectedSourceSha,
+        token,
+        apiBaseUrl,
+        fetchImpl,
+        execFileSyncImpl,
+        now,
+        workspace,
+      }),
+    additionalCandidateFields: (verified) => ({
+      publisherRun: verified.publisherRun,
+      ciRun: verified.ciRun,
+      artifactDirectory: verified.artifactDirectory,
+    }),
+  });
+}
+
+export async function prepareReleaseSelection({
+  promotionRunId,
+  promotionRunAttempt,
+  expectedSourceSha,
+  releaseTag,
+  token,
+  apiBaseUrl,
+  fetchImpl,
+  execFileSyncImpl,
+  runnerTemp = tmpdir(),
+  verifyReleaseImpl = verifyPromotedWebRelease,
+}) {
+  return prepareVerifiedSelection({
+    runnerTemp,
+    eventType: 'verified-immutable-release-promotion',
+    verify: (workspace) =>
+      verifyReleaseImpl({
+        promotionRunId,
+        promotionRunAttempt,
+        expectedSourceSha,
+        releaseTag,
+        token,
+        apiBaseUrl,
+        fetchImpl,
+        execFileSyncImpl,
+        workspace,
+      }),
+    additionalCandidateFields: (verified) => ({
+      promotionRun: verified.promotionRun,
+      ciRun: verified.ciRun,
+      release: verified.release,
+    }),
+  });
 }
 
 function stableJson(value) {
@@ -648,15 +653,39 @@ function isAncestor(ancestor, descendant, execFileSyncImpl) {
   }
 }
 
+function sourceAncestry(candidateSha, currentSha, execFileSyncImpl) {
+  if (isAncestor(currentSha, candidateSha, execFileSyncImpl)) {
+    return 'candidate-descends';
+  }
+  if (isAncestor(candidateSha, currentSha, execFileSyncImpl)) {
+    return 'candidate-ancestor';
+  }
+  return 'divergent';
+}
+
 export function compareWebSelections(candidate, current, { execFileSyncImpl = execFileSync } = {}) {
   if (stableJson(candidate) === stableJson(current)) {
     return 'already-current';
   }
   if (candidate.source.kind === 'release' && candidate.sourceSha !== current.sourceSha) {
-    return 'superseded';
+    if (sourceAncestry(candidate.sourceSha, current.sourceSha, execFileSyncImpl) !== 'divergent') {
+      return 'superseded';
+    }
+    fail(
+      `Selected SHA ${current.sourceSha} and promoted SHA ${candidate.sourceSha} are unrelated; review the selection manually.`,
+    );
   }
   if (candidate.sourceSha === current.sourceSha) {
     if (candidate.source.kind === 'release') {
+      if (
+        current.source.kind === 'actions' &&
+        (candidate.archive.sha256 !== current.archive.sha256 ||
+          candidate.assetIdentitySha256 !== current.assetIdentitySha256)
+      ) {
+        fail(
+          `Immutable Release ${candidate.source.tag} does not match the selected Actions build bytes for ${candidate.sourceSha}; review the mismatch manually.`,
+        );
+      }
       return current.source.kind === 'release' ? 'superseded' : 'advance';
     }
     if (current.source.kind === 'release') {
@@ -664,10 +693,11 @@ export function compareWebSelections(candidate, current, { execFileSyncImpl = ex
     }
     return comparePublicationIdentity(candidate.source, current.source) > 0 ? 'advance' : 'superseded';
   }
-  if (isAncestor(current.sourceSha, candidate.sourceSha, execFileSyncImpl)) {
+  const ancestry = sourceAncestry(candidate.sourceSha, current.sourceSha, execFileSyncImpl);
+  if (ancestry === 'candidate-descends') {
     return 'advance';
   }
-  if (isAncestor(candidate.sourceSha, current.sourceSha, execFileSyncImpl)) {
+  if (ancestry === 'candidate-ancestor') {
     return 'superseded';
   }
   fail(
@@ -796,7 +826,7 @@ async function resolveBotIdentity({ token, apiBaseUrl, appSlug, fetchImpl }) {
     headers: githubApiHeaders(token),
   });
   const bot = await readJsonResponse(response, 'Resolving the GitHub App bot identity');
-  if (!positiveInteger(bot.id) || bot.login !== `${appSlug}[bot]`) {
+  if (!isPositiveInteger(bot.id) || bot.login !== `${appSlug}[bot]`) {
     fail('GitHub did not return the bot identity for the deploy App.');
   }
   const email = `${bot.id}+${bot.login}@users.noreply.github.com`;
@@ -805,6 +835,7 @@ async function resolveBotIdentity({ token, apiBaseUrl, appSlug, fetchImpl }) {
 
 export async function applyLocalWebSelection({
   candidate,
+  promotionRun,
   token,
   appSlug,
   apiBaseUrl = DEFAULT_API_BASE_URL,
@@ -821,10 +852,14 @@ export async function applyLocalWebSelection({
         ? 'verified immutable Release promotion'
         : 'successful Publish Build completion'),
     sourceSha: candidate?.sourceSha,
-    publisherRun: candidate?.source
-      ? { id: candidate.source.workflowRunId, attempt: candidate.source.workflowRunAttempt }
-      : undefined,
+    publisherRun:
+      candidate?.source?.kind === 'actions'
+        ? { id: candidate.source.workflowRunId, attempt: candidate.source.workflowRunAttempt }
+        : undefined,
     ciRun: candidate?.source ? { id: candidate.source.ciRunId, attempt: candidate.source.ciRunAttempt } : undefined,
+    promotionRun,
+    release:
+      candidate?.source?.kind === 'release' ? { id: candidate.source.releaseId, tag: candidate.source.tag } : undefined,
     before: undefined,
     after: undefined,
     writeAttempts: 0,
@@ -954,7 +989,15 @@ export async function writeSelectionSummary(summaryPath, report) {
     '',
     `- Event type: ${report.eventType ?? 'successful Publish Build completion'}`,
     `- Source SHA: \`${report.sourceSha ?? 'unavailable'}\``,
-    `- Publisher run: ${report.publisherRun?.id ?? 'unavailable'}, attempt ${report.publisherRun?.attempt ?? 'unavailable'}`,
+    `- Publisher run: ${
+      report.publisherRun ? `${report.publisherRun.id}, attempt ${report.publisherRun.attempt}` : 'not applicable'
+    }`,
+    `- Promotion run: ${
+      report.promotionRun ? `${report.promotionRun.id}, attempt ${report.promotionRun.attempt}` : 'not applicable'
+    }`,
+    `- Immutable Release: ${
+      report.release ? `${report.release.tag} (ID ${report.release.id ?? 'unavailable'})` : 'not applicable'
+    }`,
     `- Successful CI run: ${report.ciRun?.id ?? 'unavailable'}, attempt ${report.ciRun?.attempt ?? 'unavailable'}`,
     `- Deploy selection before: ${formatSelection(report.before)}`,
     `- Deploy selection after: ${formatSelection(report.after)}`,
@@ -1015,6 +1058,55 @@ async function prepareCli(workflowRunId, workflowRunAttempt) {
   }
 }
 
+async function prepareReleaseCli() {
+  const promotionRunId = Number(process.env.PROMOTION_RUN_ID);
+  const promotionRunAttempt = Number(process.env.PROMOTION_RUN_ATTEMPT);
+  const report = {
+    eventType: 'verified immutable Release promotion',
+    sourceSha: process.env.PROMOTION_RUN_SHA,
+    promotionRun:
+      isPositiveInteger(promotionRunId) && isPositiveInteger(promotionRunAttempt)
+        ? { id: promotionRunId, attempt: promotionRunAttempt }
+        : undefined,
+    release: process.env.RELEASE_TAG ? { tag: process.env.RELEASE_TAG } : undefined,
+    before: undefined,
+    after: undefined,
+    writeAttempts: 0,
+  };
+  try {
+    const prepared = await prepareReleaseSelection({
+      promotionRunId,
+      promotionRunAttempt,
+      expectedSourceSha: process.env.PROMOTION_RUN_SHA,
+      releaseTag: process.env.RELEASE_TAG,
+      token: process.env.GITHUB_TOKEN,
+      apiBaseUrl: process.env.GITHUB_API_URL ?? DEFAULT_API_BASE_URL,
+    });
+    report.sourceSha = prepared.web.sourceSha;
+    report.promotionRun = prepared.promotionRun;
+    report.release = prepared.release;
+    report.ciRun = prepared.ciRun;
+    await writeOutput('candidate_path', prepared.candidatePath, process.env.GITHUB_OUTPUT);
+    await writeOutput('source_sha', prepared.web.sourceSha, process.env.GITHUB_OUTPUT);
+    await writeOutput('promotion_run_id', prepared.promotionRun.id, process.env.GITHUB_OUTPUT);
+    await writeOutput('promotion_run_attempt', prepared.promotionRun.attempt, process.env.GITHUB_OUTPUT);
+    await writeOutput('release_id', prepared.release.id, process.env.GITHUB_OUTPUT);
+    await writeOutput('release_tag', prepared.release.tag, process.env.GITHUB_OUTPUT);
+    await writeOutput('ci_run_id', prepared.ciRun.id, process.env.GITHUB_OUTPUT);
+    await writeOutput('ci_run_attempt', prepared.ciRun.attempt, process.env.GITHUB_OUTPUT);
+  } catch (error) {
+    report.promotionRun = error.releaseVerification?.promotionRun ?? report.promotionRun;
+    report.release = error.releaseVerification?.release ?? report.release;
+    report.ciRun = error.releaseVerification?.ciRun ?? report.ciRun;
+    report.outcome = 'failed';
+    report.recovery =
+      'Correct the promotion, Release, or provenance issue, then rerun this handoff for the same stable version tag.';
+    await writeSelectionSummary(process.env.GITHUB_STEP_SUMMARY, report);
+    process.stderr.write(`::error title=Local web Release verification failed::${safeAnnotation(error.message)}\n`);
+    throw error;
+  }
+}
+
 function parsePreparedCandidate(candidatePath) {
   const resolved = resolve(candidatePath);
   const tempRoot = resolve(tmpdir());
@@ -1026,82 +1118,109 @@ function parsePreparedCandidate(candidatePath) {
 
 async function applyCli(candidatePath) {
   let prepared;
+  let resolvedCandidatePath;
   let report = { writeAttempts: 0 };
   try {
-    const resolvedCandidatePath = parsePreparedCandidate(candidatePath);
+    resolvedCandidatePath = parsePreparedCandidate(candidatePath);
     prepared = JSON.parse(await readFile(resolvedCandidatePath, 'utf8'));
-    if (
+    const commonCandidateIsInvalid =
+      !isObject(prepared) ||
       prepared.schemaVersion !== 1 ||
-      prepared.eventType !== 'successful-publish-build' ||
-      !isObject(prepared.publisherRun) ||
-      !isObject(prepared.ciRun) ||
       !isObject(prepared.web) ||
       !FULL_SHA.test(prepared.sourceSha ?? '') ||
-      prepared.sourceSha !== prepared.web.sourceSha ||
-      resolve(prepared.artifactDirectory) !== resolve(join(resolve(candidatePath, '..'), 'artifact'))
-    ) {
-      fail('The checked publisher candidate data is incomplete or inconsistent.');
+      prepared.sourceSha !== prepared.web.sourceSha;
+    const actionsCandidate = prepared.eventType === 'successful-publish-build';
+    const releaseCandidate = prepared.eventType === 'verified-immutable-release-promotion';
+    if (commonCandidateIsInvalid || (!actionsCandidate && !releaseCandidate)) {
+      fail('The verified web build candidate data is incomplete or inconsistent.');
     }
     validateWebSelection(prepared.web);
-    const names = webBuildArtifactNames(
-      prepared.sourceSha,
-      prepared.web.source.ciRunId,
-      prepared.web.source.ciRunAttempt,
-    );
-    const entries = (await readdir(prepared.artifactDirectory)).sort();
-    if (JSON.stringify(entries) !== JSON.stringify([names.archiveName, names.manifestName].sort())) {
-      fail('The checked publisher artifact directory changed after verification.');
-    }
-    for (const name of entries) {
-      const info = await lstat(join(prepared.artifactDirectory, name));
-      if (!info.isFile() || info.isSymbolicLink()) {
-        fail(`The checked publisher artifact contains an unsupported file: ${name}`);
+    if (actionsCandidate) {
+      if (
+        !isObject(prepared.publisherRun) ||
+        !isObject(prepared.ciRun) ||
+        prepared.web.source.kind !== 'actions' ||
+        typeof prepared.artifactDirectory !== 'string' ||
+        resolve(prepared.artifactDirectory) !== resolve(join(resolve(resolvedCandidatePath, '..'), 'artifact'))
+      ) {
+        fail('The checked publisher candidate data is incomplete or inconsistent.');
       }
-      if (name === names.manifestName && info.size > MAX_MANIFEST_BYTES) {
-        fail('The checked publisher manifest is too large to use for deploy selection.');
+      const names = webBuildArtifactNames(
+        prepared.sourceSha,
+        prepared.web.source.ciRunId,
+        prepared.web.source.ciRunAttempt,
+      );
+      const entries = (await readdir(prepared.artifactDirectory)).sort();
+      if (JSON.stringify(entries) !== JSON.stringify([names.archiveName, names.manifestName].sort())) {
+        fail('The checked publisher artifact directory changed after verification.');
       }
-    }
-    const manifestBytes = await readFile(join(prepared.artifactDirectory, names.manifestName));
-    const archiveBytes = await readFile(join(prepared.artifactDirectory, names.archiveName));
-    if (
-      sha256(manifestBytes) !== prepared.web.manifest.sha256 ||
-      sha256(archiveBytes) !== prepared.web.archive.sha256
+      for (const name of entries) {
+        const info = await lstat(join(prepared.artifactDirectory, name));
+        if (!info.isFile() || info.isSymbolicLink()) {
+          fail(`The checked publisher artifact contains an unsupported file: ${name}`);
+        }
+        if (name === names.manifestName && info.size > MAX_MANIFEST_BYTES) {
+          fail('The checked publisher manifest is too large to use for deploy selection.');
+        }
+      }
+      const manifestBytes = await readFile(join(prepared.artifactDirectory, names.manifestName));
+      const archiveBytes = await readFile(join(prepared.artifactDirectory, names.archiveName));
+      if (
+        sha256(manifestBytes) !== prepared.web.manifest.sha256 ||
+        sha256(archiveBytes) !== prepared.web.archive.sha256
+      ) {
+        fail('The checked publisher artifact bytes changed before deploy selection.');
+      }
+      const manifest = JSON.parse(manifestBytes.toString('utf8'));
+      if (
+        manifest.schemaVersion !== 1 ||
+        manifest.source?.repository !== WEB_REPOSITORY ||
+        manifest.source?.sha !== prepared.sourceSha ||
+        manifest.ci?.workflow !== 'CI' ||
+        manifest.ci?.runId !== prepared.web.source.ciRunId ||
+        manifest.ci?.runAttempt !== prepared.web.source.ciRunAttempt ||
+        manifest.actionsArtifact?.name !== prepared.web.source.artifactName ||
+        manifest.actionsArtifact?.retentionDays !== 14 ||
+        manifest.archive?.name !== prepared.web.archive.name ||
+        manifest.archive?.sha256 !== prepared.web.archive.sha256 ||
+        manifest.archive?.sizeBytes !== prepared.web.archive.sizeBytes ||
+        manifest.assets?.treeSha256 !== prepared.web.assetIdentitySha256
+      ) {
+        fail('The checked publisher manifest identity changed before deploy selection.');
+      }
+    } else if (
+      prepared.web.source.kind !== 'release' ||
+      !isObject(prepared.promotionRun) ||
+      !isPositiveInteger(prepared.promotionRun.id) ||
+      !isPositiveInteger(prepared.promotionRun.attempt) ||
+      !isPositiveInteger(prepared.promotionRun.workflowId) ||
+      !isObject(prepared.release) ||
+      prepared.release.id !== prepared.web.source.releaseId ||
+      prepared.release.tag !== prepared.web.source.tag ||
+      !isObject(prepared.ciRun) ||
+      prepared.ciRun.id !== prepared.web.source.ciRunId ||
+      prepared.ciRun.attempt !== prepared.web.source.ciRunAttempt
     ) {
-      fail('The checked publisher artifact bytes changed before deploy selection.');
-    }
-    const manifest = JSON.parse(manifestBytes.toString('utf8'));
-    if (
-      manifest.schemaVersion !== 1 ||
-      manifest.source?.repository !== WEB_REPOSITORY ||
-      manifest.source?.sha !== prepared.sourceSha ||
-      manifest.ci?.workflow !== 'CI' ||
-      manifest.ci?.runId !== prepared.web.source.ciRunId ||
-      manifest.ci?.runAttempt !== prepared.web.source.ciRunAttempt ||
-      manifest.actionsArtifact?.name !== prepared.web.source.artifactName ||
-      manifest.actionsArtifact?.retentionDays !== 14 ||
-      manifest.archive?.name !== prepared.web.archive.name ||
-      manifest.archive?.sha256 !== prepared.web.archive.sha256 ||
-      manifest.archive?.sizeBytes !== prepared.web.archive.sizeBytes ||
-      manifest.assets?.treeSha256 !== prepared.web.assetIdentitySha256
-    ) {
-      fail('The checked publisher manifest identity changed before deploy selection.');
+      fail('The verified immutable Release candidate data is incomplete or inconsistent.');
     }
 
     report = {
       sourceSha: prepared.sourceSha,
       publisherRun: prepared.publisherRun,
       ciRun: prepared.ciRun,
+      promotionRun: prepared.promotionRun,
+      release: prepared.release,
       before: undefined,
       after: undefined,
       writeAttempts: 0,
     };
     const result = await applyLocalWebSelection({
       candidate: prepared.web,
+      promotionRun: prepared.promotionRun,
       token: process.env.DEPLOY_APP_TOKEN,
       appSlug: process.env.DEPLOY_APP_SLUG,
       apiBaseUrl: process.env.GITHUB_API_URL ?? DEFAULT_API_BASE_URL,
-      eventType:
-        prepared.eventType === 'successful-publish-build' ? 'successful Publish Build completion' : prepared.eventType,
+      eventType: actionsCandidate ? 'successful Publish Build completion' : 'verified immutable Release promotion',
     });
     report = result;
     report.recovery = 'No recovery is needed.';
@@ -1118,14 +1237,16 @@ async function applyCli(candidatePath) {
       ciRun: prepared?.ciRun ?? report.ciRun,
       outcome: 'failed',
       recovery:
-        'Correct the reported issue and rerun this handoff while the source artifact is still available. If expired, publish a new successful main CI build.',
+        prepared?.eventType === 'verified-immutable-release-promotion'
+          ? 'Correct the reported issue and rerun this handoff; the verified immutable Release remains available.'
+          : 'Correct the reported issue and rerun this handoff while the source artifact is still available. If expired, publish a new successful main CI build.',
     };
     await writeSelectionSummary(process.env.GITHUB_STEP_SUMMARY, report);
     process.stderr.write(`::error title=Local web selection handoff failed::${safeAnnotation(error.message)}\n`);
     throw error;
   } finally {
-    if (prepared?.artifactDirectory) {
-      await rm(resolve(prepared.artifactDirectory, '..'), { recursive: true, force: true });
+    if (resolvedCandidatePath) {
+      await rm(resolve(resolvedCandidatePath, '..'), { recursive: true, force: true });
     }
   }
 }
@@ -1136,12 +1257,16 @@ async function cli() {
     await prepareCli(args[0], args[1]);
     return;
   }
+  if (mode === 'prepare-release' && args.length === 0) {
+    await prepareReleaseCli();
+    return;
+  }
   if (mode === 'apply' && args.length === 1) {
     await applyCli(args[0]);
     return;
   }
   throw new Error(
-    'Usage: select-local-web-build.mjs prepare <publisher-run-id> <publisher-run-attempt> | apply <verified-candidate-path>',
+    'Usage: select-local-web-build.mjs prepare <publisher-run-id> <publisher-run-attempt> | prepare-release | apply <verified-candidate-path>',
   );
 }
 
