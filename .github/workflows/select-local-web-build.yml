@@ -1,0 +1,86 @@
+name: Select Local Web Build
+
+on:
+  workflow_run:
+    workflows: [Publish Build]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: local-web-selection
+  cancel-in-progress: false
+
+jobs:
+  select:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_run' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Verify the successful publisher run and uploaded candidate
+        id: verify
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PUBLISH_RUN_ID: ${{ github.event.workflow_run.id }}
+          PUBLISH_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          PUBLISH_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/local-web-selection.mjs prepare "$PUBLISH_RUN_ID" "$PUBLISH_RUN_ATTEMPT"
+
+      - name: Create deploy-scoped GitHub App token
+        id: deploy-app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.PITAKA_DEPLOY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PITAKA_DEPLOY_APP_PRIVATE_KEY }}
+          owner: itsdevjimbo
+          repositories: pitaka-deploy
+          permission-contents: write
+
+      - name: Select the checked build in pitaka-deploy
+        id: apply
+        env:
+          DEPLOY_APP_TOKEN: ${{ steps.deploy-app-token.outputs.token }}
+          DEPLOY_APP_SLUG: ${{ steps.deploy-app-token.outputs.app-slug }}
+          CANDIDATE_PATH: ${{ steps.verify.outputs.candidate_path }}
+        run: node scripts/local-web-selection.mjs apply "$CANDIDATE_PATH"
+
+      - name: Report App token setup failure
+        if: failure() && steps.verify.outcome == 'success' && steps.apply.outcome != 'failure'
+        env:
+          SOURCE_SHA: ${{ steps.verify.outputs.source_sha }}
+          PUBLISHER_RUN_ID: ${{ steps.verify.outputs.publisher_run_id }}
+          PUBLISHER_RUN_ATTEMPT: ${{ steps.verify.outputs.publisher_run_attempt }}
+          CI_RUN_ID: ${{ steps.verify.outputs.ci_run_id }}
+          CI_RUN_ATTEMPT: ${{ steps.verify.outputs.ci_run_attempt }}
+        shell: bash
+        run: |
+          {
+            echo '## Local web selection handoff'
+            echo
+            echo '- Event type: successful `Publish Build` completion'
+            echo "- Source SHA: \`$SOURCE_SHA\`"
+            echo "- Publisher run: $PUBLISHER_RUN_ID, attempt $PUBLISHER_RUN_ATTEMPT"
+            echo "- Successful CI run: $CI_RUN_ID, attempt $CI_RUN_ATTEMPT"
+            echo '- Deploy selection before: unavailable (App token could not be created)'
+            echo '- Deploy selection after: unavailable (no deploy write was attempted)'
+            echo '- Write attempts: 0'
+            echo '- Outcome: failed while creating the deploy-scoped App token'
+            echo '- Recovery: configure PITAKA_DEPLOY_APP_CLIENT_ID and PITAKA_DEPLOY_APP_PRIVATE_KEY, confirm the App is installed on pitaka-deploy with Contents write access, then rerun this handoff while the artifact is unexpired.'
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo '::error title=Local web selection token failure::Check the deploy App Actions settings and its pitaka-deploy Contents write permission.'
