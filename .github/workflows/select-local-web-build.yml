@@ -4,6 +4,27 @@ on:
   workflow_run:
     workflows: [Publish Build, Promote Production Build]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_type:
+        description: Reconcile the original Actions publication or an immutable Release
+        required: true
+        type: choice
+        options:
+          - actions
+          - release
+      publisher_run_id:
+        description: Actions only — successful Publish Build run ID
+        required: false
+        type: string
+      publisher_run_attempt:
+        description: Actions only — exact Publish Build run attempt
+        required: false
+        type: string
+      release_tag:
+        description: Release only — immutable vMAJOR.MINOR.PATCH tag
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -16,15 +37,18 @@ concurrency:
 jobs:
   select:
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event_name == 'workflow_dispatch' ||
       (
-        (github.event.workflow_run.name == 'Publish Build' &&
-          github.event.workflow_run.event == 'workflow_run' &&
-          github.event.workflow_run.head_branch == 'main') ||
-        (github.event.workflow_run.name == 'Promote Production Build' &&
-          github.event.workflow_run.event == 'push' &&
-          startsWith(github.event.workflow_run.head_branch, 'v'))
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        (
+          (github.event.workflow_run.name == 'Publish Build' &&
+            github.event.workflow_run.event == 'workflow_run' &&
+            github.event.workflow_run.head_branch == 'main') ||
+          (github.event.workflow_run.name == 'Promote Production Build' &&
+            github.event.workflow_run.event == 'push' &&
+            startsWith(github.event.workflow_run.head_branch, 'v'))
+        )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -40,7 +64,7 @@ jobs:
 
       - name: Verify the successful publisher run and uploaded candidate
         id: verify-actions
-        if: github.event.workflow_run.name == 'Publish Build'
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Publish Build'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PUBLISH_RUN_ID: ${{ github.event.workflow_run.id }}
@@ -50,7 +74,7 @@ jobs:
 
       - name: Verify the successful promotion and immutable Release
         id: verify-release
-        if: github.event.workflow_run.name == 'Promote Production Build'
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Promote Production Build'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PROMOTION_RUN_ID: ${{ github.event.workflow_run.id }}
@@ -59,9 +83,25 @@ jobs:
           RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
         run: node scripts/local-web-selection.mjs prepare-release
 
+      - name: Verify the explicitly selected reconciliation source
+        id: verify-reconciliation
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_TYPE: ${{ inputs.source_type }}
+          PUBLISHER_RUN_ID: ${{ inputs.publisher_run_id }}
+          PUBLISHER_RUN_ATTEMPT: ${{ inputs.publisher_run_attempt }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: >-
+          node scripts/local-web-selection.mjs prepare-reconciliation
+          "$SOURCE_TYPE" "$PUBLISHER_RUN_ID" "$PUBLISHER_RUN_ATTEMPT" "$RELEASE_TAG"
+
       - name: Create deploy-scoped GitHub App token
         id: deploy-app-token
-        if: steps.verify-actions.outcome == 'success' || steps.verify-release.outcome == 'success'
+        if: >-
+          steps.verify-actions.outcome == 'success' ||
+          steps.verify-release.outcome == 'success' ||
+          steps.verify-reconciliation.outcome == 'success'
         uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ vars.PITAKA_DEPLOY_APP_CLIENT_ID }}
@@ -75,37 +115,46 @@ jobs:
         env:
           DEPLOY_APP_TOKEN: ${{ steps.deploy-app-token.outputs.token }}
           DEPLOY_APP_SLUG: ${{ steps.deploy-app-token.outputs.app-slug }}
-          CANDIDATE_PATH: ${{ steps.verify-actions.outputs.candidate_path || steps.verify-release.outputs.candidate_path }}
+          CANDIDATE_PATH: ${{ steps.verify-actions.outputs.candidate_path || steps.verify-release.outputs.candidate_path || steps.verify-reconciliation.outputs.candidate_path }}
         run: node scripts/local-web-selection.mjs apply "$CANDIDATE_PATH"
 
       - name: Report App token setup failure
         if: >-
           failure() &&
-          (steps.verify-actions.outcome == 'success' || steps.verify-release.outcome == 'success') &&
+          (steps.verify-actions.outcome == 'success' ||
+            steps.verify-release.outcome == 'success' ||
+            steps.verify-reconciliation.outcome == 'success') &&
           steps.apply.outcome != 'failure'
         env:
-          SOURCE_SHA: ${{ steps.verify-actions.outputs.source_sha || steps.verify-release.outputs.source_sha || github.event.workflow_run.head_sha }}
-          PUBLISHER_RUN_ID: ${{ steps.verify-actions.outputs.publisher_run_id }}
-          PUBLISHER_RUN_ATTEMPT: ${{ steps.verify-actions.outputs.publisher_run_attempt }}
+          SOURCE_SHA: ${{ steps.verify-actions.outputs.source_sha || steps.verify-release.outputs.source_sha || steps.verify-reconciliation.outputs.source_sha || github.event.workflow_run.head_sha }}
+          PUBLISHER_RUN_ID: ${{ steps.verify-actions.outputs.publisher_run_id || steps.verify-reconciliation.outputs.publisher_run_id }}
+          PUBLISHER_RUN_ATTEMPT: ${{ steps.verify-actions.outputs.publisher_run_attempt || steps.verify-reconciliation.outputs.publisher_run_attempt }}
           PROMOTION_RUN_ID: ${{ steps.verify-release.outputs.promotion_run_id }}
           PROMOTION_RUN_ATTEMPT: ${{ steps.verify-release.outputs.promotion_run_attempt }}
-          RELEASE_TAG: ${{ steps.verify-release.outputs.release_tag || github.event.workflow_run.head_branch }}
-          RELEASE_ID: ${{ steps.verify-release.outputs.release_id }}
+          RELEASE_TAG: ${{ steps.verify-release.outputs.release_tag || steps.verify-reconciliation.outputs.release_tag || github.event.workflow_run.head_branch }}
+          RELEASE_ID: ${{ steps.verify-release.outputs.release_id || steps.verify-reconciliation.outputs.release_id }}
+          MANUAL_SOURCE_TYPE: ${{ inputs.source_type }}
           SOURCE_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          CI_RUN_ID: ${{ steps.verify-actions.outputs.ci_run_id || steps.verify-release.outputs.ci_run_id }}
-          CI_RUN_ATTEMPT: ${{ steps.verify-actions.outputs.ci_run_attempt || steps.verify-release.outputs.ci_run_attempt }}
+          CI_RUN_ID: ${{ steps.verify-actions.outputs.ci_run_id || steps.verify-release.outputs.ci_run_id || steps.verify-reconciliation.outputs.ci_run_id }}
+          CI_RUN_ATTEMPT: ${{ steps.verify-actions.outputs.ci_run_attempt || steps.verify-release.outputs.ci_run_attempt || steps.verify-reconciliation.outputs.ci_run_attempt }}
         shell: bash
         run: |
           {
             echo '## Local web selection handoff'
             echo
-            echo "- Event type: successful \`$SOURCE_WORKFLOW_NAME\` completion"
+            if [[ -n "$MANUAL_SOURCE_TYPE" ]]; then
+              echo "- Event type: manual $MANUAL_SOURCE_TYPE reconciliation"
+            else
+              echo "- Event type: successful \`$SOURCE_WORKFLOW_NAME\` completion"
+            fi
             echo "- Source SHA: \`$SOURCE_SHA\`"
             if [[ -n "$PUBLISHER_RUN_ID" ]]; then
               echo "- Publisher run: $PUBLISHER_RUN_ID, attempt $PUBLISHER_RUN_ATTEMPT"
             fi
             if [[ -n "$PROMOTION_RUN_ID" ]]; then
               echo "- Promotion run: $PROMOTION_RUN_ID, attempt $PROMOTION_RUN_ATTEMPT"
+            fi
+            if [[ -n "$RELEASE_TAG" ]]; then
               echo "- Immutable Release: $RELEASE_TAG (ID ${RELEASE_ID:-unavailable})"
             fi
             echo "- Successful CI run: ${CI_RUN_ID:-unavailable}, attempt ${CI_RUN_ATTEMPT:-unavailable}"
@@ -114,7 +163,7 @@ jobs:
             echo '- Write attempts: 0'
             echo '- Outcome: failed while creating the deploy-scoped App token'
             echo '- Recovery: configure PITAKA_DEPLOY_APP_CLIENT_ID and PITAKA_DEPLOY_APP_PRIVATE_KEY, confirm the App is installed on pitaka-deploy with Contents write access, then rerun this handoff.'
-            if [[ -n "$PROMOTION_RUN_ID" ]]; then
+            if [[ -n "$RELEASE_TAG" ]]; then
               echo '- The verified immutable Release remains available for retry.'
             else
               echo '- Rerun this handoff while the Actions artifact is unexpired.'

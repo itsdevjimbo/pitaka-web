@@ -42,16 +42,24 @@ export function requireSuccessfulWorkflowRun(
   return run;
 }
 
-export function assertSourceReachableFromMain({ sourceSha, execFileSyncImpl, fail, description = 'Source SHA' }) {
-  execFileSyncImpl('git', ['fetch', '--no-tags', 'origin', 'main:refs/remotes/origin/main'], {
-    stdio: 'ignore',
-  });
+export function assertSourceReachableFromMain({
+  sourceSha,
+  execFileSyncImpl,
+  fail,
+  description = 'Source SHA',
+  fetchMain = true,
+}) {
+  if (fetchMain) {
+    execFileSyncImpl('git', ['fetch', '--no-tags', 'origin', 'main:refs/remotes/origin/main'], {
+      stdio: 'ignore',
+    });
+  }
   try {
     execFileSyncImpl('git', ['merge-base', '--is-ancestor', sourceSha, 'refs/remotes/origin/main'], {
       stdio: 'ignore',
     });
   } catch (error) {
-    if (error.status === 1) {
+    if ([1, 128].includes(error.status)) {
       reject(fail, `${description} ${sourceSha} is no longer reachable from pitaka-web/main; review it manually.`);
     }
     throw error;
